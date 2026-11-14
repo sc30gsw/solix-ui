@@ -1,7 +1,12 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
+import {
+  stylePropNames,
+  stylePropTable,
+  visibilityPropNames,
+} from "../packages/core/src/style-props";
 import { tokenValues } from "../scripts/tokens.mjs";
 import { libraryPackages, packages, repositoryRoot } from "./support/workspace";
 
@@ -13,6 +18,10 @@ const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const stylesCall = /^stylex\.attrs\(styles\.(\w+)\)\.class$/;
 const featureDirectory = join(repositoryRoot, ".agents/skills/verify-playground/features");
 const contractSkill = join(repositoryRoot, ".agents/skills/verify-component-contract/SKILL.md");
+const stylePropTableFile = "packages/core/src/style-props.ts";
+const polymorphicComponents = ["Box"];
+const polymorphicRoot = 'dynamic(() => props.component ?? "div")';
+const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
 
 const libraries = libraryPackages.map(({ directory, manifest }) => ({
   name: manifest.name ?? directory,
@@ -97,6 +106,69 @@ function stringLiteralText(node: ts.Node | undefined): string | undefined {
   return node && ts.isStringLiteral(node) ? node.text : undefined;
 }
 
+function attributeNamesOf(attribute: ts.JsxAttribute): string[] {
+  return attribute.parent.properties.map((property) =>
+    ts.isJsxSpreadAttribute(property) ? property.expression.getText() : property.name.getText(),
+  );
+}
+
+function polymorphicRootProblems(
+  name: string,
+  fn: ts.FunctionDeclaration,
+  classAttribute: ts.JsxAttribute,
+  classes: ts.ArrayLiteralExpression,
+): string[] {
+  const problems: string[] = [];
+  const opening = classAttribute.parent.parent;
+  const tag = opening.tagName.getText();
+  const tagDeclaration = descendants(fn).find(
+    (node): node is ts.VariableDeclaration =>
+      ts.isVariableDeclaration(node) && node.name.getText() === tag,
+  );
+  if (tagDeclaration?.initializer?.getText() !== polymorphicRoot) {
+    problems.push(
+      `render the root as a component made by \`const ${tag} = ${polymorphicRoot}\`, the dynamic() of @solidjs/web.`,
+    );
+  }
+  const [stable, styleProps, consumer, ...extra] = classes.elements;
+  if (
+    stringLiteralText(stable) !== `solix-${name}-root` ||
+    !styleProps?.getText().endsWith(".classes") ||
+    consumer?.getText() !== "props.class" ||
+    extra.length > 0
+  ) {
+    problems.push(
+      `write the root class array as ["solix-${name}-root", <resolved style props>.classes, props.class], so the style-prop classes sit before the consumer's class.`,
+    );
+  }
+  const style = classAttribute.parent.properties.find(
+    (property): property is ts.JsxAttribute =>
+      ts.isJsxAttribute(property) && property.name.getText() === "style",
+  );
+  const styleValue =
+    style?.initializer && ts.isJsxExpression(style.initializer)
+      ? style.initializer.expression
+      : undefined;
+  const merged = styleValue && ts.isCallExpression(styleValue) ? styleValue.arguments : undefined;
+  if (
+    merged?.length !== 2 ||
+    !merged[0].getText().endsWith(".style") ||
+    merged[1].getText() !== "props.style"
+  ) {
+    problems.push(
+      "set style to a merge of the resolved style props' custom properties first and props.style after, so the consumer's style wins.",
+    );
+  }
+  const names = attributeNamesOf(classAttribute);
+  const spreadAt = names.indexOf("rest");
+  if (spreadAt === -1 || spreadAt > names.indexOf("class") || spreadAt > names.indexOf("style")) {
+    problems.push(
+      "spread {...rest} on the root element before its class and style, so the library's merged values are the ones that apply.",
+    );
+  }
+  return problems;
+}
+
 function problemsWith({ name, file, source }: Component): string[] {
   const where = relativePath(file);
   const problems: string[] = [];
@@ -118,11 +190,18 @@ function problemsWith({ name, file, source }: Component): string[] {
     return problems;
   }
 
+  const polymorphic = polymorphicComponents.includes(name);
   const parameter = fn.parameters[0];
   if (fn.parameters.length !== 1 || parameter.name.getText() !== "props") {
     report('take one parameter named "props".');
   }
-  if (!parameter?.type?.getText().includes('ComponentProps<"')) {
+  const propsType = parameter?.type?.getText() ?? "";
+  if (polymorphic && !propsType.startsWith("PolymorphicProps<")) {
+    report(
+      "type props as PolymorphicProps<T, Own>, so the attributes of the element `component` names are the component's attributes.",
+    );
+  }
+  if (!polymorphic && !propsType.includes('ComponentProps<"')) {
     report(
       "type props from ComponentProps<\"element\"> in @solidjs/web, so the root element's attributes are the component's attributes.",
     );
@@ -131,7 +210,7 @@ function problemsWith({ name, file, source }: Component): string[] {
   const imports = source.statements
     .filter(ts.isImportDeclaration)
     .map((statement) => statement.getText());
-  if (!imports.includes('import * as stylex from "@stylexjs/stylex";')) {
+  if (!polymorphic && !imports.includes('import * as stylex from "@stylexjs/stylex";')) {
     report('import styles with `import * as stylex from "@stylexjs/stylex";`.');
   }
 
@@ -151,6 +230,11 @@ function problemsWith({ name, file, source }: Component): string[] {
       'start the body with `const rest = omit(props, "class", ...)`, so the consumer\'s class is merged and not overwritten.',
     );
   }
+  if (polymorphic && (!omitted.includes('"style"') || !omitted.includes('"component"'))) {
+    report(
+      'omit "style" and "component" too, so the consumer\'s style is merged and `component` never reaches the element.',
+    );
+  }
 
   const parts: string[] = [];
   const attributes = classAttributes(fn);
@@ -161,6 +245,25 @@ function problemsWith({ name, file, source }: Component): string[] {
     if (!expression || !ts.isArrayLiteralExpression(expression)) {
       report(
         'write every class attribute as an array: [stylex.attrs(styles.part).class, "solix-Name-part"].',
+      );
+      continue;
+    }
+    const opening = attribute.parent.parent;
+    const element = ts.isJsxOpeningElement(opening) ? opening.parent : opening;
+    const isRootElement = descendants(fn).some(
+      (node) =>
+        ts.isReturnStatement(node) &&
+        node.expression !== undefined &&
+        (ts.isParenthesizedExpression(node.expression)
+          ? node.expression.expression
+          : node.expression) === element,
+    );
+    if (polymorphic && isRootElement) {
+      rootAttributes += 1;
+      problems.push(
+        ...polymorphicRootProblems(name, fn, attribute, expression).map(
+          (problem) => `${where}: ${problem}`,
+        ),
       );
       continue;
     }
@@ -181,16 +284,6 @@ function problemsWith({ name, file, source }: Component): string[] {
       );
     parts.push(part);
 
-    const opening = attribute.parent.parent;
-    const element = ts.isJsxOpeningElement(opening) ? opening.parent : opening;
-    const isRootElement = descendants(fn).some(
-      (node) =>
-        ts.isReturnStatement(node) &&
-        node.expression !== undefined &&
-        (ts.isParenthesizedExpression(node.expression)
-          ? node.expression.expression
-          : node.expression) === element,
-    );
     if (part === "root" || isRootElement) {
       rootAttributes += 1;
       if (!isRootElement || part !== "root") {
@@ -201,9 +294,7 @@ function problemsWith({ name, file, source }: Component): string[] {
           "end the root element's class array with props.class, so the consumer's class sits next to the library's.",
         );
       }
-      const attributeNames = attribute.parent.properties.map((property) =>
-        ts.isJsxSpreadAttribute(property) ? property.expression.getText() : property.name.getText(),
-      );
+      const attributeNames = attributeNamesOf(attribute);
       const spreadAt = attributeNames.indexOf("rest");
       if (spreadAt === -1 || spreadAt > attributeNames.indexOf("class")) {
         report(
@@ -262,15 +353,24 @@ test("the barrel exports every component once, in alphabetical order, and nothin
   }
 });
 
-test("every public token is named --solix-*, and is used by a component and defined once", () => {
+test("every public token is named --solix-*, is used by a component or a style-prop scale, and is defined once", () => {
+  const scalesOfStyleProps = Object.values(stylePropTable).flatMap((row) =>
+    "scale" in row ? [row.scale] : [],
+  );
   for (const { source } of libraries) {
     const tokensFile = relativePath(join(source, "tokens.stylex.ts"));
     const defined = Object.keys(tokenValues(tokensFile));
-    const used = components
-      .filter(({ file }) => file.startsWith(source))
-      .flatMap(({ file }) =>
-        [...readFileSync(file, "utf8").matchAll(/tokens\["([^"]+)"\]/g)].map(([, name]) => name),
-      );
+    const usedByStyleProps = defined.filter((name) =>
+      scalesOfStyleProps.some((scale) => name.startsWith(`--solix-${scale}-`)),
+    );
+    const used = [
+      ...usedByStyleProps,
+      ...components
+        .filter(({ file }) => file.startsWith(source))
+        .flatMap(({ file }) =>
+          [...readFileSync(file, "utf8").matchAll(/tokens\["([^"]+)"\]/g)].map(([, name]) => name),
+        ),
+    ];
 
     expect(
       defined.filter((name) => !tokenName.test(name)),
@@ -278,7 +378,7 @@ test("every public token is named --solix-*, and is used by a component and defi
     ).toEqual([]);
     expect(
       defined.filter((name) => !used.includes(name)),
-      `tokens in ${tokensFile} that no component uses`,
+      `tokens in ${tokensFile} that no component uses and no style-prop scale covers`,
     ).toEqual([]);
     expect(
       used.filter((name) => !defined.includes(name)),
@@ -316,5 +416,50 @@ test("every component is rendered by the app, has a feature file, and is listed 
 
   expect(apps.length).toBeGreaterThan(0);
   expect(existsSync(featureDirectory)).toBe(true);
+  expect(violations).toEqual([]);
+});
+
+function namesListedIn(file: string, names: string[]): { line: number; name: string }[] {
+  const source = parse(file);
+  const found: { line: number; name: string }[] = [];
+  const listedName = (node: ts.Node): string | undefined => {
+    if (ts.isStringLiteralLike(node)) return node.text;
+    const parent = node.parent;
+    const namesAProperty =
+      parent &&
+      (ts.isPropertyAssignment(parent) ||
+        ts.isShorthandPropertyAssignment(parent) ||
+        ts.isPropertySignature(parent) ||
+        ts.isPropertyDeclaration(parent)) &&
+      parent.name === node;
+    return namesAProperty && ts.isIdentifier(node) ? node.text : undefined;
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.getText() === "stylex.create") return;
+    const name = listedName(node);
+    if (name !== undefined && names.includes(name)) {
+      found.push({ line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, name });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+test("the style-prop table is the only place in the library that lists a style prop", () => {
+  const names = [...stylePropNames, ...visibilityPropNames];
+  const violations = libraryPackages.flatMap(({ directory }) =>
+    globSync(libraryCode, { cwd: directory })
+      .map((path) => join(directory, path))
+      .filter((file) => relativePath(file) !== stylePropTableFile)
+      .flatMap((file) =>
+        namesListedIn(file, names).map(
+          ({ line, name }) =>
+            `${relativePath(file)}:${line}: "${name}" is a style prop. List it only in the table in ${stylePropTableFile} and read it from there.`,
+        ),
+      ),
+  );
+
+  expect(names.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 });

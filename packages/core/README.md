@@ -24,6 +24,7 @@ vp run -r build
 - Styles that are known at build time compile to plain class strings, so those components do not call the StyleX runtime at all.
 - It compiles with its own class name prefix, `sx`, so its classes cannot collide with a consumer who also uses StyleX.
 - It has no runtime dependencies. The disclosure needs no JavaScript: it opens and closes with scripts turned off.
+- A style prop on `Box`, such as `mt="md"`, writes only the custom property `--sx-mt` into `style`. The class `sx-mt` in a layer nested in `solix` and ordered after the StyleX layers reads it, so a style prop beats a component default and loses to a consumer's plain class and `style`. The props, their CSS properties and the breakpoints are one table in `src/style-props.ts`, and `build.mjs` writes the rules from it.
 - Its tokens are the CSS custom properties `--solix-*` in `src/tokens.stylex.ts`. A colour token is written in OKLCH. Every other token is a length in rem, so it measures the same wherever it is used.
 - The modal's backdrop reads `--solix-color-backdrop` inside `::backdrop`, which inherits it from the dialog only in a 2024 engine: Chromium 122, Firefox 120 or Safari 17.4 or later.
 - With a headless component library underneath, Solid's development build reported two diagnostics that could not be fixed from this side. On `<details>` it reports none.

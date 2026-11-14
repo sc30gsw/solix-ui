@@ -9,6 +9,7 @@ const repositoryRoot = join(import.meta.dirname, "..");
 const kindByPrefix = [
   ["--solix-color-", "colour"],
   ["--solix-radius-", "radius"],
+  ["--solix-spacing-", "spacing"],
 ];
 
 function lineOf(source, node) {
@@ -63,7 +64,7 @@ export function tokenValues(file = tokensFile) {
 
 /**
  * @param {string} name
- * @returns {"colour" | "radius" | "length"}
+ * @returns {"colour" | "radius" | "spacing" | "length"}
  */
 export function tokenKind(name) {
   return kindByPrefix.find(([prefix]) => name.startsWith(prefix))?.[1] ?? "length";

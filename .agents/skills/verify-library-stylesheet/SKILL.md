@@ -7,11 +7,11 @@ description: Checks that the library's built stylesheet can always be overridden
 
 ## The promise
 
-Every rule the library build emits sits inside the `solix` cascade layer, every class it emits starts with the library prefix `sx`, and no declaration is `!important`.
+Every rule the library build emits sits inside the `solix` cascade layer, every class it emits starts with the library prefix `sx`, and no declaration is `!important`. The style-prop rules sit in a layer nested in `solix`, named `style-props` and ordered after every layer StyleX emits, so a style prop beats a component default and still loses to a consumer's unlayered rule. Each style prop's rules come at its base and then at each breakpoint in ascending order, and the `hiddenFrom` and `visibleFrom` rules come after all of them.
 
 ## The harm when it breaks
 
-A rule outside the layer, or an `!important` declaration inside it, beats the consumer's own CSS, so a consumer can no longer override that style with a plain class. A class without the prefix can collide with a consumer who also compiles StyleX.
+A rule outside the layer, or an `!important` declaration inside it, beats the consumer's own CSS, so a consumer can no longer override that style with a plain class. A class without the prefix can collide with a consumer who also compiles StyleX. A style-prop layer ordered before a StyleX layer lets a component default beat the style prop the consumer passed, and a breakpoint emitted out of order lets a smaller breakpoint's value win on a wide screen.
 
 ## Does your change touch it?
 
@@ -19,10 +19,12 @@ It does if it edits any of these:
 
 | Covered code | What the check assumes about it |
 | --- | --- |
-| `packages/core/build-pipeline.mjs`: `compileLibrarySource`, `libraryStylesheet`, `LIBRARY_CASCADE_LAYER`, `LIBRARY_CLASS_PREFIX` | This is the only code that turns StyleX source into the published stylesheet. |
-| `packages/core/build.mjs` | It writes `dist/styles.css` from `libraryStylesheet` and nothing else. |
+| `packages/core/build-pipeline.mjs`: `compileLibrarySource`, `libraryStylesheet`, `LIBRARY_CASCADE_LAYER`, `LIBRARY_CLASS_PREFIX`, `STYLE_PROP_LAYER` | This is the only code that turns StyleX source into the published stylesheet, and that puts the style-prop rules in their nested layer after the StyleX layers. |
+| `packages/core/build.mjs` | It writes `dist/styles.css` from `libraryStylesheet`, given the StyleX rules and the `stylePropRules()` of the built `dist/style-props.js`, and nothing else. |
+| `packages/core/src/style-props.ts`: `stylePropRules` | It writes every style-prop rule from the table: a base rule per prop, one `min-width` media block per breakpoint in ascending order, then the `hiddenFrom` and `visibleFrom` rules. It imports nothing at run time, so plain Node can load its build. |
 | `packages/core/src/**` | Library styles are written with `stylex.create` and `stylex.defineVars`. A component may set a private custom property from `disclosure-state.stylex.ts` inside `stylex.create`, with conditions, and may style `::backdrop` in a nested block, as `Modal.tsx` does. |
-| `packages/core/tests/stylesheet-properties.test.ts` | It calls `compileLibrarySource` and `libraryStylesheet` directly and parses the result with PostCSS. |
+| `packages/core/tests/stylesheet-properties.test.ts` | It calls `compileLibrarySource` and `libraryStylesheet` directly, with the real style-prop rules, and parses the result with PostCSS. |
+| `packages/core/tests/cascade-layers.ts` | It lists the layers nested in a layer in the order the cascade ranks them, for both tests. |
 | `packages/core/tests/build-output.test.ts` | It reads `packages/core/dist/styles.css` and the built components, and parses the stylesheet with PostCSS. |
 | `tests/support/global-setup.ts` | It runs `vp run -r build` in production mode before any test, which is what writes `packages/core/dist`. |
 | `packages/core/tests/built-components.ts` | It lists the components that `packages/core/dist` holds. |
@@ -40,7 +42,7 @@ Last confirmed against commit `c1a47cd`. Run `git diff c1a47cd -- packages/core 
 vp test packages/core/tests/stylesheet-properties.test.ts packages/core/tests/build-output.test.ts
 ```
 
-It takes about ten seconds. The first file is the generated check. The second checks the stylesheet that the real library sources build to, including the `!important` rule.
+It takes about ten seconds. The first file is the generated check. The second checks the stylesheet that the real library sources build to, including the `!important` rule, the nested-layer order, and the order of the breakpoint rules against the owner's breakpoints: xs 36em, sm 48em, md 62em, lg 75em and xl 88em.
 
 ## The tool and why
 
@@ -51,6 +53,7 @@ No verifier runs on a JavaScript build script, so this is not a proof. `styleshe
 - 300 generated definitions per run, a different set each run.
 - One to three style namespaces, each with one to four of fifteen CSS properties and two private custom properties, and sometimes a `::backdrop` block of up to three properties with plain values.
 - Values that are plain, or conditional on pseudo-classes (including `:user-invalid` and `:disabled`), `data-*` attribute selectors, the `open` attribute, `@media`, `@supports`, and `stylex.when.ancestor`, `siblingBefore` and `descendant`, nested up to two levels.
+- For each of those definitions, that the style-prop layer is the last layer nested in `solix`, whatever layers StyleX emits for it.
 
 ## What a pass does not cover
 
@@ -68,6 +71,7 @@ No verifier runs on a JavaScript build script, so this is not a proof. `styleshe
 ## When the change is intended
 
 - Renaming the layer or the prefix: change the constant in `build-pipeline.mjs`. The tests import it, so they follow.
-- Adding a second layer, or emitting rules outside the layer on purpose: this changes the contract in `AGENTS.md`. Change that rule first, then the assertion on the stylesheet's top-level nodes.
+- Adding a second top-level layer, or emitting rules outside the layer on purpose: this changes the contract in `AGENTS.md`. Change that rule first, then the assertion on the stylesheet's top-level nodes.
+- Changing a breakpoint: the owner fixed them. Change the table in `packages/core/src/style-props.ts` and `ownerBreakpoints` in `build-output.test.ts` together, and the viewport widths in `apps/playground/tests/consumer.test.ts`.
 - Upgrading StyleX: run the check, then update the version in the table above.
 - Using a StyleX feature listed under "does not cover": add it to the generator first.

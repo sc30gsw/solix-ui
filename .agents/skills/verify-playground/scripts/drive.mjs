@@ -183,6 +183,29 @@ const journeys = {
     observe("press outside: the dialog is visible", await page.locator("dialog").isVisible(), false);
     observe("press outside: the app records", await readout.textContent(), "The app records the modal as closed.");
   },
+  box: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Style props" });
+    const overButton = page.getByRole("button", { name: "Background from a style prop" });
+    const text = (content) => page.getByText(content, { exact: true });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", "Open the page 640 pixels wide, below the md breakpoint, and scroll to the section named Style props.", section);
+    observe("the style prop's background beats the button's own default", await style(overButton, "background-color"), expected("--solix-color-error"));
+    observe("a style prop sets the margin", await style(text("Style prop margin"), "margin-top"), expected("--solix-spacing-xl"));
+    observe("the consumer's class beats the style prop", await style(text("Consumer class margin"), "margin-top"), expected("roomy"));
+    observe("the consumer's style beats the consumer's class and the style prop", await style(text("Consumer style margin"), "margin-top"), expected("pinnedMargin"));
+    observe("below md: the section's padding comes from its xs value", await style(section, "padding-top"), expected("--solix-spacing-sm"));
+    observe("below md: Hidden from md is visible", await text("Hidden from md").isVisible(), true);
+    observe("below md: Visible from md is visible", await text("Visible from md").isVisible(), false);
+
+    await page.setViewportSize({ width: 992, height: 360 });
+    await text("Visible from md").waitFor({ state: "visible" });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", "Widen the page to 992 pixels, which is the md breakpoint. The padding grows, one line goes away and another appears.", section);
+    observe("at md: the section's padding comes from its md value", await style(section, "padding-top"), expected("--solix-spacing-lg"));
+    observe("at md: Hidden from md is visible", await text("Hidden from md").isVisible(), false);
+    observe("at md: Visible from md is visible", await text("Visible from md").isVisible(), true);
+    observe("at md: the consumer's style still wins", await style(text("Consumer style margin"), "margin-top"), expected("pinnedMargin"));
+  },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();
     writeFileSync(join(directory, "response.html"), html);

@@ -10,6 +10,7 @@ const repositoryRoot = join(import.meta.dirname, "..");
 const probedProperty = {
   colour: "color",
   radius: "border-top-left-radius",
+  spacing: "margin-top",
   length: "height",
 };
 
@@ -99,6 +100,8 @@ export async function expectedValues(page, { sentinels = false } = {}) {
     ]),
     ["danger", "color", playgroundValue(".danger", "background-color")],
     ["brandGreen", "color", playgroundValue(".brand-green", "--solix-color-primary")],
+    ["roomy", "margin-top", playgroundValue(".roomy", "margin-top")],
+    ["pinnedMargin", "margin-top", playgroundValue(":root", "--playground-pinned-margin")],
   ];
   const rootRule =
     sentinelByName &&

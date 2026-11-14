@@ -20,6 +20,16 @@ import { builtComponents } from "../../../packages/core/tests/built-components";
 const appDirectory = join(import.meta.dirname, "..");
 const port = 4319;
 const url = `http://127.0.0.1:${port}/`;
+const mdBreakpointInPixels = 992;
+const viewportHeight = 800;
+const boxViewports: [label: string, width: number, fromMd: boolean][] = [
+  ["one pixel below the md breakpoint", mdBreakpointInPixels - 1, false],
+  ["at the md breakpoint", mdBreakpointInPixels, true],
+];
+const scriptModes: [label: string, javaScriptEnabled: boolean][] = [
+  ["on", true],
+  ["off", false],
+];
 
 let server: ChildProcess;
 
@@ -402,6 +412,49 @@ describe.each(enginesToVerify())("in %s", (engine) => {
       expect(await dialog.isVisible()).toBe(true);
       await expect.poll(() => readout.textContent()).toBe("The app records the modal as opened.");
     });
+  });
+
+  describe.each(boxViewports)("a Box %s", (_, width, fromMd) => {
+    test.each(scriptModes)(
+      "with scripts %s, ranks component default < style prop < consumer class < consumer style, and switches at md",
+      async (__, javaScriptEnabled) => {
+        const context = await browser.newContext({
+          javaScriptEnabled,
+          viewport: { width, height: viewportHeight },
+        });
+        const page = await context.newPage();
+        await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
+        const expected = await expectedValues(page, { sentinels: true });
+        const text = (content: string) => page.getByText(content, { exact: true });
+
+        expect(
+          await computed(
+            page.getByRole("button", { name: "Background from a style prop" }),
+            "background-color",
+          ),
+          "the style prop beats the component default",
+        ).toBe(expected("--solix-color-error"));
+        expect(await computed(text("Style prop margin"), "margin-top")).toBe(
+          expected("--solix-spacing-xl"),
+        );
+        expect(
+          await computed(text("Consumer class margin"), "margin-top"),
+          "the consumer's class beats the style prop",
+        ).toBe(expected("roomy"));
+        expect(
+          await computed(text("Consumer style margin"), "margin-top"),
+          "the consumer's style beats the consumer's class and the style prop",
+        ).toBe(expected("pinnedMargin"));
+        expect(
+          await computed(page.getByRole("region", { name: "Style props" }), "padding-top"),
+          "the responsive padding switches from its xs value to its md value at md",
+        ).toBe(expected(fromMd ? "--solix-spacing-lg" : "--solix-spacing-sm"));
+        expect(await text("Hidden from md").isVisible(), "hiddenFrom md").toBe(!fromMd);
+        expect(await text("Visible from md").isVisible(), "visibleFrom md").toBe(fromMd);
+
+        await context.close();
+      },
+    );
   });
 
   test("a modal stays closed with scripts turned off", async () => {
