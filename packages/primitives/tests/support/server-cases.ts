@@ -30,6 +30,11 @@ export function serialized(value: unknown): string {
 }
 
 export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
+  createActiveElement: serverCase({
+    create: (createActiveElement) => createActiveElement({ deep: () => false }),
+    read: (active) => active()?.localName ?? null,
+    expected: null,
+  }),
   createClickOutside: serverCase({
     create: (createClickOutside) => [
       createClickOutside(() => undefined),
@@ -63,6 +68,11 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
       handlers.set(false);
     },
   }),
+  createDocumentVisibility: serverCase({
+    create: (createDocumentVisibility) => createDocumentVisibility(),
+    read: (visibility) => visibility(),
+    expected: "visible",
+  }),
   createElementSize: serverCase({
     create: (createElementSize) => createElementSize({ box: "border-box" }),
     read: ({ width, height }) => [width(), height()],
@@ -85,6 +95,12 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
   createFocusTrap: serverCase({
     create: (createFocusTrap) => createFocusTrap(() => false),
     ref: (ref) => ref,
+  }),
+  createFocusWithin: serverCase({
+    create: (createFocusWithin) => createFocusWithin({ onFocus: () => undefined }),
+    read: ({ focused }) => focused(),
+    expected: false,
+    ref: ({ ref }) => ref,
   }),
   createHeadroom: serverCase({
     create: (createHeadroom) => createHeadroom({ fixedAt: () => 40, onFix: () => undefined }),
@@ -160,6 +176,9 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
         () => document.documentElement,
       ),
   }),
+  createPageLeave: serverCase({
+    create: (createPageLeave) => createPageLeave(() => undefined),
+  }),
   createPrevious: serverCase({
     create: (createPrevious) => createPrevious(() => "now"),
     read: (previous) => previous(),
@@ -211,6 +230,11 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
       handlers.reset();
     },
   }),
+  createTextSelection: serverCase({
+    create: (createTextSelection) => createTextSelection(),
+    read: (selection) => selection()?.type ?? null,
+    expected: null,
+  }),
   createToggle: serverCase({
     create: (createToggle) => createToggle(["light", "dark"]),
     read: ([value]) => value(),
@@ -230,6 +254,11 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     read: ([state]) => [state.value(), state.lastValidValue(), state.valid()],
     expected: ["ab", undefined, true],
     commands: ([, setValue]) => setValue("abc"),
+  }),
+  createViewportSize: serverCase({
+    create: (createViewportSize) => createViewportSize(),
+    read: ({ width, height }) => [width(), height()],
+    expected: [0, 0],
   }),
   createWindowEvent: serverCase({
     create: (createWindowEvent) =>

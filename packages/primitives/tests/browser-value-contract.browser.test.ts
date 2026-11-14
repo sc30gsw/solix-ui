@@ -14,6 +14,10 @@ type ValueContract = {
 };
 
 const contracts: { [K in PageValuePrimitive]: () => ValueContract } = {
+  createActiveElement: () => ({
+    create: (raw) => primitives.createActiveElement({ deep: () => Math.round(raw()) >= 0 }),
+  }),
+  createDocumentVisibility: () => ({ create: () => primitives.createDocumentVisibility() }),
   createHeadroom: () => {
     const scroll = stubbedScroll(0);
     return {
@@ -31,6 +35,13 @@ const contracts: { [K in PageValuePrimitive]: () => ValueContract } = {
     create: (raw) => primitives.createMediaQuery(() => `(min-width: ${Math.round(raw())}px)`),
   }),
   createScrollDirection: () => ({ create: () => primitives.createScrollDirection() }),
+  createTextSelection: () => ({ create: () => primitives.createTextSelection() }),
+  createViewportSize: () => ({
+    create: () => {
+      const size = primitives.createViewportSize();
+      return () => [size.width(), size.height()];
+    },
+  }),
   createWindowScroll: () => ({
     create: () => {
       const [position] = primitives.createWindowScroll();
@@ -40,9 +51,21 @@ const contracts: { [K in PageValuePrimitive]: () => ValueContract } = {
 };
 
 const missingApis: { [K in PageValuePrimitive]: () => () => void } = {
+  createActiveElement: () => replaced(document, "activeElement", undefined),
+  createDocumentVisibility: () => replaced(document, "visibilityState", undefined),
   createHeadroom: () => replaced(window, "scrollY", undefined),
   createMediaQuery: () => replaced(window, "matchMedia", undefined),
   createScrollDirection: () => replaced(window, "scrollY", undefined),
+  createTextSelection: () => replaced(document, "getSelection", undefined),
+  createViewportSize: () => {
+    const restores = [
+      replaced(window, "innerWidth", undefined),
+      replaced(window, "innerHeight", undefined),
+    ];
+    return () => {
+      for (const restore of restores.reverse()) restore();
+    };
+  },
   createWindowScroll: () => {
     const restores = [
       replaced(window, "scrollX", undefined),

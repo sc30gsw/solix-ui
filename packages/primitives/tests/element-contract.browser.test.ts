@@ -128,6 +128,24 @@ const contracts: { [K in ElementPrimitive]: () => Contract } = {
       return element.contains(document.activeElement);
     },
   }),
+  createFocusWithin: () => () => {
+    const within = primitives.createFocusWithin<HTMLElement>();
+    return {
+      ref: within.ref,
+      actsOn: async (element) => {
+        const outside = button("outside");
+        outside.focus();
+        const entered = record(element, "focusin", true);
+        element.querySelector("button")?.focus();
+        await witnessed(() => entered.length > 0, "the focusin");
+        const acted = within.focused();
+        outside.focus();
+        outside.remove();
+        return acted;
+      },
+      value: { read: within.focused, initial: false },
+    };
+  },
   createHover: () => () => {
     const hover = primitives.createHover<HTMLElement>();
     return {

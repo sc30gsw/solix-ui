@@ -40,10 +40,38 @@ async function scrolledIntoView(page: Page, name: string): Promise<Revealed> {
 }
 
 const reveal: { [K in BrowserValuePrimitive]: (page: Page) => Promise<Revealed> } = {
+  createActiveElement: async (page) => {
+    await page.evaluate(() => document.querySelector("h1")?.focus());
+    return { expected: '"body"', restore: async () => undefined };
+  },
+  createDocumentVisibility: async (page) => {
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    return {
+      expected: '"hidden"',
+      restore: () =>
+        page.evaluate(() => {
+          Reflect.deleteProperty(document, "visibilityState");
+          document.dispatchEvent(new Event("visibilitychange"));
+        }),
+    };
+  },
   createElementSize: async (page) => ({
     expected: "[200,50]",
     restore: await sized(page, "createElementSize"),
   }),
+  createFocusWithin: async (page) => {
+    await region(page, "createFocusWithin").focus();
+    return {
+      expected: "true",
+      restore: async () => {
+        await region(page, "createFocusWithin").blur();
+        await scrolledTo(page, 0);
+      },
+    };
+  },
   createHeadroom: async (page) => {
     await scrolledTo(page, 0);
     await scrolledTo(page, 200);
@@ -80,6 +108,20 @@ const reveal: { [K in BrowserValuePrimitive]: (page: Page) => Promise<Revealed> 
     await scrolledTo(page, 80);
     return { expected: '"up"', restore: () => scrolledTo(page, 0) };
   },
+  createTextSelection: async (page) => {
+    await page.evaluate(() => {
+      const heading = document.querySelector("h1");
+      if (heading) document.getSelection()?.selectAllChildren(heading);
+    });
+    return {
+      expected: '"Range"',
+      restore: () => page.evaluate(() => document.getSelection()?.removeAllRanges()),
+    };
+  },
+  createViewportSize: async (page) => ({
+    expected: await page.evaluate(() => JSON.stringify([window.innerWidth, window.innerHeight])),
+    restore: async () => undefined,
+  }),
   createWindowScroll: async (page) => {
     await scrolledTo(page, 40);
     return { expected: JSON.stringify({ x: 0, y: 40 }), restore: () => scrolledTo(page, 0) };
