@@ -16,7 +16,7 @@ vp run -r build
 
 `build.mjs` runs Babel with the StyleX plugin through `build-pipeline.mjs` and writes `dist/*.jsx` (StyleX compiled away, JSX kept) and `dist/styles.css` (every rule inside `@layer solix`). A consumer imports the components from `@solix/core` and the stylesheet from `@solix/core/styles.css`.
 
-`vp test` builds the library and the playground in `apps/playground` in production mode before it runs any test. `tests/build-output.test.ts` checks what the library build writes, `tests/stylesheet-properties.test.ts` checks the build pipeline on generated style definitions, `tests/component-contract.test.tsx` checks the root contract, the style props and the parts of every exported component, `tests/box.test.tsx` checks `Box` against fixed cases written from the requirement, `tests/wrapped-modal.test.ts` checks a `Modal` that `Box` or `Button` wraps in each installed browser engine, and `tests/token-contrast.test.ts` checks how each token is written and the WCAG contrast of the colour pairs in each component's `stylex.create` blocks. What a consumer sees in a browser is checked in `apps/playground/tests`.
+`vp test` builds the library and the apps in `apps` in production mode before it runs any test. `tests/build-output.test.ts` checks what the library build writes, `tests/stylesheet-properties.test.ts` checks the build pipeline on generated style definitions, `tests/component-contract.test.tsx` checks the root contract, the style props and the parts of every exported component, `tests/box.test.tsx` checks `Box` against fixed cases written from the requirement, `tests/wrapped-modal.test.ts` checks a `Modal` that `Box` or `Button` wraps in each installed browser engine, and `tests/token-contrast.test.ts` checks how each token is written and the WCAG contrast of the colour pairs in each component's `stylex.create` blocks. What a consumer sees in a browser is checked in `apps/playground/tests`.
 
 ## How it is built
 
@@ -27,6 +27,7 @@ vp run -r build
 - Every component takes `classes` and `styles`, keyed by its parts, and `unstyled`. Its parts are the keys of its `stylex.create` block, `root` among them, and each part carries the stable class `solix-<Component>-<part>`. A class that `classes` names for a part beats the library's style on that part, as a plain `class` does on the root. A declaration that `styles` names for a part is written inline on it, and on the root the consumer's `style` beats `styles.root`. A declaration whose value is `undefined` or `null`, in `styles` or in `style`, sets nothing and replaces nothing. `unstyled` drops the library's look from every part and keeps the stable classes, the style props, `classes`, `styles`, `class` and `style`.
 - `Modal` takes no `display`, `hiddenFrom` or `visibleFrom`. A class that sets `display` on a `<dialog>` beats the browser's own hiding of a closed dialog, so a closed modal would show on the page. Its type declares the three as `never`, and it leaves them out of its style props at run time too. It passes a consumer's `ref` the `<dialog>` along with its own.
 - It compiles with its own class name prefix, `sx`, so its classes cannot collide with a consumer who also uses StyleX.
+- A consumer who compiles StyleX passes `stylex.attrs(styles.name).class` through `class` or `classes`, and it beats the library's style, as a plain class does. A StyleX block that sets a `--solix-*` token on a wrapper themes the components inside it. `apps/stylex-consumer` builds with the StyleX Vite plugin, whose output is unlayered, and its tests check all three in each installed engine, with the library's stylesheet before the consumer's and after it.
 - It has no runtime dependency beyond its Solid and StyleX peers. The disclosure needs no JavaScript: it opens and closes with scripts turned off.
 - A style prop, such as `mt="md"` on `Box` or any other component, writes only the custom property `--sx-mt` into `style`. The class `sx-mt` in a layer nested in `solix` and ordered after the StyleX layers reads it, so a style prop beats a component default and loses to a consumer's plain class and `style`. `hiddenFrom` and `visibleFrom` sit in the same layer, so a consumer's class that sets `display` beats them too.
 - The props, their CSS properties, the breakpoints and the class prefix are one table in `src/style-prop-table.ts`, which imports nothing at run time. `build.mjs` loads its build and writes the rules from it. `src/style-props.ts` turns a component's props into its style-prop classes and custom properties.
@@ -40,7 +41,7 @@ vp run -r build
 
 ## Not covered
 
-- A consumer passing StyleX styles as an override. `classes` and `styles` take plain classes and inline declarations.
+- A consumer passing StyleX style objects, rather than the classes `stylex.attrs` compiles them to, to `class` or `classes`. `styles` takes inline declarations only.
 - A precompiled entry for tools that do not know the `solid` condition
 - Type declarations
 - Installing the library from a published tarball instead of a workspace link
