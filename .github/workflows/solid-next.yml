@@ -19,8 +19,7 @@ jobs:
         with:
           node-version-file: package.json
           cache: true
-          run-install: false
-      - run: node scripts/use-newest-solid.mjs
+      - run: node scripts/use-newest-solid.ts
       - run: vp install --no-frozen-lockfile
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp run verify

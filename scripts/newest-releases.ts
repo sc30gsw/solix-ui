@@ -138,6 +138,29 @@ function packageFound(pin: Pin, context: Context): Found {
   };
 }
 
+export type ReleasePolicy = {
+  minimumReleaseAgeMinutes: number;
+  excluded?: readonly string[];
+  now: number;
+};
+
+export function newestEligibleRelease(
+  name: string,
+  document: RegistryDocument,
+  policy: ReleasePolicy,
+): string | undefined {
+  return packageFound(
+    { name, registryName: name, pinned: undefined },
+    {
+      documents: { [name]: document },
+      minimumReleaseAgeMinutes: policy.minimumReleaseAgeMinutes,
+      excluded: policy.excluded ?? [],
+      now: policy.now,
+      nodeLtsMajor: 0,
+    },
+  ).eligible;
+}
+
 function statusOf(pin: Pin, found: Found, held: HeldBack | undefined): Status {
   if (!found.newest || !pin.pinned) return "unknown";
   if (semver.lte(found.newest, pin.pinned)) return "current";

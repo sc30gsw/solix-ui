@@ -9,6 +9,7 @@ import {
   packageManagerName,
   pinsOf,
 } from "../scripts/newest-releases";
+import { newestSolidVersions, withCatalogVersions } from "../scripts/use-newest-solid";
 import { catalogVersions, repositoryRoot, rootManifest, workspaceFile } from "./support/workspace";
 
 const now = Date.parse("2026-11-14T12:00:00Z");
@@ -178,4 +179,43 @@ test(`${workspaceFile} sets minimumReleaseAge, so pnpm and the newest-release ch
 
   expect(workspace).toMatch(/^minimumReleaseAge: \d+$/m);
   expect(workspace).toMatch(/^minimumReleaseAgeStrict: true$/m);
+});
+
+test("the Solid 2 canary takes the newest release on the next tag that is old enough, not one younger than the release age", () => {
+  const policy = { minimumReleaseAgeMinutes, now };
+  const solid = {
+    "solid-js": registryDocument({ latest: "1.9.19", next: "2.0.0-rc.22" }, [
+      ["1.9.19", 90],
+      ["2.0.0-rc.21", 20],
+      ["2.0.0-rc.22", 0.25],
+    ]),
+    "@solidjs/web": registryDocument({ latest: "2.0.0-rc.0", next: "2.0.0-rc.22" }, [
+      ["2.0.0-rc.0", 200],
+      ["2.0.0-rc.21", 20],
+      ["2.0.0-rc.22", 2],
+    ]),
+  };
+
+  expect(newestSolidVersions(solid, policy)).toEqual({
+    "solid-js": "2.0.0-rc.21",
+    "@solidjs/web": "2.0.0-rc.22",
+  });
+  expect(newestSolidVersions(solid, { ...policy, excluded: ["solid-js@2.0.0-rc.22"] })).toEqual({
+    "solid-js": "2.0.0-rc.22",
+    "@solidjs/web": "2.0.0-rc.22",
+  });
+});
+
+test("the Solid 2 canary rewrites only the Solid entries of the catalog", () => {
+  const workspace = [
+    "catalog:",
+    '  "@solidjs/web": 2.0.0-rc.21',
+    "  solid-js: 2.0.0-rc.21",
+    "  solid2-agent-kit: 0.25.0",
+    "",
+  ].join("\n");
+
+  expect(
+    withCatalogVersions(workspace, { "solid-js": "2.0.0-rc.22", "@solidjs/web": "2.0.0-rc.22" }),
+  ).toBe(workspace.replaceAll("2.0.0-rc.21", "2.0.0-rc.22"));
 });
