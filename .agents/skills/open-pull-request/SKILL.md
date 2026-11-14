@@ -7,6 +7,8 @@ description: The steps every pull request in this repository goes through before
 
 Every pull request goes through these steps in this order. A step that finds something sends you back to the first step after the fix.
 
+The pstack skills come from the pstack plugin that `.claude/settings.json` enables. They are set so that only a person can start them with `/pstack:<name>`, so an agent reads each one and follows it. Read `pstack/skills/<name>/SKILL.md` from the installed plugin, or from a clone of `cursor/plugins` when the session did not load the plugin. When a pstack skill starts an agent that `.claude/agents` does not hold, start a general-purpose agent whose first instruction is to read `pstack/agents/<agent>.md` from the same place and act as it. The Thermos skills and their agents are in this repository. If the Skill tool does not list one, read it from the path given.
+
 ## 1. Verify
 
 ```bash
@@ -21,11 +23,11 @@ Follow the pstack `correct` skill over this branch's work. Find each mistake tha
 
 ## 3. No comments
 
-Follow the pstack `no-comments` skill over the diff against the base branch. `tests/workspace-rules.test.ts` already fails on a comment in a script file, so this step is for what that test cannot see: a constraint that a comment used to carry and that no name, type or test carries yet.
+Follow the pstack `no-comments` skill over the diff against the base branch. It starts the `comment-sicko` agent. `tests/workspace-rules.test.ts` fails on a comment in a script file, but it does not see files under a directory whose name starts with a dot, such as `.agents`. Neither check sees a constraint that a comment used to carry and that no name, type or test carries yet.
 
 ## 4. Thermos
 
-Read `.agents/skills/thermos/SKILL.md` and follow it. The Skill tool does not list it, because it is set to run only when asked. Start the two reviewers in `.claude/agents`, and give each one the diff against the base branch, the full contents of the changed files, and the path of its rubric: `.agents/skills/thermo-nuclear-review/SKILL.md` or `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Fix each finding you confirm, and say why for each one you dismiss. Run step 1 again after a fix.
+Read `.agents/skills/thermos/SKILL.md` and follow it. Start the two reviewers in `.claude/agents`, and give each one the diff against the base branch, the full contents of the changed files, and the path of its rubric: `.agents/skills/thermo-nuclear-review/SKILL.md` or `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Fix each finding you confirm, and say why for each one you dismiss. Run step 1 again after a fix.
 
 ## 5. Open it
 
@@ -36,5 +38,4 @@ Read `.agents/skills/thermos/SKILL.md` and follow it. The Skill tool does not li
 
 ## What this skill does not cover
 
-- The pstack skills themselves. They live in the `pstack` plugin from `cursor/plugins`, which `.claude/settings.json` enables. In a session that did not load the plugin, read them from a clone of that repository.
 - Merging. A person merges.

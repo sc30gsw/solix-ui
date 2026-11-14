@@ -1,16 +1,28 @@
 import { existsSync, globSync, lstatSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "../scripts/browser-engines.mjs";
 import { type Manifest, repositoryRoot } from "./support/workspace";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
+const agentsDirectory = join(repositoryRoot, ".claude/agents");
+const agentPathInBackticks = /`(\.(?:agents|claude)\/[^`*\s]+)`/g;
+const trailingPunctuation = /[:.,]$/;
 const workflowFiles = globSync(".github/workflows/*.yml", { cwd: repositoryRoot });
 const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github)\/[^`:*\s]+)`/g;
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 
 const skillNames = readdirSync(skillsDirectory).sort();
+
+function escapeForRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function skillText(name: string): string {
+  const file = join(skillsDirectory, name, "SKILL.md");
+  return existsSync(file) ? readFileSync(file, "utf8") : "";
+}
 
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
@@ -56,6 +68,49 @@ test("every skill is named for its directory, described, and linked from .claude
 
   expect(skillNames.length).toBeGreaterThan(0);
   expect([...violations, ...dangling]).toEqual([]);
+});
+
+test("every .agents or .claude path that a project-owned skill names exists", () => {
+  const vendored = Object.keys(
+    (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
+  );
+  const projectOwned = skillNames.filter((name) => !vendored.includes(name));
+  const violations = projectOwned.flatMap((name) =>
+    [...skillText(name).matchAll(agentPathInBackticks)]
+      .map(([, path]) => path.replace(trailingPunctuation, ""))
+      .filter((path) => !existsSync(join(repositoryRoot, path)))
+      .map(
+        (path) =>
+          `.agents/skills/${name}/SKILL.md: ${path} does not exist. A vendored skill may have been renamed upstream; point at its new path.`,
+      ),
+  );
+
+  expect(projectOwned.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
+test("every agent is named for its file and is started by an installed skill", () => {
+  const agentFiles = readdirSync(agentsDirectory).filter((file) => file.endsWith(".md"));
+  const skillTexts = skillNames
+    .map((name) => join(skillsDirectory, name, "SKILL.md"))
+    .filter((file) => existsSync(file))
+    .map((file) => readFileSync(file, "utf8"));
+  const violations = agentFiles.flatMap((file) => {
+    const name = basename(file, ".md");
+    const problems: string[] = [];
+    const front = frontMatterOf(readFileSync(join(agentsDirectory, file), "utf8"));
+    if (front.name !== name)
+      problems.push(`.claude/agents/${file}: name must be "${name}", not "${front.name}".`);
+    const startedBy = new RegExp(`subagent_type:\\s*["\`]?${escapeForRegExp(name)}(?![\\w-])`);
+    if (!skillTexts.some((text) => startedBy.test(text)))
+      problems.push(
+        `.claude/agents/${file}: no skill in .agents/skills starts it with subagent_type: "${name}". Remove the agent, or install the skill that starts it.`,
+      );
+    return problems;
+  });
+
+  expect(agentFiles.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
 });
 
 test("every file a verification skill's covered-code table names exists", () => {
