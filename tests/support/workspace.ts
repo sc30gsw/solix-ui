@@ -9,6 +9,10 @@ export const workspaceFile = "pnpm-workspace.yaml";
 const generatedOrInstalled = new Set(["node_modules", "dist", ".git"]);
 const catalogBlock = /^catalog:\n((?:[ \t]+.*\n?)+)/m;
 const catalogEntry = /^\s+("?)([^":\s]+)\1:\s*"?([^"\s]+)"?\s*$/;
+const permissionsBlock = /^permissions:\n((?:[ \t]+.*\n?)+)/m;
+const permissionPackage = /^ {2}("?)([^":\s]+)\1:$/;
+const permissionSkills = /^ {4}skills:(?: (true|false))?$/;
+const permissionSkill = /^ {6}- (\S+)$/;
 const peerDependencyThatMarksALibrary = "solid-js";
 
 export type Manifest = {
@@ -80,4 +84,32 @@ export function catalogVersions(): Record<string, string> {
     .map(([, , name, version]): [string, string] => [name, version]);
   if (entries.length === 0) throw new Error(`${workspaceFile}: no catalog entries were found.`);
   return Object.fromEntries(entries);
+}
+
+export type SkillApproval = string[] | boolean;
+
+export function skillApprovals(): Record<string, SkillApproval> {
+  const block = permissionsBlock.exec(
+    readFileSync(join(repositoryRoot, workspaceFile), "utf8"),
+  )?.[1];
+  const approvals: Record<string, SkillApproval> = {};
+  let current: string | undefined;
+  for (const line of (block ?? "").split("\n").filter((found) => found.trim() !== "")) {
+    const named = permissionPackage.exec(line);
+    const skills = permissionSkills.exec(line);
+    const skill = permissionSkill.exec(line);
+    const list = current === undefined ? undefined : approvals[current];
+    if (named) {
+      current = named[2];
+    } else if (skills && current !== undefined) {
+      approvals[current] = skills[1] === undefined ? [] : skills[1] === "true";
+    } else if (skill && Array.isArray(list)) {
+      list.push(skill[1]);
+    } else {
+      throw new Error(
+        `${workspaceFile}: "${line.trim()}" is not a skill approval. Write each as permissions: <package>: skills: followed by the skill names, or skills: false.`,
+      );
+    }
+  }
+  return approvals;
 }

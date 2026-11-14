@@ -34,3 +34,14 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: "*"
+permissions:
+  "@solidjs/web":
+    skills:
+      - server-components
+  solid-js:
+    skills:
+      - solid-2.0
+      - solid-2.0-cheatsheet
+      - reactivity-diagnostics
+  modern-web-guidance:
+    skills: false
