@@ -6,6 +6,7 @@ import { observers } from "./support/browser-resources";
 import type { PageValuePrimitive } from "./support/primitive-kinds";
 import { replaced } from "./support/replace";
 import { serverCases } from "./support/server-cases";
+import { applied, stubbedScroll } from "./support/scroll";
 
 type ValueContract = {
   create: (raw: Accessor<number>) => () => unknown;
@@ -13,13 +14,44 @@ type ValueContract = {
 };
 
 const contracts: { [K in PageValuePrimitive]: () => ValueContract } = {
+  createHeadroom: () => {
+    const scroll = stubbedScroll(0);
+    return {
+      create: (raw) => {
+        const headroom = primitives.createHeadroom({ fixedAt: () => Math.round(raw()) });
+        return () => [headroom.pinned(), headroom.scrollProgress()];
+      },
+      before: async () => {
+        scroll.to(50);
+        await applied();
+      },
+    };
+  },
   createMediaQuery: () => ({
     create: (raw) => primitives.createMediaQuery(() => `(min-width: ${Math.round(raw())}px)`),
+  }),
+  createScrollDirection: () => ({ create: () => primitives.createScrollDirection() }),
+  createWindowScroll: () => ({
+    create: () => {
+      const [position] = primitives.createWindowScroll();
+      return position;
+    },
   }),
 };
 
 const missingApis: { [K in PageValuePrimitive]: () => () => void } = {
+  createHeadroom: () => replaced(window, "scrollY", undefined),
   createMediaQuery: () => replaced(window, "matchMedia", undefined),
+  createScrollDirection: () => replaced(window, "scrollY", undefined),
+  createWindowScroll: () => {
+    const restores = [
+      replaced(window, "scrollX", undefined),
+      replaced(window, "scrollY", undefined),
+    ];
+    return () => {
+      for (const restore of restores.reverse()) restore();
+    };
+  },
 };
 
 function registrationsDuring(run: () => void): number {

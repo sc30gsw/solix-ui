@@ -13,6 +13,7 @@ export { createElementSize, type ElementSize } from "./create-element-size";
 export { createEventListener } from "./create-event-listener";
 export { createFocusReturn, type FocusReturnOptions } from "./create-focus-return";
 export { createFocusTrap } from "./create-focus-trap";
+export { createHeadroom, type HeadroomOptions, type HeadroomReturn } from "./create-headroom";
 export { createHotkeys } from "./create-hotkeys";
 export { createHover, type HoverReturn } from "./create-hover";
 export { createInViewport, type InViewportReturn } from "./create-in-viewport";
@@ -26,6 +27,7 @@ export { createMutationObserver } from "./create-mutation-observer";
 export { createPrevious } from "./create-previous";
 export { createQueue, type QueueOptions, type QueueReturn } from "./create-queue";
 export { createResizeObserver, type ResizeObserverReturn } from "./create-resize-observer";
+export { createScrollDirection, type ScrollDirection } from "./create-scroll-direction";
 export { createSetState, type SetStatePatch } from "./create-set-state";
 export { createSet } from "./create-set";
 export {
@@ -41,6 +43,11 @@ export {
 } from "./create-uncontrolled";
 export { createValidatedState, type ValidatedState } from "./create-validated-state";
 export { createWindowEvent } from "./create-window-event";
+export {
+  createWindowScroll,
+  type ScrollPosition,
+  type WindowScrollReturn,
+} from "./create-window-scroll";
 export { getHotkeyHandler } from "./get-hotkey-handler";
 export type {
   BrowserValue,

@@ -39,6 +39,18 @@ function CaseProbe(props: { name: Primitive }) {
   );
 }
 
+function HeadroomCallbacks() {
+  const [calls, setCalls] = createSignal<string[]>([]);
+  const called = (name: string) => () => setCalls((seen) => [...seen, name]);
+  primitives.createHeadroom({
+    fixedAt: 0,
+    onPin: called("pin"),
+    onFix: called("fix"),
+    onRelease: called("release"),
+  });
+  return <p>Headroom callbacks: {calls().join(" ") || "none"}</p>;
+}
+
 export function PrimitivesSection() {
   const [presses, setPresses] = createSignal(0);
   const [clicks, setClicks] = createSignal(0);
@@ -56,6 +68,7 @@ export function PrimitivesSection() {
       </div>
       <p>Presses outside the region: {presses()}</p>
       <p>Clicks on the region: {clicks()}</p>
+      <HeadroomCallbacks />
       {(Object.keys(serverCases) as Primitive[]).map((name) => (
         <CaseProbe name={name} />
       ))}

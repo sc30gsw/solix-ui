@@ -1,4 +1,4 @@
-import type { Page } from "playwright";
+import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import type { BrowserValuePrimitive } from "../../../packages/primitives/tests/support/primitive-kinds";
 import { inEveryEngine, openPage, type OpenPage } from "./support/playground";
@@ -44,6 +44,11 @@ const reveal: { [K in BrowserValuePrimitive]: (page: Page) => Promise<Revealed> 
     expected: "[200,50]",
     restore: await sized(page, "createElementSize"),
   }),
+  createHeadroom: async (page) => {
+    await scrolledTo(page, 0);
+    await scrolledTo(page, 200);
+    return { expected: "[false,0]", restore: () => scrolledTo(page, 0) };
+  },
   createHover: async (page) => {
     await region(page, "createHover").hover();
     return {
@@ -70,6 +75,15 @@ const reveal: { [K in BrowserValuePrimitive]: (page: Page) => Promise<Revealed> 
     }),
     restore: await sized(page, "createResizeObserver"),
   }),
+  createScrollDirection: async (page) => {
+    await scrolledTo(page, 120);
+    await scrolledTo(page, 80);
+    return { expected: '"up"', restore: () => scrolledTo(page, 0) };
+  },
+  createWindowScroll: async (page) => {
+    await scrolledTo(page, 40);
+    return { expected: JSON.stringify({ x: 0, y: 40 }), restore: () => scrolledTo(page, 0) };
+  },
 };
 
 function line(page: Page, start: string): Promise<string | null> {
@@ -89,6 +103,32 @@ function decoded(markup: string): string {
 function shownInMarkup(html: string): Map<string, string> {
   const outputs = html.matchAll(/<output[^>]*data-case-value="([^"]+)"[^>]*>(.*?)<\/output>/gs);
   return new Map([...outputs].map(([, name, text]) => [name, decoded(text)]));
+}
+
+async function hydratedWhileScrolled(browser: Browser, y: number): Promise<string | null> {
+  const context = await browser.newContext({ viewport: { width: 800, height: 600 } });
+  try {
+    const page = await context.newPage();
+    const gate: { open: () => void } = { open: () => undefined };
+    const opened = new Promise<void>((resolve) => {
+      gate.open = resolve;
+    });
+    await page.route("**/*.js", async (route) => {
+      await opened;
+      await route.continue();
+    });
+    await page.goto(url, { waitUntil: "commit" });
+    await page.getByText(/^Headroom callbacks: /).waitFor({ state: "attached" });
+    await scrolledTo(page, y);
+    gate.open();
+    await page.waitForFunction(() =>
+      document.querySelector("output[data-hydration-probe][data-hydrated-as]"),
+    );
+    await page.waitForLoadState("networkidle");
+    return await line(page, "Headroom callbacks");
+  } finally {
+    await context.close();
+  }
 }
 
 test("the server renders the regions and lines the page shows, and a probe after each primitive", async () => {
@@ -170,5 +210,10 @@ inEveryEngine((browser) => {
       await page.getByText("A region that counts clicks on it").click();
       await expect.poll(() => line(page, "Clicks on the region")).toBe("Clicks on the region: 1");
     });
+  });
+
+  test("a page that hydrates scrolled past fixedAt calls no headroom callback, and one that hydrates at the top calls onPin and onFix", async () => {
+    expect(await hydratedWhileScrolled(browser(), 400)).toBe("Headroom callbacks: none");
+    expect(await hydratedWhileScrolled(browser(), 0)).toBe("Headroom callbacks: pin fix");
   });
 });

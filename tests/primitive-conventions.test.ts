@@ -142,7 +142,7 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/get-other.ts"),
     forbiddenAt("src/internal-trap.ts"),
   ],
-  modelTests: [forbiddenAt("src/create-modelled.ts")],
+  modelTests: [forbiddenAt("src/create-modelled.ts"), forbiddenAt("src/create-folded.ts")],
   browserTestWaits: [
     located("forbidden", "tests/create-misbehaving.browser.test.ts", "{ timeout: 2_000 }"),
     located("forbidden", "tests/create-misbehaving.browser.test.ts", "setTimeout"),

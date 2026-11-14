@@ -86,6 +86,11 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createFocusTrap) => createFocusTrap(() => false),
     ref: (ref) => ref,
   }),
+  createHeadroom: serverCase({
+    create: (createHeadroom) => createHeadroom({ fixedAt: () => 40, onFix: () => undefined }),
+    read: ({ pinned, scrollProgress }) => [pinned(), scrollProgress()],
+    expected: [true, 1],
+  }),
   createHotkeys: serverCase({
     create: (createHotkeys) => createHotkeys(() => [["mod+K", () => undefined]]),
   }),
@@ -176,6 +181,11 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     expected: { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0 },
     ref: ([ref]) => ref,
   }),
+  createScrollDirection: serverCase({
+    create: (createScrollDirection) => createScrollDirection(),
+    read: (direction) => direction(),
+    expected: "unknown",
+  }),
   createSet: serverCase({
     create: (createSet) => createSet(["member"]),
     read: (set) => set(),
@@ -228,5 +238,11 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
         () => undefined,
         () => ({ passive: true }),
       ),
+  }),
+  createWindowScroll: serverCase({
+    create: (createWindowScroll) => createWindowScroll(),
+    read: ([position]) => position(),
+    expected: { x: 0, y: 0 },
+    commands: ([, scrollTo]) => scrollTo({ y: 10 }),
   }),
 };
