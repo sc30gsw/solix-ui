@@ -5,11 +5,15 @@ export function createClientMemo<T>(compute: () => T, loadingValue: T): () => T 
   return createMemo(compute, { ssrSource: "client", loadingValue });
 }
 
+function branded<T>(read: () => T): BrowserValue<T> {
+  return read as BrowserValue<T>;
+}
+
 export function createBrowserValue<T, C>(
   subscribe: (deliver: (value: T) => void, config: C) => void,
   options: { loadingValue: T; config?: () => C },
 ): BrowserValue<T> {
-  return createMemo(
+  const value = createMemo(
     () =>
       from<T>((deliver) => {
         subscribe(deliver, options.config?.() as C);
@@ -17,4 +21,5 @@ export function createBrowserValue<T, C>(
       }),
     { ssrSource: "client", loadingValue: options.loadingValue },
   );
+  return branded(value);
 }

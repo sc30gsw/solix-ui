@@ -1,5 +1,5 @@
 import { browserApi } from "./internal-browser-api";
-import { createBrowserValue, readOn } from "./internal-browser-value";
+import { createBrowserValue, mapBrowserValue, readOn } from "./internal-browser-value";
 import type { BrowserValue } from "./types";
 
 /** The width and height of the window's viewport, in CSS pixels. */
@@ -28,5 +28,8 @@ export function createViewportSize(): ViewportSize {
     ),
     { loadingValue: { width: 0, height: 0 } },
   );
-  return { width: () => size().width, height: () => size().height };
+  return {
+    width: mapBrowserValue(size, ({ width }) => width),
+    height: mapBrowserValue(size, ({ height }) => height),
+  };
 }

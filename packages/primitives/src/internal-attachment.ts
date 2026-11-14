@@ -1,4 +1,5 @@
 import { createEffect, createMemo, createSignal } from "solid-js";
+import { createBrowserSignal } from "./internal-browser-value";
 import { sameConfig } from "./internal-equal";
 import { type EventOf, handleEvent, listen, type ListenerSettings } from "./internal-listener";
 import type { BrowserValue, RefSetter } from "./types";
@@ -27,13 +28,7 @@ export function createElementValue<E extends Element, T, C = undefined>(
   attach: (element: E, config: C, deliver: (value: T) => void) => () => void,
   config?: () => C,
 ): [ref: RefSetter<E>, value: BrowserValue<T>] {
-  const [box, setBox] = createSignal<{ value: T }>(
-    { value: initial },
-    { equals: (left, right) => sameConfig(left.value, right.value) },
-  );
-  const deliver = (value: T) => {
-    setBox({ value });
-  };
+  const [value, deliver] = createBrowserSignal(initial);
   const ref = createElementAttachment<E, { element: E; config: C | undefined }>(
     (element) => element && { element, config: config?.() },
     (current) => {
@@ -44,7 +39,7 @@ export function createElementValue<E extends Element, T, C = undefined>(
       };
     },
   );
-  return [ref, () => box().value];
+  return [ref, value];
 }
 
 export function createTargetListener<T extends EventTarget, K extends string>(

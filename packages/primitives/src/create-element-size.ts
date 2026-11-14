@@ -1,4 +1,5 @@
 import { createResizeObserver } from "./create-resize-observer";
+import { mapBrowserValue } from "./internal-browser-value";
 import type { BrowserValue, MaybeAccessor, RefSetter } from "./types";
 
 /** The ref to put on the element, and the width and height of its box. */
@@ -23,5 +24,9 @@ export function createElementSize<E extends Element = Element>(
   options?: MaybeAccessor<ResizeObserverOptions | undefined>,
 ): ElementSize<E> {
   const [ref, rect] = createResizeObserver<E>(options);
-  return { ref, width: () => rect().width, height: () => rect().height };
+  return {
+    ref,
+    width: mapBrowserValue(rect, ({ width }) => width),
+    height: mapBrowserValue(rect, ({ height }) => height),
+  };
 }

@@ -3,7 +3,7 @@ import { barrelOrderRule } from "./barrel-order";
 import { browserGlobalReadsRule } from "./browser-global-reads";
 import { browserTestWaitsRule } from "./browser-test-waits";
 import { browserTestsUseTheHarnessRule } from "./browser-tests-use-the-harness";
-import { browserValuesRule } from "./browser-values";
+import { browserValueAssertionsRule, browserValuesRule } from "./browser-values";
 import { caughtErrorsRule } from "./caught-errors";
 import { commandKindsRule } from "./command-kinds";
 import { elementAttachmentsRule } from "./element-attachments";
@@ -38,6 +38,7 @@ export const primitiveRules = {
   styleAndClassWrites: styleAndClassWritesRule,
   elementAttachments: elementAttachmentsRule,
   browserValues: browserValuesRule,
+  browserValueAssertions: browserValueAssertionsRule,
   hydrationPolicy: hydrationPolicyRule,
   browserGlobalReads: browserGlobalReadsRule,
   commandKinds: commandKindsRule,

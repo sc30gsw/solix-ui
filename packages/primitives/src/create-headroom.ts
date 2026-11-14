@@ -1,5 +1,6 @@
 import { createEffect } from "solid-js";
 import { access } from "./internal-access";
+import { mapBrowserValue } from "./internal-browser-value";
 import { createScrollFold, type ScrollMove } from "./internal-scroll";
 import type { BrowserValue, MaybeAccessor } from "./types";
 
@@ -118,5 +119,8 @@ export function createHeadroom(options?: HeadroomOptions): HeadroomReturn {
       if (current.fixed && !before.fixed) options?.onFix?.();
     },
   );
-  return { pinned: () => state().progress > 0, scrollProgress: () => state().progress };
+  return {
+    pinned: mapBrowserValue(state, ({ progress }) => progress > 0),
+    scrollProgress: mapBrowserValue(state, ({ progress }) => progress),
+  };
 }

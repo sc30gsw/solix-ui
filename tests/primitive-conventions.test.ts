@@ -109,6 +109,7 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-unprobed.ts", "export function createUnprobed"),
     forbiddenAt("src/create-relayed.ts", "export function createRelayed"),
   ],
+  browserValueAssertions: [forbiddenAt("src/create-branded.ts", "as BrowserValue<number>")],
   hydrationPolicy: [
     forbiddenAt("src/create-misbehaving.ts", "import { createMemo, from }"),
     forbiddenAt("src/create-misbehaving.ts", "ssrSource"),

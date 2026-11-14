@@ -1,4 +1,5 @@
 import { createIntersection } from "./create-intersection";
+import { mapBrowserValue } from "./internal-browser-value";
 import type { BrowserValue, RefSetter } from "./types";
 
 /** The ref to put on the element, and whether any of it is in the viewport. */
@@ -20,5 +21,5 @@ export type InViewportReturn<E extends Element> = {
  */
 export function createInViewport<E extends Element = Element>(): InViewportReturn<E> {
   const { ref, entry } = createIntersection<E>();
-  return { ref, inViewport: () => entry()?.isIntersecting ?? false };
+  return { ref, inViewport: mapBrowserValue(entry, (found) => found?.isIntersecting ?? false) };
 }
