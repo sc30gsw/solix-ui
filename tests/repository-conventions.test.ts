@@ -7,6 +7,8 @@ import { type Manifest, repositoryRoot } from "./support/workspace";
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
 const agentsDirectory = join(repositoryRoot, ".claude/agents");
+const agentPathInBackticks = /`(\.(?:agents|claude)\/[^`*\s]+)`/g;
+const trailingPunctuation = /[:.,]$/;
 const workflowFiles = globSync(".github/workflows/*.yml", { cwd: repositoryRoot });
 const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github)\/[^`:*\s]+)`/g;
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
@@ -57,6 +59,25 @@ test("every skill is named for its directory, described, and linked from .claude
 
   expect(skillNames.length).toBeGreaterThan(0);
   expect([...violations, ...dangling]).toEqual([]);
+});
+
+test("every .agents or .claude path that a project-owned skill names exists", () => {
+  const vendored = Object.keys(
+    (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
+  );
+  const projectOwned = skillNames.filter((name) => !vendored.includes(name));
+  const violations = projectOwned.flatMap((name) =>
+    [...read(`.agents/skills/${name}/SKILL.md`).matchAll(agentPathInBackticks)]
+      .map(([, path]) => path.replace(trailingPunctuation, ""))
+      .filter((path) => !existsSync(join(repositoryRoot, path)))
+      .map(
+        (path) =>
+          `.agents/skills/${name}/SKILL.md: ${path} does not exist. A vendored skill may have been renamed upstream; point at its new path.`,
+      ),
+  );
+
+  expect(projectOwned.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
 });
 
 test("every agent is named for its file and is started by an installed skill", () => {

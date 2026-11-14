@@ -7,7 +7,7 @@ description: The steps every pull request in this repository goes through before
 
 Every pull request goes through these steps in this order. A step that finds something sends you back to the first step after the fix.
 
-If the Skill tool does not list a skill named below, read it from the path given.
+The pstack skills come from the pstack plugin that `.claude/settings.json` enables, and you run them as `/pstack:<name>`. If a session did not load the plugin, read `pstack/skills/<name>/SKILL.md` in a clone of `cursor/plugins`. The Thermos skills are in this repository. If the Skill tool does not list one, read it from the path given.
 
 ## 1. Verify
 
@@ -19,11 +19,11 @@ Run the matching `verify-*` skill for the code the change touches. Drive the cha
 
 ## 2. Correct
 
-Read `.agents/skills/correct/SKILL.md` and follow it over this branch's work. Find each mistake that happened twice, in the commits, the review threads and the corrections the operator gave. Fix each class at the highest level that works: architecture, then types, then a lint whose message names the fix, then a test. Show each new check failing on the mistake. Add the rule and its check to the table in `AGENTS.md`.
+Run `/pstack:correct` over this branch's work. Find each mistake that happened twice, in the commits, the review threads and the corrections the operator gave. Fix each class at the highest level that works: architecture, then types, then a lint whose message names the fix, then a test. Show each new check failing on the mistake. Add the rule and its check to the table in `AGENTS.md`.
 
 ## 3. No comments
 
-Read `.agents/skills/no-comments/SKILL.md` and follow it over the diff against the base branch. `tests/workspace-rules.test.ts` already fails on a comment in a script file, so this step is for what that test cannot see: a constraint that a comment used to carry and that no name, type or test carries yet.
+Run `/pstack:no-comments` over the diff against the base branch. `tests/workspace-rules.test.ts` already fails on a comment in a script file, so this step is for what that test cannot see: a constraint that a comment used to carry and that no name, type or test carries yet.
 
 ## 4. Thermos
 
