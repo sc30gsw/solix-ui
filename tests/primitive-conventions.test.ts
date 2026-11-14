@@ -1,6 +1,5 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import {
   importsOf,
@@ -9,6 +8,7 @@ import {
   type PrimitiveRuleName,
   publicModuleCount,
 } from "./support/primitive-rules";
+import { isTypeOnlyImport, parse, ts } from "./support/syntax";
 import { primitivesPackage, repositoryRoot } from "./support/workspace";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
@@ -145,12 +145,7 @@ test("each rule flags every line of a fixture that breaks it, and nothing else",
 
 function preBundledInConfig(): string[] {
   const path = join(repositoryRoot, viteConfig);
-  const source = ts.createSourceFile(
-    path,
-    readFileSync(path, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const source = parse(path);
   const declaration = source.statements
     .filter(ts.isVariableStatement)
     .flatMap((statement) => [...statement.declarationList.declarations])
@@ -172,15 +167,9 @@ function bareImportsReachedFrom(entries: readonly string[]): string[] {
     const file = queue.pop() ?? "";
     if (seen.has(file)) continue;
     seen.add(file);
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(file, "utf8"),
-      ts.ScriptTarget.Latest,
-      true,
-      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    );
+    const source = parse(file);
     for (const { specifier, node } of importsOf(source)) {
-      if (node.importClause?.isTypeOnly) continue;
+      if (isTypeOnlyImport(node.importClause)) continue;
       if (!specifier.startsWith(".")) {
         bare.add(specifier);
         continue;

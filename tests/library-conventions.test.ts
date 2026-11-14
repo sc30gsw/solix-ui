@@ -1,10 +1,9 @@
 import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
-import { descendants, exportsOf, parse } from "./support/syntax";
+import { descendants, exportsOf, nameOf, parse, parseAll, ts } from "./support/syntax";
 import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
@@ -173,19 +172,18 @@ function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
       : [ownProps];
   const literalMembers = members.filter(ts.isTypeLiteralNode).flatMap((literal) => literal.members);
   return {
-    names: literalMembers.flatMap((member) =>
-      member.name && (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name))
-        ? [member.name.text]
-        : [],
-    ),
+    names: literalMembers.flatMap((member) => {
+      const name = nameOf(member);
+      return name && (ts.isIdentifier(name) || ts.isStringLiteral(name)) ? [name.text] : [];
+    }),
     unread: [
       ...members.filter(
         (member) => !ts.isTypeLiteralNode(member) && member.getText() !== displayPropsRefused,
       ),
-      ...literalMembers.filter(
-        (member) =>
-          !member.name || (!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name)),
-      ),
+      ...literalMembers.filter((member) => {
+        const name = nameOf(member);
+        return !name || (!ts.isIdentifier(name) && !ts.isStringLiteral(name));
+      }),
     ].map((member) => member.getText()),
   };
 }
@@ -250,7 +248,7 @@ function polymorphicDefault(
   declaration: ts.FunctionDeclaration | ts.TypeAliasDeclaration,
 ): string | undefined {
   const [parameter] = declaration.typeParameters ?? [];
-  const fallback = parameter?.default;
+  const fallback = parameter?.defaultType;
   return fallback && ts.isLiteralTypeNode(fallback) && ts.isStringLiteral(fallback.literal)
     ? fallback.literal.text
     : undefined;
@@ -331,7 +329,11 @@ function partProblems(fn: ts.FunctionDeclaration): string[] {
       );
       return problems;
     }
-    const tag = holder.parent.parent.tagName.getText();
+    const element = holder.parent.parent;
+    const tag =
+      ts.isJsxOpeningElement(element) || ts.isJsxSelfClosingElement(element)
+        ? element.tagName.getText()
+        : element.getText();
     if (!intrinsicElement.test(tag)) {
       problems.push(
         `spread {...${call.getText()}} on an element such as <div>, not on <${tag}>: a part is one element of the component's own markup.`,
@@ -469,6 +471,7 @@ test("no source file of the library but parts.ts calls stylex.attrs or stylex.pr
       .filter((entry) => entry !== partsModule)
       .map((entry) => join(source, entry)),
   );
+  parseAll(files);
   const violations = files.flatMap((file) =>
     stylexRuntimeCalls(parse(file)).map(
       (callee) =>
@@ -636,11 +639,10 @@ function componentListsIn(
     const listed = ts.isArrayLiteralExpression(node)
       ? node.elements.flatMap((item) => (ts.isStringLiteralLike(item) ? [item.text] : []))
       : ts.isObjectLiteralExpression(node) && !mappedOverTheLibrary(node, source)
-        ? node.properties.flatMap((property) =>
-            property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
-              ? [property.name.text]
-              : [],
-          )
+        ? node.properties.flatMap((property) => {
+            const name = nameOf(property);
+            return name && (ts.isIdentifier(name) || ts.isStringLiteral(name)) ? [name.text] : [];
+          })
         : [];
     if (listed.length === 0 || listed.some((text) => !names.includes(text))) return [];
     return [
@@ -656,6 +658,7 @@ function componentListsIn(
 test("no array or object in a test file lists the components by hand, unless the object is typed as a mapped type over the keys of the library's exports", () => {
   const names = components.map(({ name }) => name);
   const testFiles = scriptFiles.filter((file) => file.split("/").includes(testDirectory));
+  parseAll(testFiles.map((file) => join(repositoryRoot, file)));
   const violations = testFiles.flatMap((file) =>
     componentListsIn(join(repositoryRoot, file), names).map(
       ({ line, listed, kind }) =>

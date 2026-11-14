@@ -22,7 +22,7 @@ catalog:
   semver: 7.8.6
   solid-js: 2.0.0-rc.21
   solid2-agent-kit: 0.25.0
-  typescript: ^6.0.3
+  typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   vite-plus: 1.6.0
 overrides:

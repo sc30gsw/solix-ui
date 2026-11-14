@@ -1,8 +1,8 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import semver from "semver";
-import ts from "typescript";
 import { expect, test } from "vite-plus/test";
+import { commentsIn, descendants, parse, parseAll, ts } from "./support/syntax";
 import {
   catalogVersions,
   type Manifest,
@@ -46,6 +46,9 @@ const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
 const namesNodeVersion = /node-version["']?\s*:/;
 const namesNodeVersionFile = /node-version-file["']?\s*:\s*(.*?)\s*$/;
 const namesRunner = /runs-on["']?\s*:/;
+const typeScriptApi = /^typescript(?:\/|$)/;
+const typeScriptApiHome = "tests/support/syntax/";
+const typeScriptApiEntry = "tests/support/syntax.ts";
 
 function installedDependencies(manifest: Manifest): [string, string][] {
   return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });
@@ -197,30 +200,72 @@ test("a library names another library of this repository as a workspace:^ peer, 
   expect(violations).toEqual([]);
 });
 
-function commentsOtherThanDocComments(file: string): string[] {
-  const text = readFileSync(join(repositoryRoot, file), "utf8");
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-  const found = new Map<number, string>();
-  const collect = (node: ts.Node): void => {
-    const ranges = [
-      ...(ts.getLeadingCommentRanges(text, node.getFullStart()) ?? []),
-      ...(ts.getTrailingCommentRanges(text, node.getEnd()) ?? []),
-    ];
-    for (const range of ranges) {
-      const comment = text.slice(range.pos, range.end);
-      if (!comment.startsWith("/**")) {
-        const line = source.getLineAndCharacterOfPosition(range.pos).line + 1;
-        found.set(range.pos, `${file}:${line}: ${comment.split("\n")[0]}`);
-      }
-    }
-    for (const child of node.getChildren(source)) collect(child);
-  };
-  collect(source);
-  return [...found.values()];
+function lineOf(source: ts.SourceFile, position: number): number {
+  return source.getLineAndCharacterOfPosition(position).line + 1;
 }
 
+function commentsOtherThanDocComments(file: string, source: ts.SourceFile): string[] {
+  return commentsIn(source)
+    .filter(({ text }) => !text.startsWith("/**"))
+    .map(({ pos, text }) => `${file}:${lineOf(source, pos)}: ${text.split("\n")[0]}`);
+}
+
+function moduleSpecifierOf(node: ts.Node): ts.Node | undefined {
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
+  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
+    return node.argument.literal;
+  const loadsAModule =
+    ts.isCallExpression(node) &&
+    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+      node.expression.getText() === "require");
+  return loadsAModule ? node.arguments[0] : undefined;
+}
+
+function typeScriptApiImports(file: string, source: ts.SourceFile): string[] {
+  return descendants(source).flatMap((node) => {
+    const specifier = moduleSpecifierOf(node);
+    return specifier && ts.isStringLiteralLike(specifier) && typeScriptApi.test(specifier.text)
+      ? [
+          `${file}:${lineOf(source, node.getStart())}: ${node.getText().split("\n")[0]} imports the TypeScript API. Import ts, parse and the walk helpers from ${typeScriptApiEntry}, the one module that talks to TypeScript, so the API's next change is an edit in ${typeScriptApiHome} alone.`,
+        ]
+      : [];
+  });
+}
+
+test(`no file outside ${typeScriptApiHome} imports the TypeScript API`, () => {
+  const files = scriptFiles.filter((file) => !file.startsWith(typeScriptApiHome));
+  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
+  const violations = files.flatMap((file, index) => typeScriptApiImports(file, sources[index]));
+
+  expect(files.length).toBeGreaterThan(10);
+  expect(violations).toEqual([]);
+});
+
+test("the TypeScript API rule flags each way a file can load typescript, and an import of the syntax module passes", () => {
+  const file = "tests/typescript-api-imports.ts";
+  const lines = [
+    'import ts from "typescript";',
+    'import { API } from "typescript/unstable/sync";',
+    'export { SyntaxKind } from "typescript/unstable/ast";',
+    'const later = await import("typescript");',
+    'const required = require("typescript");',
+    'type Tree = import("typescript/unstable/ast").Node;',
+    'import { parse } from "./support/syntax";',
+    'const named = "typescript";',
+  ];
+  const source = parse(join(repositoryRoot, file), lines.join("\n"));
+  const flagged = typeScriptApiImports(file, source).map(
+    (violation) => /^[^:]+:(\d+):/.exec(violation)?.[1],
+  );
+
+  expect(flagged).toEqual(["1", "2", "3", "4", "5", "6"]);
+});
+
 test("source code carries no comment except a doc comment on a public API", () => {
-  const comments = scriptFiles.flatMap(commentsOtherThanDocComments);
+  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
+  const comments = scriptFiles.flatMap((file, index) =>
+    commentsOtherThanDocComments(file, sources[index]),
+  );
 
   expect(scriptFiles.length).toBeGreaterThan(10);
   expect(comments, "Remove the comment and say it with a name, a constant or a test.").toEqual([]);

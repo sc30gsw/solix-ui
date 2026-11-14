@@ -1,6 +1,5 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import ts from "typescript";
+import { parse, ts } from "../tests/support/syntax";
 
 export const tokensFile = "packages/core/src/tokens.stylex.ts";
 
@@ -20,12 +19,7 @@ function lineOf(source: ts.SourceFile, node: ts.Node): number {
 }
 
 export function tokenValues(file: string = tokensFile): Record<string, string> {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(join(repositoryRoot, file), "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const source = parse(join(repositoryRoot, file));
   const definitions: ts.ObjectLiteralElementLike[] = [];
   const visit = (node: ts.Node): void => {
     if (
