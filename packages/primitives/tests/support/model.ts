@@ -1,5 +1,5 @@
 import type fc from "fast-check";
-import { flush } from "solid-js";
+import { flush } from "./browser-harness";
 
 export type Tick<S> = { staged: S; committed: S };
 

@@ -1,12 +1,12 @@
 import fc from "fast-check";
-import { createSignal, flush, type Setter } from "solid-js";
+import { createSignal, type Setter } from "solid-js";
 import { expect, expectTypeOf, test } from "vite-plus/test";
 import {
   createUncontrolled,
   type UncontrolledOptions,
   type UncontrolledReturn,
 } from "../src/index";
-import { mount, unmount } from "./support/browser-harness";
+import { flush, mount, unmount } from "./support/browser-harness";
 import { command, flushCommand, type Tick } from "./support/model";
 
 type Call = [value: string, payload: number];

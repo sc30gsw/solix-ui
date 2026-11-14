@@ -73,7 +73,6 @@ export default defineConfig({
         test: {
           name: "browser",
           include: [browserTests],
-          setupFiles: ["packages/primitives/tests/support/browser-harness.ts"],
           api: { port: browserTestServerPort, strictPort: true },
           browser: {
             enabled: true,

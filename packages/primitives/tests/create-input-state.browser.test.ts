@@ -1,9 +1,9 @@
 import fc from "fast-check";
-import { createSignal, flush } from "solid-js";
+import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser/context";
 import { createInputState, type InputChange } from "../src/index";
-import { attached, mount, unmount, watch } from "./support/browser-harness";
+import { attached, flush, mount, unmount, watch } from "./support/browser-harness";
 import { command, flushCommand, type Tick } from "./support/model";
 
 test("it stores a value, and an empty string, 0, false, null and undefined as they are", () => {

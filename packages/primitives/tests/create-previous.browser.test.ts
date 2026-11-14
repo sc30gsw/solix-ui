@@ -1,7 +1,7 @@
-import { createSignal, flush } from "solid-js";
+import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createPrevious } from "../src/index";
-import { mount } from "./support/browser-harness";
+import { flush, mount } from "./support/browser-harness";
 
 test("it is undefined until the value changes, then the value before the latest change", () => {
   const [value, setValue] = createSignal(1);

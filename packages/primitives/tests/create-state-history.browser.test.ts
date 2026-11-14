@@ -1,8 +1,8 @@
 import fc from "fast-check";
-import { createSignal, flush } from "solid-js";
+import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createStateHistory, type StateHistory, type StateHistoryHandlers } from "../src/index";
-import { mount, unmount, watch } from "./support/browser-harness";
+import { flush, mount, unmount, watch } from "./support/browser-harness";
 import { command, flushCommand, type Tick } from "./support/model";
 
 function shown<T>(value: () => T, history: StateHistory<T>): [T, T[], number] {

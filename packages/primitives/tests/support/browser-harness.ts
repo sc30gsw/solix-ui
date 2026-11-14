@@ -1,4 +1,10 @@
-import { createEffect, createRoot, type DiagnosticCapture, flush, OBSERVE } from "solid-js";
+import {
+  createEffect,
+  createRoot,
+  type DiagnosticCapture,
+  flush as flushSolid,
+  OBSERVE,
+} from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
 import { listenerMethods, observers, timers } from "./browser-resources";
 
@@ -7,27 +13,58 @@ type Listener = {
   type: string;
   listener: EventListenerOrEventListenerObject;
   capture: boolean;
+  registered: EventListener;
 };
-
 type Schedule = (callback: unknown, ...rest: unknown[]) => unknown;
 type Cancel = (id: unknown) => void;
 type Observe = (this: object, target: Node, ...rest: unknown[]) => void;
 type Unobserve = (this: object, target?: Node) => void;
+type ObserverClass = new (callback: (...args: unknown[]) => void, ...rest: unknown[]) => object;
 
-const primitiveSource = /\/packages\/primitives\/src\//;
-const framesEnoughToReachThePrimitive = 100;
 const browserGlobals = globalThis as unknown as Record<string, unknown>;
+const listening = EventTarget.prototype as unknown as Record<string, unknown>;
+const addListener = listening[listenerMethods.add] as EventTarget["addEventListener"];
+const returnedFunctionsWrappedToDepth = 2;
 
 const liveListeners = new Set<Listener>();
 const liveTimers = new Map<string, string>();
 const liveObservations = new Map<object, Set<Node>>();
 const disposers: (() => void)[] = [];
+const scope = { depth: 0 };
 let diagnostics: DiagnosticCapture | undefined;
 
-Error.stackTraceLimit = framesEnoughToReachThePrimitive;
+function inScope(): boolean {
+  return scope.depth > 0;
+}
 
-function calledByAPrimitive(): boolean {
-  return primitiveSource.test(new Error().stack ?? "");
+function attributed<Args extends unknown[], R>(
+  run: (this: unknown, ...args: Args) => R,
+): (this: unknown, ...args: Args) => R {
+  return function (this: unknown, ...args: Args): R {
+    scope.depth += 1;
+    try {
+      return run.apply(this, args);
+    } finally {
+      scope.depth -= 1;
+    }
+  };
+}
+
+function withFunctionsAttributed<T>(value: T, depth: number): T {
+  if (typeof value === "function") {
+    return attributed(value as (...args: unknown[]) => unknown) as T;
+  }
+  if (depth === 0 || typeof value !== "object" || value === null) return value;
+  if (Array.isArray(value)) {
+    const wrapped = value.map((member: unknown) => withFunctionsAttributed(member, depth - 1));
+    return wrapped.some((member, index) => member !== value[index]) ? (wrapped as T) : value;
+  }
+  if (Object.getPrototypeOf(value) !== Object.prototype) return value;
+  const entries = Object.entries(value);
+  const wrapped = entries.map(([key, member]) => [key, withFunctionsAttributed(member, depth - 1)]);
+  return wrapped.some(([, member], index) => member !== entries[index][1])
+    ? (Object.fromEntries(wrapped) as T)
+    : value;
 }
 
 function capturesIn(options: unknown): boolean {
@@ -37,64 +74,87 @@ function capturesIn(options: unknown): boolean {
     : false;
 }
 
-function forget(registration: Listener): void {
-  for (const live of liveListeners) {
-    if (
-      live.target === registration.target &&
-      live.type === registration.type &&
-      live.listener === registration.listener &&
-      live.capture === registration.capture
-    ) {
-      liveListeners.delete(live);
-    }
-  }
+function liveListenerFor(
+  target: EventTarget,
+  type: string,
+  listener: EventListenerOrEventListenerObject,
+  capture: boolean,
+): Listener | undefined {
+  return [...liveListeners].find(
+    (live) =>
+      live.target === target &&
+      live.type === type &&
+      live.listener === listener &&
+      live.capture === capture,
+  );
 }
 
-const listening = EventTarget.prototype as unknown as Record<string, unknown>;
-const addListener = listening[listenerMethods.add] as EventTarget["addEventListener"];
-const removeListener = listening[listenerMethods.remove] as EventTarget["removeEventListener"];
+function recordListeners(holder: Record<string, unknown>): void {
+  const add = holder[listenerMethods.add] as EventTarget["addEventListener"];
+  const remove = holder[listenerMethods.remove] as EventTarget["removeEventListener"];
+  holder[listenerMethods.add] = function (
+    this: EventTarget,
+    ...[type, listener, options]: Parameters<EventTarget["addEventListener"]>
+  ) {
+    if (!listener || !inScope()) {
+      add.call(this, type, listener, options);
+      return;
+    }
+    const capture = capturesIn(options);
+    if (liveListenerFor(this, type, listener, capture)) return;
+    const once = typeof options === "object" && options.once === true;
+    const registration: Listener = {
+      target: this,
+      type,
+      listener,
+      capture,
+      registered: attributed(function (this: unknown, event: Event) {
+        if (once) liveListeners.delete(registration);
+        if (typeof listener === "function") listener.call(this, event);
+        else listener.handleEvent(event);
+      }),
+    };
+    liveListeners.add(registration);
+    add.call(this, type, registration.registered, options);
+    if (typeof options === "object" && options.signal) {
+      addListener.call(options.signal, "abort", () => liveListeners.delete(registration), {
+        once: true,
+      });
+    }
+  };
+  holder[listenerMethods.remove] = function (
+    this: EventTarget,
+    ...[type, listener, options]: Parameters<EventTarget["removeEventListener"]>
+  ) {
+    const live = listener ? liveListenerFor(this, type, listener, capturesIn(options)) : undefined;
+    if (!live) {
+      remove.call(this, type, listener, options);
+      return;
+    }
+    liveListeners.delete(live);
+    remove.call(this, type, live.registered, options);
+  };
+}
 
-listening[listenerMethods.add] = function (
-  this: EventTarget,
-  ...[type, listener, options]: Parameters<EventTarget["addEventListener"]>
-) {
-  addListener.call(this, type, listener, options);
-  if (!listener || !calledByAPrimitive()) return;
-  const registration = { target: this, type, listener, capture: capturesIn(options) };
-  liveListeners.add(registration);
-  if (typeof options !== "object") return;
-  if (options.once) {
-    addListener.call(this, type, () => forget(registration), {
-      once: true,
-      capture: registration.capture,
-    });
-  }
-  options.signal?.addEventListener("abort", () => forget(registration), { once: true });
-};
-
-listening[listenerMethods.remove] = function (
-  this: EventTarget,
-  ...[type, listener, options]: Parameters<EventTarget["removeEventListener"]>
-) {
-  removeListener.call(this, type, listener, options);
-  if (listener) forget({ target: this, type, listener, capture: capturesIn(options) });
-};
+for (const holder of [listening, browserGlobals]) {
+  if (Object.hasOwn(holder, listenerMethods.add)) recordListeners(holder);
+}
 
 for (const { schedule: scheduleName, cancel: cancelName, kind, firesOnce } of timers) {
   const schedule = browserGlobals[scheduleName] as Schedule | undefined;
   const cancel = browserGlobals[cancelName] as Cancel | undefined;
   if (!schedule || !cancel) continue;
   browserGlobals[scheduleName] = (callback: unknown, ...rest: unknown[]) => {
-    if (typeof callback !== "function" || !calledByAPrimitive()) {
+    if (typeof callback !== "function" || !inScope()) {
       return schedule.call(globalThis, callback, ...rest);
     }
     const key = { id: undefined as unknown };
     const id = schedule.call(
       globalThis,
-      (...args: unknown[]) => {
+      attributed((...args: unknown[]) => {
         if (firesOnce) liveTimers.delete(`${kind} ${String(key.id)}`);
         callback(...args);
-      },
+      }),
       ...rest,
     );
     key.id = id;
@@ -108,15 +168,22 @@ for (const { schedule: scheduleName, cancel: cancelName, kind, firesOnce } of ti
 }
 
 for (const name of observers) {
-  const observer = browserGlobals[name] as { prototype: Record<string, unknown> } | undefined;
-  if (!observer) continue;
-  const prototype = observer.prototype;
+  const Observer = browserGlobals[name] as ObserverClass | undefined;
+  if (!Observer) continue;
+  const prototype = Observer.prototype as Record<string, unknown>;
   const observe = prototype.observe as Observe;
   const unobserve = prototype.unobserve as Unobserve | undefined;
   const disconnect = prototype.disconnect as Unobserve;
+  const AttributedObserver = class extends Observer {
+    constructor(callback: (...args: unknown[]) => void, ...rest: unknown[]) {
+      super(inScope() ? attributed(callback) : callback, ...rest);
+    }
+  };
+  Object.defineProperty(AttributedObserver, "name", { value: name });
+  browserGlobals[name] = AttributedObserver;
   prototype.observe = function (this: object, target: Node, ...rest: unknown[]) {
     observe.call(this, target, ...rest);
-    if (!calledByAPrimitive()) return;
+    if (!inScope()) return;
     liveObservations.set(this, (liveObservations.get(this) ?? new Set<Node>()).add(target));
   };
   if (unobserve) {
@@ -144,14 +211,33 @@ function leftAfterDispose(): string[] {
   ];
 }
 
-export function mount<T>(create: () => T): T {
-  const created = createRoot((dispose) => {
-    disposers.push(dispose);
-    return create();
-  });
-  flush();
-  return created;
+function startRecording(): void {
+  liveListeners.clear();
+  liveTimers.clear();
+  liveObservations.clear();
+  diagnostics = OBSERVE?.diagnostics.capture();
 }
+
+function diagnosticsRaised(): string[] {
+  return (diagnostics?.stop() ?? []).map(
+    ({ code, message }) => `${code}: ${message.split("\n")[0]}`,
+  );
+}
+
+export function mount<T>(create: () => T): T {
+  return attributed(() => {
+    const created = createRoot((dispose) => {
+      disposers.push(dispose);
+      return create();
+    });
+    flushSolid();
+    return withFunctionsAttributed(created, returnedFunctionsWrappedToDepth);
+  })();
+}
+
+export const flush = attributed((): void => {
+  flushSolid();
+});
 
 export function watch<T>(read: () => T): T[] {
   const seen: T[] = [];
@@ -166,31 +252,32 @@ export function attached<E extends HTMLElement>(
   type?: string,
   listener?: (event: Event) => void,
 ): E {
-  if (type && listener) element.addEventListener(type, listener);
+  if (type && listener) addListener.call(element, type, listener);
   document.body.append(element);
   return element;
 }
 
 export function unmount(): void {
   for (const dispose of disposers.splice(0).reverse()) dispose();
-  flush();
+  flushSolid();
+}
+
+export function reportAfterDispose(): string[] {
+  unmount();
+  const report = [...diagnosticsRaised(), ...leftAfterDispose()];
+  startRecording();
+  return report;
 }
 
 beforeEach(() => {
   expect(OBSERVE, "the browser project runs Solid's development build").toBeDefined();
-  liveListeners.clear();
-  liveTimers.clear();
-  liveObservations.clear();
-  diagnostics = OBSERVE?.diagnostics.capture();
+  startRecording();
 });
 
 afterEach(() => {
   unmount();
   document.body.replaceChildren();
-  const raised = (diagnostics?.stop() ?? []).map(
-    ({ code, message }) => `${code}: ${message.split("\n")[0]}`,
-  );
-  expect(raised, "a primitive raised a Solid development diagnostic").toEqual([]);
+  expect(diagnosticsRaised(), "a primitive raised a Solid development diagnostic").toEqual([]);
   expect(
     leftAfterDispose(),
     "a primitive left a listener, timer or observer behind after its owner was disposed",

@@ -1,8 +1,8 @@
 import fc from "fast-check";
-import { createSignal, flush, type Setter } from "solid-js";
+import { createSignal, type Setter } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createQueue, type QueueReturn } from "../src/index";
-import { mount, unmount, watch } from "./support/browser-harness";
+import { flush, mount, unmount, watch } from "./support/browser-harness";
 import { command, flushCommand, type Tick } from "./support/model";
 
 function lists<T>(queue: QueueReturn<T>): [T[], T[]] {

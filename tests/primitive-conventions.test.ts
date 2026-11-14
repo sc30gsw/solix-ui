@@ -14,6 +14,9 @@ const serverRenderTest = "server-render.test.ts";
 const browserTestSuffixes = [".browser.test.ts", ".browser.test.tsx"];
 const nodeTestSuffixes = [".test.ts", ".test.tsx"];
 const valueModule = "./internal-value";
+const browserHarness = "./support/browser-harness";
+const solidModule = "solid-js";
+const flushName = "flush";
 const modelRun = "modelRun";
 const readOnceName = /^(?:initial|default|final)(?:[A-Z]|$)/;
 const readOnceType = "ReadOnce";
@@ -61,6 +64,7 @@ type Files = { list: (directory: string) => string[]; read: (path: string) => st
 type Module = { file: string; path: string; source: ts.SourceFile };
 type Library = {
   source: string;
+  testDirectory: string;
   entries: string[];
   modules: Module[];
   tests: Map<string, ts.SourceFile>;
@@ -105,7 +109,7 @@ function loadLibrary(directory: string, files: Files): Library {
     const parsed = program.getSourceFile(path);
     return parsed ? [{ file: basename(path), path, source: parsed }] : [];
   });
-  return { source, entries, modules, tests, checker: program.getTypeChecker() };
+  return { source, testDirectory, entries, modules, tests, checker: program.getTypeChecker() };
 }
 
 function at(module: Module, node?: ts.Node): string {
@@ -532,6 +536,40 @@ const modelTests: Rule = (library) =>
         `${at(module)}: it keeps its state in ${valueModule}, so its browser test runs generated sequences of its commands against a model with fc.${modelRun}, built on tests/support/model.ts.`,
     );
 
+function importsOf(source: ts.SourceFile): ts.ImportDeclaration[] {
+  return source.statements.filter(
+    (statement): statement is ts.ImportDeclaration =>
+      ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier),
+  );
+}
+
+const browserTestsUseTheHarness: Rule = (library) =>
+  [...library.tests]
+    .filter(([file]) => browserTestSuffixes.some((suffix) => file.endsWith(suffix)))
+    .flatMap(([file, source]) => {
+      const path = relative(repositoryRoot, join(library.testDirectory, file));
+      const imports = importsOf(source);
+      const specifierOf = (statement: ts.ImportDeclaration) =>
+        (statement.moduleSpecifier as ts.StringLiteral).text;
+      const harness = imports.some((statement) => specifierOf(statement) === browserHarness)
+        ? []
+        : [
+            `${path}: import ${browserHarness}, so this file's tests fail on a Solid diagnostic and on a listener, timer or observer left after dispose.`,
+          ];
+      const flushFromSolid = imports
+        .filter((statement) => specifierOf(statement) === solidModule)
+        .flatMap((statement) => {
+          const bindings = statement.importClause?.namedBindings;
+          return bindings && ts.isNamedImports(bindings) ? [...bindings.elements] : [];
+        })
+        .filter((element) => (element.propertyName ?? element.name).text === flushName)
+        .map(
+          (element) =>
+            `${path}:${source.getLineAndCharacterOfPosition(element.getStart()).line + 1}: take ${flushName} from ${browserHarness}, not from ${solidModule}, so what a flush runs is attributed to the primitive.`,
+        );
+      return [...harness, ...flushFromSolid];
+    });
+
 const library = loadLibrary(primitivesPackage.directory, filesOnDisk);
 
 test("the primitives package has public modules to check", () => {
@@ -576,6 +614,10 @@ test("every primitive has a browser test named for it, and every plain helper a 
 
 test("every primitive that keeps its state in internal-value has a model test", () => {
   expect(modelTests(library)).toEqual([]);
+});
+
+test("every browser test imports the harness and flushes through it", () => {
+  expect(browserTestsUseTheHarness(library)).toEqual([]);
 });
 
 test("the primitives package has a server-render test", () => {
@@ -665,7 +707,9 @@ export { getHotkeyHandler } from "./get-hotkey-handler";
 export type { MaybeAccessor, ReadOnce } from "./types";
 `,
   "tests/create-allowed.browser.test.ts": `import fc from "fast-check";
+import { flush } from "./support/browser-harness";
 fc.modelRun(() => ({ model: {}, real: {} }), []);
+flush();
 `,
   "tests/get-hotkey-handler.test.ts": `getHotkeyHandler("a");
 `,
@@ -743,8 +787,10 @@ export function createForbidden(
   "src/index.ts": `export { createForbidden, type ForbiddenOptions } from "./create-forbidden";
 export type { MaybeAccessor, ReadOnce } from "./types";
 `,
-  "tests/create-modelled.browser.test.ts": `import { createModelled } from "../src/create-modelled";
+  "tests/create-modelled.browser.test.ts": `import { flush } from "solid-js";
+import { createModelled } from "../src/create-modelled";
 createModelled();
+flush();
 `,
 };
 
@@ -759,6 +805,7 @@ const rules: Record<string, Rule> = {
   styleAndClassWrites,
   testsNamedForModules,
   modelTests,
+  browserTestsUseTheHarness,
 };
 
 const forbiddenAt = (file: string, snippet?: string) => located(forbidden, file, snippet);
@@ -809,6 +856,10 @@ const forbiddenFindings: Record<string, string[]> = {
   ],
   testsNamedForModules: [forbiddenAt("src/create-forbidden.ts"), forbiddenAt("src/get-other.ts")],
   modelTests: [forbiddenAt("src/create-modelled.ts")],
+  browserTestsUseTheHarness: [
+    forbiddenAt("tests/create-modelled.browser.test.ts"),
+    forbiddenAt("tests/create-modelled.browser.test.ts", 'import { flush } from "solid-js"'),
+  ],
 };
 
 test("each rule passes a fixture that holds only what it allows: read-once arguments, reads of a class or a style, Symbol and Object.freeze at module level, a plain helper with a Node test, and a shadowed parameter", () => {
