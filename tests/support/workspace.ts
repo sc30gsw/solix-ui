@@ -8,6 +8,7 @@ const peerDependencyThatMarksALibrary = "solid-js";
 
 export type Manifest = {
   name?: string;
+  license?: string;
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -28,6 +29,11 @@ export const packages = globSync("**/package.json", {
   directory: join(repositoryRoot, dirname(path)),
   manifest: JSON.parse(readFileSync(join(repositoryRoot, path), "utf8")) as Manifest,
 }));
+
+/** The manifest at the repository root. */
+export const rootManifest = JSON.parse(
+  readFileSync(join(repositoryRoot, "package.json"), "utf8"),
+) as Manifest;
 
 export const libraryPackages = packages.filter(
   ({ manifest }) => peerDependencyThatMarksALibrary in (manifest.peerDependencies ?? {}),

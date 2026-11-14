@@ -2,7 +2,7 @@ import { existsSync, globSync, lstatSync, readdirSync, readFileSync, readlinkSyn
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "../scripts/browser-engines.mjs";
-import { type Manifest, repositoryRoot } from "./support/workspace";
+import { repositoryRoot, rootManifest } from "./support/workspace";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -10,6 +10,8 @@ const agentsDirectory = join(repositoryRoot, ".claude/agents");
 const agentPathInBackticks = /`(\.(?:agents|claude)\/[^`*\s]+)`/g;
 const trailingPunctuation = /[:.,]$/;
 const workflowFiles = globSync(".github/workflows/*.yml", { cwd: repositoryRoot });
+const verifyWithPrivateTerms =
+  /- run: vp run verify\n\s+env:\n\s+SOLIX_PRIVATE_TERMS: \$\{\{ secrets\.SOLIX_PRIVATE_TERMS \}\}$/m;
 const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github)\/[^`:*\s]+)`/g;
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 
@@ -161,7 +163,7 @@ test("every file the rules table in AGENTS.md names exists", () => {
 });
 
 test("every check in the repository runs through vp run verify, before a commit and in CI", () => {
-  const manifest = JSON.parse(read("package.json")) as Manifest;
+  const manifest = rootManifest;
   const verify = manifest.scripts?.verify ?? "";
 
   expect(verify.split(" && ")).toEqual([
@@ -177,6 +179,11 @@ test("every check in the repository runs through vp run verify, before a commit 
     const installs = workflow.split("\n").filter((line) => line.includes("playwright install"));
     if (/vp run (verify|evidence)/.test(workflow)) {
       expect(installs.length, `${file} installs the browser engines`).toBeGreaterThan(0);
+    }
+    if (/vp run verify/.test(workflow)) {
+      expect(workflow, `${file} gives verify the private-term list`).toMatch(
+        verifyWithPrivateTerms,
+      );
     }
     for (const line of installs) {
       expect(line, `${file} installs every browser engine, as verify needs`).toContain(everyEngine);
