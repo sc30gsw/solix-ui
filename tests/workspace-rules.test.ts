@@ -191,3 +191,20 @@ test("every peer range of a library package accepts the version the catalog pins
 
   expect(violations).toEqual([]);
 });
+
+test("the licence file exists and every library package declares the root licence", () => {
+  const rootLicence = packages.find(({ path }) => path === "package.json")?.manifest.license;
+  const violations = libraryPackages
+    .filter(({ manifest }) => manifest.license !== rootLicence)
+    .map(
+      ({ path, manifest }) =>
+        `${path}: set "license" to "${rootLicence}", as the root package.json does, not "${manifest.license}".`,
+    );
+
+  expect(
+    existsSync(join(repositoryRoot, "LICENSE")),
+    "LICENSE: add the licence text at the repository root",
+  ).toBe(true);
+  expect(rootLicence, "package.json: declare the licence").toBeDefined();
+  expect(violations).toEqual([]);
+});
