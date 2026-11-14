@@ -218,60 +218,84 @@ test("an events array read again with the same names keeps the listeners in plac
   expect(added).toEqual(["mousedown"]);
 });
 
-test("a press whose default a handler on its path already prevented is ignored, and a handled press has its default prevented", async () => {
+test("a region decides on its own: a press outside counts whatever its default, and the handler leaves the default alone", async () => {
   const { calls } = region("menu");
   const preventing = box("prevents its pointerup");
   const plain = box("page");
   preventing.addEventListener("pointerup", (event) => event.preventDefault());
   const defaults: boolean[] = [];
-  window.addEventListener("pointerup", (event) => defaults.push(event.defaultPrevented), {
-    once: true,
-  });
+  window.addEventListener("pointerup", (event) => defaults.push(event.defaultPrevented));
 
   await press(preventing);
   await press(plain);
-  expect(calls).toEqual(["menu: pointerup"]);
-  expect(defaults).toEqual([true]);
-  const handled: boolean[] = [];
-  window.addEventListener("pointerup", (event) => handled.push(event.defaultPrevented), {
-    once: true,
-  });
-  await press(plain);
-  expect(handled).toEqual([true]);
+  expect(calls).toEqual(["menu: pointerup", "menu: pointerup"]);
+  expect(defaults).toEqual([true, false]);
 });
 
-test("of two nested regions, a press inside the outer and outside the inner is handled by the inner, and a press outside both by the region attached first only", async () => {
-  const outer = box("outer");
-  const outerOnly = box("in the outer only", outer);
-  const inner = box("inner", outer);
+test("of two nested regions, a press outside both calls both handlers, and a press inside the outer and outside the inner calls only the inner, in either order of attaching", async () => {
+  const seen: string[][][] = [];
+  for (const innerFirst of [false, true]) {
+    document.body.replaceChildren();
+    const outer = box("outer");
+    const outerOnly = box("in the outer only", outer);
+    const inner = box("inner", outer);
+    const elsewhere = box("page");
+    const calls: string[] = [];
+    const attach = (name: string, element: HTMLElement) => {
+      const ref = mount(() => createClickOutside(() => calls.push(name)));
+      ref(element);
+      flush();
+    };
+    if (innerFirst) attach("inner", inner);
+    attach("outer", outer);
+    if (!innerFirst) attach("inner", inner);
+
+    await press(inner);
+    await press(outerOnly);
+    const insideTheOuter = [...calls];
+    calls.length = 0;
+    await press(elsewhere);
+    seen.push([insideTheOuter, [...calls].sort()]);
+    unmount();
+  }
+  expect(seen).toEqual([
+    [["inner"], ["inner", "outer"]],
+    [["inner"], ["inner", "outer"]],
+  ]);
+});
+
+test("a press inside a child layer portaled outside its parent's node calls only the parent's handler, until the parent passes the layer's node through nodes", async () => {
+  const parent = box("parent");
   const elsewhere = box("page");
+  const layer = box("portaled layer");
   const calls: string[] = [];
-  const outerRef = mount(() => createClickOutside(() => calls.push("outer")));
-  const innerRef = mount(() => createClickOutside(() => calls.push("inner")));
-  outerRef(outer);
-  flush();
-  innerRef(inner);
+  const parentRef = mount(() => createClickOutside(() => calls.push("parent")));
+  const layerRef = mount(() => createClickOutside(() => calls.push("layer")));
+  parentRef(parent);
+  layerRef(layer);
   flush();
 
-  await press(outerOnly);
-  await press(inner);
+  await press(layer);
+  expect(calls).toEqual(["parent"]);
+  unmount();
+  calls.length = 0;
+  mount(() =>
+    createClickOutside(
+      () => calls.push("parent"),
+      null,
+      () => [parent, layer],
+    ),
+  );
+  const ref = mount(() => createClickOutside(() => calls.push("layer")));
+  ref(layer);
+  flush();
+
+  await press(layer);
+  await press(parent);
+  const insideEither = [...calls];
+  calls.length = 0;
   await press(elsewhere);
-  expect(calls).toEqual(["inner", "outer"]);
-});
-
-test("the inner of two nested regions handles a press outside both when it was attached first, and the outer ignores the press whose default it prevented", async () => {
-  const outer = box("outer");
-  const inner = box("inner", outer);
-  const calls: string[] = [];
-  const innerRef = mount(() => createClickOutside(() => calls.push("inner")));
-  const outerRef = mount(() => createClickOutside(() => calls.push("outer")));
-  innerRef(inner);
-  flush();
-  outerRef(outer);
-  flush();
-
-  await press(box("page"));
-  expect(calls).toEqual(["inner"]);
+  expect([insideEither, [...calls].sort()]).toEqual([["layer"], ["layer", "parent"]]);
 });
 
 test("the handler is the function passed, and the listeners are removed when the owner is disposed", async () => {

@@ -63,10 +63,7 @@ function attach(
     listen<PointerEvent>(page, listenerSettings(press[1], current.capture), (event) => {
       const began = pressed.pointer;
       pressed.pointer = undefined;
-      if (began !== event.pointerId || event.defaultPrevented) return;
-      if (!isOutside(event, insideNow())) return;
-      event.preventDefault();
-      handler(event);
+      if (began === event.pointerId && isOutside(event, insideNow())) handler(event);
     }),
     listen<PointerEvent>(page, listenerSettings(press[2], current.capture), () => {
       pressed.pointer = undefined;
@@ -85,14 +82,16 @@ function attach(
  * With `events` left out or `null`, a press is a `pointerdown` and the `pointerup` of the same
  * pointer, both outside, as the platform's own light dismiss decides. A press that starts inside
  * and ends outside, or the reverse, does nothing (WCAG 2.5.2), and a touch that scrolls ends in
- * `pointercancel` and does nothing. The handler gets the `pointerup`. A `pointerup` whose default
- * is already prevented, by a handler on the press's path or by a region that handled it first, is
- * ignored, and a handled one has its default prevented. The listeners are on the document, so
- * regions decide in the order they were attached: the first that counts a press as outside
- * handles it, and every later one ignores it.
+ * `pointercancel` and does nothing. The handler gets the `pointerup`.
  *
  * With a list of `events`, such as `["mousedown", "touchstart"]`, each listed event outside calls
- * the handler on its own, whatever its default.
+ * the handler on its own.
+ *
+ * Each region decides on its own, by containment alone: it neither reads nor prevents an event's
+ * default. So a press outside two regions calls both handlers, as a stack of popovers expects, and
+ * a press inside one and outside the other calls only the other's. A component whose child layer
+ * is portaled outside its element passes the layer's node through `nodes`, with its own, so a
+ * press inside the layer does not count as outside the component.
  *
  * Inside is decided on `composedPath()`, so content in a shadow root counts as inside its host. An
  * event whose target has left the page, removed by the same press, is never outside. `events`,
