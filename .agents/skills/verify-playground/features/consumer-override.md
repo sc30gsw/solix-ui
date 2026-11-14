@@ -17,7 +17,7 @@ Preconditions:
 
 - `doctor.sh` exits 0.
 
-- **Override.** Open the page and look at the button named `Overridden`. Run `.agents/skills/verify-playground/scripts/drive.mjs consumer-override`. The observation `background comes from the consumer's class` (`rgb(250, 82, 82)`) passes, and so do `height still comes from the library` (`36px`) and `text colour still comes from the library` (`rgb(255, 255, 255)`).
+- **Override.** Open the page and look at the button named `Overridden`. Run `.agents/skills/verify-playground/scripts/drive.mjs consumer-override`. The observation `background comes from the consumer's class` (the `.danger` background in `apps/playground/src/app.css`) passes, and so do `height still comes from the library` (the control-height token) and `text colour still comes from the library` (the on-primary token).
 - **Proof.** The evidence directory holds `01-page.png`, `02-overridden-button.png`, `recording.webm` and `observations.json`.
 
 ## Gotchas

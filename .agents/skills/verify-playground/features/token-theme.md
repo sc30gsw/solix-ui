@@ -1,6 +1,6 @@
 # Token theme
 
-The library has six public tokens, all custom properties that start with `--solix-`. The app overrides only `--solix-color-primary`, for part of the page. A library button inside that part takes the new colour, and a button outside it does not. The same override would also change anything else in that part that uses the primary colour. That includes the open `Disclosure` summary and its content edge, and the focus border of a `TextInput`. The journey observes only the button.
+The library's public tokens are custom properties that start with `--solix-`, written in `packages/core/src/tokens.stylex.ts`. The app overrides only `--solix-color-primary`, for part of the page. A library button inside that part takes the new colour, and a button outside it does not. The same override would also change anything else in that part that uses the primary colour. That includes the open `Disclosure` summary and its content edge, and the focus border of a `TextInput`. The journey observes only the button.
 
 ## Sub-features
 
@@ -17,7 +17,7 @@ Preconditions:
 
 - `doctor.sh` exits 0.
 
-- **Themed subtree.** Open the page and look at the button named `Themed`. Run `.agents/skills/verify-playground/scripts/drive.mjs token-theme`. The observation `background follows the consumer's token value` (`rgb(47, 158, 68)`) passes, and `a button outside the themed subtree keeps the default` (`rgb(34, 139, 230)`) passes.
+- **Themed subtree.** Open the page and look at the button named `Themed`. Run `.agents/skills/verify-playground/scripts/drive.mjs token-theme`. The observation `background follows the consumer's token value` (the `--solix-color-primary` value in the `.brand-green` rule of `apps/playground/src/app.css`) passes, and `a button outside the themed subtree keeps the default` (the primary token) passes.
 - **Proof.** The evidence directory holds `01-page.png`, `02-themed-button.png`, `recording.webm` and `observations.json`.
 
 ## Gotchas

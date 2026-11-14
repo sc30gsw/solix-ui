@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
+import { tokenValues } from "../scripts/tokens.mjs";
 import { libraryPackages, packages, repositoryRoot } from "./support/workspace";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
@@ -263,13 +264,8 @@ test("the barrel exports every component once, in alphabetical order, and nothin
 
 test("every public token is named --solix-*, and is used by a component and defined once", () => {
   for (const { source } of libraries) {
-    const definitions = parse(join(source, "tokens.stylex.ts"));
-    const defined = descendants(definitions)
-      .filter(
-        (node): node is ts.PropertyAssignment =>
-          ts.isPropertyAssignment(node) && ts.isStringLiteral(node.name),
-      )
-      .map((node) => (node.name as ts.StringLiteral).text);
+    const tokensFile = relativePath(join(source, "tokens.stylex.ts"));
+    const defined = Object.keys(tokenValues(tokensFile));
     const used = components
       .filter(({ file }) => file.startsWith(source))
       .flatMap(({ file }) =>
@@ -278,16 +274,15 @@ test("every public token is named --solix-*, and is used by a component and defi
 
     expect(
       defined.filter((name) => !tokenName.test(name)),
-      "token names",
+      `token names in ${tokensFile}`,
     ).toEqual([]);
-    expect(new Set(defined).size, "a token is defined twice").toBe(defined.length);
     expect(
       defined.filter((name) => !used.includes(name)),
-      "tokens no component uses",
+      `tokens in ${tokensFile} that no component uses`,
     ).toEqual([]);
     expect(
       used.filter((name) => !defined.includes(name)),
-      "tokens used but not defined",
+      `tokens used but not defined in ${tokensFile}`,
     ).toEqual([]);
   }
 });

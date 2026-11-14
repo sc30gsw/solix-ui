@@ -13,7 +13,8 @@ This directory is the maintained source for verifying what a user sees and does 
 
 - Run every journey through `.agents/skills/verify-playground/scripts/drive.mjs <journey> [engine]`, once per installed engine.
 - Buttons are found by role and name: `Default`, `Overridden`, `Themed`, `Emphasise` and `Open modal`. Text inputs are found by role `textbox` and name: `Email`, `Overridden input`, `Disabled input` and, inside the modal, `Name`. The modal is the dialog named `Settings`. A disclosure is found by its summary text, `Follows`, `Toggle` or `Inner`, or by its content text.
-- Colours are compared as the browser computes them, in `rgb(r, g, b)` form.
+- No journey writes an expected colour or length. `drive.mjs` reads each token from `packages/core/src/tokens.stylex.ts` and each of the app's own colours from `apps/playground/src/app.css`, and the same browser computes it, so it matches however that engine writes a computed value.
+- A feature file names the token it expects, such as the primary token for `--solix-color-primary`. The values are in `observations.json` and in each `FAIL` line.
 
 ## Proof and skip reporting
 

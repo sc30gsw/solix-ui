@@ -13,15 +13,15 @@ const packageRoot = join(import.meta.dirname, "..");
 const generatedRuns = 300;
 
 const valuesByProperty: Record<string, (string | number)[]> = {
-  backgroundColor: ["red", "rgb(34, 139, 230)", "transparent"],
-  borderColor: ["rgb(206, 212, 218)", "red"],
-  borderRadius: ["0.25rem", "50%"],
+  backgroundColor: ["red", "rgb(10, 20, 30)", "transparent"],
+  borderColor: ["rgb(40, 50, 60)", "red"],
+  borderRadius: ["1.5rem", "50%"],
   borderStyle: ["solid", "none"],
   borderWidth: [0, "1px"],
   color: ["black", "white"],
   cursor: ["pointer", "not-allowed"],
   display: ["flex", "grid", "none"],
-  height: ["2.25rem", "100%"],
+  height: ["3rem", "100%"],
   marginTop: ["4px", "auto"],
   maxWidth: ["32rem", "min(32rem, calc(100vw - 2rem))"],
   opacity: [0, 0.5, 1],
