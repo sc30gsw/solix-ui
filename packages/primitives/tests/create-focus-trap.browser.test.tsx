@@ -161,6 +161,23 @@ test("focus that a click, a script or a frame moves outside comes back: to the f
   expect(seen).toEqual(["a", "b", "a", "a"]);
 });
 
+test("focus that enters the page with nothing focused before it, as when it comes back from the browser's own controls, lands on the first stop", async () => {
+  const before = button("before");
+  const region = html(`<div><button id="a">A</button><button id="b">B</button></div>`);
+  await trapped(region);
+  const seen: string[] = [];
+
+  document.getElementById("b")?.focus();
+  document.getElementById("b")?.blur();
+  seen.push(focusedId());
+  before.focus();
+  seen.push(focusedId());
+  document.getElementById("b")?.focus();
+  before.focus();
+  seen.push(focusedId());
+  expect(seen).toEqual(["nothing", "a", "b"]);
+});
+
 test("a frame inside the trap keeps its own stops, and focus that Tab moves out of it comes back", async () => {
   button("before");
   const region = html(

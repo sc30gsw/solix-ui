@@ -48,9 +48,12 @@ function focusInitially(container: HTMLElement): void {
 function trap(container: HTMLElement): () => void {
   const token = Symbol(activated);
   const newer = new Set<unknown>();
-  const bringBack = (landed: Node) => {
+  const bringBack = (landed: Node, fromOutsideThePage: boolean) => {
     if (newer.size === 0 && !holdsFocus(container)) {
-      focusEdge(container, comesBefore(activeElementOf(container) ?? landed, container));
+      focusEdge(
+        container,
+        !fromOutsideThePage && comesBefore(activeElementOf(container) ?? landed, container),
+      );
     }
   };
   const removeListeners = disposeAll([
@@ -61,11 +64,11 @@ function trap(container: HTMLElement): () => void {
       if (event instanceof CustomEvent) newer.delete(event.detail);
     }),
     listen(container.ownerDocument, listenerSettings(focusin, true), (event) => {
-      if (event.target instanceof Node) bringBack(event.target);
+      if (event.target instanceof Node) bringBack(event.target, event.relatedTarget === null);
     }),
     listen(container.ownerDocument.defaultView ?? window, listenerSettings(blur), () => {
       const active = container.ownerDocument.activeElement;
-      if (active instanceof HTMLIFrameElement) bringBack(active);
+      if (active instanceof HTMLIFrameElement) bringBack(active, false);
     }),
   ]);
   container.ownerDocument.dispatchEvent(new CustomEvent(activated, { detail: token }));
@@ -91,14 +94,16 @@ function trap(container: HTMLElement): () => void {
  *
  * Tab and Shift+Tab are the browser's own: the trap neither reads nor prevents them, so a widget
  * inside that handles Tab itself, such as an editor that inserts a tab character, keeps it. The
- * trap watches where focus goes instead. When focus lands outside the container, by Tab, a click,
- * a script or a frame, it moves to the container's first tab stop if the element that took it
- * follows the container in the document, and to its last tab stop if it comes before. So Tab
- * wraps at both ends. Each move is confirmed, and an element that does not take focus, such as a
- * link without `href`, is passed over for the next one. With no tab stop that takes focus, focus
- * moves to the container, so keep the container focusable with `tabindex="-1"`. Focus that leaves
- * the page for the browser's own controls, as it can from a modal `<dialog>`, is guarded when it
- * comes back.
+ * trap watches where focus goes instead. When focus moves from an element of the page to one
+ * outside the container, by Tab, a click, a script or a frame, it moves on to the container's
+ * first tab stop if the element that took it follows the container in the document, and to its
+ * last tab stop if it comes before. So Tab wraps at both ends. Focus that lands outside the
+ * container with nothing focused before it in the page moves to the first tab stop, so focus that
+ * comes back from the browser's own controls, which Tab reaches from a trap at the page's end as it
+ * does from a modal `<dialog>`, lands where the dialog's would. Each move is confirmed, and an
+ * element that does not take focus, such as a link without `href`, is passed over for the next
+ * one. With no tab stop that takes focus, focus moves to the container, so keep the container
+ * focusable with `tabindex="-1"`.
  *
  * Only the trap turned on last guards focus: turning one on suspends every other, in any order of
  * nesting, and turning it off or disposing it resumes them. Turning `active` off releases the trap
