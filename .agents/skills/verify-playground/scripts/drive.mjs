@@ -215,6 +215,31 @@ const journeys = {
     observe("at md: Visible from md is visible", await text("Visible from md").isVisible(), true);
     observe("at md: the consumer's style still wins", await style(text("Consumer style margin"), "margin-top"), expected("pinnedMargin"));
   },
+  "styles-api": async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Styles API" });
+    const fromClasses = page.getByRole("button", { name: "Class from classes.root" });
+    const summary = page.locator("summary").filter({ hasText: "Styled parts" });
+    const content = page.getByText("Content of the styled parts");
+    const unstyled = page.getByRole("button", { name: "Unstyled" });
+    const styleProp = page.getByRole("button", { name: "Style prop on a Button" });
+    await section.scrollIntoViewIfNeeded();
+    await shot("styles-api", "Open the page and scroll to the section named Styles API, at the end.", section);
+    observe("classes.root: background comes from the consumer's class", await style(fromClasses, "background-color"), expected("danger"));
+    observe("classes.root: height still comes from the library", await style(fromClasses, "height"), expected("--solix-control-height-md"));
+    observe("styles.summary: background comes from styles, not from the class classes.summary names or the library", await style(summary, "background-color"), expected("partBackground"));
+    observe("classes.summary: the consumer's class still sets the outline", await style(summary, "outline-style"), "solid");
+    observe("unstyled: background is the primary token", (await style(unstyled, "background-color")) === expected("--solix-color-primary"), false);
+    observe("unstyled: height is the control-height token", (await style(unstyled, "height")) === expected("--solix-control-height-md"), false);
+    observe("unstyled: the button keeps its stable class", (await unstyled.getAttribute("class")).split(/\s+/).includes("solix-Button-root"), true);
+    observe("a style prop on Button: background comes from bg", await style(styleProp, "background-color"), expected("--solix-color-error"));
+
+    await summary.click();
+    await content.waitFor({ state: "visible" });
+    await section.scrollIntoViewIfNeeded();
+    await shot("styled-parts-open", "Click the summary named Styled parts. It opens, and its background still comes from styles.", section);
+    observe("open: content is visible", await content.isVisible(), true);
+    observe("open: styles.summary still beats the library's open background", await style(summary, "background-color"), expected("partBackground"));
+  },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();
     writeFileSync(join(directory, "response.html"), html);

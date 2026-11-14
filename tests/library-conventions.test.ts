@@ -15,8 +15,14 @@ const helperFile =
   /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
 const partName = /^[a-z][A-Za-z0-9]*$/;
 const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const stylesCall = /^stylex\.attrs\(styles\.(\w+)\)\.class$/;
 const stylexImport = 'import * as stylex from "@stylexjs/stylex";';
+const stylesVariable = "styles";
+const stylesFactory = "stylex.create";
+const rootComponent = "Box";
+const partsHelper = "createParts";
+const partsHelperFile = "packages/core/src/parts.ts";
+const partPropsType = `PartProps<typeof ${stylesVariable}>`;
+const rootPart = "root";
 const featureDirectory = join(repositoryRoot, ".agents/skills/verify-playground/features");
 const contractSkill = join(repositoryRoot, ".agents/skills/verify-component-contract/SKILL.md");
 const stylePropTableFile = "packages/core/src/style-prop-table.ts";
@@ -29,18 +35,23 @@ const libraries = libraryPackages.map(({ directory, manifest }) => ({
 
 type Component = { name: string; file: string; source: ts.SourceFile };
 
-type RootElement = {
+type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
+
+type ComponentBody = {
   name: string;
   fn: ts.FunctionDeclaration;
-  attribute: ts.JsxAttribute;
-  classes: ts.ArrayLiteralExpression;
+  source: ts.SourceFile;
+  propsType: ts.TypeNode | undefined;
+  shape: RootShape;
 };
 
 type RootShape = {
-  importsStylex: boolean;
   alsoOmits: string[];
-  problems: (root: RootElement) => string[];
+  rendersItsElement: (component: ts.Expression | undefined) => boolean;
+  componentAttribute: string;
 };
+
+type PartUse = { part: string | undefined; call: ts.CallExpression; tag: JsxTag | undefined };
 
 function parse(file: string): ts.SourceFile {
   return ts.createSourceFile(
@@ -96,21 +107,39 @@ function exportedNames(source: ts.SourceFile): string[] {
   });
 }
 
-function stylesKeys(source: ts.SourceFile): string[] {
-  const create = descendants(source).find(
-    (node): node is ts.CallExpression =>
-      ts.isCallExpression(node) && node.expression.getText() === "stylex.create",
+function callsOf(node: ts.Node, callee: string): ts.CallExpression[] {
+  return descendants(node).filter(
+    (found): found is ts.CallExpression =>
+      ts.isCallExpression(found) && found.expression.getText() === callee,
   );
-  const argument = create?.arguments[0];
-  if (!argument || !ts.isObjectLiteralExpression(argument)) return [];
-  return argument.properties.flatMap((property) =>
+}
+
+function stylesBlock(source: ts.SourceFile): ts.ObjectLiteralExpression | undefined {
+  const declaration = descendants(source).find(
+    (node): node is ts.VariableDeclaration =>
+      ts.isVariableDeclaration(node) &&
+      node.name.getText() === stylesVariable &&
+      node.initializer !== undefined &&
+      ts.isCallExpression(node.initializer) &&
+      node.initializer.expression.getText() === stylesFactory,
+  );
+  const argument =
+    declaration?.initializer && ts.isCallExpression(declaration.initializer)
+      ? declaration.initializer.arguments[0]
+      : undefined;
+  return argument && ts.isObjectLiteralExpression(argument) ? argument : undefined;
+}
+
+function stylesKeys(source: ts.SourceFile): string[] {
+  return (stylesBlock(source)?.properties ?? []).flatMap((property) =>
     ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) ? [property.name.text] : [],
   );
 }
 
-function classAttributes(fn: ts.FunctionDeclaration): ts.JsxAttribute[] {
+function jsxAttributes(fn: ts.FunctionDeclaration, names: string[]): ts.JsxAttribute[] {
   return descendants(fn).filter(
-    (node): node is ts.JsxAttribute => ts.isJsxAttribute(node) && node.name.getText() === "class",
+    (node): node is ts.JsxAttribute =>
+      ts.isJsxAttribute(node) && names.includes(node.name.getText()),
   );
 }
 
@@ -118,26 +147,27 @@ function stringLiteralText(node: ts.Node | undefined): string | undefined {
   return node && ts.isStringLiteral(node) ? node.text : undefined;
 }
 
-function attributeNamesOf(attribute: ts.JsxAttribute): string[] {
-  return attribute.parent.properties.map((property) =>
-    ts.isJsxSpreadAttribute(property) ? property.expression.getText() : property.name.getText(),
+function attributeNamesOf(tag: JsxTag): string[] {
+  return tag.attributes.properties.map((property) =>
+    ts.isJsxSpreadAttribute(property)
+      ? `...${property.expression.getText()}`
+      : property.name.getText(),
   );
 }
 
-function spreadsRestBefore(attribute: ts.JsxAttribute, names: string[]): boolean {
-  const written = attributeNamesOf(attribute);
-  const spreadAt = written.indexOf("rest");
+function spreadsRestBefore(tag: JsxTag, names: string[]): boolean {
+  const written = attributeNamesOf(tag);
+  const spreadAt = written.indexOf("...rest");
   return spreadAt !== -1 && names.every((name) => spreadAt < written.indexOf(name));
 }
 
-function attributeValue(attribute: ts.JsxAttribute, name: string): ts.Expression | undefined {
-  const found = attribute.parent.properties.find(
+function attributeValue(tag: JsxTag, name: string): ts.Expression | undefined {
+  const found = tag.attributes.properties.find(
     (property): property is ts.JsxAttribute =>
       ts.isJsxAttribute(property) && property.name.getText() === name,
   );
-  return found?.initializer && ts.isJsxExpression(found.initializer)
-    ? found.initializer.expression
-    : undefined;
+  if (!found?.initializer) return undefined;
+  return ts.isJsxExpression(found.initializer) ? found.initializer.expression : found.initializer;
 }
 
 function isPropsMember(node: ts.Node, member: string): boolean {
@@ -148,18 +178,22 @@ function isPropsMember(node: ts.Node, member: string): boolean {
   );
 }
 
+function isComponentPropWithDefault(node: ts.Node | undefined): boolean {
+  return (
+    node !== undefined &&
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+    isPropsMember(node.left, "component") &&
+    ts.isStringLiteral(node.right)
+  );
+}
+
 function isDynamicRootWithDefault(initializer: ts.Expression | undefined): boolean {
   if (!initializer || !ts.isCallExpression(initializer)) return false;
   const [factory, ...others] = initializer.arguments;
   if (initializer.expression.getText() !== "dynamic" || !factory || others.length > 0) return false;
   if (!ts.isArrowFunction(factory) || factory.parameters.length > 0) return false;
-  const body = factory.body;
-  return (
-    ts.isBinaryExpression(body) &&
-    body.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
-    isPropsMember(body.left, "component") &&
-    ts.isStringLiteral(body.right)
-  );
+  return isComponentPropWithDefault(factory.body);
 }
 
 function memberOf(node: ts.Node | undefined, member: string): string | undefined {
@@ -168,30 +202,45 @@ function memberOf(node: ts.Node | undefined, member: string): string | undefined
     : undefined;
 }
 
-function elementRootProblems({ name, attribute, classes }: RootElement): string[] {
-  const problems: string[] = [];
-  const [styled, stable, consumer, ...extra] = classes.elements;
-  if (
-    stylesCall.exec(styled?.getText() ?? "")?.[1] !== "root" ||
-    stringLiteralText(stable) !== `solix-${name}-root` ||
-    consumer?.getText() !== "props.class" ||
-    extra.length > 0
-  ) {
-    problems.push(
-      `write the root class array as [stylex.attrs(styles.root).class, "solix-${name}-root", props.class], so the consumer's class sits next to the library's.`,
-    );
-  }
-  if (!spreadsRestBefore(attribute, ["class"])) {
-    problems.push(
-      "spread {...rest} on the root element before its class, so the library's class array is the one that applies.",
-    );
-  }
-  return problems;
+function returnedRoots(fn: ts.FunctionDeclaration): JsxTag[] {
+  return descendants(fn).flatMap((node): JsxTag[] => {
+    if (!ts.isReturnStatement(node) || !node.expression) return [];
+    const returned = ts.isParenthesizedExpression(node.expression)
+      ? node.expression.expression
+      : node.expression;
+    if (ts.isJsxElement(returned)) return [returned.openingElement];
+    return ts.isJsxSelfClosingElement(returned) ? [returned] : [];
+  });
 }
 
-function polymorphicRootProblems({ name, fn, attribute, classes }: RootElement): string[] {
+function rootComponentProblems({ name, fn, source }: ComponentBody): string[] {
   const problems: string[] = [];
-  const tag = attribute.parent.parent.tagName.getText();
+  if (stylesKeys(source).length > 0 || callsOf(source, stylesFactory).length > 0) {
+    problems.push(
+      `${name} has one unstyled root, so it calls no ${stylesFactory}. Write a component that renders a <${name}> for anything with a default style.`,
+    );
+  }
+  const [root, ...otherRoots] = returnedRoots(fn);
+  const classAttributes = jsxAttributes(fn, ["class"]);
+  const [classAttribute] = classAttributes;
+  const classes =
+    classAttribute?.initializer && ts.isJsxExpression(classAttribute.initializer)
+      ? classAttribute.initializer.expression
+      : undefined;
+  if (
+    !root ||
+    otherRoots.length > 0 ||
+    classAttributes.length !== 1 ||
+    classAttribute.parent.parent !== root ||
+    !classes ||
+    !ts.isArrayLiteralExpression(classes)
+  ) {
+    return [
+      ...problems,
+      `return one root element, and write its class, and no other, as an array: ["solix-${name}-root", <resolved style props>.classes, props.class].`,
+    ];
+  }
+  const tag = root.tagName.getText();
   const tagDeclaration = descendants(fn).find(
     (node): node is ts.VariableDeclaration =>
       ts.isVariableDeclaration(node) && node.name.getText() === tag,
@@ -213,24 +262,18 @@ function polymorphicRootProblems({ name, fn, attribute, classes }: RootElement):
       `write the root class array as ["solix-${name}-root", <resolved style props>.classes, props.class], so the style-prop classes sit before the consumer's class.`,
     );
   }
-  if (
-    resolved === undefined ||
-    memberOf(attributeValue(attribute, "style"), "style") !== resolved
-  ) {
+  if (resolved === undefined || memberOf(attributeValue(root, "style"), "style") !== resolved) {
     problems.push(
       "set style to the .style of the same resolved style props, which puts the consumer's style after the style props'.",
     );
   }
-  const resolvesProps = descendants(fn).some(
-    (node) =>
-      ts.isCallExpression(node) &&
-      node.expression.getText() === "resolveStyleProps" &&
-      node.arguments.map((argument) => argument.getText()).join() === "props",
+  const resolvesProps = callsOf(fn, "resolveStyleProps").some(
+    (call) => call.arguments.map((argument) => argument.getText()).join() === "props",
   );
   if (!resolvesProps) {
     problems.push("resolve the style props with resolveStyleProps(props) from ./style-props.");
   }
-  if (!spreadsRestBefore(attribute, ["class", "style"])) {
+  if (!spreadsRestBefore(root, ["class", "style"])) {
     problems.push(
       "spread {...rest} on the root element before its class and style, so the library's merged values are the ones that apply.",
     );
@@ -238,16 +281,153 @@ function polymorphicRootProblems({ name, fn, attribute, classes }: RootElement):
   return problems;
 }
 
+function partsFunctionOf(fn: ts.FunctionDeclaration, name: string): string | undefined {
+  const calls = callsOf(fn, partsHelper);
+  const [call] = calls;
+  const declaration = call?.parent;
+  const isDeclared =
+    calls.length === 1 &&
+    ts.isVariableDeclaration(declaration) &&
+    ts.isIdentifier(declaration.name) &&
+    ts.isVariableDeclarationList(declaration.parent) &&
+    (declaration.parent.flags & ts.NodeFlags.Const) !== 0 &&
+    call.arguments.map((argument) => argument.getText()).join(", ") ===
+      `"${name}", ${stylesVariable}, props`;
+  return isDeclared ? declaration.name.text : undefined;
+}
+
+function partUsesOf(fn: ts.FunctionDeclaration, partsFunction: string): PartUse[] {
+  return callsOf(fn, partsFunction).map((call) => {
+    const [argument, ...others] = call.arguments;
+    const spread = call.parent;
+    const onTag =
+      ts.isJsxSpreadAttribute(spread) && spread.expression === call
+        ? spread.parent.parent
+        : undefined;
+    return {
+      part: others.length === 0 ? stringLiteralText(argument) : undefined,
+      call,
+      tag: onTag,
+    };
+  });
+}
+
+function styledComponentProblems({ name, fn, source, propsType, shape }: ComponentBody): string[] {
+  const problems: string[] = [];
+  const imports = source.statements
+    .filter(ts.isImportDeclaration)
+    .map((statement) => statement.getText());
+  if (!imports.includes(stylexImport)) problems.push(`import styles with \`${stylexImport}\`.`);
+  if (!stylesBlock(source)) {
+    problems.push(
+      `declare the styles once, as \`const ${stylesVariable} = ${stylesFactory}({ ${rootPart}: { ... }, ... })\`, keyed by part.`,
+    );
+  }
+  if (!propsType?.getText().includes(partPropsType)) {
+    problems.push(
+      `take ${partPropsType} among the props, so classes, styles and unstyled name exactly the parts of ${stylesVariable}.`,
+    );
+  }
+
+  for (const call of descendants(source).filter(
+    (node): node is ts.CallExpression =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.expression.getText() === "stylex" &&
+      node.expression.getText() !== stylesFactory,
+  )) {
+    problems.push(
+      `call ${call.expression.getText()} nowhere: ${partsHelper} in ${partsHelperFile} reads every part's class from ${stylesVariable}, so no component calls StyleX at run time itself.`,
+    );
+  }
+
+  const partsFunction = partsFunctionOf(fn, name);
+  if (!partsFunction) {
+    problems.push(
+      `declare the parts once, as \`const part = ${partsHelper}("${name}", ${stylesVariable}, props)\` from ${partsHelperFile}.`,
+    );
+    return problems;
+  }
+
+  for (const attribute of jsxAttributes(fn, ["class", "style"])) {
+    problems.push(
+      `set no ${attribute.name.getText()} attribute: spread {...${partsFunction}("<part>")} on the element, which gives it the part's class and style.`,
+    );
+  }
+
+  const uses = partUsesOf(fn, partsFunction);
+  for (const { part, call, tag } of uses) {
+    if (part === undefined) {
+      problems.push(`name the part in ${call.getText()} with one string literal.`);
+    }
+    if (!tag) {
+      problems.push(
+        `spread ${call.getText()} on its element as {...${call.getText()}}, so the element takes both the part's class and its style.`,
+      );
+    }
+  }
+
+  const roots = returnedRoots(fn);
+  const [root] = roots;
+  if (roots.length !== 1 || root.tagName.getText() !== rootComponent) {
+    problems.push(
+      `return one root element, a <${rootComponent}>, so the root takes every style prop, hiddenFrom and visibleFrom.`,
+    );
+  } else {
+    const written = attributeNamesOf(root);
+    const rootSpread = `...${partsFunction}("${rootPart}")`;
+    if (!spreadsRestBefore(root, ["component", rootSpread]) || written.at(-1) !== rootSpread) {
+      problems.push(
+        `spread {...rest} on the root <${rootComponent}> before its component, and {${rootSpread}} last, so the part's class and style are the ones that apply.`,
+      );
+    }
+    if (!shape.rendersItsElement(attributeValue(root, "component"))) {
+      problems.push(`set ${shape.componentAttribute} on the root <${rootComponent}>.`);
+    }
+  }
+
+  const onRoot = uses.filter(({ tag }) => tag !== undefined && tag === root);
+  const rootUses = uses.filter(({ part }) => part === rootPart);
+  if (
+    rootUses.length !== 1 ||
+    rootUses[0].tag !== root ||
+    onRoot.some(({ part }) => part !== rootPart)
+  ) {
+    problems.push(
+      `spread {...${partsFunction}("${rootPart}")} on the returned root, once, and no other part there.`,
+    );
+  }
+
+  const keys = stylesKeys(source);
+  const parts = [...new Set(uses.flatMap(({ part }) => (part === undefined ? [] : [part])))];
+  for (const key of keys.filter((found) => !parts.includes(found))) {
+    problems.push(
+      `${stylesVariable}.${key} styles no element: spread {...${partsFunction}("${key}")} on the element it styles, or remove the style.`,
+    );
+  }
+  for (const part of parts.filter((found) => !keys.includes(found))) {
+    problems.push(
+      `the part "${part}" has no style: add a ${part} key to ${stylesVariable}, or remove the part.`,
+    );
+  }
+  for (const key of keys.filter((found) => !partName.test(found))) {
+    problems.push(
+      `name the part ${key} in camelCase, so its stable class is "solix-${name}-<part>".`,
+    );
+  }
+  return problems;
+}
+
 const elementRoot: RootShape = {
-  importsStylex: true,
   alsoOmits: [],
-  problems: elementRootProblems,
+  rendersItsElement: (component) => component !== undefined && ts.isStringLiteral(component),
+  componentAttribute: 'component="<element>"',
 };
 
 const polymorphicRoot: RootShape = {
-  importsStylex: false,
-  alsoOmits: ['"style"', '"component"', "...stylePropKeys"],
-  problems: polymorphicRootProblems,
+  alsoOmits: ['"component"'],
+  rendersItsElement: isComponentPropWithDefault,
+  componentAttribute: 'component={props.component ?? "<element>"}',
 };
 
 function rootShapeOf(propsType: ts.TypeNode | undefined): RootShape | undefined {
@@ -258,48 +438,7 @@ function rootShapeOf(propsType: ts.TypeNode | undefined): RootShape | undefined 
   ) {
     return polymorphicRoot;
   }
-  return propsType?.getText().includes('ComponentProps<"') ? elementRoot : undefined;
-}
-
-function isReturnedRoot(fn: ts.FunctionDeclaration, attribute: ts.JsxAttribute): boolean {
-  const opening = attribute.parent.parent;
-  const element = ts.isJsxOpeningElement(opening) ? opening.parent : opening;
-  return descendants(fn).some(
-    (node) =>
-      ts.isReturnStatement(node) &&
-      node.expression !== undefined &&
-      (ts.isParenthesizedExpression(node.expression)
-        ? node.expression.expression
-        : node.expression) === element,
-  );
-}
-
-function partProblems(name: string, classes: ts.ArrayLiteralExpression): string[] {
-  const [styled, stable] = classes.elements;
-  const key = stylesCall.exec(styled?.getText() ?? "")?.[1];
-  const stableName = stringLiteralText(stable);
-  const prefix = `solix-${name}-`;
-  const part = stableName?.startsWith(prefix) ? stableName.slice(prefix.length) : undefined;
-  if (!key || part === undefined || !partName.test(part)) {
-    return [
-      `start every class array with stylex.attrs(styles.<part>).class and the stable class "${prefix}<part>" (camelCase part).`,
-    ];
-  }
-  return [
-    ...(key === part
-      ? []
-      : [
-          `the style "styles.${key}" and the stable class "${stableName}" must name the same part.`,
-        ]),
-    ...(part === "root"
-      ? [`put "solix-${name}-root" on the returned root element, and only there.`]
-      : []),
-    ...(classes.elements.length === 2
-      ? []
-      : [
-          `a part's class array has exactly two items, but "${stableName}" has ${classes.elements.length}.`,
-        ]),
-  ];
+  return propsType?.getText().includes('ElementProps<"') ? elementRoot : undefined;
 }
 
 function problemsWith({ name, file, source }: Component): string[] {
@@ -327,19 +466,14 @@ function problemsWith({ name, file, source }: Component): string[] {
   if (fn.parameters.length !== 1 || parameter.name.getText() !== "props") {
     report('take one parameter named "props".');
   }
-  const shape = rootShapeOf(parameter?.type);
-  if (!shape) {
+  const propsType = parameter?.type;
+  const shape = rootShapeOf(propsType);
+  const isRootComponent = name === rootComponent;
+  if (!shape || (isRootComponent && shape !== polymorphicRoot)) {
     report(
-      "type props from ComponentProps<\"element\"> in @solidjs/web, or as PolymorphicProps<T, Own> for a root that `component` picks, so the root element's attributes are the component's attributes.",
+      `type props as PolymorphicProps<T, Own> for a root that \`component\` picks${isRootComponent ? "" : ', or as ElementProps<"element", Own> for a root that is always one element'}, both from ./style-props, so the root's attributes and every style prop are the component's props.`,
     );
     return problems;
-  }
-
-  const imports = source.statements
-    .filter(ts.isImportDeclaration)
-    .map((statement) => statement.getText());
-  if (shape.importsStylex && !imports.includes(stylexImport)) {
-    report(`import styles with \`${stylexImport}\`.`);
   }
 
   const first = fn.body.statements[0];
@@ -353,50 +487,27 @@ function problemsWith({ name, file, source }: Component): string[] {
     firstInitializer.expression.getText() === "omit"
       ? firstInitializer.arguments.map((argument) => argument.getText())
       : [];
-  const mustOmit = ['"class"', ...shape.alsoOmits];
+  const mustOmit = isRootComponent
+    ? ['"class"', '"style"', '"component"', "...stylePropKeys"]
+    : ['"class"', '"style"', ...shape.alsoOmits, "...partPropKeys"];
   if (omitted[0] !== "props" || mustOmit.some((key) => !omitted.includes(key))) {
     report(
       `start the body with \`const rest = omit(props, ${mustOmit.join(", ")}, ...)\`, so the consumer's class and style are merged and not overwritten, and no prop of the library's own reaches the element.`,
     );
   }
 
-  const parts: string[] = [];
-  let rootAttributes = 0;
-  for (const attribute of classAttributes(fn)) {
-    const value = attribute.initializer;
-    const classes = value && ts.isJsxExpression(value) ? value.expression : undefined;
-    if (!classes || !ts.isArrayLiteralExpression(classes)) {
-      report(
-        'write every class attribute as an array: [stylex.attrs(styles.part).class, "solix-Name-part"].',
-      );
-      continue;
-    }
-    const key = stylesCall.exec(classes.elements[0]?.getText() ?? "")?.[1];
-    if (key) parts.push(key);
-    const isRoot = isReturnedRoot(fn, attribute);
-    if (isRoot) rootAttributes += 1;
-    const found = isRoot
-      ? shape.problems({ name, fn, attribute, classes })
-      : partProblems(name, classes);
-    problems.push(...found.map((problem) => `${where}: ${problem}`));
-  }
-  if (rootAttributes !== 1)
-    report(`the root element carries "solix-${name}-root" exactly once (found ${rootAttributes}).`);
-
-  const keys = stylesKeys(source);
-  expect(
-    [...new Set(parts)].sort(),
-    `${where}: every stylex.create key is a part class and every part class has a key`,
-  ).toEqual([...keys].sort());
-  return problems;
+  const body: ComponentBody = { name, fn, source, propsType, shape };
+  const found = isRootComponent ? rootComponentProblems(body) : styledComponentProblems(body);
+  return [...problems, ...found.map((problem) => `${where}: ${problem}`)];
 }
 
 test("the library has components to check", () => {
   expect(libraries.length).toBeGreaterThan(0);
   expect(components.length).toBeGreaterThan(1);
+  expect(components.map(({ name }) => name)).toContain(rootComponent);
 });
 
-test("every component is written the one way: one function, props from ComponentProps, consumer class last on the root", () => {
+test("every component is written the one way: one function, a Box root, and every part's class and style from createParts", () => {
   expect(components.flatMap(problemsWith)).toEqual([]);
 });
 

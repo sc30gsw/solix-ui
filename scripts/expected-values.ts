@@ -107,6 +107,7 @@ export async function expectedValues(
     ["brandGreen", "color", playgroundValue(".brand-green", "--solix-color-primary")],
     ["roomy", "margin-top", playgroundValue(".roomy", "margin-top")],
     ["pinnedMargin", "margin-top", playgroundValue(":root", "--playground-pinned-margin")],
+    ["partBackground", "color", playgroundValue(":root", "--playground-part-background")],
     ["zero", "margin-top", "0"],
   ];
   const rootRule =

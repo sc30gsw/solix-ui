@@ -20,6 +20,7 @@ const journeys = [
   ["text-input", "A text input shows its border, its disabled look and its error after the user leaves it"],
   ["modal", "A modal opens over the page and closes by Escape, its Close button and a press outside"],
   ["box", "A Box takes style props, and a consumer's class and style still win"],
+  ["styles-api", "Classes, styles and unstyled restyle a component's parts, and Button takes a style prop"],
   ["server-render", "The page is server-rendered and styled without JavaScript"],
 ];
 

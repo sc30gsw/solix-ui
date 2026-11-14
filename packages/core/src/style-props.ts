@@ -37,14 +37,17 @@ export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
 } & { [Name in VisibilityPropName]?: Breakpoint | Absent };
 
-type Styling = { class?: JSX.ClassValue; style?: JSX.CSSProperties | string };
+export type Styling = { class?: JSX.ClassValue; style?: JSX.CSSProperties | string };
 
-export type PolymorphicProps<T extends ValidComponent, Own extends object = object> = Own &
+export type ElementProps<T extends ValidComponent, Own extends object = object> = Own &
   StyleProps &
-  Styling & { component?: T } & Omit<
-    ComponentProps<T>,
-    keyof Own | keyof StyleProps | keyof Styling | "component"
-  >;
+  Styling &
+  Omit<ComponentProps<T>, keyof Own | keyof StyleProps | keyof Styling | "component">;
+
+export type PolymorphicProps<T extends ValidComponent, Own extends object = object> = ElementProps<
+  T,
+  Own & { component?: T }
+>;
 
 export const stylePropKeys: (keyof StyleProps)[] = [...stylePropNames, ...visibilityPropNames];
 
@@ -77,7 +80,7 @@ function declarations(style: JSX.CSSProperties): string {
     .join("");
 }
 
-function withConsumerStyle(
+export function withConsumerStyle(
   own: JSX.CSSProperties,
   consumer: JSX.CSSProperties | string | undefined,
 ): JSX.CSSProperties | string | undefined {

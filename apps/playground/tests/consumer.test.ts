@@ -1,7 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Browser, Locator, Page } from "playwright";
+import type { Browser, BrowserContext, Locator, Page } from "playwright";
 import {
   afterAll,
   afterEach,
@@ -469,6 +469,66 @@ describe.each(enginesToVerify())("in %s", (engine) => {
         await context.close();
       },
     );
+  });
+
+  describe.each(scriptModes)("the Styles API with scripts %s", (_, javaScriptEnabled) => {
+    let context: BrowserContext;
+    let page: Page;
+    let expected: Expected;
+
+    beforeAll(async () => {
+      context = await browser.newContext({ javaScriptEnabled });
+      page = await context.newPage();
+      await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
+      expected = await expectedValues(page, { sentinels: true });
+    });
+
+    afterAll(async () => {
+      await context.close();
+    });
+
+    test("a consumer's rule for the class that classes.root names beats the library's style it targets, and nothing else", async () => {
+      const button = page.getByRole("button", { name: "Class from classes.root" });
+
+      expect(await computed(button, "background-color")).toBe(expected("danger"));
+      expect(await computed(button, "color")).toBe(expected("--solix-color-on-primary"));
+      expect(await computed(button, "height")).toBe(expected("--solix-control-height-md"));
+    });
+
+    test("styles on a part beats the library's style and the consumer's class on that part", async () => {
+      const summary = page.locator("summary").filter({ hasText: "Styled parts" });
+
+      expect(
+        await computed(summary, "background-color"),
+        "styles.summary beats both the .danger class that classes.summary names and the library's background",
+      ).toBe(expected("partBackground"));
+      expect(
+        await computed(summary, "outline-style"),
+        "the .outlined class that classes.summary names still applies",
+      ).toBe("solid");
+      expect(await computed(summary, "color"), "the library's text colour stays").toBe(
+        expected("--solix-color-text"),
+      );
+    });
+
+    test("unstyled drops the library's look and keeps the stable class", async () => {
+      const button = page.getByRole("button", { name: "Unstyled" });
+
+      expect(await computed(button, "background-color")).not.toBe(
+        expected("--solix-color-primary"),
+      );
+      expect(await computed(button, "height")).not.toBe(expected("--solix-control-height-md"));
+      expect((await button.getAttribute("class"))?.split(/\s+/)).toContain("solix-Button-root");
+    });
+
+    test("a style prop on Button, which is not a Box, beats its default", async () => {
+      expect(
+        await computed(
+          page.getByRole("button", { name: "Style prop on a Button" }),
+          "background-color",
+        ),
+      ).toBe(expected("--solix-color-error"));
+    });
   });
 
   test("a modal stays closed with scripts turned off", async () => {

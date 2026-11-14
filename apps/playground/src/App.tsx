@@ -60,6 +60,18 @@ export default function App() {
         <Box hiddenFrom="md">Hidden from md</Box>
         <Box visibleFrom="md">Visible from md</Box>
       </Box>
+      <Box component="section" aria-label="Styles API">
+        <Button classes={{ root: "danger" }}>Class from classes.root</Button>
+        <Disclosure
+          label="Styled parts"
+          classes={{ summary: "danger outlined" }}
+          styles={{ summary: { "background-color": "var(--playground-part-background)" } }}
+        >
+          Content of the styled parts
+        </Disclosure>
+        <Button unstyled>Unstyled</Button>
+        <Button bg="error">Style prop on a Button</Button>
+      </Box>
     </main>
   );
 }

@@ -1,6 +1,9 @@
 import * as stylex from "@stylexjs/stylex";
 import { omit } from "solid-js";
-import type { ComponentProps } from "@solidjs/web";
+import type { ValidComponent } from "@solidjs/web";
+import { Box } from "./Box";
+import { createParts, type PartProps, partPropKeys } from "./parts";
+import type { PolymorphicProps } from "./style-props";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -16,9 +19,10 @@ const styles = stylex.create({
   },
 });
 
-export function Button(props: ComponentProps<"button">) {
-  const rest = omit(props, "class");
-  return (
-    <button {...rest} class={[stylex.attrs(styles.root).class, "solix-Button-root", props.class]} />
-  );
+export function Button<T extends ValidComponent = "button">(
+  props: PolymorphicProps<T, PartProps<typeof styles>>,
+) {
+  const rest = omit(props, "class", "style", "component", ...partPropKeys);
+  const part = createParts("Button", styles, props);
+  return <Box {...rest} component={props.component ?? "button"} {...part("root")} />;
 }

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createComponent, renderToString } from "@solidjs/web";
 import postcss from "postcss";
+import type { Component } from "solid-js";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import {
@@ -17,6 +19,8 @@ import { builtComponents } from "./built-components";
 import { nestedLayerOrder } from "./cascade-layers";
 
 const dist = join(import.meta.dirname, "../dist");
+const library: Record<string, unknown> = await import(join(dist, "index.js"));
+const rootClassAttribute = /^<[a-z][a-z0-9-]*\s[^>]*?\bclass="([^"]*)"/;
 const stylesheet = readFileSync(join(dist, "styles.css"), "utf8").trim();
 const ownerBreakpoints: [name: string, width: string][] = [
   ["xs", "36em"],
@@ -204,7 +208,12 @@ test.each(builtComponents)(
     expect(source, `${where}: compile stylex.attrs away in the build`).not.toContain(
       "stylex.attrs",
     );
-    expect(source, `${where}: keep the stable class on the root`).toContain(`solix-${name}-root`);
+    expect(typeof library[name], `packages/core/dist/index.js: export ${name}`).toBe("function");
+    const html = renderToString(() => createComponent(library[name] as Component, {}));
+    expect(
+      (rootClassAttribute.exec(html)?.[1] ?? "").split(/\s+/),
+      `${where}: keep the stable class on the root of what it renders`,
+    ).toContain(`solix-${name}-root`);
   },
 );
 
