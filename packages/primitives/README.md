@@ -42,18 +42,4 @@ Every value that changes is an accessor, so call it: `value()`. Commands, such a
 
 ## Primitives
 
-Each one's doc comment, in `src/<file>.ts` and in your editor, says what it does and what it promises.
-
-- `createCounter`
-- `createDisclosure`
-- `createInputState`
-- `createListState`
-- `createMap`
-- `createPrevious`
-- `createQueue`
-- `createSet`
-- `createSetState`
-- `createStateHistory`
-- `createToggle`
-- `createUncontrolled`
-- `createValidatedState`
+`src/index.ts` exports every primitive. Each one's doc comment, in `src/<file>.ts` and in your editor, says what it does and what it promises.
