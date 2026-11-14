@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          node-version: "22"
+          cache: true
+      - run: vp exec playwright install --with-deps chromium firefox webkit
+      - run: vp run verify
+
+  evidence:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PULL_REQUEST: ${{ github.event.pull_request.number }}
+      HEAD_COMMIT: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          node-version: "22"
+          cache: true
+      - run: vp exec playwright install --with-deps chromium firefox webkit
+      - run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+      - run: vp run evidence
+      - run: node scripts/publish-evidence.mjs

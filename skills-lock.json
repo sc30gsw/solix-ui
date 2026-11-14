@@ -1,0 +1,44 @@
+{
+  "version": 2,
+  "skills": {
+    "domain-modeling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/domain-modeling/SKILL.md",
+      "computedHash": "b78689833404148c769077355e12dbe5ad996a158a1e21e58ddf169e439d9d8c"
+    },
+    "grill-with-docs": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/grill-with-docs/SKILL.md",
+      "computedHash": "02e258f41d210f9b2e7cce9faf62b3c59e8fcebe5d2736369c3cd07d471324f8"
+    },
+    "grilling": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/productivity/grilling/SKILL.md",
+      "computedHash": "485451958784497cd4c4dbea13cb5bbb579da58fac0d0e45f3bcb310fab68ac7"
+    },
+    "thermo-nuclear-code-quality-review": {
+      "source": "cursor/plugins",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "thermos/skills/thermo-nuclear-code-quality-review/SKILL.md",
+      "computedHash": "705eb32106f0fec9c9e9b4afccb6156f17f6e8829368e54cd5b53f10e4374340"
+    },
+    "thermo-nuclear-review": {
+      "source": "cursor/plugins",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "thermos/skills/thermo-nuclear-review/SKILL.md",
+      "computedHash": "1a0407b118f3b6ec39e2b6f3d19bce61d83d211427166c221ddd630e580807c0"
+    },
+    "thermos": {
+      "source": "cursor/plugins",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "thermos/skills/thermos/SKILL.md",
+      "computedHash": "aad6fd22c9524ba7cb9fd5ccf3523a2caac126e849cac27af09d2335964da116"
+    }
+  }
+}

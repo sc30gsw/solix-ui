@@ -1,0 +1,23 @@
+{
+  "enabledPlugins": {
+    "pstack@cursor-plugins": true,
+    "modern-web-guidance@googlechrome": true
+  },
+  "extraKnownMarketplaces": {
+    "cursor-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "cursor/plugins"
+      }
+    },
+    "googlechrome": {
+      "source": {
+        "source": "github",
+        "repo": "GoogleChrome/modern-web-guidance"
+      }
+    }
+  },
+  "env": {
+    "DISABLE_TELEMETRY": "1"
+  }
+}

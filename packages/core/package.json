@@ -1,0 +1,33 @@
+{
+  "name": "@solix/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "solid": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@babel/core": "catalog:",
+    "@babel/preset-typescript": "catalog:",
+    "@solidjs/web": "catalog:",
+    "@stylexjs/babel-plugin": "catalog:",
+    "@stylexjs/stylex": "catalog:",
+    "solid-js": "catalog:"
+  },
+  "peerDependencies": {
+    "@solidjs/web": "^2.0.0-rc.21",
+    "@stylexjs/stylex": "^0.19.2",
+    "solid-js": "^2.0.0-rc.21"
+  }
+}

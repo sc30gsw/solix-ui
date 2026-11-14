@@ -1,0 +1,32 @@
+{
+  "name": "solix-ui",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "evidence": "node .agents/skills/verify-playground/scripts/evidence.mjs",
+    "lint:solid": "solid2-kit check --dir . && solid2-kit doctor",
+    "prepare": "vp config --no-agent",
+    "verify": "vp check --deny-warnings && vp run lint:solid && vp test",
+    "web-guidance": "DISABLE_TELEMETRY=1 modern-web-guidance"
+  },
+  "devDependencies": {
+    "@solidjs/vite-plugin": "catalog:",
+    "@solidjs/web": "catalog:",
+    "@types/node": "catalog:",
+    "@types/semver": "catalog:",
+    "fast-check": "catalog:",
+    "modern-web-guidance": "catalog:",
+    "playwright": "catalog:",
+    "postcss": "catalog:",
+    "semver": "catalog:",
+    "solid-js": "catalog:",
+    "solid2-agent-kit": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.28.0"
+}

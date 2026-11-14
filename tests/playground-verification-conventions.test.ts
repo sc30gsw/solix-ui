@@ -1,0 +1,189 @@
+import { globSync, readdirSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
+import ts from "typescript";
+import { expect, test } from "vite-plus/test";
+import { repositoryRoot } from "./support/workspace";
+
+const skill = ".agents/skills/verify-playground";
+const skillFile = `${skill}/SKILL.md`;
+const featureDirectory = `${skill}/features`;
+const featureIndex = `${featureDirectory}/README.md`;
+const driveScript = `${skill}/scripts/drive.mjs`;
+const evidenceScript = `${skill}/scripts/evidence.mjs`;
+const launchScript = `${skill}/scripts/launch.sh`;
+const packageTests = "{packages,apps}/*/tests/*.test.ts";
+const featureSections = [
+  "Sub-features",
+  "How to get to it (user POV)",
+  "Driving it with drive.mjs",
+  "Gotchas",
+];
+const journeysVariable = "journeys";
+const journeyListLine = /^Journeys: (.*?)\.(?:\s|$)/m;
+const backticked = /`([^`]+)`/g;
+const featureLink = /\]\(\.\/([\w-]+)\.md\)/g;
+const secondLevelHeading = /^## (.+)$/gm;
+const testPort = /^const port = (\d+);$/m;
+const launchDefaultPort = /\$\{VERIFY_PLAYGROUND_PORT:-(\d+)\}/;
+const localAddress = /127\.0\.0\.1:(\d+)/g;
+
+function read(path: string): string {
+  return readFileSync(join(repositoryRoot, path), "utf8");
+}
+
+function nonEmpty(where: string, names: string[]): string[] {
+  if (names.length === 0)
+    throw new Error(`${where}: no journey names were found; fix the parser or the file.`);
+  return names;
+}
+
+function journeysInitializer(path: string): ts.Expression {
+  const source = ts.createSourceFile(
+    path,
+    read(path),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  );
+  const declaration = source.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations])
+    .find((found) => ts.isIdentifier(found.name) && found.name.text === journeysVariable);
+  if (!declaration?.initializer) {
+    throw new Error(
+      `${path}: declare the journeys as \`const ${journeysVariable} = ...\` at the top level.`,
+    );
+  }
+  return declaration.initializer;
+}
+
+function driveJourneys(): string[] {
+  const initializer = journeysInitializer(driveScript);
+  if (!ts.isObjectLiteralExpression(initializer)) {
+    throw new Error(
+      `${driveScript}: make \`${journeysVariable}\` an object literal keyed by journey name.`,
+    );
+  }
+  return nonEmpty(
+    driveScript,
+    initializer.properties.flatMap((property) =>
+      property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+        ? [property.name.text]
+        : [],
+    ),
+  );
+}
+
+function evidenceJourneys(): string[] {
+  const initializer = journeysInitializer(evidenceScript);
+  if (!ts.isArrayLiteralExpression(initializer)) {
+    throw new Error(
+      `${evidenceScript}: make \`${journeysVariable}\` an array of [journey, title] pairs.`,
+    );
+  }
+  return nonEmpty(
+    evidenceScript,
+    initializer.elements.flatMap((element) => {
+      const first = ts.isArrayLiteralExpression(element) ? element.elements[0] : undefined;
+      return first && ts.isStringLiteral(first) ? [first.text] : [];
+    }),
+  );
+}
+
+function skillJourneys(): string[] {
+  const list = journeyListLine.exec(read(skillFile))?.[1] ?? "";
+  return nonEmpty(
+    `${skillFile} (the "Journeys:" line)`,
+    [...list.matchAll(backticked)].map(([, name]) => name),
+  );
+}
+
+function indexedFeatures(): string[] {
+  return nonEmpty(
+    `${featureIndex} (links to ./<journey>.md)`,
+    [...read(featureIndex).matchAll(featureLink)].map(([, name]) => name),
+  );
+}
+
+const featureFiles = nonEmpty(
+  featureDirectory,
+  readdirSync(join(repositoryRoot, featureDirectory))
+    .filter((file) => file.endsWith(".md") && file !== "README.md")
+    .map((file) => basename(file, ".md")),
+);
+
+test("every place that lists the playground's journeys lists the same ones as the feature files", () => {
+  const sources: Record<string, string[]> = {
+    [`${driveScript} (keys of ${journeysVariable})`]: driveJourneys(),
+    [`${evidenceScript} (first item of each ${journeysVariable} pair)`]: evidenceJourneys(),
+    [`${skillFile} (the "Journeys:" line)`]: skillJourneys(),
+    [`${featureIndex} (links under Features)`]: indexedFeatures(),
+  };
+  const expected = [...featureFiles].sort();
+  const violations = Object.entries(sources).flatMap(([where, names]) => {
+    const listed = [...names].sort();
+    const missing = expected.filter((name) => !listed.includes(name));
+    const extra = listed.filter((name) => !expected.includes(name));
+    return [
+      ...missing.map((name) => `${where}: add ${name}, which has ${featureDirectory}/${name}.md.`),
+      ...extra.map(
+        (name) => `${where}: remove ${name}, or add ${featureDirectory}/${name}.md describing it.`,
+      ),
+    ];
+  });
+
+  expect(violations).toEqual([]);
+});
+
+test("every feature file names its own journey and has the four sections of the feature entry contract", () => {
+  const violations = featureFiles.flatMap((name) => {
+    const path = `${featureDirectory}/${name}.md`;
+    const text = read(path);
+    const headings = [...text.matchAll(secondLevelHeading)].map(([, heading]) => heading.trim());
+    const problems: string[] = [];
+    if (!text.includes(`drive.mjs ${name}`))
+      problems.push(`${path}: tell the reader to run \`drive.mjs ${name}\`.`);
+    if (JSON.stringify(headings) !== JSON.stringify(featureSections)) {
+      problems.push(
+        `${path}: use exactly the H2 sections ${featureSections.join(", ")} in that order (found: ${headings.join(", ") || "none"}).`,
+      );
+    }
+    return problems;
+  });
+
+  expect(violations).toEqual([]);
+});
+
+test("every test server and the verification instance listen on ports of their own", () => {
+  const launchPort = launchDefaultPort.exec(read(launchScript))?.[1];
+  const ports = globSync(packageTests, { cwd: repositoryRoot })
+    .sort()
+    .flatMap((path) => {
+      const port = testPort.exec(read(path))?.[1];
+      return port ? [{ path, port }] : [];
+    });
+  const violations = ports.flatMap(({ path, port }, index) => [
+    ...ports
+      .slice(0, index)
+      .filter((other) => other.port === port)
+      .map((other) => `${path}: port ${port} is already used by ${other.path}; pick a free one.`),
+    ...(port === launchPort
+      ? [`${path}: port ${port} is the default port of ${launchScript}; pick another.`]
+      : []),
+  ]);
+  const documented = [skillFile, featureIndex].flatMap((path) =>
+    [...read(path).matchAll(localAddress)]
+      .filter(([, port]) => port !== launchPort)
+      .map(
+        ([address]) =>
+          `${path}: write 127.0.0.1:${launchPort}, the default in ${launchScript}, not ${address}.`,
+      ),
+  );
+
+  expect(
+    launchPort,
+    `${launchScript}: set the default as \${VERIFY_PLAYGROUND_PORT:-NNNN}`,
+  ).toBeDefined();
+  expect(ports.length, `${packageTests}: no \`const port = N;\` was found`).toBeGreaterThan(0);
+  expect([...violations, ...documented]).toEqual([]);
+});

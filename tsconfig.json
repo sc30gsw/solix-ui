@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "allowJs": true
+  },
+  "include": [
+    "vite.config.ts",
+    "tests",
+    "scripts",
+    "packages/*/tests",
+    "apps/*/tests",
+    "packages/*/build-pipeline.mjs"
+  ]
+}
