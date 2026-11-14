@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { compileLibrarySource, libraryStylesheet } from "./build-pipeline.mjs";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
@@ -25,5 +25,8 @@ for (const name of await readdir(sourceDirectory)) {
   console.log(`${relative(packageRoot, filename)} -> dist/${outputName}`);
 }
 
-await writeFile(join(outputDirectory, "styles.css"), libraryStylesheet(rules));
-console.log(`dist/styles.css: ${rules.length} rules`);
+const { stylePropRules } = await import(
+  pathToFileURL(join(outputDirectory, "style-prop-table.js")).href
+);
+await writeFile(join(outputDirectory, "styles.css"), libraryStylesheet(rules, stylePropRules()));
+console.log(`dist/styles.css: ${rules.length} rules and the style-prop rules`);

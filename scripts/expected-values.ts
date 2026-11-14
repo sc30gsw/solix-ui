@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { Page } from "playwright";
 import postcss from "postcss";
-import { tokenKind, tokenValues } from "./tokens.mjs";
+import { type TokenKind, tokenKind, tokenValues } from "./tokens.ts";
 
 const playgroundStylesheet = "apps/playground/src/app.css";
 
@@ -10,11 +11,14 @@ const repositoryRoot = join(import.meta.dirname, "..");
 const probedProperty = {
   colour: "color",
   radius: "border-top-left-radius",
+  spacing: "margin-top",
   length: "height",
-};
+} satisfies Record<TokenKind, string>;
 
-function playgroundValue(selector, property) {
-  const values = [];
+type Probe = [name: string, property: string, value: string];
+
+function playgroundValue(selector: string, property: string): string {
+  const values: string[] = [];
   postcss
     .parse(readFileSync(join(repositoryRoot, playgroundStylesheet), "utf8"))
     .walkRules((rule) => {
@@ -32,11 +36,13 @@ function playgroundValue(selector, property) {
   return values[0];
 }
 
-function lengthThatLayoutRounds(index) {
-  return `${index + 1}.33rem`;
+const quarterPixelsInRem = 0.328125;
+
+function lengthNoEngineRounds(index: number): string {
+  return `${index + 1 + quarterPixelsInRem}rem`;
 }
 
-function sentinelValues(names) {
+function sentinelValues(names: string[]): Record<string, string> {
   const colours = names.filter((name) => tokenKind(name) === "colour");
   const lengths = names.filter((name) => tokenKind(name) !== "colour");
   return Object.fromEntries([
@@ -44,19 +50,23 @@ function sentinelValues(names) {
       name,
       `oklch(0.6 0.1 ${Math.round((360 * index) / colours.length)})`,
     ]),
-    ...lengths.map((name, index) => [name, lengthThatLayoutRounds(index)]),
+    ...lengths.map((name, index) => [name, lengthNoEngineRounds(index)]),
   ]);
 }
 
-function computedValues(page, probes, rootRule) {
+function computedValues(
+  page: Page,
+  probes: Probe[],
+  rootRule: string | undefined,
+): Promise<Record<string, string>> {
   return page.evaluate(
-    ([written, injected]) => {
+    ({ written, injected }) => {
       if (injected) {
         const style = document.createElement("style");
         style.textContent = injected;
         document.head.append(style);
       }
-      const computed = {};
+      const computed: Record<string, string> = {};
       for (const [name, property, value] of written) {
         const probe = document.createElement("div");
         probe.style.setProperty(property, value);
@@ -69,11 +79,11 @@ function computedValues(page, probes, rootRule) {
       }
       return computed;
     },
-    [probes, rootRule],
+    { written: probes, injected: rootRule },
   );
 }
 
-function sameValues(values) {
+function sameValues(values: Record<string, string>): string[] {
   const names = Object.keys(values);
   return names.flatMap((name, index) =>
     names
@@ -83,22 +93,23 @@ function sameValues(values) {
   );
 }
 
-/**
- * @param {import("playwright").Page} page
- * @param {{ sentinels?: boolean }} [options]
- * @returns {Promise<(name: string) => string>}
- */
-export async function expectedValues(page, { sentinels = false } = {}) {
+export async function expectedValues(
+  page: Page,
+  { sentinels = false }: { sentinels?: boolean } = {},
+): Promise<(name: string) => string> {
   const tokens = tokenValues();
   const sentinelByName = sentinels ? sentinelValues(Object.keys(tokens)) : undefined;
-  const probes = [
-    ...Object.entries(tokens).map(([name, value]) => [
+  const probes: Probe[] = [
+    ...Object.entries(tokens).map(([name, value]): Probe => [
       name,
       probedProperty[tokenKind(name)],
       sentinelByName ? `var(${name})` : value,
     ]),
     ["danger", "color", playgroundValue(".danger", "background-color")],
     ["brandGreen", "color", playgroundValue(".brand-green", "--solix-color-primary")],
+    ["roomy", "margin-top", playgroundValue(".roomy", "margin-top")],
+    ["pinnedMargin", "margin-top", playgroundValue(":root", "--playground-pinned-margin")],
+    ["zero", "margin-top", "0"],
   ];
   const rootRule =
     sentinelByName &&

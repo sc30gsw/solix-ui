@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
-import { tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens.mjs";
+import { tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
 
 type Minimum = { ratio: number; criterion: string };
 type Conditional = Map<string, ts.Expression>;
