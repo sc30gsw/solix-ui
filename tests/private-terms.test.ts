@@ -1,76 +1,93 @@
-import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import {
-  lineNumbersNamingATerm,
-  parseTerms,
-  privateTermsVariable,
-} from "../scripts/private-terms.mjs";
 import { repositoryRoot } from "./support/workspace";
 
 const script = join(repositoryRoot, "scripts/check-private-terms.mjs");
+const commitMessageHook = join(repositoryRoot, ".vite-hooks/commit-msg");
 const madeUpTerm = "zorblax";
 const otherMadeUpTerm = "quindle widgets";
+const scissors = "# ------------------------ >8 ------------------------";
+
+function temporaryDirectory(): string {
+  return mkdtempSync(join(tmpdir(), "private-terms-"));
+}
 
 function textFile(content: string): string {
-  const path = join(mkdtempSync(join(tmpdir(), "private-terms-")), "text.md");
+  const path = join(temporaryDirectory(), "text.md");
   writeFileSync(path, content);
   return path;
 }
 
-function check(args: string[], terms: string | undefined) {
+function run(command: string, args: string[], terms: string | undefined, cwd = repositoryRoot) {
   const env = { ...process.env };
-  delete env[privateTermsVariable];
-  if (terms !== undefined) env[privateTermsVariable] = terms;
-  return spawnSync("node", [script, ...args], { cwd: repositoryRoot, env, encoding: "utf8" });
+  delete env.SOLIX_PRIVATE_TERMS;
+  if (terms !== undefined) env.SOLIX_PRIVATE_TERMS = terms;
+  return spawnSync(command, args, { cwd, env, encoding: "utf8" });
 }
 
-test("terms are read from a comma- or newline-separated value, trimmed and in lower case", () => {
-  expect(parseTerms(` Zorblax ,quindle widgets\n\n,`)).toEqual([madeUpTerm, otherMadeUpTerm]);
-  expect(parseTerms(undefined)).toEqual([]);
-});
+function check(args: string[], terms: string | undefined, cwd = repositoryRoot) {
+  return run("node", [script, ...args], terms, cwd);
+}
 
-test("a line names a term whatever its case, and other lines do not", () => {
-  const text = ["a plain line", "made with ZorBlax", "Quindle Widgets inside", "zorbla x"].join(
-    "\n",
+test("text names a term in any case, and the report gives each line but never the term", () => {
+  const path = textFile(
+    ["fine", "built like ZorBlax", "Quindle Widgets inside", "zorbla x"].join("\n"),
   );
-
-  expect(lineNumbersNamingATerm(text, [madeUpTerm, otherMadeUpTerm])).toEqual([2, 3]);
-  expect(lineNumbersNamingATerm(text, ["ZORBLAX"])).toEqual([2]);
-});
-
-test("the check names the file and line of each hit and never the term itself", () => {
-  const path = textFile(["fine", "built like zorblax", "fine"].join("\n"));
-  const result = check(["--text", path], `${madeUpTerm},${otherMadeUpTerm}`);
+  const result = check(["--text", path], ` Zorblax ,quindle widgets\n\n,`);
 
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain(`${path}:2`);
+  expect(result.stderr).toContain(`${path}:2:`);
+  expect(result.stderr).toContain(`${path}:3:`);
+  expect(result.stderr).not.toContain(`${path}:4:`);
   expect(result.stderr.toLowerCase()).not.toContain(madeUpTerm);
+  expect(result.stderr.toLowerCase()).not.toContain(otherMadeUpTerm);
 });
 
-test("a commit message ignores the comment lines git adds", () => {
-  const path = textFile(["feat: add a thing", "# zorblax in a git comment"].join("\n"));
+test("the commit-msg hook rejects a message that names a term and ignores what git strips", () => {
+  const naming = textFile(["feat: add a thing", "", "Built like zorblax."].join("\n"));
+  const strippedOnly = textFile(
+    ["feat: add a thing", "# zorblax in a git comment", scissors, "+ zorblax in the diff"].join(
+      "\n",
+    ),
+  );
 
-  expect(check(["--message", path], madeUpTerm).status).toBe(0);
-  expect(check(["--text", path], madeUpTerm).status).toBe(1);
+  expect(run("sh", [commitMessageHook, naming], madeUpTerm).status).toBe(1);
+  expect(run("sh", [commitMessageHook, strippedOnly], madeUpTerm).status).toBe(0);
+});
+
+test("a repository scan reports names and lines, and survives symlinks and unstaged deletions", () => {
+  const repository = temporaryDirectory();
+  execFileSync("git", ["init", "-q"], { cwd: repository });
+  writeFileSync(join(repository, "zorblax.md"), "plain\n");
+  writeFileSync(join(repository, "notes.txt"), "plain\nmade like zorblax\n");
+  writeFileSync(join(repository, "gone.txt"), "zorblax\n");
+  mkdirSync(join(repository, "folder"));
+  symlinkSync("folder", join(repository, "link"));
+  execFileSync("git", ["add", "."], { cwd: repository });
+  rmSync(join(repository, "gone.txt"));
+
+  const result = check([], madeUpTerm, repository);
+
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("zorblax.md: its name");
+  expect(result.stderr).toContain("notes.txt:2:");
+  expect(result.stderr).not.toContain("gone.txt");
+  expect(check([], "nothing-here-at-all", repository).status).toBe(0);
+});
+
+test("an unknown option stops the check, with or without the variable", () => {
+  const path = textFile("plain");
+
+  expect(check(["--messages", path], madeUpTerm).status).toBe(2);
+  expect(check(["--text"], undefined).status).toBe(2);
 });
 
 test("without the variable the check says it skipped and passes", () => {
-  const result = check(["--text", textFile("zorblax")], undefined);
+  const result = check(["--text", textFile(madeUpTerm)], undefined);
 
   expect(result.status).toBe(0);
-  expect(result.stderr).toContain(`${privateTermsVariable} is not set`);
-});
-
-test("the repository scan reads every tracked file, and reports a term that is there", () => {
-  expect(check([], randomUUID()).status).toBe(0);
-
-  const known = check([], "verify-playground");
-  expect(known.status).toBe(1);
-  expect(known.stderr).toMatch(
-    /\.agents\/skills\/verify-playground\/SKILL\.md:\d+: names a private term/,
-  );
+  expect(result.stderr).toContain("SOLIX_PRIVATE_TERMS is not set");
 });
