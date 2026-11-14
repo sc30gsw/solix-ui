@@ -36,8 +36,10 @@ function playgroundValue(selector: string, property: string): string {
   return values[0];
 }
 
-function lengthThatLayoutRounds(index: number): string {
-  return `${index + 1}.33rem`;
+const quarterPixelsInRem = 0.328125;
+
+function lengthNoEngineRounds(index: number): string {
+  return `${index + 1 + quarterPixelsInRem}rem`;
 }
 
 function sentinelValues(names: string[]): Record<string, string> {
@@ -48,7 +50,7 @@ function sentinelValues(names: string[]): Record<string, string> {
       name,
       `oklch(0.6 0.1 ${Math.round((360 * index) / colours.length)})`,
     ]),
-    ...lengths.map((name, index) => [name, lengthThatLayoutRounds(index)]),
+    ...lengths.map((name, index) => [name, lengthNoEngineRounds(index)]),
   ]);
 }
 

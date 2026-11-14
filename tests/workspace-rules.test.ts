@@ -8,6 +8,7 @@ import {
   libraryPackages,
   packages,
   repositoryRoot,
+  rootManifest,
   scriptFiles,
 } from "./support/workspace";
 
@@ -24,6 +25,7 @@ const vitePlusCommandFor: Record<string, string> = {
   tsup: "vp pack",
 };
 
+const projectLicence = "MIT";
 const peerDependenciesALibraryMayHave = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
 const webStandardsOnly =
   "The library is built on web standards only and has no runtime dependency. Use a platform feature or a fallback written in this repository.";
@@ -189,5 +191,23 @@ test("every peer range of a library package accepts the version the catalog pins
     }),
   );
 
+  expect(violations).toEqual([]);
+});
+
+test("the project is MIT-licensed in its licence text, its root manifest and every library package", () => {
+  const licenceText = readFileSync(join(repositoryRoot, "LICENSE"), "utf8");
+  const violations = libraryPackages
+    .filter(({ manifest }) => manifest.license !== projectLicence)
+    .map(
+      ({ path, manifest }) =>
+        `${path}: set "license" to "${projectLicence}", not "${manifest.license}".`,
+    );
+
+  expect(rootManifest.license, `package.json: set "license" to "${projectLicence}"`).toBe(
+    projectLicence,
+  );
+  expect(licenceText.split("\n")[0], `LICENSE: start with "${projectLicence} License"`).toBe(
+    `${projectLicence} License`,
+  );
   expect(violations).toEqual([]);
 });
