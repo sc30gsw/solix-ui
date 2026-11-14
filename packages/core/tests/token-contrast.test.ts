@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { tokensFile, tokenValues } from "../../../scripts/tokens.mjs";
+import { isColourToken, tokensFile, tokenValues } from "../../../scripts/tokens.mjs";
 
 type Pairing = [foreground: string, background: string, minimumRatio: number, why: string];
 
@@ -22,7 +22,7 @@ const pairings: Pairing[] = [
   ["--solix-color-error", "--solix-color-body", 3, "the TextInput invalid border (WCAG 1.4.11)"],
 ];
 
-const colourToken = /^--solix-color-/;
+const remLength = /^\d+(?:\.\d+)?rem$/;
 const number = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
 const oklchNotation = new RegExp(
   String.raw`^oklch\(${number} ${number} ${number}(?: / ${number})?\)$`,
@@ -32,7 +32,8 @@ const gamutTolerance = 1e-4;
 type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
 
 const tokens = tokenValues();
-const colourTokens = Object.keys(tokens).filter((name) => colourToken.test(name));
+const colourTokens = Object.keys(tokens).filter((name) => isColourToken(name));
+const lengthTokens = Object.keys(tokens).filter((name) => !isColourToken(name));
 
 function oklch(value: string): Oklch | undefined {
   const match = oklchNotation.exec(value);
@@ -81,6 +82,18 @@ test("every colour token is written in OKLCH", () => {
     );
 
   expect(colourTokens.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
+test("every other token is a length in rem, so it means the same wherever it is used", () => {
+  const violations = lengthTokens
+    .filter((name) => !remLength.test(tokens[name]))
+    .map(
+      (name) =>
+        `${name} is "${tokens[name]}" in ${tokensFile}. Write a length in rem, or name the token --solix-color-* if it is a colour.`,
+    );
+
+  expect(lengthTokens.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 });
 

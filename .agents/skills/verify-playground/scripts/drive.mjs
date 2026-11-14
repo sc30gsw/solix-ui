@@ -10,7 +10,7 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 }).trim();
 const repositoryScript = (path) => import(pathToFileURL(join(root, "scripts", path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryScript("browser-engines.mjs");
-const { computedValues, tokenValues } = await repositoryScript("tokens.mjs");
+const { computedColours, computedTokens } = await repositoryScript("tokens.mjs");
 const { playgroundValue } = await repositoryScript("playground-styles.mjs");
 const state = join(root, ".verify-playground");
 
@@ -261,8 +261,8 @@ const shot = async (name, description, target = page) => {
 };
 
 try {
-  const token = await computedValues(page, tokenValues());
-  const consumer = await computedValues(page, consumerValues);
+  const token = await computedTokens(page);
+  const consumer = await computedColours(page, consumerValues);
   await journeys[journey]({ browser, page, url, observe, shot, directory, token, consumer });
   observe("console errors and warnings", consoleProblems.join(" | "), "");
 } finally {

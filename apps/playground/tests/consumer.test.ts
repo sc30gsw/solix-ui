@@ -14,7 +14,7 @@ import {
 } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import { playgroundValue } from "../../../scripts/playground-styles.mjs";
-import { computedValues, tokenValues } from "../../../scripts/tokens.mjs";
+import { computedColours, computedTokens } from "../../../scripts/tokens.mjs";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
 import { builtComponents } from "../../../packages/core/tests/built-components";
 
@@ -102,8 +102,8 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     browser = await browserType(engine).launch();
     const page = await browser.newPage();
     await page.goto(url);
-    token = await computedValues(page, tokenValues());
-    consumer = await computedValues(page, consumerValues);
+    token = await computedTokens(page);
+    consumer = await computedColours(page, consumerValues);
     await page.close();
   });
 

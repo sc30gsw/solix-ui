@@ -11,7 +11,6 @@ function lineOf(source, node) {
 }
 
 /**
- * The value of every public token in packages/core/src/tokens.stylex.ts, keyed by its custom property name.
  * @returns {Record<string, string>}
  */
 export function tokenValues() {
@@ -56,29 +55,56 @@ export function tokenValues() {
   return values;
 }
 
+const colourTokenPrefix = "--solix-color-";
+
 /**
- * Each value as the page's browser computes it on a probe element: as a `color` if it is one, otherwise as a `height`.
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function isColourToken(name) {
+  return name.startsWith(colourTokenPrefix);
+}
+
+function probed(page, values, property) {
+  return page.evaluate(
+    ([written, probedProperty]) => {
+      const computed = {};
+      for (const [name, value] of Object.entries(written)) {
+        const probe = document.createElement("div");
+        probe.style.setProperty(probedProperty, value);
+        if (probe.style.getPropertyValue(probedProperty) === "") {
+          throw new Error(`${name}: "${value}" is not a valid ${probedProperty} in this browser.`);
+        }
+        document.body.append(probe);
+        computed[name] = getComputedStyle(probe).getPropertyValue(probedProperty);
+        probe.remove();
+      }
+      return computed;
+    },
+    [values, property],
+  );
+}
+
+/**
  * @template {string} Name
  * @param {import("playwright").Page} page
  * @param {Record<Name, string>} values
  * @returns {Promise<Record<Name, string>>}
  */
-export function computedValues(page, values) {
-  return page.evaluate((written) => {
-    const computed = {};
-    for (const [name, value] of Object.entries(written)) {
-      const probe = document.createElement("div");
-      const property = ["color", "height"].find((candidate) => {
-        probe.style.setProperty(candidate, value);
-        return probe.style.getPropertyValue(candidate) !== "";
-      });
-      if (property === undefined) {
-        throw new Error(`${name}: "${value}" is neither a colour nor a length in this browser.`);
-      }
-      document.body.append(probe);
-      computed[name] = getComputedStyle(probe).getPropertyValue(property);
-      probe.remove();
-    }
-    return computed;
-  }, values);
+export function computedColours(page, values) {
+  return probed(page, values, "color");
+}
+
+/**
+ * @param {import("playwright").Page} page
+ * @returns {Promise<Record<string, string>>}
+ */
+export async function computedTokens(page) {
+  const entries = Object.entries(tokenValues());
+  const colours = Object.fromEntries(entries.filter(([name]) => isColourToken(name)));
+  const lengths = Object.fromEntries(entries.filter(([name]) => !isColourToken(name)));
+  return {
+    ...(await computedColours(page, colours)),
+    ...(await probed(page, lengths, "height")),
+  };
 }
