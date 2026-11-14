@@ -2,7 +2,7 @@ import { existsSync, globSync, lstatSync, readdirSync, readFileSync, readlinkSyn
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "../scripts/browser-engines.mjs";
-import { type Manifest, repositoryRoot } from "./support/workspace";
+import { repositoryRoot, rootManifest } from "./support/workspace";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -161,7 +161,7 @@ test("every file the rules table in AGENTS.md names exists", () => {
 });
 
 test("every check in the repository runs through vp run verify, before a commit and in CI", () => {
-  const manifest = JSON.parse(read("package.json")) as Manifest;
+  const manifest = rootManifest;
   const verify = manifest.scripts?.verify ?? "";
 
   expect(verify.split(" && ")).toEqual([
