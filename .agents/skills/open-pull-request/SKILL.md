@@ -7,6 +7,8 @@ description: The steps every pull request in this repository goes through before
 
 Every pull request goes through these steps in this order. A step that finds something sends you back to the first step after the fix.
 
+The pstack and Thermos skills named below set `disable-model-invocation`, so the Skill tool does not list them. Read each one from the path given.
+
 ## 1. Verify
 
 ```bash
@@ -17,11 +19,11 @@ Run the matching `verify-*` skill for the code the change touches. Drive the cha
 
 ## 2. Correct
 
-Follow the pstack `correct` skill over this branch's work. Find each mistake that happened twice, in the commits, the review threads and the corrections the operator gave. Fix each class at the highest level that works: architecture, then types, then a lint whose message names the fix, then a test. Show each new check failing on the mistake. Add the rule and its check to the table in `AGENTS.md`.
+Read `.agents/skills/correct/SKILL.md` and follow it over this branch's work. Find each mistake that happened twice, in the commits, the review threads and the corrections the operator gave. Fix each class at the highest level that works: architecture, then types, then a lint whose message names the fix, then a test. Show each new check failing on the mistake. Add the rule and its check to the table in `AGENTS.md`.
 
 ## 3. No comments
 
-Follow the pstack `no-comments` skill over the diff against the base branch. `tests/workspace-rules.test.ts` already fails on a comment in a script file, so this step is for what that test cannot see: a constraint that a comment used to carry and that no name, type or test carries yet.
+Read `.agents/skills/no-comments/SKILL.md` and follow it over the diff against the base branch. It starts the `comment-sicko` agent in `.claude/agents`. `tests/workspace-rules.test.ts` already fails on a comment in a script file, so this step is for what that test cannot see: a constraint that a comment used to carry and that no name, type or test carries yet.
 
 ## 4. Thermos
 
@@ -36,5 +38,4 @@ Read `.agents/skills/thermos/SKILL.md` and follow it. The Skill tool does not li
 
 ## What this skill does not cover
 
-- The pstack skills themselves. They live in the `pstack` plugin from `cursor/plugins`, which `.claude/settings.json` enables. In a session that did not load the plugin, read them from a clone of that repository.
 - Merging. A person merges.
