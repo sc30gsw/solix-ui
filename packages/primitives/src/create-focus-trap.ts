@@ -1,7 +1,7 @@
 import { access } from "./internal-access";
-import { createElementSlot } from "./internal-element";
+import { createElementAttachment } from "./internal-attachment";
 import { activeElementOf, focusFirst, moveFocus } from "./internal-focus";
-import { createAttachment, listen, listenerSettings } from "./internal-listener";
+import { disposeAll, listen, listenerSettings } from "./internal-listener";
 import { initialFocusCandidates, tabStopCandidates } from "./internal-tabbable";
 import type { MaybeAccessor, RefSetter } from "./types";
 
@@ -53,32 +53,28 @@ function trap(container: HTMLElement): () => void {
       focusEdge(container, comesBefore(activeElementOf(container) ?? landed, container));
     }
   };
-  const removers = [
-    listen<Event>(container.ownerDocument, listenerSettings(activated, false), (event) => {
+  const removeListeners = disposeAll([
+    listen(container.ownerDocument, listenerSettings(activated), (event) => {
       if (event instanceof CustomEvent && event.detail !== token) newer.add(event.detail);
     }),
-    listen<Event>(container.ownerDocument, listenerSettings(released, false), (event) => {
+    listen(container.ownerDocument, listenerSettings(released), (event) => {
       if (event instanceof CustomEvent) newer.delete(event.detail);
     }),
-    listen<FocusEvent>(container.ownerDocument, listenerSettings(focusin, true), (event) => {
+    listen(container.ownerDocument, listenerSettings(focusin, true), (event) => {
       if (event.target instanceof Node) bringBack(event.target);
     }),
-    listen<Event>(
-      container.ownerDocument.defaultView ?? window,
-      listenerSettings(blur, false),
-      () => {
-        const active = container.ownerDocument.activeElement;
-        if (active instanceof HTMLIFrameElement) bringBack(active);
-      },
-    ),
-  ];
+    listen(container.ownerDocument.defaultView ?? window, listenerSettings(blur), () => {
+      const active = container.ownerDocument.activeElement;
+      if (active instanceof HTMLIFrameElement) bringBack(active);
+    }),
+  ]);
   container.ownerDocument.dispatchEvent(new CustomEvent(activated, { detail: token }));
   const initial = setTimeout(() => {
     if (newer.size === 0) focusInitially(container);
   }, 0);
   return () => {
     clearTimeout(initial);
-    for (const remove of removers) remove();
+    removeListeners();
     container.ownerDocument.dispatchEvent(new CustomEvent(released, { detail: token }));
   };
 }
@@ -114,11 +110,8 @@ function trap(container: HTMLElement): () => void {
  * ```
  */
 export function createFocusTrap(active?: MaybeAccessor<boolean>): RefSetter<HTMLElement> {
-  const [element, ref] = createElementSlot<HTMLElement>();
-  createAttachment(
-    () => (access(active ?? true) ? element() : undefined),
+  return createElementAttachment<HTMLElement, HTMLElement>(
+    (element) => (access(active ?? true) ? element : undefined),
     (container) => trap(container),
-    (left, right) => left === right,
   );
-  return ref;
 }

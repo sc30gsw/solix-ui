@@ -4,7 +4,7 @@ import { type Accessor, createSignal, onCleanup } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 import { createFocusTrap, getHotkeyHandler } from "../src/index";
-import { axeViolations } from "./support/accessibility";
+import { expectNoAxeViolations } from "./support/accessibility";
 import { flush, mount, mountOn, record, unmount } from "./support/browser-harness";
 import { attached, button, focusedId, html, nextTask, settled, tab } from "./support/dom";
 import {
@@ -329,7 +329,7 @@ test("a trapped dialog, with focus inside it, has no WCAG 2.2 A or AA violation"
   await tab();
 
   expect(region.contains(document.activeElement)).toBe(true);
-  expect(await axeViolations(region)).toEqual([]);
+  await expectNoAxeViolations(region);
 });
 
 const step: fc.Arbitrary<Step> = fc.oneof(
@@ -356,8 +356,8 @@ test("for generated Tab and Shift+Tab presses among stops that are added, remove
         const slots: Slot[] = [];
         const mirrored: Slot[] = [];
         for (const [index, kind] of initial.entries()) {
-          apply({ type: "add", at: index, kind }, slots, container, `trap ${index}`);
-          apply({ type: "add", at: index, kind }, mirrored, mirror, `mirror ${index}`);
+          apply({ type: "add", at: index, kind }, slots, container, `trap start ${index}`);
+          apply({ type: "add", at: index, kind }, mirrored, mirror, `mirror start ${index}`);
         }
         let order = await engineOrder(mirrorStart, mirrored);
         mirrorStart.blur();
@@ -370,13 +370,13 @@ test("for generated Tab and Shift+Tab presses among stops that are added, remove
               const before = document.activeElement;
               setSuspended(true);
               flush();
-              apply(current, mirrored, mirror, `mirror ${index}`);
+              apply(current, mirrored, mirror, `mirror step ${index}`);
               order = await engineOrder(mirrorStart, mirrored);
               if (before instanceof HTMLElement && before !== document.body) before.focus();
               else (document.activeElement as HTMLElement | null)?.blur();
               setSuspended(false);
               flush();
-              apply(current, slots, container, `trap ${index}`);
+              apply(current, slots, container, `trap step ${index}`);
               await settled();
               continue;
             }

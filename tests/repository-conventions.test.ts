@@ -22,6 +22,8 @@ const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 const notOneSpaceAtACellBorder = / {2,}\||\| {2,}|\S\||\|\S/;
 const confirmedCommit = /Last confirmed against commit `([0-9a-f]{7,40})`/;
+const diffPathList = /Run `git diff [0-9a-f]{7,40} -- ([^`]+)`/;
+const backticked = /`([^`]+)`/g;
 const checkoutSteps = /- uses: actions\/checkout@/g;
 const fullHistory = /^\s+fetch-depth: 0$/gm;
 const versionPrefix = /^[\^~]/;
@@ -156,6 +158,46 @@ test("every verification skill says which commit it was last confirmed against",
     .map(
       (name) => `.agents/skills/${name}/SKILL.md: add "Last confirmed against commit \`<hash>\`."`,
     );
+
+  expect(violations).toEqual([]);
+});
+
+function coveredPathsOf(text: string): string[] {
+  return text
+    .split("\n")
+    .filter((line) => line.startsWith("| ") && !line.startsWith("| ---"))
+    .slice(1)
+    .flatMap((row) => [...(row.split(" | ")[0] ?? "").matchAll(backticked)].map(([, path]) => path))
+    .filter((path) => existsSync(join(repositoryRoot, path)));
+}
+
+function covers(listed: string, path: string): boolean {
+  return path === listed || path.startsWith(`${listed}/`);
+}
+
+test("every path a verification skill tells you to diff is in its covered-code table, and every path in the table is in the diff", () => {
+  const violations = skillNames
+    .filter((name) => name.startsWith("verify-"))
+    .flatMap((name) => {
+      const text = skillText(name);
+      const listed = diffPathList.exec(text)?.[1]?.split(" ") ?? [];
+      if (listed.length === 0) return [];
+      const covered = coveredPathsOf(text);
+      return [
+        ...covered
+          .filter((path) => !listed.some((entry) => covers(entry, path)))
+          .map(
+            (path) =>
+              `.agents/skills/${name}/SKILL.md: the table covers ${path}, which the git diff command leaves out.`,
+          ),
+        ...listed
+          .filter((entry) => !covered.some((path) => covers(entry, path)))
+          .map(
+            (entry) =>
+              `.agents/skills/${name}/SKILL.md: the git diff command names ${entry}, which no row of the table covers.`,
+          ),
+      ];
+    });
 
   expect(violations).toEqual([]);
 });

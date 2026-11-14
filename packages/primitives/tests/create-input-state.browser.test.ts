@@ -1,10 +1,20 @@
 import fc from "fast-check";
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser/context";
+import { userEvent } from "vite-plus/test/browser";
 import { createInputState, type InputChange } from "../src/index";
-import { attached, flush, mount, unmount, watch } from "./support/browser-harness";
+import { flush, mount, unmount, watch } from "./support/browser-harness";
+import { attached } from "./support/dom";
 import { command, flushCommand, type Tick } from "./support/model";
+
+function listened<E extends HTMLElement>(
+  element: E,
+  type: string,
+  listener: (event: Event) => void,
+): E {
+  element.addEventListener(type, listener);
+  return attached(element);
+}
 
 test("it stores a value, and an empty string, 0, false, null and undefined as they are", () => {
   const [value, onChange] = mount(() => createInputState<unknown>("start"));
@@ -29,7 +39,7 @@ test("it stores what an updater returns for the current value", () => {
 
 test("given the input event of a text field, it stores the field's value", async () => {
   const [value, onChange] = mount(() => createInputState(""));
-  const field = attached(document.createElement("input"), "input", onChange);
+  const field = listened(document.createElement("input"), "input", onChange);
 
   await userEvent.type(field, "solid");
   flush();
@@ -38,7 +48,7 @@ test("given the input event of a text field, it stores the field's value", async
 
 test("given the change event of a checkbox, it stores whether it is checked", async () => {
   const [value, onChange] = mount(() => createInputState(false));
-  const checkbox = attached(document.createElement("input"), "change", onChange);
+  const checkbox = listened(document.createElement("input"), "change", onChange);
   checkbox.type = "checkbox";
 
   await userEvent.click(checkbox);
@@ -51,7 +61,7 @@ test("given the change event of a checkbox, it stores whether it is checked", as
 
 test("given the change event of a select, it stores the selected value", async () => {
   const [value, onChange] = mount(() => createInputState("a"));
-  const select = attached(document.createElement("select"), "change", onChange);
+  const select = listened(document.createElement("select"), "change", onChange);
   select.append(new Option("A", "a"), new Option("B", "b"));
 
   await userEvent.selectOptions(select, "b");
@@ -144,7 +154,7 @@ test("for every generated sequence of values, updaters, input events and flushes
           const [value, onChange] = createInputState<Stored>(initial);
           return { value, onChange, seen: watch(value) };
         });
-        const field = attached(document.createElement("input"), "input", onChange);
+        const field = listened(document.createElement("input"), "input", onChange);
         const model: Model = { staged: initial, committed: initial, shown: [initial] };
         fc.modelRun(() => ({ model, real: { value, onChange, field, seen } }), sequence);
         field.remove();

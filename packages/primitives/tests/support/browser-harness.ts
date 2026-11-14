@@ -6,6 +6,7 @@ import {
   OBSERVE,
 } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
+import type { EventOf } from "../../src/internal-listener";
 import type { RefSetter } from "../../src/types";
 import { listenerMethods, observers, timers } from "./browser-resources";
 
@@ -250,16 +251,6 @@ export function watch<T>(read: () => T): T[] {
   return seen;
 }
 
-export function attached<E extends HTMLElement>(
-  element: E,
-  type?: string,
-  listener?: (event: Event) => void,
-): E {
-  if (type && listener) addListener.call(element, type, listener);
-  document.body.append(element);
-  return element;
-}
-
 export function mountOn<E extends Element>(create: () => RefSetter<E>, element: E): RefSetter<E> {
   const ref = mount(create);
   ref(element);
@@ -267,13 +258,13 @@ export function mountOn<E extends Element>(create: () => RefSetter<E>, element: 
   return ref;
 }
 
-export function record<K extends keyof WindowEventMap>(
-  target: EventTarget,
+export function record<T extends EventTarget, K extends string>(
+  target: T,
   type: K,
-): WindowEventMap[K][] {
-  const seen: WindowEventMap[K][] = [];
+): EventOf<T, K>[] {
+  const seen: EventOf<T, K>[] = [];
   const listener = (event: Event) => {
-    seen.push(event as WindowEventMap[K]);
+    seen.push(event as EventOf<T, K>);
   };
   addListener.call(target, type, listener);
   recorders.push(() => removeListener.call(target, type, listener));

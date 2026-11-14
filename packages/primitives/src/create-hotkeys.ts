@@ -1,6 +1,7 @@
 import { access } from "./internal-access";
+import { createAttachment } from "./internal-attachment";
 import { runHotkeys } from "./internal-hotkey";
-import { createAttachment, listen, listenerSettings } from "./internal-listener";
+import { listen, listenerSettings } from "./internal-listener";
 import type { HotkeyItem, MaybeAccessor } from "./types";
 
 const defaultTagsToIgnore = ["INPUT", "TEXTAREA", "SELECT"] as const;
@@ -46,13 +47,12 @@ export function createHotkeys(
   triggerOnContentEditable?: MaybeAccessor<boolean>,
 ): void {
   createAttachment(
-    () => listenerSettings(keydown, false),
-    (settings) =>
-      listen<KeyboardEvent>(window, settings, (event) => {
+    () => keydown,
+    () =>
+      listen(window, listenerSettings(keydown), (event) => {
         const ignored = access(tagsToIgnore ?? defaultTagsToIgnore);
         if (isIgnoredTarget(event, ignored, access(triggerOnContentEditable ?? false))) return;
         runHotkeys(event, access(hotkeys));
       }),
-    () => true,
   );
 }

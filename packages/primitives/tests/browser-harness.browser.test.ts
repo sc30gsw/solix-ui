@@ -4,7 +4,8 @@ import { createLeakyListener } from "./fixtures/leaky-listener";
 import { createLeakyObserver } from "./fixtures/leaky-observer";
 import { createLeakyTimer } from "./fixtures/leaky-timer";
 import { createCleanupInCommand } from "./fixtures/raises-diagnostic";
-import { attached, flush, mount, reportAfterDispose } from "./support/browser-harness";
+import { flush, mount, reportAfterDispose } from "./support/browser-harness";
+import { attached } from "./support/dom";
 
 test("it reports a listener that an effect added on a later flush and never removed", () => {
   const [target, setTarget] = createSignal<EventTarget | undefined>(undefined);

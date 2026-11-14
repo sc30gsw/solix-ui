@@ -23,7 +23,13 @@ export type ReadOnce<T> = T | Accessor<T>;
  */
 export type RefSetter<E extends Element> = (element: E) => void;
 
-/** The options of `addEventListener`: `true` means `capture`. */
+/**
+ * The options of `addEventListener`: `true` means `capture`. A primitive that takes them with an
+ * event type reads both live. A change of the type, `capture`, `passive`, `once` or `signal` moves
+ * the listener, removed with the options it was added with. Options equal by value, such as an
+ * accessor that returns a new object each time, keep it in place, with no gap and no duplicate.
+ * The listener is the function passed, so read anything that changes inside it.
+ */
 export type ListenerOptions = boolean | AddEventListenerOptions;
 
 /** What a hotkey item may set. Each option is read when a key is pressed. */

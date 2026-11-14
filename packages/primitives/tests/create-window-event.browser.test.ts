@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { createWindowEvent } from "../src/index";
-import type { ListenerOptions } from "../src/index";
-import { attached, flush, mount, unmount } from "./support/browser-harness";
+import { createWindowEvent, type ListenerOptions } from "../src/index";
+import { flush, mount, unmount } from "./support/browser-harness";
+import { attached } from "./support/dom";
 
 const ping = "solix-ping";
 
@@ -37,7 +37,8 @@ test("a custom event name works, and a change of the type moves the listener", (
 
 test("capture, as a boolean or in an object, runs the listener before a handler on the target stops the event", () => {
   const seen: string[] = [];
-  const target = attached(document.createElement("div"), ping, (event) => event.stopPropagation());
+  const target = attached(document.createElement("div"));
+  target.addEventListener(ping, (event) => event.stopPropagation());
   mount(() => createWindowEvent(ping, () => seen.push("boolean"), true));
   mount(() => createWindowEvent(ping, () => seen.push("object"), { capture: true }));
   mount(() => createWindowEvent(ping, () => seen.push("bubble")));

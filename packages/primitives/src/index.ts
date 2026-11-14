@@ -1,4 +1,8 @@
-export { createClickOutside, type ClickOutsideHandler } from "./create-click-outside";
+export {
+  createClickOutside,
+  type ClickOutsideHandler,
+  type PressEventName,
+} from "./create-click-outside";
 export { createCounter, type CounterHandlers, type CounterOptions } from "./create-counter";
 export {
   createDisclosure,

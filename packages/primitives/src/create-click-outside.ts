@@ -1,18 +1,37 @@
-import { untrack } from "solid-js";
 import { access } from "./internal-access";
-import { createElementSlot } from "./internal-element";
+import { createElementAttachment } from "./internal-attachment";
 import { sameItems } from "./internal-equal";
-import { createAttachment, listen, listenerSettings } from "./internal-listener";
+import { disposeAll, listen, listenerSettings } from "./internal-listener";
 import type { MaybeAccessor, RefSetter } from "./types";
 
-/** Runs with the event that completed a press, or with a listed event, outside. */
-export type ClickOutsideHandler = (event: MouseEvent | TouchEvent) => void;
+type Exactly<T, U> = [T] extends [U] ? ([U] extends [T] ? true : false) : false;
 
-type Inside = readonly (Element | null | undefined)[];
+/** The name of an event whose type is `MouseEvent`, `PointerEvent` or `TouchEvent`. */
+export type PressEventName = {
+  [K in keyof DocumentEventMap]: true extends
+    | Exactly<DocumentEventMap[K], MouseEvent>
+    | Exactly<DocumentEventMap[K], PointerEvent>
+    | Exactly<DocumentEventMap[K], TouchEvent>
+    ? K
+    : never;
+}[keyof DocumentEventMap];
 
-type Listening = { events: readonly string[] | null; capture: boolean; inside: Element | null };
+/** Runs with the `pointerup` that completed a press outside, or with a listed event outside. */
+export type ClickOutsideHandler<K extends PressEventName = "pointerup"> = (
+  event: DocumentEventMap[K],
+) => void;
 
-const press = ["pointerdown", "pointerup", "pointercancel"] as const;
+type Listening = {
+  events: readonly string[] | null;
+  capture: boolean;
+  inside: readonly Element[];
+};
+
+const press = { start: "pointerdown", end: "pointerup", cancel: "pointercancel" } as const;
+
+function isPresent(node: Element | null | undefined): node is Element {
+  return node !== null && node !== undefined;
+}
 
 function isOnPage(target: EventTarget | null): boolean {
   if (!(target instanceof Node) || target.ownerDocument === null) return false;
@@ -21,121 +40,131 @@ function isOnPage(target: EventTarget | null): boolean {
   );
 }
 
-function isOutside(event: Event, inside: Inside): boolean {
+function isOutside(event: Event, inside: readonly Element[]): boolean {
   if (!isOnPage(event.target)) return false;
-  const present = inside.filter((node): node is Element => node !== null && node !== undefined);
-  if (present.length !== inside.length) return false;
   const path = event.composedPath();
-  return present.every((node) => !path.includes(node));
+  return inside.every((node) => !path.includes(node));
 }
 
 function sameListening(left: Listening, right: Listening): boolean {
   return (
     left.capture === right.capture &&
-    left.inside === right.inside &&
+    sameItems(left.inside, right.inside) &&
     (left.events === null || right.events === null
       ? left.events === right.events
       : sameItems(left.events, right.events))
   );
 }
 
-function attach(
+function pageOf(current: Listening): Document {
+  return current.inside[0]?.ownerDocument ?? document;
+}
+
+function listenToEvents(
   current: Listening,
-  insideNow: () => Inside,
-  handler: ClickOutsideHandler,
+  events: readonly string[],
+  handler: (event: Event) => void,
 ): () => void {
-  const page = document;
-  if (current.events !== null) {
-    const removers = current.events.map((type) =>
-      listen<MouseEvent | TouchEvent>(page, listenerSettings(type, current.capture), (event) => {
-        if (isOutside(event, insideNow())) handler(event);
+  return disposeAll(
+    events.map((type) =>
+      listen(pageOf(current), listenerSettings(type, current.capture), (event) => {
+        if (isOutside(event, current.inside)) handler(event);
       }),
-    );
-    return () => {
-      for (const remove of removers) remove();
-    };
-  }
-  const pressed: { pointer: number | undefined } = { pointer: undefined };
-  const removers = [
-    listen<PointerEvent>(page, listenerSettings(press[0], current.capture), (event) => {
-      pressed.pointer = isOutside(event, insideNow()) ? event.pointerId : undefined;
+    ),
+  );
+}
+
+function listenToPresses(current: Listening, handler: (event: Event) => void): () => void {
+  const page = pageOf(current);
+  const view = page.defaultView ?? window;
+  const started = new Map<number, { target: EventTarget | null; outside: boolean }>();
+  const endingOutside = new WeakSet<Event>();
+  return disposeAll([
+    listen(view, listenerSettings(press.start, true), (event) => {
+      started.set(event.pointerId, {
+        target: event.target,
+        outside: isOutside(event, current.inside),
+      });
     }),
-    listen<PointerEvent>(page, listenerSettings(press[1], current.capture), (event) => {
-      const began = pressed.pointer;
-      pressed.pointer = undefined;
-      if (began === event.pointerId && isOutside(event, insideNow())) handler(event);
+    ...current.inside.map((node) =>
+      listen(node, listenerSettings(press.start, true), (event) => {
+        const start = started.get(event.pointerId);
+        if (start) start.outside = false;
+      }),
+    ),
+    listen(view, listenerSettings(press.end, true), (event) => {
+      const start = started.get(event.pointerId);
+      started.delete(event.pointerId);
+      if (start?.outside && isOnPage(start.target)) endingOutside.add(event);
     }),
-    listen<PointerEvent>(page, listenerSettings(press[2], current.capture), () => {
-      pressed.pointer = undefined;
+    listen(view, listenerSettings(press.cancel, true), (event) => {
+      started.delete(event.pointerId);
     }),
-  ];
-  return () => {
-    for (const remove of removers) remove();
-  };
+    listen(page, listenerSettings(press.end, current.capture), (event) => {
+      if (endingOutside.has(event) && isOutside(event, current.inside)) handler(event);
+    }),
+  ]);
 }
 
 /**
- * Calls `handler` when the user presses outside an element, and returns the ref that names it.
- * With `nodes`, inside is every node in the list instead, and no ref is returned. A node that is
- * `null` or `undefined`, or a ref that has received no element, makes every press count as inside.
+ * Calls `handler` when the user presses outside the element its ref is on, and returns that ref.
+ * With `nodes`, inside is every node in the list instead, and the ref is not needed. A node that
+ * is `null` or `undefined`, or a ref that has received no element, makes every press count as
+ * inside.
  *
  * With `events` left out or `null`, a press is a `pointerdown` and the `pointerup` of the same
- * pointer, both outside, as the platform's own light dismiss decides. A press that starts inside
- * and ends outside, or the reverse, does nothing (WCAG 2.5.2), and a touch that scrolls ends in
- * `pointercancel` and does nothing. The handler gets the `pointerup`.
+ * pointer, both outside, and the handler gets the `pointerup`. A press that starts inside and ends
+ * outside, or the reverse, does nothing (WCAG 2.5.2), and a touch that scrolls ends in
+ * `pointercancel` and does nothing. Each pointer is followed on its own. Where a press starts is
+ * read before any handler on the page runs, so a widget that stops its `pointerdown` cannot hide
+ * it.
  *
  * With a list of `events`, such as `["mousedown", "touchstart"]`, each listed event outside calls
- * the handler on its own.
+ * the handler on its own, and the handler gets that event. Only mouse, pointer and touch events
+ * can be listed.
  *
  * Each region decides on its own, by containment alone: it neither reads nor prevents an event's
- * default. So a press outside two regions calls both handlers, as a stack of popovers expects, and
- * a press inside one and outside the other calls only the other's. A component whose child layer
- * is portaled outside its element passes the layer's node through `nodes`, with its own, so a
- * press inside the layer does not count as outside the component.
+ * default. So a press outside two regions calls both handlers, and a press inside one and outside
+ * the other calls only the other's. A component whose child layer is portaled outside its element
+ * passes the layer's node through `nodes`, with its own, so a press inside the layer does not count
+ * as outside the component.
  *
- * Inside is decided on `composedPath()`, so content in a shadow root counts as inside its host. An
- * event whose target has left the page, removed by the same press, is never outside. `events`,
- * `enabled` (default `true`) and `capture` (default `false`) are live, and `events` is compared by
- * value. `nodes` and the handler are read when an event arrives.
+ * Inside is decided on `composedPath()`, so content in an open shadow root counts as inside its
+ * host. A closed shadow root hides its content from that path, so there a listener on each inside
+ * node tells a press that starts inside, and the rest of the press, or a listed event, is decided
+ * on the path the page sees. An event whose target has left the page, removed by the same press,
+ * is never outside. `events` (compared by value), `nodes` (compared by value), `enabled` (default
+ * `true`) and `capture` (default `false`), which puts the listener that ends a press, or the listed
+ * events' listener, in the capture phase, are live.
  *
  * ```tsx
  * const ref = createClickOutside(() => setOpened(false));
  * return <div ref={ref}>Menu</div>;
  * ```
  */
-export function createClickOutside<E extends Element = HTMLElement>(
-  handler: ClickOutsideHandler,
-  events?: MaybeAccessor<readonly string[] | null | undefined>,
-  nodes?: null,
+export function createClickOutside<K extends PressEventName = "pointerup">(
+  handler: ClickOutsideHandler<K>,
+  events?: MaybeAccessor<readonly K[] | null | undefined>,
+  nodes?: MaybeAccessor<readonly (Element | null | undefined)[] | null | undefined>,
   enabled?: MaybeAccessor<boolean>,
   capture?: MaybeAccessor<boolean>,
-): RefSetter<E>;
-export function createClickOutside(
-  handler: ClickOutsideHandler,
-  events: MaybeAccessor<readonly string[] | null | undefined>,
-  nodes: MaybeAccessor<Inside>,
-  enabled?: MaybeAccessor<boolean>,
-  capture?: MaybeAccessor<boolean>,
-): undefined;
-export function createClickOutside<E extends Element>(
-  handler: ClickOutsideHandler,
-  events?: MaybeAccessor<readonly string[] | null | undefined>,
-  nodes?: MaybeAccessor<Inside> | null,
-  enabled?: MaybeAccessor<boolean>,
-  capture?: MaybeAccessor<boolean>,
-): RefSetter<E> | undefined {
-  const [element, ref] = createElementSlot<E>();
-  const insideNow = (): Inside =>
-    nodes === undefined || nodes === null ? [untrack(element)] : untrack(() => access(nodes));
-  createAttachment<Listening>(
-    () => {
+): RefSetter<Element> {
+  const call = (event: Event) => handler(event as DocumentEventMap[K]);
+  return createElementAttachment<Element, Listening>(
+    (element) => {
       if (!access(enabled ?? true)) return undefined;
-      const inside = nodes === undefined || nodes === null ? element() : null;
-      if (inside === undefined) return undefined;
-      return { events: access(events) ?? null, capture: access(capture ?? false), inside };
+      const listed = access(nodes ?? null) ?? [element];
+      if (!listed.every(isPresent)) return undefined;
+      return {
+        events: access(events) ?? null,
+        capture: access(capture ?? false),
+        inside: listed,
+      };
     },
-    (current) => attach(current, insideNow, (event) => handler(event)),
+    (current) =>
+      current.events === null
+        ? listenToPresses(current, call)
+        : listenToEvents(current, current.events, call),
     sameListening,
   );
-  return nodes === undefined || nodes === null ? ref : undefined;
 }

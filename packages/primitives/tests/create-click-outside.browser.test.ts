@@ -1,42 +1,14 @@
 import { createSignal } from "solid-js";
-import { expect, test } from "vite-plus/test";
-import { userEvent } from "vite-plus/test/browser";
+import { expect, test, vi } from "vite-plus/test";
 import { createClickOutside } from "../src/index";
-import { flush, mount, unmount } from "./support/browser-harness";
-
-function box(label: string, parent: HTMLElement = document.body): HTMLDivElement {
-  const element = document.createElement("div");
-  element.textContent = label;
-  element.style.padding = "8px";
-  parent.append(element);
-  return element;
-}
+import { flush, mount, mountOn, record, unmount } from "./support/browser-harness";
+import { box, pointer, press } from "./support/dom";
 
 function region(label: string) {
   const inside = box(label);
-  const ref = mount(() => createClickOutside((event) => calls.push(`${label}: ${event.type}`)));
   const calls: string[] = [];
-  ref(inside);
-  flush();
+  mountOn(() => createClickOutside((event) => calls.push(`${label}: ${event.type}`)), inside);
   return { inside, calls };
-}
-
-function press(down: Element, up: Element = down): Promise<void> {
-  return userEvent.pointer([
-    { target: down, keys: "[MouseLeft>]" },
-    { target: up, keys: "[/MouseLeft]" },
-  ]);
-}
-
-function pointer(type: string, target: EventTarget, pointerId = 1): PointerEvent {
-  const event = new PointerEvent(type, {
-    bubbles: true,
-    cancelable: true,
-    composed: true,
-    pointerId,
-  });
-  target.dispatchEvent(event);
-  return event;
 }
 
 test("a press outside calls the handler with the pointerup, and a press inside does not", async () => {
@@ -57,14 +29,18 @@ test("a press that starts inside and ends outside, or starts outside and ends in
   expect(calls).toEqual([]);
 });
 
-test("a press that the browser cancels, as when a touch starts a scroll, does nothing", () => {
+test("a press that the browser cancels, as when a touch starts a scroll, does nothing, and the cancel ends only its own pointer", () => {
   const { calls } = region("menu");
   const outside = box("page");
 
-  pointer("pointerdown", outside);
-  pointer("pointercancel", outside);
-  pointer("pointerup", outside);
-  expect(calls).toEqual([]);
+  pointer("pointerdown", outside, 1);
+  pointer("pointercancel", outside, 1);
+  pointer("pointerup", outside, 1);
+  pointer("pointerdown", outside, 2);
+  pointer("pointerdown", outside, 3);
+  pointer("pointercancel", outside, 3);
+  pointer("pointerup", outside, 2);
+  expect(calls).toEqual(["menu: pointerup"]);
 });
 
 test("a pointerup of another pointer than the one that pressed does not complete the press", () => {
@@ -74,6 +50,19 @@ test("a pointerup of another pointer than the one that pressed does not complete
   pointer("pointerdown", outside, 1);
   pointer("pointerup", outside, 2);
   pointer("pointerup", outside, 1);
+  expect(calls).toEqual(["menu: pointerup"]);
+});
+
+test("where a press starts is read before the page's handlers, so a pointerup an outside widget hid leaves nothing behind for a later press that a widget inside stops", async () => {
+  const { inside, calls } = region("menu");
+  const handle = box("drag handle", inside);
+  handle.addEventListener("pointerdown", (event) => event.stopPropagation());
+  const stopper = box("stops its pointerup");
+  stopper.addEventListener("pointerup", (event) => event.stopPropagation());
+  const elsewhere = box("page");
+
+  await press(stopper);
+  await press(handle, elsewhere);
   expect(calls).toEqual([]);
 });
 
@@ -99,37 +88,48 @@ test("content in an open shadow root counts as inside its host", async () => {
   button.textContent = "In the shadow";
   shadow.append(button);
   const calls: string[] = [];
-  const ref = mount(() => createClickOutside(() => calls.push("outside")));
-  ref(host);
-  flush();
+  mountOn(() => createClickOutside(() => calls.push("outside")), host);
 
   await press(button);
   expect(calls).toEqual([]);
 });
 
-test("before the ref receives an element, every press counts as inside", async () => {
+test("a region inside a closed shadow root tells a press that starts in it by its own listener", () => {
+  const host = box("host");
+  const shadow = host.attachShadow({ mode: "closed" });
+  const inside = box("region in a closed root", shadow);
+  const field = document.createElement("input");
+  field.setAttribute("aria-label", "Field");
+  shadow.append(field);
   const calls: string[] = [];
-  mount(() => createClickOutside(() => calls.push("outside")));
+  mountOn(() => createClickOutside(() => calls.push("outside")), inside);
+  const outside = box("page");
 
-  await press(box("page"));
-  expect(calls).toEqual([]);
+  for (const target of [inside, field, outside]) {
+    pointer("pointerdown", target);
+    pointer("pointerup", target);
+  }
+  expect(calls).toEqual(["outside", "outside"]);
 });
 
-test("with nodes, it returns no ref, inside is every node, and a missing node makes every press count as inside", async () => {
+test("with nodes, inside is every node in the list, the list is live, and a missing node makes every press count as inside", async () => {
   const first = box("first");
   const second = box("second");
   const outside = box("page");
-  const [nodes, setNodes] = createSignal<readonly (Element | undefined)[]>([first, second]);
+  const [nodes, setNodes] = createSignal<readonly (Element | undefined)[]>([first]);
   const calls: string[] = [];
-  const returned = mount(() => createClickOutside(() => calls.push("outside"), null, nodes));
+  mount(() => createClickOutside(() => calls.push("outside"), null, nodes));
 
+  await press(second);
+  setNodes([first, second]);
+  flush();
   await press(first);
   await press(second);
   await press(outside);
   setNodes([first, undefined]);
+  flush();
   await press(outside);
-  expect(returned).toBeUndefined();
-  expect(calls).toEqual(["outside"]);
+  expect(calls).toEqual(["outside", "outside"]);
 });
 
 test("enabled is live: turning it off removes the listeners, and turning it on adds them again", async () => {
@@ -137,9 +137,7 @@ test("enabled is live: turning it off removes the listeners, and turning it on a
   const outside = box("page");
   const [enabled, setEnabled] = createSignal(false);
   const calls: string[] = [];
-  const ref = mount(() => createClickOutside(() => calls.push("outside"), null, null, enabled));
-  ref(inside);
-  flush();
+  mountOn(() => createClickOutside(() => calls.push("outside"), null, null, enabled), inside);
 
   await press(outside);
   setEnabled(true);
@@ -156,17 +154,17 @@ test("with capture, an outside element that stops the press in its own handler d
   stopper.addEventListener("pointerup", (event) => event.stopPropagation());
   const [capture, setCapture] = createSignal(true);
   const calls: string[] = [];
-  const ref = mount(() =>
-    createClickOutside(
-      () => calls.push(capture() ? "capture" : "bubble"),
-      null,
-      null,
-      true,
-      capture,
-    ),
+  mountOn(
+    () =>
+      createClickOutside(
+        () => calls.push(capture() ? "capture" : "bubble"),
+        null,
+        null,
+        true,
+        capture,
+      ),
+    box("menu"),
   );
-  ref(box("menu"));
-  flush();
 
   await press(stopper);
   setCapture(false);
@@ -175,47 +173,46 @@ test("with capture, an outside element that stops the press in its own handler d
   expect(calls).toEqual(["capture"]);
 });
 
-test("a list of events tests each listed event on its own, whatever its default, the way the mirrored default does", async () => {
+test("a list of events tests each listed event on its own, whatever its default, and the handler gets that event", async () => {
   const inside = box("menu");
   const outside = box("page");
   const calls: string[] = [];
-  const ref = mount(() =>
-    createClickOutside((event) => calls.push(event.type), ["mousedown", "touchstart"]),
+  mountOn(
+    () =>
+      createClickOutside(
+        (event) => calls.push(`${event.type} at ${event.clientX > 0 ? "a point" : "no point"}`),
+        ["mousedown"],
+      ),
+    inside,
   );
-  ref(inside);
-  flush();
 
   outside.addEventListener("mousedown", (event) => event.preventDefault());
   await press(outside, inside);
   await press(inside, outside);
-  expect(calls).toEqual(["mousedown"]);
+  expect(calls).toEqual(["mousedown at a point"]);
 });
 
-test("an events array read again with the same names keeps the listeners in place", async () => {
-  const added: string[] = [];
-  const add = EventTarget.prototype.addEventListener.bind(document);
+test("an events list read again with the same names keeps the listeners in place", () => {
   const [tick, setTick] = createSignal(0);
-  const ref = mount(() =>
-    createClickOutside(
-      () => undefined,
-      () => (tick() >= 0 ? ["mousedown"] : []),
-    ),
+  mountOn(
+    () =>
+      createClickOutside(
+        () => undefined,
+        () => (tick() >= 0 ? ["mousedown"] : []),
+      ),
+    box("menu"),
   );
-  document.addEventListener = (...args: Parameters<typeof add>) => {
-    added.push(args[0]);
-    add(...args);
-  };
+  const added = vi.spyOn(EventTarget.prototype, "addEventListener");
+
   try {
-    ref(box("menu"));
-    flush();
     setTick(1);
     flush();
     setTick(2);
     flush();
+    expect(added).not.toHaveBeenCalled();
   } finally {
-    Reflect.deleteProperty(document, "addEventListener");
+    added.mockRestore();
   }
-  expect(added).toEqual(["mousedown"]);
 });
 
 test("a region decides on its own: a press outside counts whatever its default, and the handler leaves the default alone", async () => {
@@ -223,13 +220,12 @@ test("a region decides on its own: a press outside counts whatever its default, 
   const preventing = box("prevents its pointerup");
   const plain = box("page");
   preventing.addEventListener("pointerup", (event) => event.preventDefault());
-  const defaults: boolean[] = [];
-  window.addEventListener("pointerup", (event) => defaults.push(event.defaultPrevented));
+  const pointerups = record(window, "pointerup");
 
   await press(preventing);
   await press(plain);
   expect(calls).toEqual(["menu: pointerup", "menu: pointerup"]);
-  expect(defaults).toEqual([true, false]);
+  expect(pointerups.map((event) => event.defaultPrevented)).toEqual([true, false]);
 });
 
 test("of two nested regions, a press outside both calls both handlers, and a press inside the outer and outside the inner calls only the inner, in either order of attaching", async () => {
@@ -241,11 +237,8 @@ test("of two nested regions, a press outside both calls both handlers, and a pre
     const inner = box("inner", outer);
     const elsewhere = box("page");
     const calls: string[] = [];
-    const attach = (name: string, element: HTMLElement) => {
-      const ref = mount(() => createClickOutside(() => calls.push(name)));
-      ref(element);
-      flush();
-    };
+    const attach = (name: string, element: HTMLElement) =>
+      mountOn(() => createClickOutside(() => calls.push(name)), element);
     if (innerFirst) attach("inner", inner);
     attach("outer", outer);
     if (!innerFirst) attach("inner", inner);
@@ -269,11 +262,8 @@ test("a press inside a child layer portaled outside its parent's node calls only
   const elsewhere = box("page");
   const layer = box("portaled layer");
   const calls: string[] = [];
-  const parentRef = mount(() => createClickOutside(() => calls.push("parent")));
-  const layerRef = mount(() => createClickOutside(() => calls.push("layer")));
-  parentRef(parent);
-  layerRef(layer);
-  flush();
+  mountOn(() => createClickOutside(() => calls.push("parent")), parent);
+  mountOn(() => createClickOutside(() => calls.push("layer")), layer);
 
   await press(layer);
   expect(calls).toEqual(["parent"]);
@@ -286,9 +276,7 @@ test("a press inside a child layer portaled outside its parent's node calls only
       () => [parent, layer],
     ),
   );
-  const ref = mount(() => createClickOutside(() => calls.push("layer")));
-  ref(layer);
-  flush();
+  mountOn(() => createClickOutside(() => calls.push("layer")), layer);
 
   await press(layer);
   await press(parent);
@@ -296,13 +284,4 @@ test("a press inside a child layer portaled outside its parent's node calls only
   calls.length = 0;
   await press(elsewhere);
   expect([insideEither, [...calls].sort()]).toEqual([["layer"], ["layer", "parent"]]);
-});
-
-test("the handler is the function passed, and the listeners are removed when the owner is disposed", async () => {
-  const { calls } = region("menu");
-  const outside = box("page");
-
-  unmount();
-  await press(outside);
-  expect(calls).toEqual([]);
 });

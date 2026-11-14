@@ -2,7 +2,7 @@ import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 import { createClickOutside, createFocusReturn } from "../src/index";
-import { axeViolations } from "./support/accessibility";
+import { expectNoAxeViolations } from "./support/accessibility";
 import { flush, mount, unmount } from "./support/browser-harness";
 import { attached, button, focusedId } from "./support/dom";
 
@@ -140,5 +140,5 @@ test("the page around a surface that returned focus has no WCAG 2.2 A or AA viol
   inside.blur();
   close();
   expect(focusedId()).toBe("trigger");
-  expect(await axeViolations(document.body)).toEqual([]);
+  await expectNoAxeViolations(document.body);
 });

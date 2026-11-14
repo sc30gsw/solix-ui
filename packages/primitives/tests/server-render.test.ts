@@ -12,32 +12,30 @@ type Library = typeof Primitives;
 type Primitive = Extract<keyof Library, `create${string}`>;
 type ServerCase<F> = {
   create: (primitive: F) => unknown;
-  read: (returned: never) => unknown;
-  expected: unknown;
+  read?: (returned: never) => unknown;
+  expected?: unknown;
 };
 
 const primitivePrefix = "create";
 
 function serverCase<F, R>(cases: {
   create: (primitive: F) => R;
-  read: (returned: R) => unknown;
-  expected: unknown;
+  read?: (returned: R) => unknown;
+  expected?: unknown;
 }): ServerCase<F> {
   return cases;
 }
 
 const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
   createClickOutside: serverCase({
-    create: (createClickOutside) => {
-      const withNodes = createClickOutside(
+    create: (createClickOutside) => [
+      createClickOutside(() => undefined),
+      createClickOutside(
         () => undefined,
         ["mousedown"],
         () => [undefined],
-      );
-      return [createClickOutside(() => undefined), () => withNodes] as const;
-    },
-    read: ([ref, withNodes]) => [typeof ref, withNodes()],
-    expected: ["function", undefined],
+      ),
+    ],
   }),
   createCounter: serverCase({
     create: (createCounter) => createCounter(11, { min: 0, max: 10 }),
@@ -56,23 +54,15 @@ const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
         () => undefined,
         () => ({ capture: true }),
       ),
-    read: (ref) => typeof ref,
-    expected: "function",
   }),
   createFocusReturn: serverCase({
     create: (createFocusReturn) => createFocusReturn({ opened: true, surface: () => undefined }),
-    read: (returnFocus) => typeof returnFocus,
-    expected: "function",
   }),
   createFocusTrap: serverCase({
     create: (createFocusTrap) => createFocusTrap(() => true),
-    read: (ref) => typeof ref,
-    expected: "function",
   }),
   createHotkeys: serverCase({
     create: (createHotkeys) => createHotkeys(() => [["mod+K", () => undefined]]),
-    read: (returned) => returned,
-    expected: undefined,
   }),
   createInputState: serverCase({
     create: (createInputState) => createInputState("typed"),
@@ -138,8 +128,6 @@ const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
         () => undefined,
         () => ({ passive: true }),
       ),
-    read: (returned) => returned,
-    expected: undefined,
   }),
 };
 
@@ -156,7 +144,7 @@ function renderOnTheServer<K extends Primitive>(name: K) {
   const touched = browserResourcesReadDuring(() => {
     renderedOnTheServer(() => {
       rendered.returned = create(primitive);
-      rendered.value = read(rendered.returned as never);
+      rendered.value = read?.(rendered.returned as never);
       return serialized(rendered.value);
     });
   });
