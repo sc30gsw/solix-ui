@@ -42,6 +42,8 @@ Every value that changes is an accessor, so call it: `value()`. Commands, such a
 
 ## Primitives
 
+In the order they build on each other: `createUncontrolled` first, since most inputs rest on it, then the rest of the state primitives.
+
 ### createUncontrolled
 
 ```ts
@@ -53,7 +55,132 @@ const [value, setValue, controlled] = createUncontrolled({
 });
 ```
 
-The state of a control that a consumer may own. While `value` reads anything but `undefined`, the state is controlled: `value()` is that value, and `setValue` only calls `onChange`, so the consumer decides. Otherwise it is uncontrolled: it starts at `defaultValue`, or `finalValue` when that is `undefined`, and `setValue` writes the value and then calls `onChange` with it and any payload. It may switch while it runs, and the uncontrolled value survives a controlled stretch. A request for the value it would replace calls nothing. Passing `finalValue` types the value as `T`; without it the value may be `undefined`.
+The state of a control that a consumer may own. While `value` reads anything but `undefined`, the state is controlled: `value()` is that value, and `setValue` only calls `onChange`, so the consumer decides. Otherwise it is uncontrolled: it starts at `defaultValue`, or `finalValue` when that is `undefined`, and `setValue` writes the value and then calls `onChange` with it and any payload. It may switch while it runs, and the uncontrolled value survives a controlled stretch. A request for the value it would replace calls nothing, and while controlled a request the consumer refused can be made again after the flush. Passing `finalValue` types the value as `T`; without it the value may be `undefined`.
+
+### createToggle
+
+```ts
+const [value, toggle] = createToggle(["light", "dark", "contrast"]);
+```
+
+A value that cycles through its options, `[false, true]` by default, read once. `toggle()` moves to the next option and wraps around. `toggle(option)` moves to that option, and the next `toggle()` continues from there. `toggle(updater)` moves to the option the updater returns for the current value. A value that is not an option does nothing. With two options, `toggle(); toggle()` before a flush ends where it started.
+
+### createCounter
+
+```ts
+const [count, { increment, decrement, set, reset }] = createCounter(0, {
+  min: 0,
+  max: () => props.max,
+  step: 1,
+});
+```
+
+A number kept between `min` and `max`, which start at `-Infinity` and `Infinity`. The initial value is read once and clamped. `increment` and `decrement` move by the absolute value of `step`, `set` writes a value, and `reset` returns to the initial value, each clamped to the bounds as they are when it runs. A count already outside new bounds stays until the next command.
+
+### createDisclosure
+
+```ts
+const [opened, { open, close, toggle, set }] = createDisclosure(false, { onOpen, onClose });
+```
+
+Whether something is open. `open`, `close` and `toggle` run `onOpen` or `onClose` after the write, and only when they change the state, so `open(); open()` runs `onOpen` once, and `toggle(); toggle()` runs both and ends where it started. `set` writes the state and runs neither callback. The callbacks are read when they run.
+
+### createListState
+
+```ts
+const [
+  list,
+  {
+    setState,
+    append,
+    prepend,
+    insert,
+    pop,
+    shift,
+    apply,
+    applyWhere,
+    remove,
+    reorder,
+    swap,
+    setItem,
+    setItemProp,
+    filter,
+  },
+] = createListState(initial);
+```
+
+A list whose commands each make a new array and leave the old one as it was. The initial value is an array or a function that returns one, read once. `insert(index, ...items)` inserts before `index`, `remove(...indices)` counts indices in the list before the removal, `reorder({ from, to })` moves one item and `swap({ from, to })` exchanges two, and `setItemProp(index, key, value)` copies the object at `index` with one key replaced. Indices are not checked. A command that leaves every item in place writes nothing.
+
+### createMap
+
+```ts
+const map = createMap<string, User>([["ada", ada]]);
+map().set("grace", grace);
+```
+
+An accessor of a `Map` whose `set`, `delete` and `clear` update it. Each change makes a new `Map`. A mutator taken from an older instance writes to the latest one, and every mutation before a flush lands. `set` with the value a key holds, and `delete` or `clear` of nothing, change nothing. `get`, `has`, `size` and iteration are the platform's own.
+
+### createSet
+
+```ts
+const selected = createSet<string>();
+selected().add(id);
+```
+
+An accessor of a `Set` whose `add`, `delete` and `clear` update it, as `createMap` does. `union`, `intersection`, `difference` and `symmetricDifference` are the platform's own: they take a set or anything with `size`, `has` and `keys`, and return a new plain `Set` without changing this one.
+
+### createQueue
+
+```ts
+const { state, queue, add, update, cleanQueue } = createQueue({ initialValues: [], limit: 3 });
+```
+
+A list split in two: the first `limit` items in `state` and the rest in `queue`. `add` appends and splits again, `update` replaces every item, `state` then `queue`, with what it returns and splits again, so removing a shown item moves the next queued one up, and `cleanQueue` empties the queue. `limit` is read by each command, so a new limit applies from the next one.
+
+### createStateHistory
+
+```ts
+const [value, { set, back, forward, reset }, { history, current }] = createStateHistory(initial);
+```
+
+A value with an undo history that starts with the initial value, read once. `set` drops the entries after the current one and appends, `back(steps)` and `forward(steps)` move 1 step by default and stop at either end, and `reset` returns to the initial value alone.
+
+### createValidatedState
+
+```ts
+const [{ value, lastValidValue, valid }, setValue] = createValidatedState(
+  "",
+  (text) => text.length > 2,
+);
+```
+
+A value that remembers the last one that passed `validate`. `value` is the last value set, valid or not. `lastValidValue` starts as the initial value when it passes, or `undefined`, and moves only on a valid value. `initialValidationState`, a third argument read once, replaces the first verdict when it is a boolean. `validate` is called when a value is set.
+
+### createInputState
+
+```tsx
+const [name, onNameInput] = createInputState("");
+<input value={name()} onInput={onNameInput} />;
+```
+
+A value with one handler that takes a value, an updater, or a form control's event. Given an event, it stores the `checked` of a checkbox and the `value` of any other control. Anything else, `""`, `0`, `false` and `null` included, is stored as it is.
+
+### createSetState
+
+```ts
+const [filters, setFilters] = createSetState({ query: "", page: 1 });
+setFilters({ page: 2 });
+```
+
+An object that takes partial updates. `setState` merges the keys it is given, or the keys an updater returns for the current object, into a new object. One that sets every key to the value it holds writes nothing.
+
+### createPrevious
+
+```ts
+const previousPage = createPrevious(() => props.page);
+```
+
+The value the accessor held before its latest change, `undefined` until it first changes. Several writes before a flush are one change, and a read that returns the value it already held is not a change.
 
 ## How it is built
 

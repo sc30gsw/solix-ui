@@ -5,6 +5,6 @@ export function access<T>(value: MaybeAccessor<T>): T {
   return typeof value === "function" ? (value as Accessor<T>)() : value;
 }
 
-export function accessOnce<T>(value: MaybeAccessor<T>): T {
+export function accessUntracked<T>(value: MaybeAccessor<T>): T {
   return untrack(() => access(value));
 }

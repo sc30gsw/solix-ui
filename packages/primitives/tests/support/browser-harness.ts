@@ -1,4 +1,4 @@
-import { createRoot, type DiagnosticCapture, flush, OBSERVE } from "solid-js";
+import { createEffect, createRoot, type DiagnosticCapture, flush, OBSERVE } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
 
 type Listener = {
@@ -152,6 +152,14 @@ export function mount<T>(create: () => T): T {
   });
   flush();
   return created;
+}
+
+export function watch<T>(read: () => T): T[] {
+  const seen: T[] = [];
+  createEffect(read, (value) => {
+    seen.push(value);
+  });
+  return seen;
 }
 
 export function unmount(): void {

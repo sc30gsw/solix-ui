@@ -1,5 +1,5 @@
 import { type Accessor, createMemo, untrack } from "solid-js";
-import { access, accessOnce } from "./internal-access";
+import { access, accessUntracked } from "./internal-access";
 import { createValue } from "./internal-value";
 import type { MaybeAccessor } from "./types";
 
@@ -52,7 +52,7 @@ export function createUncontrolled<T, P extends unknown[] = []>(
   options: UncontrolledOptions<T, P>,
 ): UncontrolledReturn<T, P> {
   const uncontrolled = createValue(
-    (accessOnce(options.defaultValue) ?? accessOnce(options.finalValue)) as T,
+    (accessUntracked(options.defaultValue) ?? accessUntracked(options.finalValue)) as T,
   );
   const requested = createValue<{ value: T } | undefined>(undefined);
   const controlled = createMemo(() => access(options.value) !== undefined);

@@ -1,4 +1,4 @@
-import { type Accessor, createSignal, untrack } from "solid-js";
+import { type Accessor, createMemo, createSignal, untrack } from "solid-js";
 
 export type Value<T> = {
   get: Accessor<T>;
@@ -8,7 +8,7 @@ export type Value<T> = {
 export function createValue<T>(initial: T): Value<T> {
   const [box, setBox] = createSignal({ value: initial });
   return {
-    get: () => box().value,
+    get: createMemo(() => box().value),
     update: (decide) => {
       let changed = false;
       setBox((staged) => {

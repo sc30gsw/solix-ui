@@ -133,9 +133,10 @@ function parametersOf(node: ts.Node): ts.ParameterDeclaration[] {
   return ts.isFunctionLike(node) ? [...node.parameters] : [];
 }
 
-function enclosingParameters(node: ts.Node): string[] {
+function argumentsInScope(node: ts.Node): string[] {
   const names: string[] = [];
   for (let parent = node.parent; parent; parent = parent.parent) {
+    if (!isModuleLevelFunction(parent)) continue;
     for (const parameter of parametersOf(parent)) {
       if (ts.isIdentifier(parameter.name)) names.push(parameter.name.text);
     }
@@ -148,6 +149,14 @@ function rootIdentifier(expression: ts.Expression): string | undefined {
   if (ts.isIdentifier(value)) return value.text;
   if (ts.isPropertyAccessExpression(value) || ts.isElementAccessExpression(value))
     return rootIdentifier(value.expression);
+  if (ts.isNonNullExpression(value)) return rootIdentifier(value.expression);
+  if (
+    ts.isBinaryExpression(value) &&
+    (value.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+      value.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+  ) {
+    return rootIdentifier(value.left);
+  }
   return undefined;
 }
 
@@ -177,7 +186,7 @@ function destructuredArguments(module: Module): string[] {
       ts.isVariableDeclaration(node) &&
       !ts.isIdentifier(node.name) &&
       node.initializer &&
-      enclosingParameters(node).includes(rootIdentifier(node.initializer) ?? "")
+      argumentsInScope(node).includes(rootIdentifier(node.initializer) ?? "")
     ) {
       return [
         `${where(module, node)}: ${node.getText()} destructures an argument. Read argument.x where it is used, so an accessor or a getter in it stays live.`,
@@ -185,7 +194,7 @@ function destructuredArguments(module: Module): string[] {
     }
     if (
       ts.isSpreadAssignment(node) &&
-      enclosingParameters(node).includes(rootIdentifier(node.expression) ?? "")
+      argumentsInScope(node).includes(rootIdentifier(node.expression) ?? "")
     ) {
       return [
         `${where(module, node)}: ${node.getText()} copies an argument. Read argument.x where it is used, so an accessor or a getter in it stays live.`,

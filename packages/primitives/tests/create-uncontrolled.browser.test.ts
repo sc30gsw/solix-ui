@@ -229,7 +229,7 @@ test("for every generated sequence of requests, consumer writes and flushes, it 
         defaultValue: fc.option(values, { nil: undefined }),
         finalValue: fc.option(values, { nil: undefined }),
       }),
-      fc.commands(commands, { maxCommands: 30 }),
+      fc.commands(commands, { maxCommands: 30, size: "medium" }),
       (start, sequence) => {
         const calls: Call[] = [];
         const [outside, setOutside] = createSignal<string | undefined>(start.outside);

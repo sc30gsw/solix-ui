@@ -38,12 +38,97 @@ const browserOnlyGlobals = [
 ];
 
 const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
+  createCounter: {
+    run: (createCounter) => {
+      const returned = createCounter(11, { min: 0, max: 10 });
+      return { returned, value: returned[0]() };
+    },
+    expected: 10,
+  },
+  createDisclosure: {
+    run: (createDisclosure) => {
+      const returned = createDisclosure(true);
+      return { returned, value: returned[0]() };
+    },
+    expected: true,
+  },
+  createInputState: {
+    run: (createInputState) => {
+      const returned = createInputState("typed");
+      return { returned, value: returned[0]() };
+    },
+    expected: "typed",
+  },
+  createListState: {
+    run: (createListState) => {
+      const returned = createListState(() => [1, 2]);
+      return { returned, value: returned[0]() };
+    },
+    expected: [1, 2],
+  },
+  createMap: {
+    run: (createMap) => {
+      const returned = createMap([["key", 1]]);
+      return { returned, value: returned() };
+    },
+    expected: new Map([["key", 1]]),
+  },
+  createPrevious: {
+    run: (createPrevious) => {
+      const returned = createPrevious(() => "now");
+      return { returned, value: returned() };
+    },
+    expected: undefined,
+  },
+  createQueue: {
+    run: (createQueue) => {
+      const returned = createQueue({ initialValues: [1, 2, 3], limit: 2 });
+      return { returned, value: [returned.state(), returned.queue()] };
+    },
+    expected: [[1, 2], [3]],
+  },
+  createSet: {
+    run: (createSet) => {
+      const returned = createSet(["member"]);
+      return { returned, value: returned() };
+    },
+    expected: new Set(["member"]),
+  },
+  createSetState: {
+    run: (createSetState) => {
+      const returned = createSetState({ page: 1 });
+      return { returned, value: returned[0]() };
+    },
+    expected: { page: 1 },
+  },
+  createStateHistory: {
+    run: (createStateHistory) => {
+      const returned = createStateHistory("first");
+      return { returned, value: [returned[0](), returned[2].history(), returned[2].current()] };
+    },
+    expected: ["first", ["first"], 0],
+  },
+  createToggle: {
+    run: (createToggle) => {
+      const returned = createToggle(["light", "dark"]);
+      return { returned, value: returned[0]() };
+    },
+    expected: "light",
+  },
   createUncontrolled: {
     run: (createUncontrolled) => {
       const returned = createUncontrolled({ defaultValue: "default", finalValue: "final" });
       return { returned, value: [returned[0](), returned[2]()] };
     },
     expected: ["default", false],
+  },
+  createValidatedState: {
+    run: (createValidatedState) => {
+      const returned = createValidatedState("ab", (text: string) => text.length > 2, true);
+      const [state] = returned;
+      return { returned, value: [state.value(), state.lastValidValue(), state.valid()] };
+    },
+    expected: ["ab", undefined, true],
   },
 };
 
