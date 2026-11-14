@@ -8,7 +8,7 @@ import {
   visibilityPropNames,
 } from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
-import { libraryPackages, packages, repositoryRoot } from "./support/workspace";
+import { libraryPackages, packages, repositoryRoot, scriptFiles } from "./support/workspace";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
@@ -26,6 +26,8 @@ const polymorphicPropsType = "PolymorphicProps";
 const featureDirectory = join(repositoryRoot, ".agents/skills/verify-playground/features");
 const contractSkill = join(repositoryRoot, ".agents/skills/verify-component-contract/SKILL.md");
 const stylePropTableFile = "packages/core/src/style-prop-table.ts";
+const builtComponentsFile = "packages/core/tests/built-components.ts";
+const testDirectory = "tests";
 const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
 
 const libraries = libraryPackages.map(({ directory, manifest }) => ({
@@ -452,5 +454,34 @@ test("no array or argument list outside the style-prop table names two or more s
   );
 
   expect(names.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
+function componentListsIn(file: string, names: string[]): { line: number; listed: string[] }[] {
+  const source = parse(file);
+  return descendants(source).flatMap((node) => {
+    if (!ts.isArrayLiteralExpression(node)) return [];
+    const strings = node.elements.flatMap((item) =>
+      ts.isStringLiteralLike(item) ? [item.text] : [],
+    );
+    if (strings.length === 0 || strings.some((text) => !names.includes(text))) return [];
+    return [
+      { line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, listed: strings },
+    ];
+  });
+}
+
+test("no array in a test file lists the components by hand", () => {
+  const names = components.map(({ name }) => name);
+  const testFiles = scriptFiles.filter((file) => file.split("/").includes(testDirectory));
+  const violations = testFiles.flatMap((file) =>
+    componentListsIn(join(repositoryRoot, file), names).map(
+      ({ line, listed }) =>
+        `${file}:${line}: this array lists the components ${listed.join(", ")} by hand. Read the components from the build with builtComponents in ${builtComponentsFile}, and say what sets the ones a test picks out apart.`,
+    ),
+  );
+
+  expect(names.length).toBeGreaterThan(0);
+  expect(testFiles.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 });
