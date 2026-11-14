@@ -15,6 +15,8 @@ const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
 const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
+const partsImport = "./parts";
+const libraryEntry = /(?:^|\/)src\/index$/;
 const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
 const rootBinding = "root";
 const partBinding = "part";
@@ -158,11 +160,33 @@ type PropsShape = {
   alias: ts.TypeAliasDeclaration;
 };
 
+function importedFromParts(source: ts.SourceFile, name: string): boolean {
+  return source.statements.some((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== partsImport
+    ) {
+      return false;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    return (
+      bindings !== undefined &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.some(
+        (element) =>
+          element.name.text === name && (element.propertyName ?? element.name).text === name,
+      )
+    );
+  });
+}
+
 function propsShapeOf(alias: ts.TypeAliasDeclaration | undefined): PropsShape | undefined {
   const type = alias?.type;
   if (!alias || !type || !ts.isTypeReferenceNode(type)) return undefined;
   const kind = type.typeName.getText();
   if (kind !== elementPropsType && kind !== polymorphicPropsType) return undefined;
+  if (!importedFromParts(alias.getSourceFile(), kind)) return undefined;
   const [target, stylesApi, ownProps] = type.typeArguments ?? [];
   const element =
     kind === elementPropsType
@@ -397,7 +421,7 @@ function problemsWith({ name, file, source }: Component): string[] {
   }
   if (shape.stylesApi?.getText() !== stylesApiTypeArgument) {
     report(
-      `pass ${stylesApiTypeArgument} as the second type argument of ${shape.kind}, so classes, styles and unstyled name exactly the parts of ${stylesVariable}.`,
+      `pass ${stylesApiTypeArgument} as the second type argument of ${shape.kind}, so classes and styles name exactly the parts of ${stylesVariable}.`,
     );
   }
 
@@ -599,27 +623,77 @@ test("no array or argument list outside the style-prop table names two or more s
   expect(violations).toEqual([]);
 });
 
-function componentListsIn(file: string, names: string[]): { line: number; listed: string[] }[] {
+function libraryNamespaces(source: ts.SourceFile): string[] {
+  return source.statements.flatMap((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !libraryEntry.test(statement.moduleSpecifier.text)
+    ) {
+      return [];
+    }
+    const bindings = statement.importClause?.namedBindings;
+    return bindings && ts.isNamespaceImport(bindings) ? [bindings.name.text] : [];
+  });
+}
+
+function keysOfTheLibrary(type: ts.TypeNode, source: ts.SourceFile): boolean {
+  if (
+    ts.isTypeOperatorNode(type) &&
+    type.operator === ts.SyntaxKind.KeyOfKeyword &&
+    ts.isTypeQueryNode(type.type)
+  ) {
+    return libraryNamespaces(source).includes(type.type.exprName.getText());
+  }
+  if (!ts.isTypeReferenceNode(type)) return false;
+  const alias = source.statements.find(
+    (statement): statement is ts.TypeAliasDeclaration =>
+      ts.isTypeAliasDeclaration(statement) && statement.name.text === type.typeName.getText(),
+  );
+  return alias !== undefined && keysOfTheLibrary(alias.type, source);
+}
+
+function mappedOverTheLibrary(literal: ts.ObjectLiteralExpression, source: ts.SourceFile): boolean {
+  const holder = literal.parent;
+  const type =
+    ts.isVariableDeclaration(holder) || ts.isSatisfiesExpression(holder) ? holder.type : undefined;
+  const constraint = type && ts.isMappedTypeNode(type) ? type.typeParameter.constraint : undefined;
+  return constraint !== undefined && keysOfTheLibrary(constraint, source);
+}
+
+function componentListsIn(
+  file: string,
+  names: string[],
+): { line: number; listed: string[]; kind: string }[] {
   const source = parse(file);
   return descendants(source).flatMap((node) => {
-    if (!ts.isArrayLiteralExpression(node)) return [];
-    const strings = node.elements.flatMap((item) =>
-      ts.isStringLiteralLike(item) ? [item.text] : [],
-    );
-    if (strings.length === 0 || strings.some((text) => !names.includes(text))) return [];
+    const listed = ts.isArrayLiteralExpression(node)
+      ? node.elements.flatMap((item) => (ts.isStringLiteralLike(item) ? [item.text] : []))
+      : ts.isObjectLiteralExpression(node) && !mappedOverTheLibrary(node, source)
+        ? node.properties.flatMap((property) =>
+            property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+              ? [property.name.text]
+              : [],
+          )
+        : [];
+    if (listed.length === 0 || listed.some((text) => !names.includes(text))) return [];
     return [
-      { line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, listed: strings },
+      {
+        line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+        listed,
+        kind: ts.isArrayLiteralExpression(node) ? "array" : "object",
+      },
     ];
   });
 }
 
-test("no array in a test file lists the components by hand", () => {
+test("no array or object in a test file lists the components by hand, unless the object is typed as a mapped type over the keys of the library's exports", () => {
   const names = components.map(({ name }) => name);
   const testFiles = scriptFiles.filter((file) => file.split("/").includes(testDirectory));
   const violations = testFiles.flatMap((file) =>
     componentListsIn(join(repositoryRoot, file), names).map(
-      ({ line, listed }) =>
-        `${file}:${line}: this array lists the components ${listed.join(", ")} by hand. Read the components from the build with builtComponents in ${builtLibraryFile}, and write a per-component table as a mapped type over the library's exports, as fixtures does in ${fixturesFile}, so a flag in it says what sets the ones a test picks out apart.`,
+      ({ line, listed, kind }) =>
+        `${file}:${line}: this ${kind} lists the components ${listed.join(", ")} by hand. Read the components from the build with builtComponents in ${builtLibraryFile}, and write a per-component table as a mapped type over the library's exports, as fixtures does in ${fixturesFile}, so a flag in it says what sets the ones a test picks out apart.`,
     ),
   );
 

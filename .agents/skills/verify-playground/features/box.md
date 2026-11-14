@@ -1,6 +1,6 @@
 # Box
 
-At the bottom of the page is a section named `Style props`, a `Box` rendered as a `<section>`. Its padding is a responsive style prop that grows at the md breakpoint. Inside it are a library button with a style-prop background, three lines whose top margin comes from a style prop, a consumer class and a consumer `style`, a line whose `pt` longhand sits on a responsive `p` shorthand, a line with `mt="unset"` inside a `Box` with `mt="xl"`, and two lines that `hiddenFrom` and `visibleFrom` show on either side of md.
+Before the section named `Styles API` is a section named `Style props`, a `Box` rendered as a `<section>`. Its padding is a responsive style prop that grows at the md breakpoint. Inside it are a library button with a style-prop background, three lines whose top margin comes from a style prop, a consumer class and a consumer `style`, a line whose `pt` longhand sits on a responsive `p` shorthand, a line with `mt="unset"` inside a `Box` with `mt="xl"`, and two lines that `hiddenFrom` and `visibleFrom` show on either side of md.
 
 ## Sub-features
 
@@ -15,7 +15,7 @@ At the bottom of the page is a section named `Style props`, a `Box` rendered as 
 
 ## How to get to it (user POV)
 
-- Open the page and scroll to the end. The section named `Style props` is after the line that says whether the app records the modal as opened.
+- Open the page and scroll down. The section named `Style props` is after the line that says whether the app records the modal as opened, and before the section named `Styles API`.
 - Make the window 992 pixels wide or wider to cross the md breakpoint.
 
 ## Driving it with drive.mjs

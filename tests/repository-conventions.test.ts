@@ -14,7 +14,7 @@ const verifyWithPrivateTerms =
   /- run: vp run verify\n\s+env:\n\s+SOLIX_PRIVATE_TERMS: \$\{\{ secrets\.SOLIX_PRIVATE_TERMS \}\}$/m;
 const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github)\/[^`:*\s]+)`/g;
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
-const paddingNextToACellBorder = / {2,}\||\| {2,}/;
+const notOneSpaceAtACellBorder = / {2,}\||\| {2,}|\S\||\|\S/;
 
 const skillNames = readdirSync(skillsDirectory).sort();
 
@@ -167,7 +167,7 @@ test("every row of the rules table in AGENTS.md is compact, so a rule edit chang
   const padded = read("AGENTS.md")
     .split("\n")
     .map((line, index) => ({ line, number: index + 1 }))
-    .filter(({ line }) => line.startsWith("|") && paddingNextToACellBorder.test(line))
+    .filter(({ line }) => line.startsWith("|") && notOneSpaceAtACellBorder.test(line))
     .map(({ number }) => `AGENTS.md:${number}`);
 
   expect(
