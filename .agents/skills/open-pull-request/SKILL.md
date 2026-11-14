@@ -7,7 +7,7 @@ description: The steps every pull request in this repository goes through before
 
 Every pull request goes through these steps in this order. A step that finds something sends you back to the first step after the fix.
 
-The pstack and Thermos skills named below set `disable-model-invocation`, so the Skill tool does not list them. Read each one from the path given.
+If the Skill tool does not list a skill named below, read it from the path given.
 
 ## 1. Verify
 
@@ -23,11 +23,11 @@ Read `.agents/skills/correct/SKILL.md` and follow it over this branch's work. Fi
 
 ## 3. No comments
 
-Read `.agents/skills/no-comments/SKILL.md` and follow it over the diff against the base branch. It starts the `comment-sicko` agent in `.claude/agents`. `tests/workspace-rules.test.ts` already fails on a comment in a script file, so this step is for what that test cannot see: a constraint that a comment used to carry and that no name, type or test carries yet.
+Read `.agents/skills/no-comments/SKILL.md` and follow it over the diff against the base branch. `tests/workspace-rules.test.ts` already fails on a comment in a script file, so this step is for what that test cannot see: a constraint that a comment used to carry and that no name, type or test carries yet.
 
 ## 4. Thermos
 
-Read `.agents/skills/thermos/SKILL.md` and follow it. The Skill tool does not list it, because it is set to run only when asked. Start the two reviewers in `.claude/agents`, and give each one the diff against the base branch, the full contents of the changed files, and the path of its rubric: `.agents/skills/thermo-nuclear-review/SKILL.md` or `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Fix each finding you confirm, and say why for each one you dismiss. Run step 1 again after a fix.
+Read `.agents/skills/thermos/SKILL.md` and follow it. Start the two reviewers in `.claude/agents`, and give each one the diff against the base branch, the full contents of the changed files, and the path of its rubric: `.agents/skills/thermo-nuclear-review/SKILL.md` or `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Fix each finding you confirm, and say why for each one you dismiss. Run step 1 again after a fix.
 
 ## 5. Open it
 

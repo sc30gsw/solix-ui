@@ -59,7 +59,7 @@ test("every skill is named for its directory, described, and linked from .claude
   expect([...violations, ...dangling]).toEqual([]);
 });
 
-test("every agent is named for its file and is used by an installed skill", () => {
+test("every agent is named for its file and is started by an installed skill", () => {
   const agentFiles = readdirSync(agentsDirectory).filter((file) => file.endsWith(".md"));
   const skillTexts = skillNames
     .map((name) => join(skillsDirectory, name, "SKILL.md"))
@@ -71,9 +71,10 @@ test("every agent is named for its file and is used by an installed skill", () =
     const front = frontMatterOf(readFileSync(join(agentsDirectory, file), "utf8"));
     if (front.name !== name)
       problems.push(`.claude/agents/${file}: name must be "${name}", not "${front.name}".`);
-    if (!skillTexts.some((text) => text.includes(name)))
+    const startedBy = new RegExp(`subagent_type: ["\`]${name}["\`]`);
+    if (!skillTexts.some((text) => startedBy.test(text)))
       problems.push(
-        `.claude/agents/${file}: no skill in .agents/skills names "${name}". Remove the agent, or install the skill that starts it.`,
+        `.claude/agents/${file}: no skill in .agents/skills starts it with subagent_type: "${name}". Remove the agent, or install the skill that starts it.`,
       );
     return problems;
   });
