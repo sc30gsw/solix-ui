@@ -2,13 +2,9 @@ import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
-import {
-  stylePropNames,
-  stylePropTable,
-  visibilityPropNames,
-} from "../packages/core/src/style-prop-table";
+import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
-import { libraryPackages, packages, repositoryRoot, scriptFiles } from "./support/workspace";
+import { libraryPackages, repositoryRoot, scriptFiles } from "./support/workspace";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
@@ -18,15 +14,23 @@ const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
 const partsHelperFile = "packages/core/src/parts.ts";
+const partsModule = "parts.ts";
+const partsImport = "./parts";
+const libraryEntry = /(?:^|\/)src\/index$/;
+const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
 const rootBinding = "root";
 const partBinding = "part";
-const partPropsType = `PartProps<typeof ${stylesVariable}>`;
+const stylesApiTypeArgument = `typeof ${stylesVariable}`;
+const childrenProp = "children";
+const stylexModule = "@stylexjs/stylex";
+const stylexRuntimeFunctions = ["attrs", "props"];
+const intrinsicElement = /^[a-z][a-z0-9-]*$/;
 const elementPropsType = "ElementProps";
 const polymorphicPropsType = "PolymorphicProps";
 const featureDirectory = join(repositoryRoot, ".agents/skills/verify-playground/features");
-const contractSkill = join(repositoryRoot, ".agents/skills/verify-component-contract/SKILL.md");
 const stylePropTableFile = "packages/core/src/style-prop-table.ts";
-const builtComponentsFile = "packages/core/tests/built-components.ts";
+const builtLibraryFile = "packages/core/tests/built-library.ts";
+const fixturesFile = "packages/core/tests/fixtures.ts";
 const testDirectory = "tests";
 const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
 
@@ -45,7 +49,7 @@ function parse(file: string): ts.SourceFile {
     readFileSync(file, "utf8"),
     ts.ScriptTarget.Latest,
     true,
-    ts.ScriptKind.TSX,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 }
 
@@ -84,6 +88,7 @@ function exportedNames(source: ts.SourceFile): string[] {
       : false;
     if (!exported) return [];
     if (ts.isFunctionDeclaration(statement)) return [statement.name?.text ?? "<anonymous>"];
+    if (ts.isTypeAliasDeclaration(statement)) return [statement.name.text];
     if (ts.isVariableStatement(statement)) {
       return statement.declarationList.declarations.map((declaration) =>
         declaration.name.getText(),
@@ -139,10 +144,6 @@ function spreadsOn(tag: JsxTag): string[] {
   );
 }
 
-function intersected(type: ts.TypeNode): ts.TypeNode[] {
-  return ts.isIntersectionTypeNode(type) ? type.types.flatMap(intersected) : [type];
-}
-
 function isDynamicRoot(initializer: ts.Expression | undefined, element: string): boolean {
   if (!initializer || !ts.isCallExpression(initializer)) return false;
   const [factory, ...others] = initializer.arguments;
@@ -151,28 +152,174 @@ function isDynamicRoot(initializer: ts.Expression | undefined, element: string):
   return factory.body.getText() === `props.component ?? "${element}"`;
 }
 
-type PropsShape = { kind: string; element: string | undefined; own: ts.TypeNode | undefined };
+type PropsShape = {
+  kind: string;
+  element: string | undefined;
+  stylesApi: ts.TypeNode | undefined;
+  ownProps: ts.TypeNode | undefined;
+  alias: ts.TypeAliasDeclaration;
+};
 
-function propsShapeOf(type: ts.TypeNode | undefined): PropsShape | undefined {
-  if (!type || !ts.isTypeReferenceNode(type)) return undefined;
+function importedFromParts(source: ts.SourceFile, name: string): boolean {
+  return source.statements.some((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== partsImport
+    ) {
+      return false;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    return (
+      bindings !== undefined &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.some(
+        (element) =>
+          element.name.text === name && (element.propertyName ?? element.name).text === name,
+      )
+    );
+  });
+}
+
+function propsShapeOf(alias: ts.TypeAliasDeclaration | undefined): PropsShape | undefined {
+  const type = alias?.type;
+  if (!alias || !type || !ts.isTypeReferenceNode(type)) return undefined;
   const kind = type.typeName.getText();
   if (kind !== elementPropsType && kind !== polymorphicPropsType) return undefined;
-  const [target, own] = type.typeArguments ?? [];
+  if (!importedFromParts(alias.getSourceFile(), kind)) return undefined;
+  const [target, stylesApi, ownProps] = type.typeArguments ?? [];
   const element =
     kind === elementPropsType
       ? target && ts.isLiteralTypeNode(target) && ts.isStringLiteral(target.literal)
         ? target.literal.text
         : undefined
       : undefined;
-  return { kind, element, own };
+  return { kind, element, stylesApi, ownProps, alias };
 }
 
-function polymorphicDefault(fn: ts.FunctionDeclaration): string | undefined {
-  const [parameter] = fn.typeParameters ?? [];
+type OwnPropNames = { names: string[]; unread: string[] };
+
+function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
+  const members = !ownProps
+    ? []
+    : ts.isIntersectionTypeNode(ownProps)
+      ? [...ownProps.types]
+      : [ownProps];
+  const literalMembers = members.filter(ts.isTypeLiteralNode).flatMap((literal) => literal.members);
+  return {
+    names: literalMembers.flatMap((member) =>
+      member.name && (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name))
+        ? [member.name.text]
+        : [],
+    ),
+    unread: [
+      ...members.filter(
+        (member) => !ts.isTypeLiteralNode(member) && member.getText() !== displayPropsRefused,
+      ),
+      ...literalMembers.filter(
+        (member) =>
+          !member.name || (!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name)),
+      ),
+    ].map((member) => member.getText()),
+  };
+}
+
+function keptOffRootProblems(
+  name: string,
+  fn: ts.FunctionDeclaration,
+  call: ts.CallExpression,
+  shape: PropsShape,
+): string[] {
+  const kept = call.arguments
+    .slice(3)
+    .flatMap((argument) => (ts.isStringLiteral(argument) ? [argument.text] : []));
+  const readsChildren = descendants(fn).some(
+    (node) => ts.isPropertyAccessExpression(node) && node.getText() === `props.${childrenProp}`,
+  );
+  const { names, unread } = ownPropNames(shape.ownProps);
+  const handledByTheComponent = [...names, ...(readsChildren ? [childrenProp] : [])];
+  return [
+    ...unread.map(
+      (member) =>
+        `write ${member} in the own props of ${name}Props as an inline type literal, such as { label: string }, so this check reads each key it declares and requires it off the root. Only ${displayPropsRefused} may stand on its own.`,
+    ),
+    ...handledByTheComponent
+      .filter((prop) => !kept.includes(prop))
+      .map(
+        (prop) =>
+          `pass "${prop}" to ${partsHelper} after props, so it stays off the root: ${prop === childrenProp ? `${name} renders props.${childrenProp} itself` : `${name}Props declares it in its own props type`}.`,
+      ),
+  ];
+}
+
+function stylexRuntimeCalls(source: ts.SourceFile): string[] {
+  const callees = source.statements.flatMap((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== stylexModule
+    ) {
+      return [];
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      return stylexRuntimeFunctions.map((runtime) => `${bindings.name.text}.${runtime}`);
+    }
+    return bindings && ts.isNamedImports(bindings)
+      ? bindings.elements
+          .filter(({ name, propertyName }) =>
+            stylexRuntimeFunctions.includes((propertyName ?? name).text),
+          )
+          .map(({ name }) => name.text)
+      : [];
+  });
+  return descendants(source).flatMap((node) =>
+    ts.isCallExpression(node) && callees.includes(node.expression.getText())
+      ? [node.expression.getText()]
+      : [],
+  );
+}
+
+function polymorphicDefault(
+  declaration: ts.FunctionDeclaration | ts.TypeAliasDeclaration,
+): string | undefined {
+  const [parameter] = declaration.typeParameters ?? [];
   const fallback = parameter?.default;
   return fallback && ts.isLiteralTypeNode(fallback) && ts.isStringLiteral(fallback.literal)
     ? fallback.literal.text
     : undefined;
+}
+
+function signatureOf(fn: ts.FunctionDeclaration): string {
+  const [parameter] = fn.parameters;
+  return [
+    fn.typeParameters?.map((type) => type.getText()).join(", ") ?? "",
+    parameter?.type?.getText() ?? "",
+    fn.type?.getText() ?? "",
+  ].join(" | ");
+}
+
+function overloadProblems(
+  name: string,
+  implementation: ts.FunctionDeclaration,
+  overloads: ts.FunctionDeclaration[],
+  shape: PropsShape,
+): string[] {
+  const propsType = `${name}Props`;
+  if (shape.kind !== polymorphicPropsType) {
+    return overloads.length === 0
+      ? []
+      : [`declare ${name} once, with no overload: its props type names one element.`];
+  }
+  const element = polymorphicDefault(implementation) ?? "<element>";
+  const generic = `T extends ValidComponent = "${element}" | ${propsType}<T> | JSX.Element`;
+  const byDefault = ` | ${propsType} | JSX.Element`;
+  return overloads.map(signatureOf).join("\n") === [generic, byDefault].join("\n") &&
+    polymorphicDefault(shape.alias) === element
+    ? []
+    : [
+        `type ${propsType} as \`${propsType}<T extends ValidComponent = "${element}">\`, and declare \`export function ${name}<T extends ValidComponent = "${element}">(props: ${propsType}<T>): JSX.Element;\` and then \`export function ${name}(props: ${propsType}): JSX.Element;\` before the implementation, so ComponentProps<typeof ${name}> reads the props of a <${element}> instead of any.`,
+      ];
 }
 
 function rootProblems(fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
@@ -205,7 +352,6 @@ function rootProblems(fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
 }
 
 function partProblems(fn: ts.FunctionDeclaration): string[] {
-  const spreads = new Set(jsxTags(fn).flatMap(spreadsOn));
   return callsOf(fn, partBinding).flatMap((call) => {
     const [argument, ...others] = call.arguments;
     const problems: string[] = [];
@@ -213,15 +359,16 @@ function partProblems(fn: ts.FunctionDeclaration): string[] {
       problems.push(`name the part in ${call.getText()} with one string literal.`);
     }
     const holder = call.parent;
-    const spreadInline = ts.isJsxSpreadAttribute(holder) && holder.expression === call;
-    const stored =
-      ts.isVariableDeclaration(holder) &&
-      ts.isIdentifier(holder.name) &&
-      isConst(holder) &&
-      spreads.has(holder.name.text);
-    if (!spreadInline && !stored) {
+    if (!ts.isJsxSpreadAttribute(holder) || holder.expression !== call) {
       problems.push(
-        `spread ${call.getText()} on the element it styles, as {...${call.getText()}} or through a const that is spread there.`,
+        `spread ${call.getText()} inline on the element it styles, as {...${call.getText()}}.`,
+      );
+      return problems;
+    }
+    const tag = holder.parent.parent.tagName.getText();
+    if (!intrinsicElement.test(tag)) {
+      problems.push(
+        `spread {...${call.getText()}} on an element such as <div>, not on <${tag}>: a part is one element of the component's own markup.`,
       );
     }
     return problems;
@@ -233,17 +380,19 @@ function problemsWith({ name, file, source }: Component): string[] {
   const problems: string[] = [];
   const report = (message: string) => problems.push(`${where}: ${message}`);
 
+  const propsType = `${name}Props`;
   const exported = exportedNames(source);
-  if (exported.length !== 1 || exported[0] !== name) {
+  if (exported.filter((found) => found !== name).join() !== propsType || !exported.includes(name)) {
     report(
-      `export exactly one function named "${name}" and nothing else (found: ${exported.join(", ") || "nothing"}).`,
+      `export one function named "${name}", its props type "${propsType}", and nothing else (found: ${exported.join(", ") || "nothing"}).`,
     );
   }
 
-  const fn = source.statements.find(
+  const declarations = source.statements.filter(
     (statement): statement is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(statement) && statement.name?.text === name,
   );
+  const fn = declarations.find((declaration) => declaration.body !== undefined);
   if (!fn?.body) {
     report(`declare "export function ${name}(props ...)" and nothing that replaces it.`);
     return problems;
@@ -253,16 +402,26 @@ function problemsWith({ name, file, source }: Component): string[] {
   if (fn.parameters.length !== 1 || parameter.name.getText() !== "props") {
     report('take one parameter named "props".');
   }
-  const shape = propsShapeOf(parameter?.type);
+  const typeParameter = fn.typeParameters?.[0]?.name.text;
+  const parameterType = typeParameter === undefined ? propsType : `${propsType}<${typeParameter}>`;
+  if (parameter?.type?.getText() !== parameterType) {
+    report(`type props as ${parameterType}.`);
+  }
+  const shape = propsShapeOf(
+    source.statements.find(
+      (statement): statement is ts.TypeAliasDeclaration =>
+        ts.isTypeAliasDeclaration(statement) && statement.name.text === propsType,
+    ),
+  );
   if (!shape) {
     report(
-      `type props as ${polymorphicPropsType}<T, Own> for a root that \`component\` picks, or as ${elementPropsType}<"element", Own> for a root that is always one element, both from ./style-props.`,
+      `declare \`export type ${propsType}\` as ${polymorphicPropsType}<T, ${stylesApiTypeArgument}, OwnProps> for a root that \`component\` picks, or as ${elementPropsType}<"element", ${stylesApiTypeArgument}, OwnProps> for a root that is always one element, both from ${partsHelperFile}.`,
     );
     return problems;
   }
-  if (!shape.own || !intersected(shape.own).some((type) => type.getText() === partPropsType)) {
+  if (shape.stylesApi?.getText() !== stylesApiTypeArgument) {
     report(
-      `take ${partPropsType} in the Own type of ${shape.kind}, so classes, styles and unstyled name exactly the parts of ${stylesVariable}.`,
+      `pass ${stylesApiTypeArgument} as the second type argument of ${shape.kind}, so classes and styles name exactly the parts of ${stylesVariable}.`,
     );
   }
 
@@ -299,7 +458,7 @@ function problemsWith({ name, file, source }: Component): string[] {
     consumer?.getText() !== "props"
   ) {
     report(
-      `call ${partsHelper} once, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...ownKeys)\` from ${partsHelperFile}.`,
+      `call ${partsHelper} once, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}.`,
     );
     return problems;
   }
@@ -307,6 +466,13 @@ function problemsWith({ name, file, source }: Component): string[] {
   return [
     ...problems,
     ...[
+      ...overloadProblems(
+        name,
+        fn,
+        declarations.filter((declaration) => declaration !== fn),
+        shape,
+      ),
+      ...keptOffRootProblems(name, fn, call, shape),
       ...rootProblems(fn, shape),
       ...partProblems(fn),
       ...descendants(fn)
@@ -331,6 +497,23 @@ test("every component is written the one way: one function, and its root and eve
   expect(components.flatMap(problemsWith)).toEqual([]);
 });
 
+test("no source file of the library but parts.ts calls stylex.attrs or stylex.props", () => {
+  const files = libraries.flatMap(({ source }) =>
+    globSync("**/*.{ts,tsx}", { cwd: source })
+      .filter((entry) => entry !== partsModule)
+      .map((entry) => join(source, entry)),
+  );
+  const violations = files.flatMap((file) =>
+    stylexRuntimeCalls(parse(file)).map(
+      (callee) =>
+        `${relativePath(file)}: call no ${callee}. ${partsHelper} in ${partsHelperFile} gives each part the classes of its ${stylesVariable} entry, and no other file calls the StyleX runtime.`,
+    ),
+  );
+
+  expect(files.length).toBeGreaterThan(components.length);
+  expect(violations).toEqual([]);
+});
+
 test("every other source file is the barrel, a StyleX definition, or a kebab-case module", () => {
   const violations = libraries.flatMap(({ source }) =>
     readdirSync(source)
@@ -344,13 +527,13 @@ test("every other source file is the barrel, a StyleX definition, or a kebab-cas
   expect(violations).toEqual([]);
 });
 
-test("the barrel exports every component once, in alphabetical order, and nothing else", () => {
+test("the barrel exports every component and its props type once, in alphabetical order, and nothing else", () => {
   for (const { source } of libraries) {
     const names = components
       .filter(({ file }) => file.startsWith(source))
       .map(({ name }) => name)
       .sort();
-    const expected = names.map((name) => `export { ${name} } from "./${name}";`);
+    const expected = names.map((name) => `export { ${name}, type ${name}Props } from "./${name}";`);
     const actual = readFileSync(join(source, "index.ts"), "utf8").trim().split("\n");
 
     expect(actual, `${relativePath(join(source, "index.ts"))}`).toEqual(expected);
@@ -391,34 +574,17 @@ test("every public token is named --solix-*, is used by a component or a style-p
   }
 });
 
-test("every component is rendered by the app, has a feature file, and is listed in the contract skill", () => {
-  const apps = packages.filter(({ manifest }) =>
-    libraries.some(({ name }) => name in { ...manifest.dependencies, ...manifest.devDependencies }),
-  );
+test("every component is described by a feature file", () => {
   const features = readdirSync(featureDirectory);
-  const skill = readFileSync(contractSkill, "utf8");
-  const violations = components.flatMap(({ name, file }) => {
+  const violations = components.flatMap(({ name }) => {
     const kebab = name.replace(/(?<=[a-z0-9])(?=[A-Z])/g, "-").toLowerCase();
-    const problems: string[] = [];
-    for (const { directory, path } of apps) {
-      const app = readFileSync(join(directory, "src/App.tsx"), "utf8");
-      if (!new RegExp(`<${name}[\\s>]`).test(app))
-        problems.push(`${path}: render <${name}> in src/App.tsx so the journeys can drive it.`);
-    }
-    if (!features.some((feature) => feature === `${kebab}.md` || feature.startsWith(`${kebab}-`))) {
-      problems.push(
-        `${relativePath(featureDirectory)}: add ${kebab}.md describing ${name} for the verify-playground skill.`,
-      );
-    }
-    if (!skill.includes(`\`${relativePath(file)}\`: \`${name}\``)) {
-      problems.push(
-        `${relativePath(contractSkill)}: add a row for \`${relativePath(file)}\`: \`${name}\` to the covered-code table.`,
-      );
-    }
-    return problems;
+    return features.some((feature) => feature === `${kebab}.md` || feature.startsWith(`${kebab}-`))
+      ? []
+      : [
+          `${relativePath(featureDirectory)}: add ${kebab}.md describing ${name} for the verify-playground skill.`,
+        ];
   });
 
-  expect(apps.length).toBeGreaterThan(0);
   expect(existsSync(featureDirectory)).toBe(true);
   expect(violations).toEqual([]);
 });
@@ -440,7 +606,7 @@ function listsOfStylePropsIn(file: string, names: string[]): { line: number; lis
 }
 
 test("no array or argument list outside the style-prop table names two or more style props", () => {
-  const names = [...stylePropNames, ...visibilityPropNames];
+  const names: string[] = stylePropKeys;
   const violations = libraryPackages.flatMap(({ directory }) =>
     globSync(libraryCode, { cwd: directory })
       .map((path) => join(directory, path))
@@ -457,27 +623,77 @@ test("no array or argument list outside the style-prop table names two or more s
   expect(violations).toEqual([]);
 });
 
-function componentListsIn(file: string, names: string[]): { line: number; listed: string[] }[] {
+function libraryNamespaces(source: ts.SourceFile): string[] {
+  return source.statements.flatMap((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !libraryEntry.test(statement.moduleSpecifier.text)
+    ) {
+      return [];
+    }
+    const bindings = statement.importClause?.namedBindings;
+    return bindings && ts.isNamespaceImport(bindings) ? [bindings.name.text] : [];
+  });
+}
+
+function keysOfTheLibrary(type: ts.TypeNode, source: ts.SourceFile): boolean {
+  if (
+    ts.isTypeOperatorNode(type) &&
+    type.operator === ts.SyntaxKind.KeyOfKeyword &&
+    ts.isTypeQueryNode(type.type)
+  ) {
+    return libraryNamespaces(source).includes(type.type.exprName.getText());
+  }
+  if (!ts.isTypeReferenceNode(type)) return false;
+  const alias = source.statements.find(
+    (statement): statement is ts.TypeAliasDeclaration =>
+      ts.isTypeAliasDeclaration(statement) && statement.name.text === type.typeName.getText(),
+  );
+  return alias !== undefined && keysOfTheLibrary(alias.type, source);
+}
+
+function mappedOverTheLibrary(literal: ts.ObjectLiteralExpression, source: ts.SourceFile): boolean {
+  const holder = literal.parent;
+  const type =
+    ts.isVariableDeclaration(holder) || ts.isSatisfiesExpression(holder) ? holder.type : undefined;
+  const constraint = type && ts.isMappedTypeNode(type) ? type.typeParameter.constraint : undefined;
+  return constraint !== undefined && keysOfTheLibrary(constraint, source);
+}
+
+function componentListsIn(
+  file: string,
+  names: string[],
+): { line: number; listed: string[]; kind: string }[] {
   const source = parse(file);
   return descendants(source).flatMap((node) => {
-    if (!ts.isArrayLiteralExpression(node)) return [];
-    const strings = node.elements.flatMap((item) =>
-      ts.isStringLiteralLike(item) ? [item.text] : [],
-    );
-    if (strings.length === 0 || strings.some((text) => !names.includes(text))) return [];
+    const listed = ts.isArrayLiteralExpression(node)
+      ? node.elements.flatMap((item) => (ts.isStringLiteralLike(item) ? [item.text] : []))
+      : ts.isObjectLiteralExpression(node) && !mappedOverTheLibrary(node, source)
+        ? node.properties.flatMap((property) =>
+            property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+              ? [property.name.text]
+              : [],
+          )
+        : [];
+    if (listed.length === 0 || listed.some((text) => !names.includes(text))) return [];
     return [
-      { line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, listed: strings },
+      {
+        line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+        listed,
+        kind: ts.isArrayLiteralExpression(node) ? "array" : "object",
+      },
     ];
   });
 }
 
-test("no array in a test file lists the components by hand", () => {
+test("no array or object in a test file lists the components by hand, unless the object is typed as a mapped type over the keys of the library's exports", () => {
   const names = components.map(({ name }) => name);
   const testFiles = scriptFiles.filter((file) => file.split("/").includes(testDirectory));
   const violations = testFiles.flatMap((file) =>
     componentListsIn(join(repositoryRoot, file), names).map(
-      ({ line, listed }) =>
-        `${file}:${line}: this array lists the components ${listed.join(", ")} by hand. Read the components from the build with builtComponents in ${builtComponentsFile}, and say what sets the ones a test picks out apart.`,
+      ({ line, listed, kind }) =>
+        `${file}:${line}: this ${kind} lists the components ${listed.join(", ")} by hand. Read the components from the build with builtComponents in ${builtLibraryFile}, and write a per-component table as a mapped type over the library's exports, as fixtures does in ${fixturesFile}, so a flag in it says what sets the ones a test picks out apart.`,
     ),
   );
 

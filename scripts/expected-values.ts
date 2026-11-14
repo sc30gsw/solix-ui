@@ -146,7 +146,6 @@ export async function expectedValues(
   };
 }
 
-/** The computed background, colour, border, radius, height and padding of an element, to compare with another element in the same page and engine. */
 export function lookOf(element: Locator): Promise<Record<string, string>> {
   return element.evaluate(
     (node, properties) =>

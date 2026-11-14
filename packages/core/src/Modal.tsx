@@ -1,9 +1,8 @@
 import * as stylex from "@stylexjs/stylex";
 import { createEffect, createUniqueId, onSettled } from "solid-js";
 import { dismissOnOutsidePress, supportsClosedBy } from "./light-dismiss";
-import { createParts, type PartProps } from "./parts";
-import { displayPropNames } from "./style-prop-table";
-import type { ElementProps } from "./style-props";
+import { createParts, type ElementProps } from "./parts";
+import { type DisplayPropName, displayPropNames } from "./style-prop-table";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -46,19 +45,13 @@ const styles = stylex.create({
   },
 });
 
-export function Modal(
-  props: ElementProps<
-    "dialog",
-    PartProps<typeof styles> & {
-      label: string;
-      opened: boolean;
-      open?: never;
-      display?: never;
-      hiddenFrom?: never;
-      visibleFrom?: never;
-    }
-  >,
-) {
+export type ModalProps = ElementProps<
+  "dialog",
+  typeof styles,
+  { label: string; opened: boolean; open?: never } & Partial<Record<DisplayPropName, never>>
+>;
+
+export function Modal(props: ModalProps) {
   const { root, part } = createParts(
     "Modal",
     styles,

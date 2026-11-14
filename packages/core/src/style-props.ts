@@ -1,4 +1,4 @@
-import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
+import type { JSX } from "@solidjs/web";
 import {
   baseKey,
   type Breakpoint,
@@ -37,20 +37,6 @@ export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
 } & { [Name in VisibilityPropName]?: Breakpoint | Absent };
 
-export type Styling = { class?: JSX.ClassValue; style?: JSX.CSSProperties | string };
-
-export type ElementProps<T extends ValidComponent, Own extends object = object> = Own &
-  StyleProps &
-  Styling &
-  Omit<ComponentProps<T>, keyof Own | keyof StyleProps | keyof Styling | "component">;
-
-export type PolymorphicProps<T extends ValidComponent, Own extends object = object> = ElementProps<
-  T,
-  Own & { component?: T }
->;
-
-export const stylePropKeys: (keyof StyleProps)[] = [...stylePropNames, ...visibilityPropNames];
-
 type ResolvedStyleProps = {
   classes: string[];
   properties: Record<`--${string}`, string>;
@@ -74,21 +60,29 @@ function cssValue(row: PropertyRow, written: string | number): string | undefine
   return row.scale !== undefined && Object.hasOwn(tokens, token) ? `var(${token})` : written;
 }
 
+function presentEntries(style: JSX.CSSProperties): [string, string | number][] {
+  return Object.entries(style).flatMap(([property, value]): [string, string | number][] =>
+    value === undefined || value === null ? [] : [[property, value]],
+  );
+}
+
 function declarations(style: JSX.CSSProperties): string {
-  return Object.entries(style)
-    .flatMap(([property, value]) =>
-      value === undefined || value === null ? [] : [`${property}:${value};`],
-    )
+  return presentEntries(style)
+    .map(([property, value]) => `${property}:${value};`)
     .join("");
+}
+
+export function presentStyle(style: JSX.CSSProperties | undefined): JSX.CSSProperties {
+  return Object.fromEntries(presentEntries(style ?? {}));
 }
 
 export function withConsumerStyle(
   own: JSX.CSSProperties,
-  consumer: JSX.CSSProperties | string | undefined,
+  consumer?: JSX.CSSProperties | string,
 ): JSX.CSSProperties | string | undefined {
   if (typeof consumer === "string") return `${declarations(own)}${consumer}`;
   if (consumer === undefined && Object.keys(own).length === 0) return undefined;
-  return { ...own, ...consumer };
+  return { ...own, ...presentStyle(consumer) };
 }
 
 export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {

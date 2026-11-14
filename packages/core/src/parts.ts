@@ -1,37 +1,66 @@
 import * as stylex from "@stylexjs/stylex";
 import { createMemo, merge, omit } from "solid-js";
-import type { JSX } from "@solidjs/web";
-import {
-  resolveStyleProps,
-  type StyleProps,
-  stylePropKeys,
-  type Styling,
-  withConsumerStyle,
-} from "./style-props";
+import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
+import { stableClass } from "./stable-class";
+import { stylePropKeys } from "./style-prop-table";
+import { presentStyle, resolveStyleProps, type StyleProps, withConsumerStyle } from "./style-props";
 
-/** The part every component has: the element it returns, which takes the consumer's props. */
 export const rootPart = "root";
 
-/** The props that restyle a component's parts, keyed by the parts of its compiled `stylex.create` block. */
-export type PartProps<Compiled> = {
-  classes?: Partial<Record<keyof Compiled, JSX.ClassValue>>;
-  styles?: Partial<Record<keyof Compiled, JSX.CSSProperties>>;
+export type StylesApiProps<Styles> = {
+  classes?: Partial<Record<keyof Styles, JSX.ClassValue>>;
+  styles?: Partial<Record<keyof Styles, JSX.CSSProperties>>;
   unstyled?: boolean;
 };
 
-type PartPropKey = keyof PartProps<object>;
+type StylesApiPropKey = keyof StylesApiProps<object>;
 
-const partProps = { classes: true, styles: true, unstyled: true } satisfies Record<
-  PartPropKey,
+const stylesApiProps = { classes: true, styles: true, unstyled: true } satisfies Record<
+  StylesApiPropKey,
   true
 >;
 
-function isPartPropKey(name: string): name is PartPropKey {
-  return Object.hasOwn(partProps, name);
+function isStylesApiPropKey(name: PropertyKey): name is StylesApiPropKey {
+  return Object.hasOwn(stylesApiProps, name);
 }
 
-/** The names of the props that `PartProps` declares. No element receives them. */
-export const partPropKeys = Object.keys(partProps).filter(isPartPropKey);
+export const stylesApiPropKeys = Object.keys(stylesApiProps).filter(isStylesApiPropKey);
+
+export const handledKeys = [
+  "class",
+  "style",
+  "component",
+  ...stylesApiPropKeys,
+  ...stylePropKeys,
+] as const;
+
+export type HandledKey = (typeof handledKeys)[number];
+
+type Styling = { class?: JSX.ClassValue; style?: JSX.CSSProperties | string };
+
+type RefusedBy<T extends ValidComponent> = {
+  [Key in keyof ComponentProps<T> & keyof StyleProps]-?: [
+    NonNullable<ComponentProps<T>[Key]>,
+  ] extends [never]
+    ? Key
+    : never;
+}[keyof ComponentProps<T> & keyof StyleProps];
+
+export type ElementProps<
+  T extends ValidComponent,
+  Styles,
+  OwnProps extends object = object,
+> = OwnProps &
+  StylesApiProps<Styles> &
+  StyleProps &
+  Styling &
+  Omit<ComponentProps<T>, keyof OwnProps | HandledKey>;
+
+export type PolymorphicProps<
+  T extends ValidComponent,
+  Styles,
+  OwnProps extends object = object,
+> = ElementProps<T, Styles, OwnProps & { component?: T } & { [Key in RefusedBy<T>]?: never }>;
 
 type Part = {
   readonly class: JSX.ClassValue;
@@ -41,71 +70,53 @@ type Part = {
 type Compiled = Record<typeof rootPart, stylex.CompiledStyles> &
   Readonly<Record<string, stylex.CompiledStyles>>;
 
-type Handled = keyof Styling | "component" | PartPropKey | keyof StyleProps;
-
-type RootProps<Props, Own extends keyof Props> = Omit<Props, Handled | Own> & Part;
+type RootProps<Props, KeptOffRoot extends keyof Props> = Omit<Props, HandledKey | KeptOffRoot> &
+  Part;
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
-/**
- * Splits a component's props into the props of its root element and the class and style of each other part.
- *
- * The root's class is the library's class for it (left out with `unstyled`), `solix-<component>-root`,
- * `classes.root`, the style-prop classes and the consumer's `class`. Its style is the style props'
- * custom properties, `styles.root` and the consumer's `style`, in that order. Every other prop reaches
- * the root, except the component's `ownKeys`, which take no part in the style props either.
- */
 export function createParts<
   Styles extends Compiled,
-  Props extends PartProps<Styles> & StyleProps & Styling,
-  Own extends keyof Props = never,
+  Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
+  KeptOffRoot extends keyof Props = never,
 >(
   component: string,
   compiled: Styles,
   props: Props,
-  ...ownKeys: Own[]
+  ...keptOffRoot: KeptOffRoot[]
 ): {
-  root: RootProps<Props, Own>;
+  root: RootProps<Props, KeptOffRoot>;
   part: (name: OtherPart<Styles>) => Part;
 } {
-  const handled = new Set<PropertyKey>([
-    "class",
-    "style",
-    "component",
-    ...partPropKeys,
-    ...stylePropKeys,
-    ...ownKeys,
-  ]);
-  const styleProps = omit(props, (key) => ownKeys.some((own) => own === key));
-  const resolved = createMemo(() => resolveStyleProps(styleProps));
-  const libraryClass = (name: keyof Styles & string) =>
-    props.unstyled ? undefined : stylex.attrs(compiled[name]).class;
+  const rest = omit(props, ...keptOffRoot);
+  const resolved = createMemo(() => resolveStyleProps(rest));
+  const wrapsAComponent = () => typeof props.component === "function";
+  const stylesApi = omit(rest, (key) => !isStylesApiPropKey(key));
+  const partClass = (name: keyof Styles & string): JSX.ClassValue => [
+    props.unstyled ? undefined : stylex.attrs(compiled[name]).class,
+    stableClass(component, name),
+    props.classes?.[name],
+  ];
+  const ownStyle = (name: keyof Styles & string): JSX.CSSProperties =>
+    presentStyle(props.styles?.[name]);
   const root = merge(
-    omit(props, (key) => handled.has(key)),
+    omit<Record<string, unknown>, typeof handledKeys>(rest, ...handledKeys),
+    () => (wrapsAComponent() ? stylesApi : {}),
     {
       get class() {
-        return [
-          libraryClass(rootPart),
-          `solix-${component}-${rootPart}`,
-          props.classes?.[rootPart],
-          resolved().classes,
-          props.class,
-        ];
+        return [partClass(rootPart), resolved().classes, props.class];
       },
       get style() {
-        return withConsumerStyle(
-          { ...resolved().properties, ...props.styles?.[rootPart] },
-          props.style,
-        );
+        return withConsumerStyle({ ...resolved().properties, ...ownStyle(rootPart) }, props.style);
       },
     },
-  ) as RootProps<Props, Own>;
+  ) as RootProps<Props, KeptOffRoot>;
   const part = (name: OtherPart<Styles>): Part => ({
     get class() {
-      return [libraryClass(name), `solix-${component}-${name}`, props.classes?.[name]];
+      return partClass(name);
     },
     get style() {
-      return props.styles?.[name];
+      return withConsumerStyle(ownStyle(name));
     },
   });
   return { root, part };

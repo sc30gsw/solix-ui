@@ -27,4 +27,4 @@ Preconditions:
 ## Gotchas
 
 - This journey needs scripts. With JavaScript off the click changes nothing.
-- A component that reads a prop once when it is created passes every other journey and fails only this one. So does a part whose class `createParts` reads once, when a component keeps the part in a `const`.
+- A component that reads a prop once when it is created passes every other journey and fails only this one.

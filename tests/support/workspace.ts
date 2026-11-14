@@ -32,7 +32,6 @@ export const packages = globSync("**/package.json", {
   manifest: JSON.parse(readFileSync(join(repositoryRoot, path), "utf8")) as Manifest,
 }));
 
-/** The manifest at the repository root. */
 export const rootManifest = JSON.parse(
   readFileSync(join(repositoryRoot, "package.json"), "utf8"),
 ) as Manifest;

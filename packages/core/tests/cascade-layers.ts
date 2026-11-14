@@ -1,4 +1,21 @@
 import type postcss from "postcss";
+import { STYLE_PROP_LAYER } from "../build-pipeline.mjs";
+
+function isAtRule(node: postcss.Node | postcss.Document | undefined): node is postcss.AtRule {
+  return node?.type === "atrule";
+}
+
+export function enclosingAtRules(node: postcss.Node): postcss.AtRule[] {
+  const parent = node.parent;
+  if (!isAtRule(parent)) return [];
+  return [parent, ...enclosingAtRules(parent)];
+}
+
+export function inStylePropLayer(node: postcss.Node): boolean {
+  return enclosingAtRules(node).some(
+    ({ name, params }) => name === "layer" && params === STYLE_PROP_LAYER,
+  );
+}
 
 export function nestedLayerOrder(layer: postcss.Container): string[] {
   const order: string[] = [];

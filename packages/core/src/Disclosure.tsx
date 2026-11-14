@@ -1,7 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { disclosureState } from "./disclosure-state.stylex";
-import { createParts, type PartProps } from "./parts";
-import type { ElementProps } from "./style-props";
+import { createParts, type ElementProps } from "./parts";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -30,9 +29,9 @@ const styles = stylex.create({
   },
 });
 
-export function Disclosure(
-  props: ElementProps<"details", PartProps<typeof styles> & { label: string }>,
-) {
+export type DisclosureProps = ElementProps<"details", typeof styles, { label: string }>;
+
+export function Disclosure(props: DisclosureProps) {
   const { root, part } = createParts("Disclosure", styles, props, "label", "children");
   return (
     <details {...root}>

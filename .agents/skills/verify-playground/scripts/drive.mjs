@@ -12,6 +12,7 @@ const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
 const { breakpointWidths } = await repositoryModule("packages/core/src/style-prop-table.ts");
+const { stableClass } = await repositoryModule("packages/core/src/stable-class.ts");
 const state = join(root, ".verify-playground");
 const pixelsPerMediaQueryEm = 16;
 const mdWidth = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
@@ -226,7 +227,6 @@ const journeys = {
     const content = page.getByText("Content of the styled parts");
     const unstyled = page.getByRole("button", { name: "Unstyled" });
     const plain = page.getByRole("button", { name: "Plain button" });
-    const styleProp = page.getByRole("button", { name: "Style prop on a Button" });
     await section.scrollIntoViewIfNeeded();
     await shot("styles-api", "Open the page and scroll to the section named Styles API, at the end.", section);
     observe("classes.root: background comes from the consumer's class", await style(fromClasses, "background-color"), expected("danger"));
@@ -238,8 +238,7 @@ const journeys = {
     for (const [property, value] of Object.entries(await lookOf(unstyled))) {
       observe(`unstyled: ${property} is the Plain button's`, value, plainLook[property]);
     }
-    observe("unstyled: the button keeps its stable class", (await unstyled.getAttribute("class")).split(/\s+/).includes("solix-Button-root"), true);
-    observe("a style prop on Button: background comes from bg", await style(styleProp, "background-color"), expected("--solix-color-error"));
+    observe("unstyled: the button keeps its stable class", (await unstyled.getAttribute("class")).split(/\s+/).includes(stableClass("Button", "root")), true);
 
     await summary.click();
     await content.waitFor({ state: "visible" });

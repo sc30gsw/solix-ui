@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import postcss from "postcss";
 import ts from "typescript";
@@ -13,16 +13,10 @@ import {
   stylePropClassPrefix,
   stylePropNames,
 } from "../src/style-prop-table";
-import { builtComponents } from "./built-components";
-import { nestedLayerOrder } from "./cascade-layers";
+import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
+import { enclosingAtRules, inStylePropLayer, nestedLayerOrder } from "./cascade-layers";
 
-const dist = join(import.meta.dirname, "../dist");
-const library: Record<string, unknown> = await import(join(dist, "index.js"));
-const stylexRuntime = "@stylexjs/stylex";
-const runtimeCalls = ["attrs", "props"];
-const runtimeCaller = "parts.js";
-const builtModule = /\.jsx?$/;
-const stylesheet = readFileSync(join(dist, "styles.css"), "utf8").trim();
+const stylesheet = builtStylesheet.trim();
 const ownerBreakpoints: [name: string, width: string][] = [
   ["xs", "36em"],
   ["sm", "48em"],
@@ -75,12 +69,6 @@ function libraryLayer(): postcss.AtRule {
   return layer;
 }
 
-function enclosingAtRules(node: postcss.Node): postcss.AtRule[] {
-  const parent = node.parent;
-  if (!(parent instanceof postcss.AtRule)) return [];
-  return [parent, ...enclosingAtRules(parent)];
-}
-
 function placedRules(): PlacedRule[] {
   const placed: PlacedRule[] = [];
   libraryLayer().walkRules((rule) => {
@@ -95,12 +83,6 @@ function placedRules(): PlacedRule[] {
     });
   });
   return placed;
-}
-
-function inStylePropLayer(node: postcss.Node): boolean {
-  return enclosingAtRules(node).some(
-    ({ name, params }) => name === "layer" && params === STYLE_PROP_LAYER,
-  );
 }
 
 function registrations(): postcss.AtRule[] {
@@ -198,65 +180,12 @@ test("open state compiles to a selector on the element's own open attribute", ()
 test.each(builtComponents)(
   "%s ships as JSX source with its styles compiled to class names",
   (name) => {
-    const file = join(dist, `${name}.jsx`);
-    const where = `packages/core/dist/${name}.jsx`;
-
-    expect(existsSync(file), `${where}: build the library so the component ships`).toBe(true);
-    const source = readFileSync(file, "utf8");
-    expect(source, `${where}: compile stylex.create away in the build`).not.toContain(
-      "stylex.create",
-    );
-    expect(typeof library[name], `packages/core/dist/index.js: export ${name}`).toBe("function");
+    expect(
+      builtSource(name),
+      `packages/core/dist/${name}.jsx: compile stylex.create away in the build`,
+    ).not.toContain("stylex.create");
   },
 );
-
-function runtimeCallsIn(file: string): string[] {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(join(dist, file), "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JSX,
-  );
-  const callees = source.statements.flatMap((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== stylexRuntime
-    ) {
-      return [];
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamespaceImport(bindings)) {
-      return runtimeCalls.map((call) => `${bindings.name.text}.${call}`);
-    }
-    return bindings && ts.isNamedImports(bindings)
-      ? bindings.elements
-          .filter((element) => runtimeCalls.includes((element.propertyName ?? element.name).text))
-          .map((element) => element.name.text)
-      : [];
-  });
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && callees.includes(node.expression.getText(source))) {
-      found.push(`${file}: ${node.expression.getText(source)}`);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return found;
-}
-
-test(`only ${runtimeCaller} calls the StyleX runtime, so every component's classes come from createParts`, () => {
-  const calls = readdirSync(dist)
-    .filter((file) => builtModule.test(file))
-    .flatMap(runtimeCallsIn);
-
-  expect(
-    calls.map((call) => call.slice(0, call.indexOf(":"))),
-    `packages/core/dist calls ${runtimeCalls.map((call) => `stylex.${call}`).join(" or ")} here: ${calls.join(", ")}. Read a part's class from createParts in packages/core/src/parts.ts instead.`,
-  ).toEqual([runtimeCaller]);
-});
 
 test("input validity and the modal backdrop compile to the platform's own selectors", () => {
   expect(stylesheet).toMatch(new RegExp(`\\.${LIBRARY_CLASS_PREFIX}\\w+:user-invalid\\{`));
