@@ -2,22 +2,26 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type ComponentProps, type JSX, renderToString, type ValidComponent } from "@solidjs/web";
 import fc from "fast-check";
+import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
-import { tokenValues } from "../../../scripts/tokens.mjs";
-import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
+import { tokenValues } from "../../../scripts/tokens";
+import { LIBRARY_CLASS_PREFIX, STYLE_PROP_LAYER } from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
 import {
+  baseKey,
   breakpoints,
+  canonicalOf,
+  responsiveKeys,
   type StylePropName,
   stylePropNames,
   stylePropTable,
   visibilityPropNames,
-} from "../src/style-props";
+} from "../src/style-prop-table";
 
 type ConsumerProps = Record<string, unknown>;
 
-const builtLibrary = join(import.meta.dirname, "../dist/index.js");
-const library = (await import(builtLibrary)) as typeof Library;
+const dist = join(import.meta.dirname, "../dist");
+const library = (await import(join(dist, "index.js"))) as typeof Library;
 const generatedRuns = 300;
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const contractSkill = ".agents/skills/verify-component-contract/SKILL.md";
@@ -26,20 +30,17 @@ const rootOf: {
   [Name in keyof typeof Library]: {
     tag: string;
     booleanAttribute: string;
-    hasDefaultStyles: boolean;
     render: (props: ConsumerProps) => string;
   };
 } = {
   Box: {
     tag: "div",
     booleanAttribute: "hidden",
-    hasDefaultStyles: false,
     render: (props) => renderToString(() => <library.Box {...props}>Content</library.Box>),
   },
   Button: {
     tag: "button",
     booleanAttribute: "disabled",
-    hasDefaultStyles: true,
     render: (props) =>
       renderToString(() => (
         <library.Button {...(props as ComponentProps<"button">)}>Label</library.Button>
@@ -48,7 +49,6 @@ const rootOf: {
   Disclosure: {
     tag: "details",
     booleanAttribute: "open",
-    hasDefaultStyles: true,
     render: (props) =>
       renderToString(() => (
         <library.Disclosure label="Label" {...(props as ComponentProps<"details">)}>
@@ -59,7 +59,6 @@ const rootOf: {
   Modal: {
     tag: "dialog",
     booleanAttribute: "hidden",
-    hasDefaultStyles: true,
     render: (props) =>
       renderToString(() => (
         <library.Modal label="Label" opened={false} {...(props as ComponentProps<"dialog">)}>
@@ -70,11 +69,35 @@ const rootOf: {
   TextInput: {
     tag: "input",
     booleanAttribute: "disabled",
-    hasDefaultStyles: true,
     render: (props) =>
       renderToString(() => <library.TextInput {...(props as ComponentProps<"input">)} />),
   },
 };
+
+function inStylePropLayer(node: postcss.Node): boolean {
+  const parent = node.parent;
+  if (!(parent instanceof postcss.AtRule)) return false;
+  return (
+    (parent.name === "layer" && parent.params === STYLE_PROP_LAYER) || inStylePropLayer(parent)
+  );
+}
+
+function styleXClassesInTheStylesheet(): Set<string> {
+  const found = new Set<string>();
+  postcss.parse(readFileSync(join(dist, "styles.css"), "utf8")).walkRules((rule) => {
+    if (inStylePropLayer(rule)) return;
+    for (const [, name] of rule.selector.matchAll(/\.([\w-]+)/g)) found.add(name);
+  });
+  return found;
+}
+
+const styleXClasses = styleXClassesInTheStylesheet();
+
+function emitsStyleXClass(component: string): boolean {
+  return [...readFileSync(join(dist, `${component}.jsx`), "utf8").matchAll(/[\w-]+/g)].some(
+    ([word]) => styleXClasses.has(word),
+  );
+}
 
 const consumerToken = fc
   .stringMatching(/^[a-z][a-z0-9-]{0,8}$/)
@@ -123,6 +146,17 @@ function rootElementOf(html: string): { tag: string; attributes: [string, string
   return { tag: root[1], attributes };
 }
 
+function declarationsIn(style: string | true | undefined): [string, string][] {
+  if (typeof style !== "string") return [];
+  return style
+    .split(";")
+    .filter((declaration) => declaration.trim() !== "")
+    .map((declaration): [string, string] => {
+      const colon = declaration.indexOf(":");
+      return [declaration.slice(0, colon).trim(), declaration.slice(colon + 1).trim()];
+    });
+}
+
 test("every component the library exports is held to the root contract", () => {
   const exportedComponents = Object.entries(library)
     .filter(([, exported]) => typeof exported === "function")
@@ -134,6 +168,7 @@ test("every component the library exports is held to the root contract", () => {
 test.each(Object.entries(rootOf))(
   "%s puts every class and attribute a consumer passes on its root, next to its own classes",
   (name, component) => {
+    const hasDefaultStyles = emitsStyleXClass(name);
     fc.assert(
       fc.property(classTokens, stringAttributes, fc.boolean(), (tokens, attributes, flag) => {
         const html = component.render({
@@ -149,9 +184,10 @@ test.each(Object.entries(rootOf))(
         expect(root.tag).toBe(component.tag);
         expect(valuesOf("class")).toHaveLength(1);
         expect(classes).toContain(`solix-${name}-root`);
-        expect(classes.some((found) => found.startsWith(LIBRARY_CLASS_PREFIX))).toBe(
-          component.hasDefaultStyles,
-        );
+        expect(
+          classes.some((found) => found.startsWith(LIBRARY_CLASS_PREFIX)),
+          `the built ${name} ${hasDefaultStyles ? "emits" : "emits no"} StyleX class, so its root carries ${hasDefaultStyles ? "one" : "none"} of the library's style classes`,
+        ).toBe(hasDefaultStyles);
         for (const { token, applied } of tokens) {
           expect(classes.includes(token), `class "${token}"`).toBe(applied);
         }
@@ -165,9 +201,79 @@ test.each(Object.entries(rootOf))(
   },
 );
 
+type BoxPropsFor<T extends ValidComponent> = Parameters<typeof Library.Box<T>>[0];
+
+const own = (suffix: string) => `${LIBRARY_CLASS_PREFIX}-${suffix}`;
+
+const resolvedCases: [
+  what: string,
+  props: BoxPropsFor<"div">,
+  classes: string[],
+  style: Record<string, string>,
+][] = [
+  ["a number is pixels, written in rem", { mt: 16 }, [own("mt")], { [`--${own("mt")}`]: "1rem" }],
+  [
+    "a colour scale key reads its token",
+    { bg: "error" },
+    [own("bg")],
+    { [`--${own("bg")}`]: "var(--solix-color-error)" },
+  ],
+  [
+    "a CSS-wide keyword passes through",
+    { c: "inherit" },
+    [own("c")],
+    { [`--${own("c")}`]: "inherit" },
+  ],
+  [
+    "a number for a property that is not a length stays a number",
+    { opacity: 0.5 },
+    [own("opacity")],
+    { [`--${own("opacity")}`]: "0.5" },
+  ],
+  [
+    "a responsive value sets its base and each breakpoint it names",
+    { p: { base: "xs", md: "lg" } },
+    [own("p"), own("p-md")],
+    {
+      [`--${own("p")}`]: "var(--solix-spacing-xs)",
+      [`--${own("p-md")}`]: "var(--solix-spacing-lg)",
+    },
+  ],
+  [
+    "an alias sets the class and property of the prop it aliases",
+    { mis: 8 },
+    [own("ms")],
+    { [`--${own("ms")}`]: "0.5rem" },
+  ],
+  ["hiddenFrom adds its class and no property", { hiddenFrom: "md" }, [own("hidden-from-md")], {}],
+  [
+    "null is the same as leaving the prop out",
+    { mt: null, p: { base: null, md: 4 }, hiddenFrom: null },
+    [own("p-md")],
+    { [`--${own("p-md")}`]: "0.25rem" },
+  ],
+  ["a value that holds a semicolon is dropped", { c: "red; background: blue" }, [], {}],
+  [
+    "a value that holds a brace is dropped at its own breakpoint only",
+    { m: { base: "1px}", md: "{", lg: 4 } },
+    [own("m-lg")],
+    { [`--${own("m-lg")}`]: "0.25rem" },
+  ],
+];
+
+test.each(resolvedCases)("Box: %s", (_, props, expectedClasses, expectedStyle) => {
+  const root = rootElementOf(rootOf.Box.render(props));
+  const valuesOf = (attribute: string) =>
+    root.attributes.filter(([found]) => found === attribute).map(([, value]) => value);
+  const classes = String(valuesOf("class")[0]).split(/\s+/);
+
+  expect(classes.filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`)).sort()).toEqual(
+    [...expectedClasses].sort(),
+  );
+  expect(Object.fromEntries(declarationsIn(valuesOf("style")[0]))).toEqual(expectedStyle);
+});
+
 const tokens = tokenValues();
-const pixelsPerRem = 16;
-const baseKey = "base";
 const passedThrough = ["inherit", "initial", "unset", "revert", "3px"];
 const consumerDeclarations: [string, string][] = [
   ["color", "red"],
@@ -178,65 +284,52 @@ const consumerOverride = "7px";
 const elsewhere = "/elsewhere";
 const ownPropsOfBox = [...stylePropNames, ...visibilityPropNames, "component"];
 
-type Written = { value: string | number; css: string };
-type Declared = { written: unknown; declared: [suffix: string, css: string][] };
-type BoxPropsFor<T extends ValidComponent> = Parameters<typeof Library.Box<T>>[0];
+type Drawn = { value: string | number | null; kept: boolean };
+type Declared = { written: unknown; keptKeys: string[] };
 
-function scaleOf(name: StylePropName): string | undefined {
-  const row = stylePropTable[name];
-  return "scale" in row ? row.scale : undefined;
-}
-
-const scaleKeys = [...new Set(stylePropNames.flatMap((name) => scaleOf(name) ?? []))].flatMap(
-  (scale) =>
-    Object.keys(tokens)
-      .filter((token) => token.startsWith(`--solix-${scale}-`))
-      .map((token) => token.slice(`--solix-${scale}-`.length)),
+const scaleKeys = [
+  ...new Set(Object.values(stylePropTable).flatMap((row) => ("scale" in row ? [row.scale] : []))),
+].flatMap((scale) =>
+  Object.keys(tokens)
+    .filter((token) => token.startsWith(`--solix-${scale}-`))
+    .map((token) => token.slice(`--solix-${scale}-`.length)),
 );
 
-function cssFor(name: StylePropName, value: string | number): string {
-  const scale = scaleOf(name);
-  const token = `--solix-${scale}-${value}`;
-  if (scale !== undefined && typeof value === "string" && token in tokens) return `var(${token})`;
-  if (stylePropTable[name].kind === "length" && typeof value === "number") {
-    return `${value / pixelsPerRem}rem`;
-  }
-  return String(value);
-}
+const valueThatEndsADeclaration = fc
+  .tuple(
+    fc.constantFrom("", "1px", "red"),
+    fc.constantFrom(";", "{", "}"),
+    fc.constantFrom("", " color: blue", "--injected: 1", ".x{color:blue"),
+  )
+  .map((parts) => parts.join(""));
 
-function written(name: StylePropName): fc.Arbitrary<Written> {
-  return fc
-    .oneof(fc.constantFrom(...passedThrough, ...scaleKeys), fc.integer({ min: 0, max: 96 }))
-    .map((value) => ({ value, css: cssFor(name, value) }));
-}
+const drawnValue: fc.Arbitrary<Drawn> = fc.oneof(
+  {
+    arbitrary: fc
+      .oneof(fc.constantFrom(...passedThrough, ...scaleKeys), fc.integer({ min: 0, max: 96 }))
+      .map((value) => ({ value, kept: true })),
+    weight: 3,
+  },
+  { arbitrary: fc.constant({ value: null, kept: false }), weight: 1 },
+  { arbitrary: valueThatEndsADeclaration.map((value) => ({ value, kept: false })), weight: 1 },
+);
 
-function suffixFor(name: string, key: string): string {
-  return key === baseKey ? name : `${name}-${key}`;
-}
-
-function declaredStyleProp(name: StylePropName): fc.Arbitrary<Declared> {
-  const responsiveKeys = [baseKey, ...breakpoints];
-  const single = written(name).map(({ value, css }): Declared => ({
-    written: value,
-    declared: [[name, css]],
-  }));
-  const responsive = fc
-    .record(Object.fromEntries(responsiveKeys.map((key) => [key, written(name)])), {
+const declaredStyleProp: fc.Arbitrary<Declared> = fc.oneof(
+  drawnValue.map(({ value, kept }) => ({ written: value, keptKeys: kept ? [baseKey] : [] })),
+  fc
+    .record(Object.fromEntries(responsiveKeys.map((key) => [key, drawnValue])), {
       requiredKeys: [],
     })
-    .map((byKey): Declared => ({
-      written: Object.fromEntries(
-        Object.entries(byKey).flatMap(([key, entry]) =>
-          entry === undefined ? [] : [[key, entry.value]],
-        ),
-      ),
-      declared: responsiveKeys.flatMap((key): [string, string][] => {
-        const value = byKey[key];
-        return value === undefined ? [] : [[suffixFor(name, key), value.css]];
-      }),
-    }));
-  return fc.oneof(single, responsive);
-}
+    .map((byKey) => {
+      const entries = Object.entries(byKey).flatMap(([key, drawn]): [string, Drawn][] =>
+        drawn === undefined ? [] : [[key, drawn]],
+      );
+      return {
+        written: Object.fromEntries(entries.map(([key, { value }]) => [key, value])),
+        keptKeys: entries.flatMap(([key, { kept }]) => (kept ? [key] : [])),
+      };
+    }),
+);
 
 const boxCases = fc
   .record({
@@ -245,12 +338,15 @@ const boxCases = fc
       .chain((names) =>
         fc.tuple(
           ...names.map((name) =>
-            declaredStyleProp(name).map((declared): [StylePropName, Declared] => [name, declared]),
+            declaredStyleProp.map((declared): [StylePropName, Declared] => [name, declared]),
           ),
         ),
       ),
     visibility: fc.record(
-      { hiddenFrom: fc.constantFrom(...breakpoints), visibleFrom: fc.constantFrom(...breakpoints) },
+      {
+        hiddenFrom: fc.option(fc.constantFrom(...breakpoints), { nil: null }),
+        visibleFrom: fc.option(fc.constantFrom(...breakpoints), { nil: null }),
+      },
       { requiredKeys: [] },
     ),
     component: fc.option(fc.constantFrom("div", "section", "article", "span", "a"), {
@@ -259,28 +355,17 @@ const boxCases = fc
     classTokens,
     styleWrittenAs: fc.constantFrom("object", "string", "absent"),
   })
-  .chain((generated) => {
-    const ownProperties = generated.styleProps.flatMap(([, { declared }]) =>
-      declared.map(([suffix]): [string, string] => [
-        `--${LIBRARY_CLASS_PREFIX}-${suffix}`,
-        consumerOverride,
-      ]),
-    );
-    return fc
-      .subarray([...consumerDeclarations, ...ownProperties])
-      .map((consumerStyle) => ({ ...generated, consumerStyle }));
-  });
-
-function declarationsIn(style: string | true | undefined): [string, string][] {
-  if (typeof style !== "string") return [];
-  return style
-    .split(";")
-    .filter((declaration) => declaration.trim() !== "")
-    .map((declaration): [string, string] => {
-      const colon = declaration.indexOf(":");
-      return [declaration.slice(0, colon).trim(), declaration.slice(colon + 1).trim()];
-    });
-}
+  .chain((generated) =>
+    fc
+      .subarray([
+        ...consumerDeclarations,
+        ...generated.styleProps.map(([name]): [string, string] => [
+          `--${own(name)}`,
+          consumerOverride,
+        ]),
+      ])
+      .map((consumerStyle) => ({ ...generated, consumerStyle })),
+  );
 
 const anchorBoxTakesHref: "href" extends keyof BoxPropsFor<"a"> ? true : false = true;
 const divBoxTakesNoHref: "href" extends keyof BoxPropsFor<"div"> ? true : false = false;
@@ -300,7 +385,7 @@ test("Box takes every attribute of the element its component prop names, and onl
   expect(rootElementOf(html).attributes).toContainEqual(["href", elsewhere]);
 });
 
-test("Box turns every generated style prop into sx- classes and --sx- custom properties, and keeps the consumer's class and style on top", () => {
+test("Box gives every kept style-prop value one class and the one custom property that class reads, drops null and every value that holds ;, { or }, and keeps the consumer's class and style on top", () => {
   fc.assert(
     fc.property(
       boxCases,
@@ -329,54 +414,53 @@ test("Box turns every generated style prop into sx- classes and --sx- custom pro
         const valuesOf = (attribute: string) =>
           root.attributes.filter(([found]) => found === attribute).map(([, value]) => value);
         const classes = String(valuesOf("class")[0]).split(/\s+/);
-        const declarations = declarationsIn(valuesOf("style")[0]);
-        const consumerNames = (styleWrittenAs === "absent" ? [] : consumerStyle).map(
-          ([name]) => name,
+        const styleText = String(valuesOf("style")[0] ?? "");
+        const declared = new Map(declarationsIn(valuesOf("style")[0]));
+        const consumerGave = styleWrittenAs === "absent" ? [] : consumerStyle;
+        const consumerNames = consumerGave.map(([name]) => name);
+        const keptPairs = new Set(
+          styleProps.flatMap(([name, { keptKeys }]) =>
+            keptKeys.map((key) => `${canonicalOf(name)} at ${key}`),
+          ),
         );
-        const expectedClasses = [
-          ...styleProps.flatMap(([, { declared }]) =>
-            declared.map(([suffix]) => `${LIBRARY_CLASS_PREFIX}-${suffix}`),
-          ),
-          ...(visibility.hiddenFrom
-            ? [`${LIBRARY_CLASS_PREFIX}-hidden-from-${visibility.hiddenFrom}`]
-            : []),
-          ...(visibility.visibleFrom
-            ? [`${LIBRARY_CLASS_PREFIX}-visible-from-${visibility.visibleFrom}`]
-            : []),
-        ];
-        const expectedStyle = Object.fromEntries([
-          ...styleProps.flatMap(([, { declared }]) =>
-            declared.map(([suffix, css]) => [`--${LIBRARY_CLASS_PREFIX}-${suffix}`, css]),
-          ),
-          ...(styleWrittenAs === "absent" ? [] : consumerStyle),
-        ]);
+        const visibilityGiven = Object.values(visibility).filter(
+          (breakpoint) => breakpoint !== null && breakpoint !== undefined,
+        ).length;
+        const libraryClasses = classes.filter((found) =>
+          found.startsWith(`${LIBRARY_CLASS_PREFIX}-`),
+        );
+        const readByAClass = libraryClasses.filter((found) => declared.has(`--${found}`));
 
         expect(rootOf.Box.render(props), "a second render gives the same markup").toBe(html);
         expect(root.tag).toBe(component ?? "div");
         expect(valuesOf("class")).toHaveLength(1);
         expect(classes).toContain("solix-Box-root");
-        expect(
-          classes.filter((found) => found.startsWith(LIBRARY_CLASS_PREFIX)).sort(),
-          "the sx- classes are exactly those of the style props given",
-        ).toEqual(expectedClasses.sort());
         for (const { token, applied } of tokensOfClass) {
           expect(classes.includes(token), `class "${token}"`).toBe(applied);
         }
         expect(valuesOf("style").length).toBeLessThanOrEqual(1);
+        expect(styleText, "no value that holds a brace reaches style").not.toMatch(/[{}]/);
         expect(
-          declarations.filter(
-            ([name]) =>
-              !consumerNames.includes(name) && !name.startsWith(`--${LIBRARY_CLASS_PREFIX}-`),
+          readByAClass.length,
+          "one class and one custom property for each kept value of a style prop at a breakpoint, and none for null or a value that holds ;, { or }",
+        ).toBe(keptPairs.size);
+        expect(
+          libraryClasses.length - readByAClass.length,
+          "one class and no custom property for each of hiddenFrom and visibleFrom given",
+        ).toBe(visibilityGiven);
+        expect(
+          [...declared.keys()].filter(
+            (name) => !consumerNames.includes(name) && !libraryClasses.includes(name.slice(2)),
           ),
-          "a style prop writes only --sx- custom properties",
+          "a style prop writes only the custom property its own class reads",
         ).toEqual([]);
         expect(
-          Object.fromEntries(declarations),
-          "each --sx- property holds its style prop's value unless the consumer's style sets it",
-        ).toEqual(expectedStyle);
+          consumerGave.filter(([name, value]) => declared.get(name) !== value),
+          "the consumer's style keeps every declaration it sets, a --sx- one included",
+        ).toEqual([]);
         expect(
           root.attributes.filter(([name]) =>
-            ownPropsOfBox.some((own) => own.toLowerCase() === name.toLowerCase()),
+            ownPropsOfBox.some((ownProp) => ownProp.toLowerCase() === name.toLowerCase()),
           ),
           "Box's own props never reach the element as attributes",
         ).toEqual([]);

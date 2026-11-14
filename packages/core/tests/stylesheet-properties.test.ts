@@ -9,7 +9,7 @@ import {
   libraryStylesheet,
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
-import { stylePropRules } from "../src/style-props";
+import { stylePropRules } from "../src/style-prop-table";
 import { nestedLayerOrder } from "./cascade-layers";
 
 const packageRoot = join(import.meta.dirname, "..");
@@ -141,7 +141,7 @@ function sourceFor(definitions: Definition[]): string {
   return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "./disclosure-state.stylex";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
 }
 
-test("for every generated style definition, the stylesheet stays inside the library layer with prefixed classes, the style-prop layer last, and nothing important", async () => {
+test("for every generated style definition, the stylesheet stays inside the library layer with prefixed classes and registered custom properties, the style-prop layer last, and nothing important", async () => {
   await fc.assert(
     fc.asyncProperty(styleDefinitions, async (definitions) => {
       const { rules } = await compileLibrarySource({
@@ -167,6 +167,14 @@ test("for every generated style definition, the stylesheet stays inside the libr
           [],
         );
       });
+      const registered: string[] = [];
+      stylesheet.walkAtRules("property", (registration) => {
+        registered.push(registration.params);
+      });
+      expect(registered.length).toBeGreaterThan(0);
+      expect(registered.filter((name) => !name.startsWith(`--${LIBRARY_CLASS_PREFIX}-`))).toEqual(
+        [],
+      );
       stylesheet.walkDecls((declaration) => {
         expect(declaration.important).toBeFalsy();
       });

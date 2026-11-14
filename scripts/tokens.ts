@@ -10,25 +10,24 @@ const kindByPrefix = [
   ["--solix-color-", "colour"],
   ["--solix-radius-", "radius"],
   ["--solix-spacing-", "spacing"],
-];
+] as const;
+const kindOfAnyOtherToken = "length";
 
-function lineOf(source, node) {
+export type TokenKind = (typeof kindByPrefix)[number][1] | typeof kindOfAnyOtherToken;
+
+function lineOf(source: ts.SourceFile, node: ts.Node): number {
   return source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
 }
 
-/**
- * @param {string} [file]
- * @returns {Record<string, string>}
- */
-export function tokenValues(file = tokensFile) {
+export function tokenValues(file: string = tokensFile): Record<string, string> {
   const source = ts.createSourceFile(
     file,
     readFileSync(join(repositoryRoot, file), "utf8"),
     ts.ScriptTarget.Latest,
     true,
   );
-  const definitions = [];
-  const visit = (node) => {
+  const definitions: ts.ObjectLiteralElementLike[] = [];
+  const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
       node.expression.getText(source) === "stylex.defineVars" &&
@@ -41,7 +40,7 @@ export function tokenValues(file = tokensFile) {
   };
   visit(source);
 
-  const values = {};
+  const values: Record<string, string> = {};
   for (const property of definitions) {
     const where = `${file}:${lineOf(source, property)}`;
     if (
@@ -62,10 +61,6 @@ export function tokenValues(file = tokensFile) {
   return values;
 }
 
-/**
- * @param {string} name
- * @returns {"colour" | "radius" | "spacing" | "length"}
- */
-export function tokenKind(name) {
-  return kindByPrefix.find(([prefix]) => name.startsWith(prefix))?.[1] ?? "length";
+export function tokenKind(name: string): TokenKind {
+  return kindByPrefix.find(([prefix]) => name.startsWith(prefix))?.[1] ?? kindOfAnyOtherToken;
 }

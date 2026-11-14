@@ -26,7 +26,7 @@ for (const name of await readdir(sourceDirectory)) {
 }
 
 const { stylePropRules } = await import(
-  pathToFileURL(join(outputDirectory, "style-props.js")).href
+  pathToFileURL(join(outputDirectory, "style-prop-table.js")).href
 );
 await writeFile(join(outputDirectory, "styles.css"), libraryStylesheet(rules, stylePropRules()));
 console.log(`dist/styles.css: ${rules.length} rules and the style-prop rules`);

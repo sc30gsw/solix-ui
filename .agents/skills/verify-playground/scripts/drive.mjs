@@ -8,10 +8,13 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
   cwd: dirname(fileURLToPath(import.meta.url)),
   encoding: "utf8",
 }).trim();
-const repositoryScript = (path) => import(pathToFileURL(join(root, "scripts", path)).href);
-const { browserType, engineNames, enginesToVerify } = await repositoryScript("browser-engines.mjs");
-const { expectedValues } = await repositoryScript("expected-values.mjs");
+const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
+const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
+const { expectedValues } = await repositoryModule("scripts/expected-values.ts");
+const { breakpointWidths } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const state = join(root, ".verify-playground");
+const pixelsPerMediaQueryEm = 16;
+const mdWidth = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 
 const style = (locator, property) =>
   locator.evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
@@ -187,21 +190,27 @@ const journeys = {
     const section = page.getByRole("region", { name: "Style props" });
     const overButton = page.getByRole("button", { name: "Background from a style prop" });
     const text = (content) => page.getByText(content, { exact: true });
+    await page.setViewportSize({ width: mdWidth - 1, height: 360 });
     await section.scrollIntoViewIfNeeded();
-    await shot("below-md", "Open the page 640 pixels wide, below the md breakpoint, and scroll to the section named Style props.", section);
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Style props.`, section);
     observe("the style prop's background beats the button's own default", await style(overButton, "background-color"), expected("--solix-color-error"));
     observe("a style prop sets the margin", await style(text("Style prop margin"), "margin-top"), expected("--solix-spacing-xl"));
     observe("the consumer's class beats the style prop", await style(text("Consumer class margin"), "margin-top"), expected("roomy"));
     observe("the consumer's style beats the consumer's class and the style prop", await style(text("Consumer style margin"), "margin-top"), expected("pinnedMargin"));
     observe("below md: the section's padding comes from its xs value", await style(section, "padding-top"), expected("--solix-spacing-sm"));
+    observe("below md: the pt longhand beats the p shorthand", await style(text("Longhand padding"), "padding-top"), expected("zero"));
+    observe("below md: the p shorthand sets the other sides", await style(text("Longhand padding"), "padding-bottom"), expected("--solix-spacing-xs"));
+    observe("mt=unset inside a Box with mt=xl takes no margin from it", await style(text("Unset margin"), "margin-top"), expected("zero"));
     observe("below md: Hidden from md is visible", await text("Hidden from md").isVisible(), true);
     observe("below md: Visible from md is visible", await text("Visible from md").isVisible(), false);
 
-    await page.setViewportSize({ width: 992, height: 360 });
+    await page.setViewportSize({ width: mdWidth, height: 360 });
     await text("Visible from md").waitFor({ state: "visible" });
     await section.scrollIntoViewIfNeeded();
-    await shot("at-md", "Widen the page to 992 pixels, which is the md breakpoint. The padding grows, one line goes away and another appears.", section);
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, which is the md breakpoint. The padding grows, one line goes away and another appears.`, section);
     observe("at md: the section's padding comes from its md value", await style(section, "padding-top"), expected("--solix-spacing-lg"));
+    observe("at md: the pt longhand still beats the p shorthand's md value", await style(text("Longhand padding"), "padding-top"), expected("zero"));
+    observe("at md: the p shorthand sets the other sides to its md value", await style(text("Longhand padding"), "padding-bottom"), expected("--solix-spacing-lg"));
     observe("at md: Hidden from md is visible", await text("Hidden from md").isVisible(), false);
     observe("at md: Visible from md is visible", await text("Visible from md").isVisible(), true);
     observe("at md: the consumer's style still wins", await style(text("Consumer style margin"), "margin-top"), expected("pinnedMargin"));

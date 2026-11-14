@@ -13,14 +13,16 @@ import {
   vi,
 } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
-import { expectedValues } from "../../../scripts/expected-values.mjs";
+import { expectedValues } from "../../../scripts/expected-values";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
+import { breakpointWidths } from "../../../packages/core/src/style-prop-table";
 import { builtComponents } from "../../../packages/core/tests/built-components";
 
 const appDirectory = join(import.meta.dirname, "..");
 const port = 4319;
 const url = `http://127.0.0.1:${port}/`;
-const mdBreakpointInPixels = 992;
+const pixelsPerMediaQueryEm = 16;
+const mdBreakpointInPixels = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 const viewportHeight = 800;
 const boxViewports: [label: string, width: number, fromMd: boolean][] = [
   ["one pixel below the md breakpoint", mdBreakpointInPixels - 1, false],
@@ -416,7 +418,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
 
   describe.each(boxViewports)("a Box %s", (_, width, fromMd) => {
     test.each(scriptModes)(
-      "with scripts %s, ranks component default < style prop < consumer class < consumer style, and switches at md",
+      "with scripts %s, ranks component default < style prop < consumer class < consumer style, lets a longhand beat its shorthand, inherits nothing, and switches at md",
       async (__, javaScriptEnabled) => {
         const context = await browser.newContext({
           javaScriptEnabled,
@@ -449,6 +451,18 @@ describe.each(enginesToVerify())("in %s", (engine) => {
           await computed(page.getByRole("region", { name: "Style props" }), "padding-top"),
           "the responsive padding switches from its xs value to its md value at md",
         ).toBe(expected(fromMd ? "--solix-spacing-lg" : "--solix-spacing-sm"));
+        expect(
+          await computed(text("Longhand padding"), "padding-top"),
+          "the pt longhand beats the p shorthand, at its base and at its md value",
+        ).toBe(expected("zero"));
+        expect(
+          await computed(text("Longhand padding"), "padding-bottom"),
+          "the p shorthand still sets the sides pt leaves alone",
+        ).toBe(expected(fromMd ? "--solix-spacing-lg" : "--solix-spacing-xs"));
+        expect(
+          await computed(text("Unset margin"), "margin-top"),
+          "mt=unset inside a Box with mt=xl does not take the outer Box's margin",
+        ).toBe(expected("zero"));
         expect(await text("Hidden from md").isVisible(), "hiddenFrom md").toBe(!fromMd);
         expect(await text("Visible from md").isVisible(), "visibleFrom md").toBe(fromMd);
 
