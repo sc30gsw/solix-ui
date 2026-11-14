@@ -60,7 +60,7 @@ const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     expected: "function",
   }),
   createFocusReturn: serverCase({
-    create: (createFocusReturn) => createFocusReturn({ opened: true }),
+    create: (createFocusReturn) => createFocusReturn({ opened: true, surface: () => undefined }),
     read: (returnFocus) => typeof returnFocus,
     expected: "function",
   }),

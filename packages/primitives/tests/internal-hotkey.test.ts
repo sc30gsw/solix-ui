@@ -7,7 +7,9 @@ import {
   keyName,
   matchesHotkey,
   parseHotkey,
+  runHotkeys,
 } from "../src/internal-hotkey";
+import type { HotkeyItem } from "../src/types";
 
 type Modifiers = { alt: boolean; ctrl: boolean; meta: boolean; shift: boolean };
 type Key = { names: readonly string[]; key: string; code: string };
@@ -184,4 +186,83 @@ test("a key pressed while an input method composes text is composing, by the sta
       expect(isComposing({ isComposing: composing, keyCode })).toBe(composing || keyCode === 229);
     }),
   );
+});
+
+type Pressed = Partial<
+  Pick<
+    KeyboardEvent,
+    "key" | "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey" | "isComposing" | "keyCode"
+  >
+>;
+
+function keydown(pressed: Pressed): KeyboardEvent {
+  const event = new Event("keydown", { cancelable: true });
+  return Object.assign(event, {
+    key: "",
+    code: "",
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    isComposing: false,
+    keyCode: 0,
+    ...pressed,
+  }) as unknown as KeyboardEvent;
+}
+
+function recorder() {
+  const calls: string[] = [];
+  const item = (hotkey: string, options?: HotkeyItem[2]): HotkeyItem => [
+    hotkey,
+    (event) => calls.push(`${hotkey} ${event.key}`),
+    options,
+  ];
+  return { calls, item };
+}
+
+test("runHotkeys runs every item that matches, in order, and prevents the default unless an item opts out", () => {
+  const { calls, item } = recorder();
+  const prevented = keydown({ key: "k", ctrlKey: true });
+  const kept = keydown({ key: "k", ctrlKey: true });
+
+  runHotkeys(prevented, [
+    item("mod+k"),
+    item("ctrl+K", { preventDefault: false }),
+    item("shift+k"),
+  ]);
+  runHotkeys(kept, [item("ctrl+k", { preventDefault: false })]);
+  expect(calls).toEqual(["mod+k k", "ctrl+K k", "ctrl+k k"]);
+  expect([prevented.defaultPrevented, kept.defaultPrevented]).toEqual([true, false]);
+});
+
+test("runHotkeys ignores a key whose default is already prevented, so of two nested handlers the first one the key reaches handles it", () => {
+  const { calls, item } = recorder();
+  const event = keydown({ key: "Escape" });
+
+  runHotkeys(event, [item("escape")]);
+  runHotkeys(event, [item("esc")]);
+  expect(calls).toEqual(["escape Escape"]);
+});
+
+test("runHotkeys ignores a key pressed while an input method composes text", () => {
+  const { calls, item } = recorder();
+
+  for (const pressed of [
+    { key: "Enter", isComposing: true },
+    { key: "Process", keyCode: 229 },
+    { key: "Enter" },
+  ]) {
+    runHotkeys(keydown(pressed), [item("enter")]);
+  }
+  expect(calls).toEqual(["enter Enter"]);
+});
+
+test("runHotkeys with physical keys compares the code, so a shortcut survives another layout", () => {
+  const { calls, item } = recorder();
+
+  runHotkeys(keydown({ key: "ф", code: "KeyA", metaKey: true }), [
+    item("mod+a", { usePhysicalKeys: true }),
+    item("mod+a"),
+  ]);
+  expect(calls).toEqual(["mod+a ф"]);
 });

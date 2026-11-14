@@ -44,6 +44,12 @@ export type HotkeyItemOptions = {
  * `mod`, which is Ctrl or Meta, to one key. A key is a character or a name such as `escape`
  * (`esc`), `enter`, `space`, `tab`, `backspace`, `delete`, `arrowup` (`up`), `plus` (`[plus]`),
  * `minus`, `asterisk` or `slash`.
+ *
+ * Each item whose hotkey matches runs, in the order of the list, and prevents the key's default
+ * unless its options say otherwise. Matching is exact: every modifier the key carries must be
+ * named, and every one named must be pressed, except `mod`, which takes Ctrl or Meta. A key whose
+ * default is already prevented, or one pressed while an input method composes text, so confirming
+ * a candidate with Enter, runs no item.
  */
 export type HotkeyItem = readonly [
   hotkey: string,
