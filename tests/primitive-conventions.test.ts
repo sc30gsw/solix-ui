@@ -17,6 +17,9 @@ const valueModule = "./internal-value";
 const browserHarness = "./support/browser-harness";
 const solidModule = "solid-js";
 const flushName = "flush";
+const accessibilityModule = "./support/accessibility";
+const axeHelper = "axeViolations";
+const focusMethod = "focus";
 const modelRun = "modelRun";
 const readOnceName = /^(?:initial|default|final)(?:[A-Z]|$)/;
 const readOnceType = "ReadOnce";
@@ -579,6 +582,46 @@ const browserTestsUseTheHarness: Rule = (library) =>
       return [...harness, ...flushFromSolid];
     });
 
+function movesFocus(module: Module): boolean {
+  return descendants(module.source).some(
+    (node) =>
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === focusMethod,
+  );
+}
+
+function runsAxe(test: ts.SourceFile): boolean {
+  const imported = importsOf(test)
+    .filter(
+      (statement) => (statement.moduleSpecifier as ts.StringLiteral).text === accessibilityModule,
+    )
+    .flatMap((statement) => {
+      const bindings = statement.importClause?.namedBindings;
+      return bindings && ts.isNamedImports(bindings) ? [...bindings.elements] : [];
+    })
+    .filter((element) => (element.propertyName ?? element.name).text === axeHelper)
+    .map((element) => element.name.text);
+  return descendants(test).some(
+    (node) =>
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      imported.includes(node.expression.text),
+  );
+}
+
+const accessibilityTests: Rule = (library) =>
+  publicModules(library)
+    .filter((module) => isPrimitive(module.file) && movesFocus(module))
+    .filter((module) => {
+      const browserTest = testNamed(library, module.file, browserTestSuffixes);
+      return !(browserTest && runsAxe(browserTest));
+    })
+    .map(
+      (module) =>
+        `${at(module)}: it moves focus, so its browser test runs axe-core on the region it manages with ${axeHelper} from tests/support/accessibility.ts, which fails on any WCAG 2.2 A or AA violation.`,
+    );
+
 const library = loadLibrary(primitivesPackage.directory, filesOnDisk);
 
 test("the primitives package has public modules to check", () => {
@@ -623,6 +666,10 @@ test("every primitive has a browser test named for it, and every plain helper a 
 
 test("every primitive that keeps its state in internal-value has a model test", () => {
   expect(modelTests(library)).toEqual([]);
+});
+
+test("every primitive that moves focus has a browser test that runs axe-core on the region it manages", () => {
+  expect(accessibilityTests(library)).toEqual([]);
 });
 
 test("every browser test imports the harness and flushes through it", () => {
@@ -704,7 +751,8 @@ export function createAllowed(
   const copy = (options: { max: number }) => ({ ...options });
   const open = () => element.classList.contains("open") || element.style.display !== "none";
   const clamped = () => Math.min(value.get(), accessUntracked(options?.max ?? limits.lowest));
-  return [value.get, open, clamped, () => [label, missing, empty, items], copy];
+  const focus = () => element.focus();
+  return [value.get, open, clamped, () => [label, missing, empty, items], copy, focus];
 }
 `,
   "src/get-hotkey-handler.ts": `export function getHotkeyHandler(hotkey: string): (event: KeyboardEvent) => boolean {
@@ -716,9 +764,11 @@ export { getHotkeyHandler } from "./get-hotkey-handler";
 export type { MaybeAccessor, ReadOnce } from "./types";
 `,
   "tests/create-allowed.browser.test.ts": `import fc from "fast-check";
+import { axeViolations as violations } from "./support/accessibility";
 import { flush } from "./support/browser-harness";
 fc.modelRun(() => ({ model: {}, real: {} }), []);
 flush();
+await violations(document.body);
 `,
   "tests/get-hotkey-handler.test.ts": `getHotkeyHandler("a");
 `,
@@ -738,7 +788,8 @@ const forbidden: Record<string, string> = {
 `,
   "src/create-modelled.ts": `import { createValue } from "./internal-value";
 
-export function createModelled() {
+export function createModelled(element: HTMLElement) {
+  element.focus();
   return createValue(0).get;
 }
 `,
@@ -797,9 +848,11 @@ export function createForbidden(
 export type { MaybeAccessor, ReadOnce } from "./types";
 `,
   "tests/create-modelled.browser.test.ts": `import { flush } from "solid-js";
+import { axeViolations } from "./support/accessibility";
 import { createModelled } from "../src/create-modelled";
-createModelled();
+createModelled(document.body);
 flush();
+axeViolations;
 `,
 };
 
@@ -814,6 +867,7 @@ const rules: Record<string, Rule> = {
   styleAndClassWrites,
   testsNamedForModules,
   modelTests,
+  accessibilityTests,
   browserTestsUseTheHarness,
 };
 
@@ -865,13 +919,14 @@ const forbiddenFindings: Record<string, string[]> = {
   ],
   testsNamedForModules: [forbiddenAt("src/create-forbidden.ts"), forbiddenAt("src/get-other.ts")],
   modelTests: [forbiddenAt("src/create-modelled.ts")],
+  accessibilityTests: [forbiddenAt("src/create-modelled.ts")],
   browserTestsUseTheHarness: [
     forbiddenAt("tests/create-modelled.browser.test.ts"),
     forbiddenAt("tests/create-modelled.browser.test.ts", 'import { flush } from "solid-js"'),
   ],
 };
 
-test("each rule passes a fixture that holds only what it allows: read-once arguments, reads of a class or a style, Symbol and Object.freeze at module level, a plain helper with a Node test, and a shadowed parameter", () => {
+test("each rule passes a fixture that holds only what it allows: read-once arguments, reads of a class or a style, Symbol and Object.freeze at module level, a plain helper with a Node test, a primitive that moves focus with an axe check, and a shadowed parameter", () => {
   const fixture = fixtureLibrary(allowed);
   const findings = Object.fromEntries(
     Object.entries(rules).map(([name, rule]) => [name, rule(fixture)]),

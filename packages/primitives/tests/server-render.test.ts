@@ -59,6 +59,21 @@ const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     read: (ref) => typeof ref,
     expected: "function",
   }),
+  createFocusReturn: serverCase({
+    create: (createFocusReturn) => createFocusReturn({ opened: true }),
+    read: (returnFocus) => typeof returnFocus,
+    expected: "function",
+  }),
+  createFocusTrap: serverCase({
+    create: (createFocusTrap) => createFocusTrap(() => true),
+    read: (ref) => typeof ref,
+    expected: "function",
+  }),
+  createHotkeys: serverCase({
+    create: (createHotkeys) => createHotkeys(() => [["mod+K", () => undefined]]),
+    read: (returned) => returned,
+    expected: undefined,
+  }),
   createInputState: serverCase({
     create: (createInputState) => createInputState("typed"),
     read: ([value]) => value(),

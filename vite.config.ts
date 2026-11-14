@@ -9,7 +9,7 @@ const generatedEvidence = ["docs/verification/**"];
 const tablesKeptCompact = ["AGENTS.md"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
-const preBundledForBrowserTests = ["fast-check", "vite-plus/test/browser"];
+const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),

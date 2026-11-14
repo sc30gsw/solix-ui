@@ -25,3 +25,28 @@ export type RefSetter<E extends Element> = (element: E) => void;
 
 /** The options of `addEventListener`: `true` means `capture`. */
 export type ListenerOptions = boolean | AddEventListenerOptions;
+
+/** What a hotkey item may set. Each option is read when a key is pressed. */
+export type HotkeyItemOptions = {
+  /** Whether a match prevents the key's default action. Default `true`. */
+  preventDefault?: boolean;
+  /**
+   * Compare the physical key, `event.code`, instead of the character, `event.key`, so a shortcut
+   * survives a change of keyboard layout. `a` then matches `KeyA` and `1` matches `Digit1`, but not
+   * `Numpad1`.
+   */
+  usePhysicalKeys?: boolean;
+};
+
+/**
+ * A hotkey, the handler it runs and its options: `["mod+K", openSearch]`. The hotkey is
+ * case-insensitive and joins with `+` any of the modifiers `alt`, `ctrl`, `meta`, `shift` and
+ * `mod`, which is Ctrl or Meta, to one key. A key is a character or a name such as `escape`
+ * (`esc`), `enter`, `space`, `tab`, `backspace`, `delete`, `arrowup` (`up`), `plus` (`[plus]`),
+ * `minus`, `asterisk` or `slash`.
+ */
+export type HotkeyItem = readonly [
+  hotkey: string,
+  handler: (event: KeyboardEvent) => void,
+  options?: HotkeyItemOptions,
+];

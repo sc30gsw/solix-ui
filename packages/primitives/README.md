@@ -39,6 +39,7 @@ Every value that changes is an accessor, so call it: `value()`. Commands, such a
 - **Owner.** Call a primitive under an owner: a component, `createRoot` or another primitive. Its state and its cleanup belong to that owner, and once the owner is disposed its commands write nothing and call nothing.
 - **Server.** A primitive renders on the server, where it reads no browser global.
 - **Elements.** A primitive that works on an element returns a ref setter: `<div ref={[props.ref, trap]}>`. It creates the same reactive nodes on the server and the client, so hydration stays aligned, and it adds its listeners once the owner's effects run, which never happens on the server, and removes them when the owner is disposed.
+- **Nesting.** Of two nested focus traps, Escape handlers or click-outside regions, the one that handles an event prevents its default, and the other ignores an event whose default is already prevented. No registry is kept. A trap and a `getHotkeyHandler` listen on their element, so the inner one sees the event first. A click-outside region and `createHotkeys` listen on the document, where the one attached first sees the event first.
 - **Look.** A primitive writes no style and no class. The component that renders the element styles it.
 
 ## Primitives

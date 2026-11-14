@@ -6,6 +6,9 @@ export {
   type DisclosureOptions,
 } from "./create-disclosure";
 export { createEventListener } from "./create-event-listener";
+export { createFocusReturn, type FocusReturnOptions } from "./create-focus-return";
+export { createFocusTrap } from "./create-focus-trap";
+export { createHotkeys } from "./create-hotkeys";
 export { createInputState, type InputChange } from "./create-input-state";
 export { createListState, type ListMove, type ListStateHandlers } from "./create-list-state";
 export { createMap } from "./create-map";
@@ -26,4 +29,12 @@ export {
 } from "./create-uncontrolled";
 export { createValidatedState, type ValidatedState } from "./create-validated-state";
 export { createWindowEvent } from "./create-window-event";
-export type { ListenerOptions, MaybeAccessor, ReadOnce, RefSetter } from "./types";
+export { getHotkeyHandler } from "./get-hotkey-handler";
+export type {
+  HotkeyItem,
+  HotkeyItemOptions,
+  ListenerOptions,
+  MaybeAccessor,
+  ReadOnce,
+  RefSetter,
+} from "./types";

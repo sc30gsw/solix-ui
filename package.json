@@ -17,6 +17,7 @@
     "@types/node": "catalog:",
     "@types/semver": "catalog:",
     "@vitest/browser-playwright": "catalog:",
+    "axe-core": "catalog:",
     "fast-check": "catalog:",
     "modern-web-guidance": "catalog:",
     "playwright": "catalog:",
