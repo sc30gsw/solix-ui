@@ -1,17 +1,14 @@
 import { access } from "./internal-access";
 import { createElementSlot } from "./internal-element";
+import { activeElementOf, focusFirst, moveFocus } from "./internal-focus";
 import { createAttachment, listen, listenerSettings } from "./internal-listener";
-import {
-  type Focusable,
-  hasOwnTabStops,
-  initialFocusTarget,
-  isFocusable,
-  nextTabStop,
-} from "./internal-tabbable";
+import { initialFocusCandidates, tabStopCandidates } from "./internal-tabbable";
 import type { MaybeAccessor, RefSetter } from "./types";
 
-const tab = "Tab";
-const keydown = "keydown";
+const activated = "solix-focus-trap-activated";
+const released = "solix-focus-trap-released";
+const focusin = "focusin";
+const blur = "blur";
 
 function liesOutside(box: DOMRect, view: Window | null): boolean {
   return (
@@ -20,63 +17,69 @@ function liesOutside(box: DOMRect, view: Window | null): boolean {
   );
 }
 
-function focusInView(target: Focusable | undefined): void {
-  if (!target) return;
-  target.focus({ preventScroll: true });
-  if (liesOutside(target.getBoundingClientRect(), target.ownerDocument.defaultView)) {
+function holdsFocus(container: HTMLElement): boolean {
+  const active = activeElementOf(container);
+  return active !== null && container.contains(active);
+}
+
+function comesBefore(node: Node, container: HTMLElement): boolean {
+  const anchor: { at: Node } = { at: container };
+  while (anchor.at.getRootNode() !== node.getRootNode()) {
+    const root = anchor.at.getRootNode();
+    if (!(root instanceof ShadowRoot)) break;
+    anchor.at = root.host;
+  }
+  return (anchor.at.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
+}
+
+function focusEdge(container: HTMLElement, last: boolean): void {
+  if (!focusFirst(tabStopCandidates(container, last))) moveFocus(container);
+}
+
+function focusInitially(container: HTMLElement): void {
+  const target = focusFirst(initialFocusCandidates(container), { preventScroll: true });
+  if (target === undefined) {
+    moveFocus(container, { preventScroll: true });
+  } else if (liesOutside(target.getBoundingClientRect(), target.ownerDocument.defaultView)) {
     target.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 }
 
-function activeIn(container: HTMLElement): Element | null {
-  const root = container.getRootNode();
-  return root instanceof Document || root instanceof ShadowRoot ? root.activeElement : null;
-}
-
 function trap(container: HTMLElement): () => void {
-  const pending: { correction: ReturnType<typeof setTimeout> | undefined } = {
-    correction: undefined,
-  };
-  const focusContainer = () => {
-    if (isFocusable(container)) container.focus();
-  };
-  const initial = setTimeout(() => focusInView(initialFocusTarget(container)), 0);
-  const correctAfterNativeTab = (backwards: boolean) => {
-    clearTimeout(pending.correction);
-    pending.correction = setTimeout(() => {
-      pending.correction = undefined;
-      const now = activeIn(container);
-      if (now !== null && container.contains(now)) return;
-      nextTabStop(container, null, backwards)?.focus();
-    }, 0);
+  const token = Symbol(activated);
+  const newer = new Set<unknown>();
+  const bringBack = (landed: Node) => {
+    if (newer.size === 0 && !holdsFocus(container)) {
+      focusEdge(container, comesBefore(activeElementOf(container) ?? landed, container));
+    }
   };
   const removers = [
-    listen<KeyboardEvent>(container, listenerSettings(keydown, false), (event) => {
-      if (event.key !== tab || event.defaultPrevented) return;
-      const current = event.target instanceof Element ? event.target : null;
-      if (current !== null && current !== container && hasOwnTabStops(current)) {
-        correctAfterNativeTab(event.shiftKey);
-        return;
-      }
-      event.preventDefault();
-      const next = nextTabStop(container, current, event.shiftKey);
-      if (next) next.focus();
-      else if (current === null || !isFocusable(current)) focusContainer();
+    listen<Event>(container.ownerDocument, listenerSettings(activated, false), (event) => {
+      if (event instanceof CustomEvent && event.detail !== token) newer.add(event.detail);
     }),
-    listen<KeyboardEvent>(container.ownerDocument, listenerSettings(keydown, false), (event) => {
-      if (event.key !== tab || event.defaultPrevented) return;
-      const page = container.ownerDocument;
-      if (event.target !== page.body && event.target !== page.documentElement) return;
-      event.preventDefault();
-      const next = nextTabStop(container, null, event.shiftKey);
-      if (next) next.focus();
-      else focusContainer();
+    listen<Event>(container.ownerDocument, listenerSettings(released, false), (event) => {
+      if (event instanceof CustomEvent) newer.delete(event.detail);
     }),
+    listen<FocusEvent>(container.ownerDocument, listenerSettings(focusin, true), (event) => {
+      if (event.target instanceof Node) bringBack(event.target);
+    }),
+    listen<Event>(
+      container.ownerDocument.defaultView ?? window,
+      listenerSettings(blur, false),
+      () => {
+        const active = container.ownerDocument.activeElement;
+        if (active instanceof HTMLIFrameElement) bringBack(active);
+      },
+    ),
   ];
+  container.ownerDocument.dispatchEvent(new CustomEvent(activated, { detail: token }));
+  const initial = setTimeout(() => {
+    if (newer.size === 0) focusInitially(container);
+  }, 0);
   return () => {
     clearTimeout(initial);
-    clearTimeout(pending.correction);
     for (const remove of removers) remove();
+    container.ownerDocument.dispatchEvent(new CustomEvent(released, { detail: token }));
   };
 }
 
@@ -86,29 +89,28 @@ function trap(container: HTMLElement): () => void {
  * needs no trap.
  *
  * When the trap turns on, focus moves on the next task to the first element marked
- * `data-autofocus`, else the first tab stop, else the first focusable element, else the container
- * when it is focusable, without scrolling, and the element is then scrolled into view only if it
- * lies outside the viewport (WCAG 2.4.11).
+ * `data-autofocus`, else the first tab stop, else the first focusable element, else the container,
+ * without scrolling, and the element is then scrolled into view only if it lies outside the
+ * viewport (WCAG 2.4.11).
  *
- * Tab and Shift+Tab move through the container's tab stops in the order the browser uses:
- * positive `tabindex` ascending, then document order, one stop per radio group, skipping disabled,
- * inert, hidden and `tabindex="-1"` elements. They wrap at both ends. From the container, or from
- * an element that is not a stop, they continue from its position. An element with tab stops of its
- * own, such as a date input, a media element with controls or an iframe, keeps the browser's Tab,
- * and focus that then leaves the container is brought back on the next task. With no stop, focus
- * stays where it is, or moves to the container when that element can no longer hold it, so keep
- * the container focusable with `tabindex="-1"`. A Tab pressed while nothing has focus, such as after the focused element was removed,
- * moves focus to the first stop, or with Shift to the last.
+ * Tab and Shift+Tab are the browser's own: the trap neither reads nor prevents them, so a widget
+ * inside that handles Tab itself, such as an editor that inserts a tab character, keeps it. The
+ * trap watches where focus goes instead. When focus lands outside the container, by Tab, a click,
+ * a script or a frame, it moves to the container's first tab stop if the element that took it
+ * follows the container in the document, and to its last tab stop if it comes before. So Tab
+ * wraps at both ends. Each move is confirmed, and an element that does not take focus, such as a
+ * link without `href`, is passed over for the next one. With no tab stop that takes focus, focus
+ * moves to the container, so keep the container focusable with `tabindex="-1"`. Focus that leaves
+ * the page for the browser's own controls, as it can from a modal `<dialog>`, is guarded when it
+ * comes back.
  *
- * It ignores a Tab whose default is already prevented, and prevents the default of every Tab it
- * handles. Its listener is on the container, so of two nested traps the inner one handles the Tab
- * and the outer one leaves it. A Tab pressed while nothing has focus reaches every active trap at
- * the document, and the first one attached handles it. Turning `active` off removes every
- * listener at once, so the caller's Escape or close action releases the trap (WCAG 2.1.2).
+ * Only the trap turned on last guards focus: turning one on suspends every other, in any order of
+ * nesting, and turning it off or disposing it resumes them. Turning `active` off releases the trap
+ * at once, so the caller's Escape or close action lets focus go (WCAG 2.1.2).
  *
  * ```tsx
  * const trap = createFocusTrap(() => props.opened);
- * return <div ref={trap} role="dialog" aria-label="Filters">...</div>;
+ * return <div ref={trap} role="dialog" aria-label="Filters" tabindex="-1">...</div>;
  * ```
  */
 export function createFocusTrap(active?: MaybeAccessor<boolean>): RefSetter<HTMLElement> {

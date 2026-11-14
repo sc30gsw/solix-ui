@@ -6,6 +6,7 @@ import {
   OBSERVE,
 } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
+import type { RefSetter } from "../../src/types";
 import { listenerMethods, observers, timers } from "./browser-resources";
 
 type Listener = {
@@ -24,12 +25,14 @@ type ObserverClass = new (callback: (...args: unknown[]) => void, ...rest: unkno
 const browserGlobals = globalThis as unknown as Record<string, unknown>;
 const listening = EventTarget.prototype as unknown as Record<string, unknown>;
 const addListener = listening[listenerMethods.add] as EventTarget["addEventListener"];
+const removeListener = listening[listenerMethods.remove] as EventTarget["removeEventListener"];
 const returnedFunctionsWrappedToDepth = 2;
 
 const liveListeners = new Set<Listener>();
 const liveTimers = new Map<string, string>();
 const liveObservations = new Map<object, Set<Node>>();
 const disposers: (() => void)[] = [];
+const recorders: (() => void)[] = [];
 const scope = { depth: 0 };
 let diagnostics: DiagnosticCapture | undefined;
 
@@ -257,6 +260,26 @@ export function attached<E extends HTMLElement>(
   return element;
 }
 
+export function mountOn<E extends Element>(create: () => RefSetter<E>, element: E): RefSetter<E> {
+  const ref = mount(create);
+  ref(element);
+  flush();
+  return ref;
+}
+
+export function record<K extends keyof WindowEventMap>(
+  target: EventTarget,
+  type: K,
+): WindowEventMap[K][] {
+  const seen: WindowEventMap[K][] = [];
+  const listener = (event: Event) => {
+    seen.push(event as WindowEventMap[K]);
+  };
+  addListener.call(target, type, listener);
+  recorders.push(() => removeListener.call(target, type, listener));
+  return seen;
+}
+
 export function unmount(): void {
   for (const dispose of disposers.splice(0).reverse()) dispose();
   flushSolid();
@@ -276,6 +299,7 @@ beforeEach(() => {
 
 afterEach(() => {
   unmount();
+  for (const remove of recorders.splice(0)) remove();
   document.body.replaceChildren();
   expect(diagnosticsRaised(), "a primitive raised a Solid development diagnostic").toEqual([]);
   expect(
