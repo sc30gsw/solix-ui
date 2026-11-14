@@ -72,13 +72,17 @@ function declarations(style: JSX.CSSProperties): string {
     .join("");
 }
 
+export function presentStyle(style: JSX.CSSProperties | undefined): JSX.CSSProperties {
+  return Object.fromEntries(presentEntries(style ?? {}));
+}
+
 export function withConsumerStyle(
   own: JSX.CSSProperties,
-  consumer: JSX.CSSProperties | string | undefined,
+  consumer?: JSX.CSSProperties | string,
 ): JSX.CSSProperties | string | undefined {
   if (typeof consumer === "string") return `${declarations(own)}${consumer}`;
   if (consumer === undefined && Object.keys(own).length === 0) return undefined;
-  return { ...own, ...Object.fromEntries(presentEntries(consumer ?? {})) };
+  return { ...own, ...presentStyle(consumer) };
 }
 
 export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {

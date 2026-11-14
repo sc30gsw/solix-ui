@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ValidComponent } from "@solidjs/web";
+import type { JSX, ValidComponent } from "@solidjs/web";
 import fc from "fast-check";
 import { expect, expectTypeOf, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
@@ -10,7 +10,6 @@ import {
   classTokens,
   declarationsByPart,
   consumerStyles,
-  displayPropCases,
   elementsToRender,
   partClassTokens,
   stringAttributes,
@@ -271,6 +270,10 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
   const declared = new Map(declarationsIn(valuesOf(root, "style")[0]));
   const consumerGave = declaredBy(generated.consumerStyle);
   const consumerNames = consumerGave.map(([property]) => property);
+  const stylesRootGave = presentDeclarations(
+    Object.entries(Object.fromEntries(generated.stylesRoot)),
+  );
+  const writtenByTheConsumer = [...consumerNames, ...stylesRootGave.map(([property]) => property)];
   const keptPairs = new Set(
     styleProps.flatMap(([prop, { keptKeys }]) =>
       keptKeys.map((key) => `${canonicalOf(prop)} at ${key}`),
@@ -300,13 +303,19 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
   expect(
     [...declared.keys()].filter(
       (property) =>
-        !consumerNames.includes(property) && !libraryClasses.includes(property.slice(2)),
+        !writtenByTheConsumer.includes(property) && !libraryClasses.includes(property.slice(2)),
     ),
     "a style prop writes only the custom property its own class reads",
   ).toEqual([]);
   expect(
     consumerGave.filter(([property, value]) => declared.get(property) !== value),
     "the consumer's style keeps every declaration it sets, a --sx- one included",
+  ).toEqual([]);
+  expect(
+    stylesRootGave.filter(
+      ([property, value]) => !consumerNames.includes(property) && declared.get(property) !== value,
+    ),
+    "styles.root keeps every declaration it sets that the consumer's style does not replace, a --sx- one included",
   ).toEqual([]);
   expect(
     root.attributes.filter(([attribute]) =>
@@ -382,35 +391,44 @@ test("a polymorphic component wrapping Modal refuses every display prop Modal re
   expectTypeOf<"type">().toExtend<keyof Library.BoxProps<typeof Library.Button>>();
 });
 
-test.each(polymorphicComponents)(
-  "%s passes display, hiddenFrom and visibleFrom to a component its component prop names unresolved, so Modal leaves them off its <dialog> and Box resolves them once",
-  (name) => {
-    fc.assert(
-      fc.property(displayPropCases, ({ given, classes }) => {
-        const dialog = rootElementOf(
-          render(name, { ...fixtures.Modal.props, component: library.Modal, ...given }),
-        );
-        const box = rootElementOf(render(name, { component: library.Box, ...given }));
-        const styleProps = (element: Element) =>
-          classesOf(element).filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`));
+function Card(props: JSX.HTMLAttributes<HTMLElement>) {
+  return <section {...props} />;
+}
 
-        expect(dialog.tag).toBe("dialog");
-        expect(styleProps(dialog), "no style-prop class on the dialog").toEqual([]);
-        expect(declarationsIn(valuesOf(dialog, "style")[0]), "no custom property").toEqual([]);
-        expect(
-          dialog.attributes.filter(([attribute]) =>
-            displayPropNames.some((display) => display.toLowerCase() === attribute.toLowerCase()),
-          ),
-          "no display prop as an attribute",
-        ).toEqual([]);
-        expect(styleProps(box).sort(), "the wrapped Box resolves each one, once").toEqual(
-          [...classes].sort(),
-        );
-      }),
-      { numRuns: generatedRuns },
+test.each(polymorphicComponents)(
+  "%s resolves every style prop, display ones included, for a function component its component prop names, which gets the sx- classes and custom properties and no display or hiddenFrom attribute",
+  (name) => {
+    const root = rootElementOf(
+      render(name, { component: Card, display: "flex", hiddenFrom: "sm", p: 4 }),
     );
+
+    expect(root.tag).toBe("section");
+    expect(
+      classesOf(root)
+        .filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`))
+        .sort(),
+    ).toEqual(["sx-display", "sx-hidden-from-sm", "sx-p"]);
+    expect(Object.fromEntries(declarationsIn(valuesOf(root, "style")[0]))).toEqual({
+      "--sx-display": "flex",
+      "--sx-p": "0.25rem",
+    });
+    expect(
+      root.attributes.filter(([attribute]) =>
+        ["display", "hiddenfrom"].includes(attribute.toLowerCase()),
+      ),
+    ).toEqual([]);
   },
 );
+
+test("Box passes unstyled to the Button its component prop names, so the Button carries none of its library classes, and keeps them without it", () => {
+  const libraryClassesOf = (props: Record<string, unknown>) =>
+    classesOf(rootElementOf(render("Box", { component: library.Button, ...props }))).filter(
+      (found) => styleXClasses.has(found),
+    );
+
+  expect(libraryClassesOf({}).length).toBeGreaterThan(0);
+  expect(libraryClassesOf({ unstyled: true })).toEqual([]);
+});
 
 test("the contract skill has a row for each component that names its root tag and boolean attribute as fixtures does", () => {
   const rows = readFileSync(join(repositoryRoot, contractSkill), "utf8")

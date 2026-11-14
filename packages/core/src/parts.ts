@@ -2,8 +2,8 @@ import * as stylex from "@stylexjs/stylex";
 import { createMemo, merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
 import { stableClass } from "./stable-class";
-import { displayPropNames, stylePropKeys } from "./style-prop-table";
-import { resolveStyleProps, type StyleProps, withConsumerStyle } from "./style-props";
+import { stylePropKeys } from "./style-prop-table";
+import { presentStyle, resolveStyleProps, type StyleProps, withConsumerStyle } from "./style-props";
 
 export { stableClass };
 
@@ -22,7 +22,7 @@ const stylesApiProps = { classes: true, styles: true, unstyled: true } satisfies
   true
 >;
 
-function isStylesApiPropKey(name: string): name is StylesApiPropKey {
+function isStylesApiPropKey(name: PropertyKey): name is StylesApiPropKey {
   return Object.hasOwn(stylesApiProps, name);
 }
 
@@ -77,10 +77,6 @@ type RootProps<Props, KeptOffRoot extends keyof Props> = Omit<Props, HandledKey 
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
-function isDisplayPropName(key: PropertyKey): boolean {
-  return displayPropNames.some((name) => name === key);
-}
-
 export function createParts<
   Styles extends Compiled,
   Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
@@ -95,27 +91,25 @@ export function createParts<
   part: (name: OtherPart<Styles>) => Part;
 } {
   const rest = omit(props, ...keptOffRoot);
+  const resolved = createMemo(() => resolveStyleProps(rest));
   const wrapsAComponent = () => typeof props.component === "function";
-  const resolvedHere = omit(rest, isDisplayPropName);
-  const forwarded = omit(rest, (key) => !isDisplayPropName(key));
-  const resolved = createMemo(() => resolveStyleProps(wrapsAComponent() ? resolvedHere : rest));
+  const stylesApi = omit(rest, (key) => !isStylesApiPropKey(key));
   const partClass = (name: keyof Styles & string): JSX.ClassValue => [
     props.unstyled ? undefined : stylex.attrs(compiled[name]).class,
     stableClass(component, name),
     props.classes?.[name],
   ];
+  const ownStyle = (name: keyof Styles & string): JSX.CSSProperties =>
+    presentStyle(props.styles?.[name]);
   const root = merge(
     omit<Record<string, unknown>, typeof handledKeys>(rest, ...handledKeys),
-    () => (wrapsAComponent() ? forwarded : {}),
+    () => (wrapsAComponent() ? stylesApi : {}),
     {
       get class() {
         return [partClass(rootPart), resolved().classes, props.class];
       },
       get style() {
-        return withConsumerStyle(
-          { ...resolved().properties, ...props.styles?.[rootPart] },
-          props.style,
-        );
+        return withConsumerStyle({ ...resolved().properties, ...ownStyle(rootPart) }, props.style);
       },
     },
   ) as RootProps<Props, KeptOffRoot>;
@@ -124,7 +118,7 @@ export function createParts<
       return partClass(name);
     },
     get style() {
-      return props.styles?.[name];
+      return withConsumerStyle(ownStyle(name));
     },
   });
   return { root, part };

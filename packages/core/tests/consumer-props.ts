@@ -16,6 +16,7 @@ export type StylePropCase = {
   visibility: Partial<Record<VisibilityPropName, Breakpoint | null>>;
   classTokens: ClassToken[];
   consumerStyle: ConsumerStyle;
+  stylesRoot: DrawnDeclaration[];
   unstyled: boolean;
 };
 
@@ -77,6 +78,7 @@ export function stylePropPropsOf(generated: StylePropCase): ConsumerProps {
     ...generated.visibility,
     class: classValueFrom(generated.classTokens),
     ...styleWritten(generated.consumerStyle),
+    styles: { root: Object.fromEntries(generated.stylesRoot) },
     unstyled: generated.unstyled,
   };
 }

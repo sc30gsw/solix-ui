@@ -5,15 +5,11 @@ import {
   baseKey,
   breakpoints,
   canonicalOf,
-  type DisplayPropName,
-  displayPropNames,
   responsiveKeys,
   stylePropClass,
   type StylePropName,
   stylePropNames,
   stylePropTable,
-  visibilityClass,
-  visibilityPropNames,
 } from "../src/style-prop-table";
 import {
   classProp,
@@ -29,6 +25,7 @@ import {
 type Drawn = { value: string | number | null; kept: boolean };
 
 const consumerOverride = "7px";
+const stylesOverride = "9px";
 
 const consumerToken = fc
   .stringMatching(/^[a-z][a-z0-9-]{0,8}$/)
@@ -190,18 +187,41 @@ export const stylePropCases: fc.Arbitrary<StylePropCase> = fc
   })
   .chain((generated) =>
     fc
-      .subarray(
-        generated.styleProps.map(([name]): Declaration => [
-          `--${stylePropClassName(name)}`,
-          consumerOverride,
-        ]),
-      )
-      .map((overrides) => ({
+      .record({
+        overrides: fc.subarray(
+          generated.styleProps.map(([name]): Declaration => [
+            `--${stylePropClassName(name)}`,
+            consumerOverride,
+          ]),
+        ),
+        stylesRoot: fc
+          .tuple(
+            consumerDeclarations(true),
+            fc
+              .subarray(
+                generated.styleProps.map(
+                  ([name]) => `--${stylePropClass(canonicalOf(name), baseKey)}`,
+                ),
+              )
+              .chain((properties) =>
+                fc.tuple(
+                  ...properties.map((property) =>
+                    fc
+                      .constantFrom(stylesOverride, undefined, null)
+                      .map((written): DrawnDeclaration => [property, written]),
+                  ),
+                ),
+              ),
+          )
+          .map(([declarations, overrides]) => [...declarations, ...overrides]),
+      })
+      .map(({ overrides, stylesRoot }) => ({
         ...generated,
         consumerStyle: generated.consumerStyle && {
           ...generated.consumerStyle,
           declarations: [...generated.consumerStyle.declarations, ...overrides],
         },
+        stylesRoot,
       })),
   );
 
@@ -209,28 +229,3 @@ export const elementsToRender = fc.option(
   fc.constantFrom("div", "section", "article", "span", "a"),
   { nil: undefined },
 );
-
-const displayValue = fc.constantFrom("flex", "grid", "block", "none");
-
-function drawnDisplayProp(name: DisplayPropName): fc.Arbitrary<[DisplayPropName, string, string]> {
-  const visibility = visibilityPropNames.find((found) => found === name);
-  if (visibility !== undefined) {
-    return fc
-      .constantFrom(...breakpoints)
-      .map((breakpoint) => [name, breakpoint, visibilityClass(visibility, breakpoint)]);
-  }
-  const styleProp = stylePropNames.find((found) => found === name) ?? "display";
-  return displayValue.map((value) => [
-    name,
-    value,
-    stylePropClass(canonicalOf(styleProp), baseKey),
-  ]);
-}
-
-export const displayPropCases = fc
-  .subarray([...displayPropNames], { minLength: 1 })
-  .chain((names) => fc.tuple(...names.map(drawnDisplayProp)))
-  .map((drawn) => ({
-    given: Object.fromEntries(drawn.map(([name, value]) => [name, value])),
-    classes: drawn.map(([, , className]) => className),
-  }));
