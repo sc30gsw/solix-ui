@@ -9,15 +9,8 @@ const scripts = dirname(fileURLToPath(import.meta.url));
 const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { cwd: scripts, encoding: "utf8" }).trim();
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
-const {
-  diagnosticsSection,
-  evidenceDirectory,
-  evidenceSummary,
-  fullReportFile,
-  reportHeading,
-  scriptsLine,
-  summaryFile,
-} = await repositoryModule("scripts/evidence-summary.mjs");
+const { evidenceDirectory, evidenceReports, fullReportFile, recordingFile, runDirectory, summaryFile } =
+  await repositoryModule("scripts/evidence-summary.mjs");
 const vp = join(root, "node_modules/.bin/vp");
 const output = join(root, evidenceDirectory);
 
@@ -81,35 +74,15 @@ const runs = join(root, ".verify-playground/evidence");
 function recordedRun(engine, journey) {
   const newest = readdirSync(join(runs, engine)).filter((name) => name.startsWith(`${journey}-2`)).sort().at(-1);
   const from = join(runs, engine, newest);
-  const published = `${engine}/${journey}`;
-  const to = join(output, published);
+  const to = join(output, runDirectory(engine, journey));
   mkdirSync(to, { recursive: true });
   const record = JSON.parse(readFileSync(join(from, "observations.json"), "utf8"));
   for (const { image } of record.steps) copyFileSync(join(from, image), join(to, image));
   execFileSync("ffmpeg", [
     "-y", "-loglevel", "error", "-i", join(from, "recording.webm"),
-    "-vf", "fps=6,scale=640:-1:flags=lanczos", join(to, "recording.gif"),
+    "-vf", "fps=6,scale=640:-1:flags=lanczos", join(to, recordingFile),
   ]);
-  return { ...record, published, recording: `${published}/recording.gif` };
-}
-
-function runSection(engine, title, { browserVersion, published, recording, steps, observations }) {
-  const numberedSteps = steps.map(
-    ({ description, image }, index) => `${index + 1}. ${description}\n\n   ![Screenshot of step ${index + 1}](${published}/${image})`,
-  );
-  const rows = observations.map(
-    ({ what, expected, actual, pass }) =>
-      `| ${what} | \`${JSON.stringify(expected)}\` | \`${JSON.stringify(actual)}\` | ${pass ? "pass" : "FAIL"} |`,
-  );
-  return [
-    `### ${engine} ${browserVersion}`,
-    "Recording of the whole journey:",
-    `![Recording of ${title} in ${engine}](${recording})`,
-    "Steps:",
-    numberedSteps.join("\n\n"),
-    "Observed:",
-    ["| What | Expected | Observed | Result |", "| --- | --- | --- | --- |", ...rows].join("\n"),
-  ].join("\n\n");
+  return record;
 }
 
 const recordedJourneys = journeys.map(([journey, title]) => ({
@@ -117,13 +90,6 @@ const recordedJourneys = journeys.map(([journey, title]) => ({
   title,
   runs: Object.fromEntries(drivenEngines.map((engine) => [engine, recordedRun(engine, journey)])),
 }));
-const sections = recordedJourneys.map(({ journey, title, runs }) =>
-  [
-    `## ${title}`,
-    `Journey \`${journey}\`.`,
-    ...drivenEngines.map((engine) => runSection(engine, title, runs[engine])),
-  ].join("\n\n"),
-);
 const browserVersions = new Map(
   drivenEngines.map((engine) => [engine, recordedJourneys[0].runs[engine].browserVersion]),
 );
@@ -135,38 +101,24 @@ const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root
 const uncommitted = execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim();
 const recordedFrom = uncommitted === "" ? `\`${commit}\`` : `\`${commit}\` with uncommitted changes`;
 
-const upstreamExceptions = JSON.parse(
-  readFileSync(join(root, "apps/playground/tests/upstream-diagnostic-exceptions.json"), "utf8"),
-);
-
 const app = "apps/playground";
 const lib = "packages/core";
-const facts = [
-  ["Recorded", `${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`],
-  ["Source", recordedFrom],
-  ["Solid", `solid-js ${installedVersion(app, "solid-js")}, @solidjs/web ${installedVersion(app, "@solidjs/web")}`],
-  ["StyleX", `@stylexjs/stylex ${installedVersion(lib, "@stylexjs/stylex")}`],
-  ["Vite+", `vite-plus ${installedVersion(".", "vite-plus")}`],
-  ["Browser engines", browserEngines],
-  ["Checks", `\`vp check\`, \`solid2-kit check\` and \`vp test\` passed (${testSummary})`],
-];
-const fullReport = [
-  ...reportHeading(facts),
-  "## How this was verified",
-  [
-    "1. `vp check --deny-warnings`, `vp run lint:solid` and `vp test` ran and passed. The tests include the app on Solid's development build, generated style definitions, generated consumer props for each component, and generated modal sequences of presses, keys and typing.",
-    "2. `launch.sh` built the library and the app in production mode and started the built server.",
-    "3. `doctor.sh` confirmed the running instance came from this checkout and this build.",
-    "4. `drive.mjs` drove each journey below in each installed browser engine, as a user would, and recorded it.",
-    "5. `cleanup.sh` stopped the server.",
-  ].join("\n"),
-  scriptsLine,
-  ...diagnosticsSection(upstreamExceptions),
-  ...sections,
-];
-writeFileSync(join(output, fullReportFile), `${fullReport.join("\n\n")}\n`);
-writeFileSync(
-  join(output, summaryFile),
-  evidenceSummary({ facts, engines: drivenEngines, journeys: recordedJourneys, upstreamExceptions }),
-);
+const { fullReport, summary } = evidenceReports({
+  facts: [
+    ["Recorded", `${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`],
+    ["Source", recordedFrom],
+    ["Solid", `solid-js ${installedVersion(app, "solid-js")}, @solidjs/web ${installedVersion(app, "@solidjs/web")}`],
+    ["StyleX", `@stylexjs/stylex ${installedVersion(lib, "@stylexjs/stylex")}`],
+    ["Vite+", `vite-plus ${installedVersion(".", "vite-plus")}`],
+    ["Browser engines", browserEngines],
+    ["Checks", `\`vp check\`, \`solid2-kit check\` and \`vp test\` passed (${testSummary})`],
+  ],
+  engines: drivenEngines,
+  journeys: recordedJourneys,
+  upstreamExceptions: JSON.parse(
+    readFileSync(join(root, "apps/playground/tests/upstream-diagnostic-exceptions.json"), "utf8"),
+  ),
+});
+writeFileSync(join(output, fullReportFile), fullReport);
+writeFileSync(join(output, summaryFile), summary);
 console.log(`evidence recorded in ${output}: ${fullReportFile} in full, ${summaryFile} for the pull request comment`);

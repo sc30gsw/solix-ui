@@ -18,9 +18,11 @@ vp run evidence
 This one command runs the checks, then Launch, Doctor, every journey in the feature map on every installed browser engine, and Cleanup. It writes two reports to `docs/verification`, and both name any engine that was not installed:
 
 - `README.md`, the full report, with the steps, screenshots, a recording of each journey and the observed values.
-- `SUMMARY.md`, with the same header and the steps condensed, one table row per journey and one column per engine, and the Solid diagnostics line. Each cell counts the observations that passed, or names those that failed, and links to that journey's recording. `scripts/evidence-summary.mjs` builds it.
+- `SUMMARY.md`, with the same header and the steps condensed, one table row per journey and one column per engine, and the Solid diagnostics line. Each row links once, to that journey's section of `README.md`, by the anchor GitHub gives its heading. Each cell counts the observations that passed in that engine, or names those that failed.
 
-`docs/verification` is ignored by git. Never commit it. On a pull request the CI `evidence` job runs the same command on all three engines, stores the result in a commit outside every branch under `refs/evidence/pull-<number>`, and posts `SUMMARY.md` as a comment, with its recording links and a link to the full `README.md` pointing into that commit. A pull request comment holds at most 65,536 characters, so the comment carries no step, screenshot or observed value, and `tests/evidence-summary.test.ts` keeps it under that limit for 100 journeys on every engine. Pushing the change is all it takes.
+`scripts/evidence-summary.mjs` builds both reports.
+
+`docs/verification` is ignored by git. Never commit it. On a pull request the CI `evidence` job runs the same command on all three engines, stores the result in a commit outside every branch under `refs/evidence/pull-<number>`, and posts `SUMMARY.md` as a comment, with its links pointing into `README.md` at that commit. A pull request comment holds at most 65,536 characters, so the comment carries no step, screenshot, recording or observed value, and `tests/evidence-summary.test.ts` keeps it under that limit for 200 journeys on every engine. Pushing the change is all it takes.
 
 The sections below are the same steps run one at a time, for driving a single journey or investigating a failure.
 
