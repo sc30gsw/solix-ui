@@ -166,8 +166,9 @@ test("the held-back list names only pins of this repository, each with a reason 
   expect(heldBack.filter(({ reason, lift }) => !reason?.trim() || !lift?.trim())).toEqual([]);
 });
 
-test(`${workspaceFile} sets minimumReleaseAge, so pnpm and the newest-release check read one release age`, () => {
-  expect(readFileSync(join(repositoryRoot, workspaceFile), "utf8")).toMatch(
-    /^minimumReleaseAge: \d+$/m,
-  );
+test(`${workspaceFile} sets minimumReleaseAge, so pnpm and the newest-release check read one release age, and makes pnpm refuse a younger release rather than exempt it`, () => {
+  const workspace = readFileSync(join(repositoryRoot, workspaceFile), "utf8");
+
+  expect(workspace).toMatch(/^minimumReleaseAge: \d+$/m);
+  expect(workspace).toMatch(/^minimumReleaseAgeStrict: true$/m);
 });

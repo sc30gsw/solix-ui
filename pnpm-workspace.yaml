@@ -3,6 +3,7 @@ packages:
   - apps/*
 catalogMode: strict
 minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
 catalog:
   "@babel/core": ^8.1.2
   "@babel/plugin-syntax-jsx": ^8.0.1
