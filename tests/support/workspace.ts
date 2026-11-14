@@ -9,6 +9,8 @@ const peerDependencyThatMarksALibrary = "solid-js";
 export type Manifest = {
   name?: string;
   license?: string;
+  engines?: Record<string, string>;
+  devEngines?: Record<string, unknown>;
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;

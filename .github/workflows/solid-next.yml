@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
-          node-version: "22"
+          node-version-file: package.json
           cache: true
           run-install: false
       - run: node scripts/use-newest-solid.mjs

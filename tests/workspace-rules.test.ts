@@ -1,5 +1,5 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import semver from "semver";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
@@ -34,6 +34,13 @@ const workspaceFile = "pnpm-workspace.yaml";
 const catalogBlock = /^catalog:\n((?:[ \t]+.*\n?)+)/m;
 const catalogEntry = /^\s+("?)([^":\s]+)\1:\s*"?([^"\s]+)"?\s*$/;
 
+const nodeVersionHome = "package.json";
+const nodeVersionFilesThatCompete = [".node-version", ".nvmrc"];
+const workflowFiles = globSync(".github/workflows/*.yml", { cwd: repositoryRoot });
+const setupVpStep = /^( *)- uses: voidzero-dev\/setup-vp@\S+\n((?:\1 {2,}\S.*\n?)*)/gm;
+const nodeVersionInput = /^\s*node-version:\s*(.*?)\s*$/gm;
+const nodeVersionFileInput = /^\s*node-version-file:\s*(\S+)\s*$/m;
+
 function catalogVersions(): Record<string, string> {
   const block = catalogBlock.exec(readFileSync(join(repositoryRoot, workspaceFile), "utf8"))?.[1];
   const entries = (block ?? "")
@@ -47,6 +54,10 @@ function catalogVersions(): Record<string, string> {
 
 function installedDependencies(manifest: Manifest): [string, string][] {
   return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });
+}
+
+function lowestMajorOf(range: string): number | undefined {
+  return semver.validRange(range) === null ? undefined : semver.minVersion(range)?.major;
 }
 
 test("the workspace has packages to check", () => {
@@ -210,4 +221,61 @@ test("the project is MIT-licensed in its licence text, its root manifest and eve
     `${projectLicence} License`,
   );
   expect(violations).toEqual([]);
+});
+
+test("every workflow runs the Node that engines.node in package.json names, and names none of its own", () => {
+  const nodeRange = rootManifest.engines?.node ?? "";
+  const readFromHome = `Set \`node-version-file: ${nodeVersionHome}\`, so CI runs the Node that engines.node in ${nodeVersionHome} names (${nodeRange}).`;
+  const workflows = workflowFiles.map((file) => ({
+    file,
+    text: readFileSync(join(repositoryRoot, file), "utf8"),
+  }));
+  const ownVersions = workflows.flatMap(({ file, text }) =>
+    [...text.matchAll(nodeVersionInput)].map(
+      ([, version]) => `${file}: remove \`node-version: ${version}\`. ${readFromHome}`,
+    ),
+  );
+  const setupSteps = workflows.flatMap(({ file, text }) =>
+    [...text.matchAll(setupVpStep)].map(([, , inputs]) => ({
+      file,
+      source: nodeVersionFileInput.exec(inputs)?.[1],
+    })),
+  );
+  const otherSources = setupSteps
+    .filter(({ source }) => source !== nodeVersionHome)
+    .map(
+      ({ file, source }) =>
+        `${file}: a setup-vp step reads Node from ${source ?? "no file"}. ${readFromHome}`,
+    );
+
+  expect(
+    lowestMajorOf(nodeRange),
+    `${nodeVersionHome}: set "engines.node" to the Node range the project runs on`,
+  ).toBeDefined();
+  expect(setupSteps.length).toBeGreaterThan(0);
+  expect([...ownVersions, ...otherSources]).toEqual([]);
+});
+
+test("the Node version is written once, in engines.node in package.json, and @types/node shares its major", () => {
+  const nodeRange = rootManifest.engines?.node ?? "";
+  const nodeMajor = lowestMajorOf(nodeRange);
+  const typesRange = catalogVersions()["@types/node"] ?? "";
+  const writtenAgain = packages.flatMap(({ path, directory, manifest }) => [
+    ...nodeVersionFilesThatCompete
+      .filter((file) => existsSync(join(directory, file)))
+      .map((file) => join(dirname(path), file)),
+    ...(manifest.devEngines?.runtime === undefined ? [] : [`${path} devEngines.runtime`]),
+    ...(manifest.engines?.node === undefined || path === nodeVersionHome
+      ? []
+      : [`${path} engines.node`]),
+  ]);
+
+  expect(
+    writtenAgain,
+    `Remove these. The Node version lives only in engines.node in ${nodeVersionHome}, which Vite+, pnpm and CI all read.`,
+  ).toEqual([]);
+  expect(
+    lowestMajorOf(typesRange),
+    `${workspaceFile}: set "@types/node" (now ${typesRange}) to Node ${nodeMajor}, the major that engines.node in ${nodeVersionHome} names (${nodeRange}).`,
+  ).toBe(nodeMajor);
 });
