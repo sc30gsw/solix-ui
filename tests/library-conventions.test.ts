@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
+import { tokensFile, tokenValues } from "../scripts/tokens.mjs";
 import { libraryPackages, packages, repositoryRoot } from "./support/workspace";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
@@ -262,34 +263,23 @@ test("the barrel exports every component once, in alphabetical order, and nothin
 });
 
 test("every public token is named --solix-*, and is used by a component and defined once", () => {
-  for (const { source } of libraries) {
-    const definitions = parse(join(source, "tokens.stylex.ts"));
-    const defined = descendants(definitions)
-      .filter(
-        (node): node is ts.PropertyAssignment =>
-          ts.isPropertyAssignment(node) && ts.isStringLiteral(node.name),
-      )
-      .map((node) => (node.name as ts.StringLiteral).text);
-    const used = components
-      .filter(({ file }) => file.startsWith(source))
-      .flatMap(({ file }) =>
-        [...readFileSync(file, "utf8").matchAll(/tokens\["([^"]+)"\]/g)].map(([, name]) => name),
-      );
+  const defined = Object.keys(tokenValues());
+  const used = components.flatMap(({ file }) =>
+    [...readFileSync(file, "utf8").matchAll(/tokens\["([^"]+)"\]/g)].map(([, name]) => name),
+  );
 
-    expect(
-      defined.filter((name) => !tokenName.test(name)),
-      "token names",
-    ).toEqual([]);
-    expect(new Set(defined).size, "a token is defined twice").toBe(defined.length);
-    expect(
-      defined.filter((name) => !used.includes(name)),
-      "tokens no component uses",
-    ).toEqual([]);
-    expect(
-      used.filter((name) => !defined.includes(name)),
-      "tokens used but not defined",
-    ).toEqual([]);
-  }
+  expect(
+    defined.filter((name) => !tokenName.test(name)),
+    `token names in ${tokensFile}`,
+  ).toEqual([]);
+  expect(
+    defined.filter((name) => !used.includes(name)),
+    `tokens in ${tokensFile} that no component uses`,
+  ).toEqual([]);
+  expect(
+    used.filter((name) => !defined.includes(name)),
+    `tokens used but not defined in ${tokensFile}`,
+  ).toEqual([]);
 });
 
 test("every component is rendered by the app, has a feature file, and is listed in the contract skill", () => {

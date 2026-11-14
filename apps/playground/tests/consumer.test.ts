@@ -13,6 +13,8 @@ import {
   vi,
 } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
+import { playgroundValue } from "../../../scripts/playground-styles.mjs";
+import { computedValues, tokenValues } from "../../../scripts/tokens.mjs";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
 import { builtComponents } from "../../../packages/core/tests/built-components";
 
@@ -20,14 +22,10 @@ const appDirectory = join(import.meta.dirname, "..");
 const port = 4319;
 const url = `http://127.0.0.1:${port}/`;
 
-const libraryPrimary = "rgb(34, 139, 230)";
-const librarySurface = "rgb(233, 236, 239)";
-const libraryBorder = "rgb(206, 212, 218)";
-const libraryError = "rgb(224, 49, 49)";
-const white = "rgb(255, 255, 255)";
-const black = "rgb(0, 0, 0)";
-const consumerDanger = "rgb(250, 82, 82)";
-const consumerBrandGreen = "rgb(47, 158, 68)";
+const consumerValues = {
+  danger: playgroundValue(".danger", "background-color"),
+  brandGreen: playgroundValue(".brand-green", "--solix-color-primary"),
+};
 
 let server: ChildProcess;
 
@@ -97,9 +95,16 @@ describe("a consumer with no StyleX build setup", () => {
 
 describe.each(enginesToVerify())("in %s", (engine) => {
   let browser: Browser;
+  let token: Record<string, string>;
+  let consumer: Record<keyof typeof consumerValues, string>;
 
   beforeAll(async () => {
     browser = await browserType(engine).launch();
+    const page = await browser.newPage();
+    await page.goto(url);
+    token = await computedValues(page, tokenValues());
+    consumer = await computedValues(page, consumerValues);
+    await page.close();
   });
 
   afterAll(async () => {
@@ -111,7 +116,9 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     const page = await scriptless.newPage();
     await page.goto(url);
 
-    expect(await computed(page.getByTestId("default"), "background-color")).toBe(libraryPrimary);
+    expect(await computed(page.getByTestId("default"), "background-color")).toBe(
+      token["--solix-color-primary"],
+    );
 
     await scriptless.close();
   });
@@ -136,35 +143,47 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     });
 
     test("a consumer's plain class beats the library default it targets, and nothing else", async () => {
-      expect(await computed(page.getByTestId("default"), "background-color")).toBe(libraryPrimary);
-      expect(await computed(page.getByTestId("overridden"), "background-color")).toBe(
-        consumerDanger,
+      expect(await computed(page.getByTestId("default"), "background-color")).toBe(
+        token["--solix-color-primary"],
       );
-      expect(await computed(page.getByTestId("overridden"), "height")).toBe("36px");
+      expect(await computed(page.getByTestId("overridden"), "background-color")).toBe(
+        consumer.danger,
+      );
+      expect(await computed(page.getByTestId("overridden"), "color")).toBe(
+        token["--solix-color-on-primary"],
+      );
+      expect(await computed(page.getByTestId("overridden"), "height")).toBe(
+        token["--solix-control-height-md"],
+      );
+      expect(await computed(page.getByTestId("overridden"), "border-top-left-radius")).toBe(
+        token["--solix-radius-md"],
+      );
     });
 
     test("a class and an attribute that change after the first render reach each component's root", async () => {
       const emphasise = page.getByRole("button", { name: "Emphasise" });
       const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
-      expect(await computed(emphasise, "background-color")).toBe(libraryPrimary);
+      expect(await computed(emphasise, "background-color")).toBe(token["--solix-color-primary"]);
       expect(await emphasise.getAttribute("aria-pressed")).toBe("false");
       expect(await computed(follower, "outline-style")).toBe("none");
 
       await emphasise.click();
 
-      await expect.poll(() => computed(emphasise, "background-color")).toBe(consumerDanger);
+      await expect.poll(() => computed(emphasise, "background-color")).toBe(consumer.danger);
       expect(await emphasise.getAttribute("aria-pressed")).toBe("true");
       expect(await computed(follower, "outline-style")).toBe("solid");
 
       await emphasise.click();
 
-      await expect.poll(() => computed(emphasise, "background-color")).toBe(libraryPrimary);
+      await expect
+        .poll(() => computed(emphasise, "background-color"))
+        .toBe(token["--solix-color-primary"]);
       expect(await computed(follower, "outline-style")).toBe("none");
     });
 
     test("a consumer rethemes a subtree by overriding a public token", async () => {
       expect(await computed(page.getByTestId("themed"), "background-color")).toBe(
-        consumerBrandGreen,
+        consumer.brandGreen,
       );
     });
   });
@@ -183,16 +202,16 @@ describe.each(enginesToVerify())("in %s", (engine) => {
 
     async function expectClosed(): Promise<void> {
       await expect.poll(detailsIsOpen).toBe(false);
-      expect(await computed(summary, "background-color")).toBe(librarySurface);
+      expect(await computed(summary, "background-color")).toBe(token["--solix-color-surface"]);
       expect(await content.isVisible()).toBe(false);
     }
 
     async function expectOpen(): Promise<void> {
       await expect.poll(detailsIsOpen).toBe(true);
-      expect(await computed(summary, "background-color")).toBe(libraryPrimary);
-      expect(await computed(summary, "color")).toBe(white);
+      expect(await computed(summary, "background-color")).toBe(token["--solix-color-primary"]);
+      expect(await computed(summary, "color")).toBe(token["--solix-color-on-primary"]);
       expect(await content.isVisible()).toBe(true);
-      expect(await computed(content, "border-left-color")).toBe(libraryPrimary);
+      expect(await computed(content, "border-left-color")).toBe(token["--solix-color-primary"]);
     }
 
     beforeEach(async () => {
@@ -232,12 +251,14 @@ describe.each(enginesToVerify())("in %s", (engine) => {
 
       await summary.click();
       await expectOpen();
-      expect(await computed(innerSummary, "background-color")).toBe(librarySurface);
-      expect(await computed(innerSummary, "color")).toBe(black);
+      expect(await computed(innerSummary, "background-color")).toBe(token["--solix-color-surface"]);
+      expect(await computed(innerSummary, "color")).toBe(token["--solix-color-text"]);
 
       await innerSummary.click();
-      await expect.poll(() => computed(innerSummary, "background-color")).toBe(libraryPrimary);
-      expect(await computed(summary, "background-color")).toBe(libraryPrimary);
+      await expect
+        .poll(() => computed(innerSummary, "background-color"))
+        .toBe(token["--solix-color-primary"]);
+      expect(await computed(summary, "background-color")).toBe(token["--solix-color-primary"]);
     });
   });
 
@@ -250,7 +271,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     await summary.click();
 
     await expect.poll(() => page.getByText("Hidden content").isVisible()).toBe(true);
-    expect(await computed(summary, "background-color")).toBe(libraryPrimary);
+    expect(await computed(summary, "background-color")).toBe(token["--solix-color-primary"]);
 
     await scriptless.close();
   });
@@ -272,29 +293,38 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     test("has the library's border, and a consumer's plain class beats its background", async () => {
       const overridden = page.getByRole("textbox", { name: "Overridden input" });
 
-      expect(await computed(email, "border-top-color")).toBe(libraryBorder);
-      expect(await computed(email, "background-color")).toBe(white);
-      expect(await computed(overridden, "background-color")).toBe(consumerDanger);
-      expect(await computed(overridden, "height")).toBe("36px");
+      expect(await computed(email, "border-top-color")).toBe(token["--solix-color-border"]);
+      expect(await computed(email, "background-color")).toBe(token["--solix-color-body"]);
+      expect(await computed(email, "color")).toBe(token["--solix-color-text"]);
+      expect(await computed(overridden, "background-color")).toBe(consumer.danger);
+      expect(await computed(overridden, "height")).toBe(token["--solix-control-height-md"]);
     });
 
     test("shows the error border only after the user has committed an invalid value", async () => {
       await email.fill("not an address");
-      await expect.poll(() => computed(email, "border-top-color")).not.toBe(libraryError);
+      await expect
+        .poll(() => computed(email, "border-top-color"))
+        .not.toBe(token["--solix-color-error"]);
 
       await page.getByRole("button", { name: "Default" }).focus();
-      await expect.poll(() => computed(email, "border-top-color")).toBe(libraryError);
+      await expect
+        .poll(() => computed(email, "border-top-color"))
+        .toBe(token["--solix-color-error"]);
 
       await email.fill("someone@example.com");
       await page.getByRole("button", { name: "Default" }).focus();
-      await expect.poll(() => computed(email, "border-top-color")).toBe(libraryBorder);
+      await expect
+        .poll(() => computed(email, "border-top-color"))
+        .toBe(token["--solix-color-border"]);
     });
 
     test("takes the primary border while it has keyboard focus", async () => {
       await email.focus();
       await page.keyboard.press("ArrowRight");
 
-      await expect.poll(() => computed(email, "border-top-color")).toBe(libraryPrimary);
+      await expect
+        .poll(() => computed(email, "border-top-color"))
+        .toBe(token["--solix-color-primary"]);
     });
 
     test("looks disabled and cannot be typed in when disabled", async () => {
@@ -332,10 +362,12 @@ describe.each(enginesToVerify())("in %s", (engine) => {
       await dialog.waitFor({ state: "visible" });
       expect(await dialog.evaluate((node) => node.matches(":modal"))).toBe(true);
       expect(await dialog.getByRole("heading", { name: "Settings" }).isVisible()).toBe(true);
-      expect(await computed(dialog, "background-color")).toBe(white);
+      expect(await computed(dialog, "background-color")).toBe(token["--solix-color-body"]);
+      expect(await computed(dialog, "color")).toBe(token["--solix-color-text"]);
+      expect(await computed(dialog, "border-top-color")).toBe(token["--solix-color-border"]);
       expect(
         await dialog.evaluate((node) => getComputedStyle(node, "::backdrop").backgroundColor),
-      ).toBe("rgba(0, 0, 0, 0.5)");
+      ).toBe(token["--solix-color-backdrop"]);
       await expect.poll(() => readout.textContent()).toBe("The app records the modal as opened.");
     });
 
@@ -376,7 +408,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
 
     expect(await page.locator("dialog").isVisible()).toBe(false);
     expect(await computed(page.getByRole("textbox", { name: "Email" }), "border-top-color")).toBe(
-      libraryBorder,
+      token["--solix-color-border"],
     );
 
     await scriptless.close();

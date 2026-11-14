@@ -14,12 +14,13 @@ const styles = stylex.create({
     borderRadius: tokens["--solix-radius-md"],
     borderStyle: "solid",
     borderWidth: "1px",
+    color: tokens["--solix-color-text"],
     cursor: {
       default: "text",
       ":disabled": "not-allowed",
     },
     fontSize: "0.875rem",
-    height: "2.25rem",
+    height: tokens["--solix-control-height-md"],
     opacity: {
       default: 1,
       ":disabled": 0.6,

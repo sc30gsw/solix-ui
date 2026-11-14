@@ -22,7 +22,7 @@ Preconditions:
 - `doctor.sh` exits 0.
 
 - **Closed.** Open the page. Run `.agents/skills/verify-playground/scripts/drive.mjs modal`. The observation `closed: the dialog is visible` (`false`) passes.
-- **Open.** Press `Open modal`. The same run observes `open: the dialog is modal` (`true`), `open: dialog background` (`rgb(255, 255, 255)`), `open: backdrop colour` (`rgba(0, 0, 0, 0.5)`) and `open: the app records` (`The app records the modal as opened.`).
+- **Open.** Press `Open modal`. The same run observes `open: the dialog is modal` (`true`), `open: dialog background` (the body token), `open: backdrop colour` (the backdrop token) and `open: the app records` (`The app records the modal as opened.`).
 - **Inside.** Press `Modal content`. The same run observes `press inside: the dialog is visible` (`true`).
 - **Escape.** Press Escape. The same run observes `Escape: the dialog is visible` (`false`) and `Escape: the app records` (`The app records the modal as closed.`).
 - **Close button.** Open it again and press `Close`. The same run observes `Close button: the dialog is visible` (`false`) and `Close button: the app records` (`The app records the modal as closed.`).

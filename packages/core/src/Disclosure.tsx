@@ -11,8 +11,8 @@ const styles = stylex.create({
       "[open]": tokens["--solix-color-primary"],
     },
     [disclosureState.summaryColor]: {
-      default: "black",
-      "[open]": "white",
+      default: tokens["--solix-color-text"],
+      "[open]": tokens["--solix-color-on-primary"],
     },
   },
   summary: {

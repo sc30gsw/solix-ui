@@ -18,9 +18,9 @@ Preconditions:
 
 - `doctor.sh` exits 0.
 
-- **Before.** Open the page. Run `.agents/skills/verify-playground/scripts/drive.mjs changing-props`. The observations `before: Emphasise background` (`rgb(34, 139, 230)`), `before: Emphasise aria-pressed` (`false`) and `before: Follows outline` (`none`) pass.
-- **Change.** Click `Emphasise`. The same run observes `after a click: Emphasise background comes from the class the app now passes` (`rgb(250, 82, 82)`), `after a click: Emphasise aria-pressed` (`true`) and `after a click: Follows outline comes from the class the app now passes` (`solid`).
-- **Change back.** Click `Emphasise` again. The same run observes `after a second click: Emphasise background` (`rgb(34, 139, 230)`) and `after a second click: Follows outline` (`none`).
+- **Before.** Open the page. Run `.agents/skills/verify-playground/scripts/drive.mjs changing-props`. The observations `before: Emphasise background` (the primary token), `before: Emphasise aria-pressed` (`false`) and `before: Follows outline` (`none`) pass.
+- **Change.** Click `Emphasise`. The same run observes `after a click: Emphasise background comes from the class the app now passes` (the `.danger` background in `apps/playground/src/app.css`), `after a click: Emphasise aria-pressed` (`true`) and `after a click: Follows outline comes from the class the app now passes` (`solid`).
+- **Change back.** Click `Emphasise` again. The same run observes `after a second click: Emphasise background` (the primary token) and `after a second click: Follows outline` (`none`).
 - **Proof.** The evidence directory holds `01-before.png`, `02-after-click.png`, `03-after-second-click.png`, `recording.webm` and `observations.json`.
 
 ## Gotchas

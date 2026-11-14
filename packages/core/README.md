@@ -16,7 +16,7 @@ vp run -r build
 
 `build.mjs` runs Babel with the StyleX plugin through `build-pipeline.mjs` and writes `dist/*.jsx` (StyleX compiled away, JSX kept) and `dist/styles.css` (every rule inside `@layer solix`). A consumer imports the components from `@solix/core` and the stylesheet from `@solix/core/styles.css`.
 
-`vp test` builds the library and the playground in `apps/playground` in production mode before it runs any test. `tests/build-output.test.ts` checks what the library build writes, `tests/stylesheet-properties.test.ts` checks the build pipeline on generated style definitions, and `tests/component-contract.test.tsx` checks the root contract of every exported component. What a consumer sees in a browser is checked in `apps/playground/tests`.
+`vp test` builds the library and the playground in `apps/playground` in production mode before it runs any test. `tests/build-output.test.ts` checks what the library build writes, `tests/stylesheet-properties.test.ts` checks the build pipeline on generated style definitions, `tests/component-contract.test.tsx` checks the root contract of every exported component, and `tests/token-contrast.test.ts` checks that every colour token is written in OKLCH, lies inside sRGB and meets the contrast its pairing needs. What a consumer sees in a browser is checked in `apps/playground/tests`.
 
 ## How it is built
 
