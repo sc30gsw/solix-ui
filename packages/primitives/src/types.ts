@@ -7,6 +7,16 @@ import type { Accessor } from "solid-js";
  */
 export type MaybeAccessor<T> = T | Accessor<T>;
 
+declare const browserValue: unique symbol;
+
+/**
+ * An accessor of a value only the browser knows, such as whether a media query matches or the size
+ * of an element. On the server, and while the page hydrates, it reads its loading value, so the
+ * markup the server sent and the hydrated page agree. It reads the browser's value from the first
+ * flush after hydration, and at once on a page that the browser renders alone.
+ */
+export type BrowserValue<T> = Accessor<T> & { readonly [browserValue]?: T };
+
 /**
  * An argument read once, untracked, when the primitive is created. Its name starts with `initial`,
  * `default` or `final`. It takes the value itself or an accessor, so `() => props.defaultValue`

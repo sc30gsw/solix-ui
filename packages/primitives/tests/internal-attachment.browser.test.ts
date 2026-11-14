@@ -1,28 +1,33 @@
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { createAttachment, createElementAttachment } from "../src/internal-attachment";
+import {
+  createAttachment,
+  createElementAttachment,
+  createElementValue,
+  createTargetListener,
+  createWindowHandler,
+} from "../src/internal-attachment";
+import { listenerSettings } from "../src/internal-listener";
 import { flush, mount, unmount } from "./support/browser-harness";
 import { box } from "./support/dom";
 
-test("createAttachment attaches a defined config, detaches when it turns undefined or changes, keeps one that is the same, and detaches on dispose", () => {
+const ping = "solix-ping";
+
+test("createAttachment attaches a defined config, keeps one equal by value, detaches when it turns undefined or changes, and detaches on dispose", () => {
   const seen: string[] = [];
-  const [config, setConfig] = createSignal<string | undefined>("a");
+  const [config, setConfig] = createSignal<{ name: string } | undefined>({ name: "a" });
   mount(() =>
-    createAttachment(
-      config,
-      (current) => {
-        seen.push(`attach ${current}`);
-        return () => seen.push(`detach ${current}`);
-      },
-      (left, right) => left.toLowerCase() === right.toLowerCase(),
-    ),
+    createAttachment(config, (current) => {
+      seen.push(`attach ${current.name}`);
+      return () => seen.push(`detach ${current.name}`);
+    }),
   );
 
-  setConfig("A");
+  setConfig({ name: "a" });
   flush();
   setConfig(undefined);
   flush();
-  setConfig("b");
+  setConfig({ name: "b" });
   flush();
   unmount();
   expect(seen).toEqual(["attach a", "detach a", "attach b", "detach b"]);
@@ -48,4 +53,49 @@ test("createElementAttachment hands the config the element its ref received, and
   ref(box("second"));
   flush();
   expect(seen).toEqual(["attach first", "detach first"]);
+});
+
+test("createElementValue starts at its initial value, takes what the attachment delivers, and goes back to it when an attachment ends", () => {
+  const first = box("first");
+  const second = box("second");
+  const [ref, label] = mount(() =>
+    createElementValue<HTMLElement, string, string>(
+      "none",
+      (element, suffix, deliver) => {
+        deliver(`${element.textContent} ${suffix}`);
+        return () => undefined;
+      },
+      () => "seen",
+    ),
+  );
+  const seen = [label()];
+
+  ref(first);
+  flush();
+  seen.push(label());
+  ref(second);
+  flush();
+  seen.push(label());
+  unmount();
+  seen.push(label());
+  expect(seen).toEqual(["none", "first seen", "second seen", "none"]);
+});
+
+test("createTargetListener resolves its target when it attaches, and createWindowHandler skips an event whose default is prevented", () => {
+  const seen: string[] = [];
+  const target = box("target");
+  mount(() => {
+    createTargetListener(
+      () => target,
+      () => listenerSettings(ping),
+      () => seen.push("target"),
+    );
+    createWindowHandler(ping, () => seen.push("window"));
+  });
+  const prevented = new Event(ping, { bubbles: true, cancelable: true });
+  prevented.preventDefault();
+
+  target.dispatchEvent(new Event(ping, { bubbles: true, cancelable: true }));
+  window.dispatchEvent(prevented);
+  expect(seen).toEqual(["target", "window"]);
 });

@@ -1,5 +1,11 @@
 import { expect, test } from "vite-plus/test";
-import { disposeAll, listen, listenerSettings } from "../src/internal-listener";
+import {
+  disposeAll,
+  handleEvent,
+  listen,
+  listenerSettings,
+  watchEvents,
+} from "../src/internal-listener";
 
 test("listenerSettings reads a boolean as capture and fills every option an object leaves out", () => {
   const signal = new AbortController().signal;
@@ -36,4 +42,28 @@ test("disposeAll returns one function that runs every disposer in order", () => 
   disposeAll([() => seen.push(1), () => seen.push(2)])();
 
   expect(seen).toEqual([1, 2]);
+});
+
+test("watchEvents listens in the capture phase, so a handler on the target that stops the event hides nothing from it", () => {
+  const parent = new EventTarget();
+  const seen: string[] = [];
+  const remove = watchEvents(parent, "ping", (event) => seen.push(event.type), { passive: true });
+
+  parent.dispatchEvent(new Event("ping"));
+  remove();
+  parent.dispatchEvent(new Event("ping"));
+  expect(seen).toEqual(["ping"]);
+});
+
+test("handleEvent skips an event whose default is already prevented", () => {
+  const view = new EventTarget() as unknown as Window;
+  const seen: boolean[] = [];
+  const remove = handleEvent(view, "ping", (event) => seen.push(event.defaultPrevented));
+  const prevented = new Event("ping", { cancelable: true });
+  prevented.preventDefault();
+
+  view.dispatchEvent(new Event("ping", { cancelable: true }));
+  view.dispatchEvent(prevented);
+  remove();
+  expect(seen).toEqual([false]);
 });

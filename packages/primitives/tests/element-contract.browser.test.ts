@@ -2,61 +2,55 @@ import { type Accessor, createSignal } from "solid-js";
 import { describe, expect, test, vi } from "vite-plus/test";
 import * as primitives from "../src/index";
 import { flush, mount, unmount } from "./support/browser-harness";
+import { observers } from "./support/browser-resources";
 import { box, button, nextTask, press } from "./support/dom";
+import type { ElementPrimitive } from "./support/primitive-kinds";
 
-type Library = typeof primitives;
-type ElementPrimitive = {
-  [K in keyof Library]: Library[K] extends (...args: never[]) => (...element: infer A) => void
-    ? A extends [Element]
-      ? K
-      : never
-    : never;
-}[keyof Library];
-
-type Contract = {
-  create: (tick: Accessor<number>) => primitives.RefSetter<HTMLElement>;
+type Contracted = {
+  ref: primitives.RefSetter<HTMLElement>;
   actsOn: (element: HTMLElement) => Promise<boolean>;
+  value?: { read: () => unknown; initial: unknown };
 };
+
+type Contract = (tick: Accessor<number>) => Contracted;
 
 const ping = "solix-ping";
 
 const contracts: { [K in ElementPrimitive]: () => Contract } = {
   createClickOutside: () => {
     const calls: string[] = [];
-    return {
-      create: (tick) =>
-        primitives.createClickOutside(
-          () => calls.push("outside"),
-          null,
-          null,
-          () => tick() >= 0,
-        ),
+    return (tick) => ({
+      ref: primitives.createClickOutside(
+        () => calls.push("outside"),
+        null,
+        null,
+        () => tick() >= 0,
+      ),
       actsOn: async (element) => {
         calls.length = 0;
         await press(element);
         await press(box("elsewhere"));
         return calls.length === 1;
       },
-    };
+    });
   },
   createEventListener: () => {
     const targets: (EventTarget | null)[] = [];
-    return {
-      create: (tick) =>
-        primitives.createEventListener(
-          ping,
-          (event) => targets.push(event.currentTarget),
-          () => ({ passive: tick() >= 0 }),
-        ),
+    return (tick) => ({
+      ref: primitives.createEventListener(
+        ping,
+        (event) => targets.push(event.currentTarget),
+        () => ({ passive: tick() >= 0 }),
+      ),
       actsOn: async (element) => {
         targets.length = 0;
         element.dispatchEvent(new Event(ping));
         return targets.includes(element);
       },
-    };
+    });
   },
-  createFocusTrap: () => ({
-    create: (tick) => primitives.createFocusTrap(() => tick() >= 0),
+  createFocusTrap: () => (tick) => ({
+    ref: primitives.createFocusTrap(() => tick() >= 0),
     actsOn: async (element) => {
       await nextTask();
       const outside = button("outside");
@@ -73,24 +67,47 @@ function element(label: string): HTMLElement {
   return region;
 }
 
-function attachmentsDuring<T>(run: () => T): { result: T; added: number; removed: number } {
-  const added = vi.spyOn(EventTarget.prototype, "addEventListener");
-  const removed = vi.spyOn(EventTarget.prototype, "removeEventListener");
+type Observable = { observe(...target: never[]): void; disconnect(): void };
+
+function observerPrototypes(): Observable[] {
+  return observers.map((name) => {
+    const observer: { prototype: Observable } = Reflect.get(globalThis, name);
+    return observer.prototype;
+  });
+}
+
+function attachmentsDuring<T>(run: () => T): {
+  result: T;
+  added: number;
+  removed: number;
+  types: string[];
+} {
+  const listened = vi.spyOn(EventTarget.prototype, "addEventListener");
+  const added = [
+    listened,
+    ...observerPrototypes().map((prototype) => vi.spyOn(prototype, "observe")),
+  ];
+  const removed = [
+    vi.spyOn(EventTarget.prototype, "removeEventListener"),
+    ...observerPrototypes().map((prototype) => vi.spyOn(prototype, "disconnect")),
+  ];
+  const calls = (spies: { mock: { calls: unknown[] } }[]) =>
+    spies.reduce((total, spy) => total + spy.mock.calls.length, 0);
   try {
     const result = run();
-    return { result, added: added.mock.calls.length, removed: removed.mock.calls.length };
+    const types = listened.mock.calls.map(([type]) => type);
+    return { result, added: calls(added), removed: calls(removed), types };
   } finally {
-    added.mockRestore();
-    removed.mockRestore();
+    for (const spy of [...added, ...removed]) spy.mockRestore();
   }
 }
 
 describe.each(Object.entries(contracts))("%s", (_name, contract) => {
   function mounted() {
-    const { create, actsOn } = contract();
+    const create = contract();
     const [tick, setTick] = createSignal(0);
-    const ref = mount(() => create(tick));
-    return { ref, actsOn, setTick };
+    const contracted = mount(() => create(tick));
+    return { ...contracted, setTick };
   }
 
   test("nothing is attached before the ref receives an element", async () => {
@@ -100,8 +117,8 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
     expect(await result.actsOn(element("first"))).toBe(false);
   });
 
-  test("the attachment moves to each element the ref receives", async () => {
-    const { ref, actsOn } = mounted();
+  test("the attachment moves to each element the ref receives, and right after a move no value describes the old element", async () => {
+    const { ref, actsOn, value } = mounted();
     const first = element("first");
     const second = element("second");
 
@@ -110,7 +127,9 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
     const onFirst = await actsOn(first);
     ref(second);
     flush();
+    const afterTheMove = value?.read();
     expect([onFirst, await actsOn(first), await actsOn(second)]).toEqual([true, false, true]);
+    expect(afterTheMove).toEqual(value?.initial);
   });
 
   test("the attachment is removed when the owner is disposed", async () => {
@@ -149,5 +168,21 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
     });
     expect([added, removed]).toEqual([0, 0]);
     expect(await actsOn(first)).toBe(true);
+  });
+
+  test("a child that stops the propagation of every event type the primitive listens to changes nothing it reads", async () => {
+    const first = element("first");
+    const { result, types } = attachmentsDuring(() => {
+      const contracted = mounted();
+      contracted.ref(first);
+      flush();
+      return contracted;
+    });
+    const child = first.querySelector("button");
+    for (const type of new Set(types)) {
+      child?.addEventListener(type, (event) => event.stopPropagation());
+    }
+
+    expect(await result.actsOn(first)).toBe(true);
   });
 });

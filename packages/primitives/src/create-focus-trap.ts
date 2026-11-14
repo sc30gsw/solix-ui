@@ -2,8 +2,8 @@ import { access } from "./internal-access";
 import { createElementAttachment } from "./internal-attachment";
 import { activeElementOf, containsComposed, deepActiveElement } from "./internal-active";
 import { focusFirst, moveFocus } from "./internal-focus";
-import { disposeAll, listen, listenerSettings } from "./internal-listener";
-import { isHtmlElement, isNode, isShadowRoot } from "./internal-node";
+import { disposeAll, watchEvents } from "./internal-listener";
+import { isHtmlElement, isNode, isShadowRoot, viewOf } from "./internal-node";
 import { initialFocusCandidates, tabStopCandidates } from "./internal-tabbable";
 import type { MaybeAccessor, RefSetter } from "./types";
 
@@ -59,6 +59,7 @@ function focusInitially(container: HTMLElement): void {
 
 function trap(container: HTMLElement): () => void {
   const token = Symbol(activated);
+  const view = viewOf(container) ?? window;
   const newer = new Set<unknown>();
   const frameCheck: { pending: ReturnType<typeof setTimeout> | undefined } = {
     pending: undefined,
@@ -80,20 +81,21 @@ function trap(container: HTMLElement): () => void {
     frameCheck.pending = setTimeout(bringBackFromFrame, 0);
   };
   const removeListeners = disposeAll([
-    listen(container.ownerDocument, listenerSettings(activated), (event) => {
+    watchEvents(container.ownerDocument, activated, (event) => {
       const detail: unknown = Reflect.get(event, "detail");
       if (detail !== token) newer.add(detail);
     }),
-    listen(container.ownerDocument, listenerSettings(released), (event) => {
+    watchEvents(container.ownerDocument, released, (event) => {
       newer.delete(Reflect.get(event, "detail"));
     }),
-    listen(container.ownerDocument, listenerSettings(focusin, true), (event) => {
+    watchEvents(container.ownerDocument, focusin, (event) => {
       if (isNode(event.target)) bringBack(event.target, event.relatedTarget === null);
     }),
-    listen(container, listenerSettings(focusout, true), (event) => {
+    watchEvents(container, focusout, (event) => {
       if (event.relatedTarget === null) bringBackFromFrameOnNextTask();
     }),
-    listen(container.ownerDocument.defaultView ?? window, listenerSettings(blur), () => {
+    watchEvents(view, blur, (event) => {
+      if (event.target !== view) return;
       bringBackFromFrame();
       bringBackFromFrameOnNextTask();
     }),

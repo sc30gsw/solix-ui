@@ -35,6 +35,7 @@ export { createValidatedState, type ValidatedState } from "./create-validated-st
 export { createWindowEvent } from "./create-window-event";
 export { getHotkeyHandler } from "./get-hotkey-handler";
 export type {
+  BrowserValue,
   HotkeyItem,
   HotkeyItemOptions,
   ListenerOptions,

@@ -1,7 +1,6 @@
 import { access } from "./internal-access";
 import { createElementAttachment } from "./internal-attachment";
-import { sameItems } from "./internal-equal";
-import { disposeAll, listen, listenerSettings } from "./internal-listener";
+import { disposeAll, listen, listenerSettings, watchEvents } from "./internal-listener";
 import { isNode } from "./internal-node";
 import type { MaybeAccessor, RefSetter } from "./types";
 
@@ -47,16 +46,6 @@ function isOutside(event: Event, inside: readonly Element[]): boolean {
   return inside.every((node) => !path.includes(node));
 }
 
-function sameListening(left: Listening, right: Listening): boolean {
-  return (
-    left.capture === right.capture &&
-    sameItems(left.inside, right.inside) &&
-    (left.events === null || right.events === null
-      ? left.events === right.events
-      : sameItems(left.events, right.events))
-  );
-}
-
 function pageOf(current: Listening): Document {
   return current.inside[0]?.ownerDocument ?? document;
 }
@@ -81,24 +70,24 @@ function listenToPresses(current: Listening, handler: (event: Event) => void): (
   const started = new Map<number, { target: EventTarget | null; outside: boolean }>();
   const endingOutside = new WeakSet<Event>();
   return disposeAll([
-    listen(view, listenerSettings(press.start, true), (event) => {
+    watchEvents(view, press.start, (event) => {
       started.set(event.pointerId, {
         target: event.target,
         outside: isOutside(event, current.inside),
       });
     }),
     ...current.inside.map((node) =>
-      listen(node, listenerSettings(press.start, true), (event) => {
+      watchEvents(node, press.start, (event) => {
         const start = started.get(event.pointerId);
         if (start) start.outside = false;
       }),
     ),
-    listen(view, listenerSettings(press.end, true), (event) => {
+    watchEvents(view, press.end, (event) => {
       const start = started.get(event.pointerId);
       started.delete(event.pointerId);
       if (start?.outside && isOnPage(start.target)) endingOutside.add(event);
     }),
-    listen(view, listenerSettings(press.cancel, true), (event) => {
+    watchEvents(view, press.cancel, (event) => {
       started.delete(event.pointerId);
     }),
     listen(page, listenerSettings(press.end, current.capture), (event) => {
@@ -166,6 +155,5 @@ export function createClickOutside<K extends PressEventName = "pointerup">(
       current.events === null
         ? listenToPresses(current, call)
         : listenToEvents(current, current.events, call),
-    sameListening,
   );
 }

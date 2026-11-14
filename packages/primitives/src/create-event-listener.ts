@@ -1,6 +1,5 @@
 import { access } from "./internal-access";
 import { createElementAttachment } from "./internal-attachment";
-import { sameKeys } from "./internal-equal";
 import { type EventOf, listen, listenerSettings } from "./internal-listener";
 import type { ListenerOptions, MaybeAccessor, RefSetter } from "./types";
 
@@ -28,6 +27,5 @@ export function createEventListener<K extends string, E extends Element = Elemen
     (element: E | undefined) =>
       element && { target: element, ...listenerSettings(access(type), access(options)) },
     (current) => listen(current.target, current, listener),
-    sameKeys,
   );
 }

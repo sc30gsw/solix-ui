@@ -1,7 +1,6 @@
 import { access } from "./internal-access";
-import { createAttachment } from "./internal-attachment";
-import { sameKeys } from "./internal-equal";
-import { type EventOf, listen, listenerSettings } from "./internal-listener";
+import { createTargetListener } from "./internal-attachment";
+import { type EventOf, listenerSettings } from "./internal-listener";
 import type { ListenerOptions, MaybeAccessor } from "./types";
 
 /**
@@ -20,9 +19,9 @@ export function createWindowEvent<K extends string>(
   listener: (event: EventOf<Window, K>) => void,
   options?: MaybeAccessor<ListenerOptions | undefined>,
 ): void {
-  createAttachment(
+  createTargetListener<Window, K>(
+    () => window,
     () => listenerSettings(access(type), access(options)),
-    (settings) => listen<Window, K>(window, settings, listener),
-    sameKeys,
+    listener,
   );
 }

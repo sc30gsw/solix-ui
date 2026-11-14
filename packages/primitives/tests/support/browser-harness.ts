@@ -261,13 +261,14 @@ export function mountOn<E extends Element>(create: () => RefSetter<E>, element: 
 export function record<T extends EventTarget, K extends string>(
   target: T,
   type: K,
+  capture = false,
 ): EventOf<T, K>[] {
   const seen: EventOf<T, K>[] = [];
   const listener = (event: Event) => {
     seen.push(event as EventOf<T, K>);
   };
-  addListener.call(target, type, listener);
-  recorders.push(() => removeListener.call(target, type, listener));
+  addListener.call(target, type, listener, capture);
+  recorders.push(() => removeListener.call(target, type, listener, capture));
   return seen;
 }
 

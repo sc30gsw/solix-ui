@@ -102,6 +102,11 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-sized.ts", "import { createMemo }"),
     forbiddenAt("src/create-sized.ts", "import { createSignal }"),
   ],
+  liveOptions: [forbiddenAt("src/create-misbehaving.ts", "const size = access")],
+  listenerRoles: [
+    forbiddenAt("src/create-misbehaving.ts", "import { listen }"),
+    forbiddenAt("src/create-misbehaving.ts", "element.addEventListener"),
+  ],
   instanceofChecks: [forbiddenAt("src/create-misbehaving.ts", "instanceof Element")],
   focusMoves: [
     forbiddenAt("src/create-forbidden.ts", "element.focus()"),

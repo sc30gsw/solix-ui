@@ -36,6 +36,22 @@ export function nextTask(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+export const engineTimeout = 2_000;
+
+export const engineWait = { timeout: engineTimeout, interval: 10 } as const;
+
+export async function reported(check: () => boolean, what: string): Promise<void> {
+  const deadline = performance.now() + engineTimeout;
+  while (!check()) {
+    if (performance.now() > deadline) throw new Error(`the engine never reported ${what}`);
+    await nextTask();
+  }
+}
+
+export async function witnessed(control: () => boolean, what: string): Promise<void> {
+  await reported(control, `${what} to a control`);
+}
+
 export function settled(): Promise<void> {
   return new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),

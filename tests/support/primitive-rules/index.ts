@@ -5,6 +5,8 @@ import { elementAttachmentsRule } from "./element-attachments";
 import { accessibilityTestsRule, focusMovesRule } from "./focus";
 import { instanceofChecksRule } from "./instanceof-checks";
 import { type Library, type PrimitiveRule, publicModules } from "./library";
+import { listenerRolesRule } from "./listener-roles";
+import { liveOptionsRule } from "./live-options";
 import { modelTestsRule } from "./model-tests";
 import { moduleStateRule } from "./module-state";
 import { publicExportsRule } from "./public-exports";
@@ -28,6 +30,8 @@ export const primitiveRules = {
   argumentReads: argumentReadsRule,
   styleAndClassWrites: styleAndClassWritesRule,
   elementAttachments: elementAttachmentsRule,
+  liveOptions: liveOptionsRule,
+  listenerRoles: listenerRolesRule,
   instanceofChecks: instanceofChecksRule,
   focusMoves: focusMovesRule,
   testsNamedForModules: testsNamedForModulesRule,

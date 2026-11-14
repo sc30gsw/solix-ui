@@ -64,3 +64,22 @@ export function disposeAll(disposers: readonly (() => void)[]): () => void {
     for (const dispose of disposers) dispose();
   };
 }
+
+export function watchEvents<T extends EventTarget, K extends string>(
+  target: T,
+  type: K,
+  listener: (event: EventOf<T, K>) => void,
+  options?: { passive?: boolean },
+): () => void {
+  return listen(target, { ...listenerSettings(type, true), passive: options?.passive }, listener);
+}
+
+export function handleEvent<K extends string>(
+  view: Window,
+  type: K,
+  listener: (event: EventOf<Window, K>) => void,
+): () => void {
+  return listen<Window, K>(view, listenerSettings(type), (event) => {
+    if (!event.defaultPrevented) listener(event);
+  });
+}
