@@ -15,6 +15,15 @@ const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 
 const skillNames = readdirSync(skillsDirectory).sort();
 
+function escapeForRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function skillText(name: string): string {
+  const file = join(skillsDirectory, name, "SKILL.md");
+  return existsSync(file) ? readFileSync(file, "utf8") : "";
+}
+
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
 }
@@ -67,7 +76,7 @@ test("every .agents or .claude path that a project-owned skill names exists", ()
   );
   const projectOwned = skillNames.filter((name) => !vendored.includes(name));
   const violations = projectOwned.flatMap((name) =>
-    [...read(`.agents/skills/${name}/SKILL.md`).matchAll(agentPathInBackticks)]
+    [...skillText(name).matchAll(agentPathInBackticks)]
       .map(([, path]) => path.replace(trailingPunctuation, ""))
       .filter((path) => !existsSync(join(repositoryRoot, path)))
       .map(
@@ -92,7 +101,7 @@ test("every agent is named for its file and is started by an installed skill", (
     const front = frontMatterOf(readFileSync(join(agentsDirectory, file), "utf8"));
     if (front.name !== name)
       problems.push(`.claude/agents/${file}: name must be "${name}", not "${front.name}".`);
-    const startedBy = new RegExp(`subagent_type: ["\`]${name}["\`]`);
+    const startedBy = new RegExp(`subagent_type:\\s*["\`]?${escapeForRegExp(name)}(?![\\w-])`);
     if (!skillTexts.some((text) => startedBy.test(text)))
       problems.push(
         `.claude/agents/${file}: no skill in .agents/skills starts it with subagent_type: "${name}". Remove the agent, or install the skill that starts it.`,
