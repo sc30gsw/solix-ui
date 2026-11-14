@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { once } from "node:events";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -6,6 +6,7 @@ import { expect, test } from "vite-plus/test";
 import { repositoryRoot } from "./support/workspace";
 
 const compilerModule = pathToFileURL(join(repositoryRoot, "tests/support/syntax/program.ts")).href;
+const readByPlainNode = pathToFileURL(join(repositoryRoot, "scripts/expected-values.ts")).href;
 const parsedSignal = "parsed";
 const parentScript = `
 const { parse } = await import(${JSON.stringify(compilerModule)});
@@ -54,3 +55,14 @@ test.each([
     await expect.poll(() => compilers.filter(isRunning), { timeout: 5_000 }).toEqual([]);
   },
 );
+
+test("Node's own loader imports scripts/expected-values.ts, which reads the tokens through the syntax module, as the playground's drive script does", () => {
+  const result = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-e", `await import(${JSON.stringify(readByPlainNode)});`],
+    { cwd: repositoryRoot, encoding: "utf8" },
+  );
+
+  expect(result.stderr).toBe("");
+  expect(result.status).toBe(0);
+});

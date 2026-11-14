@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { parse, ts } from "../tests/support/syntax";
+import { parse, ts } from "../tests/support/syntax.ts";
 
 export const tokensFile = "packages/core/src/tokens.stylex.ts";
 

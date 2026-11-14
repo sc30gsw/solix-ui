@@ -1,4 +1,4 @@
-import * as ts from "./tree";
+import * as ts from "./tree.ts";
 
 export type Exports = { functions: string[]; types: string[]; others: string[] };
 

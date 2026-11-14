@@ -1,4 +1,4 @@
-export * as ts from "./syntax/tree";
+export * as ts from "./syntax/tree.ts";
 export {
   openProgram,
   parse,
@@ -6,7 +6,7 @@ export {
   stringLiteralTypesOf,
   type CompilerOptions,
   type Program,
-} from "./syntax/program";
+} from "./syntax/program.ts";
 export {
   commentsIn,
   descendants,
@@ -16,4 +16,4 @@ export {
   nameOf,
   type Comment,
   type Exports,
-} from "./syntax/walk";
+} from "./syntax/walk.ts";
