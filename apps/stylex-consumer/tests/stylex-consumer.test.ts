@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { stylesheet as libraryStylesheet } from "../../../packages/core/tests/built-library";
 import { computed, inEveryEngine, serveApp } from "../../../tests/support/served-app";
 
 const port = 4327;
@@ -20,10 +20,6 @@ const url = serveApp({
     "--strictPort",
   ],
 });
-const libraryStylesheet = readFileSync(
-  join(repositoryRoot, "packages/core/dist/styles.css"),
-  "utf8",
-);
 const arrangements: [label: string, libraryLast: boolean][] = [
   ["as the bundle orders them", false],
   ["with the library's stylesheet loaded again after every other", true],

@@ -1,43 +1,20 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import type { Browser, Locator } from "playwright";
-import { afterAll, beforeAll, describe, vi } from "vite-plus/test";
+import { afterAll, beforeAll, describe } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../scripts/browser-engines.mjs";
+import { localUrl, type RunningServer, type ServedApp, startServer } from "./server-process";
 
-type ServedApp = { directory: string; port: number; command: string[] };
-
-async function answers(url: string): Promise<boolean> {
-  try {
-    return (await fetch(url)).ok;
-  } catch {
-    return false;
-  }
-}
-
-export function serveApp({ directory, port, command }: ServedApp): string {
-  const url = `http://127.0.0.1:${port}/`;
-  const [program, ...args] = command;
-  let server: ChildProcess | undefined;
+export function serveApp(app: ServedApp): string {
+  let running: RunningServer | undefined;
 
   beforeAll(async () => {
-    if (await answers(url)) {
-      throw new Error(
-        `port ${port} already answers, so this run would test a server it did not start. Stop the process that holds the port.`,
-      );
-    }
-    server = spawn(program, args, {
-      cwd: directory,
-      env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
-      stdio: "ignore",
-      detached: true,
-    });
-    await vi.waitUntil(() => answers(url), { timeout: 20_000 });
+    running = await startServer(app);
   });
 
   afterAll(() => {
-    if (server?.pid !== undefined) process.kill(-server.pid);
+    running?.stop();
   });
 
-  return url;
+  return localUrl(app.port);
 }
 
 export function inEveryEngine(define: (browser: () => Browser) => void): void {

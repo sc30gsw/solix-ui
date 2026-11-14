@@ -1,15 +1,8 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, inject, test } from "vite-plus/test";
 import { breakpointWidths } from "../../../packages/core/src/style-prop-table";
-import {
-  computed,
-  inEveryEngine,
-  openPage,
-  scriptModes,
-  servePlayground,
-} from "./support/playground";
+import { computed, inEveryEngine, openPage, scriptModes } from "./support/playground";
 
-const port = 4326;
-const url = servePlayground(port);
+const url = inject("playgroundUrl");
 const pixelsPerMediaQueryEm = 16;
 const mdBreakpointInPixels = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 const viewportHeight = 800;

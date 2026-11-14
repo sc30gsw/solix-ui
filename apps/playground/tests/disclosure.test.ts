@@ -1,5 +1,14 @@
 import type { Locator, Page } from "playwright";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  inject,
+  test,
+} from "vite-plus/test";
 import {
   computed,
   type Expected,
@@ -7,11 +16,9 @@ import {
   openPage,
   type OpenPage,
   scriptModes,
-  servePlayground,
 } from "./support/playground";
 
-const port = 4323;
-const url = servePlayground(port);
+const url = inject("playgroundUrl");
 
 inEveryEngine((browser) => {
   describe("a disclosure in a freshly hydrated page", () => {

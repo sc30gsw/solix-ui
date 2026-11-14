@@ -25,9 +25,9 @@ It does if it edits any of these:
 | `packages/core/src/**` | Library styles are written with `stylex.create` and `stylex.defineVars`. A component may set a private custom property from `disclosure-state.stylex.ts` inside `stylex.create`, with conditions, and may style `::backdrop` in a nested block, as `Modal.tsx` does. |
 | `packages/core/tests/stylesheet-properties.test.ts` | It calls `compileLibrarySource` and `libraryStylesheet` directly, with the real style-prop rules, and parses the result with PostCSS. |
 | `packages/core/tests/cascade-layers.ts` | It lists the layers nested in a layer in the order the cascade ranks them, for both tests. |
-| `packages/core/tests/build-output.test.ts` | It reads `packages/core/dist/styles.css`, the built components and the built `dist/style-prop-table.js`, and parses the stylesheet with PostCSS. Which property a shorthand sets comes from `longhandsSetBy`, written from the CSS specification for horizontal, left-to-right text: `margin`, `padding`, their `-inline` and `-block` forms, `inset` and `background`. |
+| `packages/core/tests/build-output.test.ts` | It reads `packages/core/dist/styles.css` and the built components through `packages/core/tests/built-library.ts`, reads the built `dist/style-prop-table.js`, and parses the stylesheet with PostCSS. Which property a shorthand sets comes from `longhandsSetBy`, written from the CSS specification for horizontal, left-to-right text: `margin`, `padding`, their `-inline` and `-block` forms, `inset` and `background`. |
 | `tests/support/global-setup.ts` | It runs `vp run -r build` in production mode before any test, which is what writes `packages/core/dist`. |
-| `packages/core/tests/built-library.ts` | It lists the components that `packages/core/dist` holds. |
+| `packages/core/tests/built-library.ts` | It lists the components that `packages/core/dist` holds, and reads `dist/styles.css` as `stylesheet` and each built component as `builtSource(name)`. |
 | `apps/playground/tests/consumer.test.ts` and `apps/playground/tests/box.test.ts` | `consumer.test.ts` checks that the app's own rule comes before the library layer in the bundle, and `box.test.ts` checks the cascade in each installed engine. |
 | `scripts/browser-engines.mjs` | It lists the engines the browser tests run on. |
 | `vite.config.ts` | It sets the test include globs and the global setup. |

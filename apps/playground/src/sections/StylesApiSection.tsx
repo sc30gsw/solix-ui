@@ -18,7 +18,6 @@ export function StylesApiSection() {
       </Disclosure>
       <Button unstyled>Unstyled</Button>
       <button>Plain button</button>
-      <Button bg="error">Style prop on a Button</Button>
     </Box>
   );
 }

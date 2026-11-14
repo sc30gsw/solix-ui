@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import postcss from "postcss";
 import ts from "typescript";
@@ -13,10 +13,10 @@ import {
   stylePropClassPrefix,
   stylePropNames,
 } from "../src/style-prop-table";
-import { builtComponents, dist } from "./built-library";
+import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
 import { enclosingAtRules, inStylePropLayer, nestedLayerOrder } from "./cascade-layers";
 
-const stylesheet = readFileSync(join(dist, "styles.css"), "utf8").trim();
+const stylesheet = builtStylesheet.trim();
 const ownerBreakpoints: [name: string, width: string][] = [
   ["xs", "36em"],
   ["sm", "48em"],
@@ -180,14 +180,10 @@ test("open state compiles to a selector on the element's own open attribute", ()
 test.each(builtComponents)(
   "%s ships as JSX source with its styles compiled to class names",
   (name) => {
-    const file = join(dist, `${name}.jsx`);
-    const where = `packages/core/dist/${name}.jsx`;
-
-    expect(existsSync(file), `${where}: build the library so the component ships`).toBe(true);
-    const source = readFileSync(file, "utf8");
-    expect(source, `${where}: compile stylex.create away in the build`).not.toContain(
-      "stylex.create",
-    );
+    expect(
+      builtSource(name),
+      `packages/core/dist/${name}.jsx: compile stylex.create away in the build`,
+    ).not.toContain("stylex.create");
   },
 );
 

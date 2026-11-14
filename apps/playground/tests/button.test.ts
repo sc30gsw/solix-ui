@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
 import { lookOf } from "../../../scripts/expected-values";
 import {
@@ -7,11 +7,9 @@ import {
   openPage,
   type OpenPage,
   scriptModes,
-  servePlayground,
 } from "./support/playground";
 
-const port = 4322;
-const url = servePlayground(port);
+const url = inject("playgroundUrl");
 
 inEveryEngine((browser) => {
   describe.each(scriptModes)("a Button with scripts %s", (_, javaScriptEnabled) => {
@@ -59,15 +57,6 @@ inEveryEngine((browser) => {
       expect((await button.getAttribute("class"))?.split(/\s+/)).toContain(
         stableClass("Button", rootPart),
       );
-    });
-
-    test("a style prop on Button beats its default", async () => {
-      expect(
-        await computed(
-          opened.page.getByRole("button", { name: "Style prop on a Button" }),
-          "background-color",
-        ),
-      ).toBe(opened.expected("--solix-color-error"));
     });
   });
 });

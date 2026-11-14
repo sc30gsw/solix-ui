@@ -1,31 +1,35 @@
 import { expect } from "vite-plus/test";
 import type * as Library from "../src/index";
 import type { DisplayPropName } from "../src/style-prop-table";
-import { type ConsumerProps, renderBuilt, stylesApiPropKeys } from "./built-library";
+import { type ConsumerProps, handledKeys, renderBuilt } from "./built-library";
 import { elementsOf } from "./markup";
 
 type PropsOf<Component> = Component extends (props: infer Props) => unknown ? Props : never;
-type Refused<Props, Key extends PropertyKey> = Key extends keyof Props
-  ? [NonNullable<Props[Key]>] extends [never]
-    ? true
-    : false
-  : true;
-type TakesDisplay<Component> = [Refused<PropsOf<Component>, DisplayPropName>] extends [false]
-  ? true
-  : [Refused<PropsOf<Component>, DisplayPropName>] extends [true]
-    ? false
-    : never;
+
+type TakesEachDisplayProp<Props> = {
+  [Key in DisplayPropName]: Key extends keyof Props
+    ? [NonNullable<Props[Key]>] extends [never]
+      ? false
+      : true
+    : true;
+}[DisplayPropName];
+
+export type TakesDisplay<Props> =
+  boolean extends TakesEachDisplayProp<Props> ? never : TakesEachDisplayProp<Props>;
+
 type Polymorphic<Component> = "component" extends keyof PropsOf<Component> ? true : false;
 
 type Fixture<Component> = {
   tag: string;
   booleanAttribute: string;
-  takesDisplay: TakesDisplay<Component>;
+  takesDisplay: TakesDisplay<PropsOf<Component>>;
   polymorphic: Polymorphic<Component>;
-  props: ConsumerProps;
+  props: PropsOf<Component>;
 };
 
 type ComponentName = keyof typeof Library;
+
+const childrenProp = "children";
 
 export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]> } = {
   Box: {
@@ -71,14 +75,16 @@ export const polymorphicComponents = components
   .filter(([, { polymorphic }]) => polymorphic)
   .map(([name]) => name);
 
+const handledOffEveryElement = handledKeys.filter((key) => key !== "class" && key !== "style");
+
 function isComponentName(name: string): name is ComponentName {
   return Object.hasOwn(fixtures, name);
 }
 
-function stylesApiPropsOn(html: string): string[] {
+function attributesNamed(html: string, props: readonly string[]): string[] {
   return elementsOf(html).flatMap(({ tag, attributes }) =>
     attributes
-      .filter(([name]) => stylesApiPropKeys.some((key) => key.toLowerCase() === name.toLowerCase()))
+      .filter(([name]) => props.some((prop) => prop.toLowerCase() === name.toLowerCase()))
       .map(([name]) => `<${tag}> ${name}`),
   );
 }
@@ -87,7 +93,18 @@ export function render(name: string, props: ConsumerProps = {}): string {
   if (!isComponentName(name)) {
     throw new Error(`packages/core/tests/fixtures.ts: add a fixture for ${name}.`);
   }
-  const html = renderBuilt(name, { ...fixtures[name].props, ...props });
-  expect(stylesApiPropsOn(html), "classes, styles and unstyled reach no element").toEqual([]);
+  const fixtureProps: ConsumerProps = fixtures[name].props;
+  const html = renderBuilt(name, { ...fixtureProps, ...props });
+  expect(
+    attributesNamed(
+      html,
+      Object.keys(fixtureProps).filter((prop) => prop !== childrenProp),
+    ),
+    `${name} keeps every prop its fixture gives, but children, off its elements`,
+  ).toEqual([]);
+  expect(
+    attributesNamed(html, handledOffEveryElement),
+    "no prop that createParts handles, but class and style, reaches an element as an attribute",
+  ).toEqual([]);
   return html;
 }

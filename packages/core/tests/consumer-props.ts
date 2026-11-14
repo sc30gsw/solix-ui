@@ -1,5 +1,4 @@
 import type { JSX } from "@solidjs/web";
-import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import type { Breakpoint, StylePropName, VisibilityPropName } from "../src/style-prop-table";
 import type { ConsumerProps } from "./built-library";
 
@@ -22,10 +21,6 @@ export type StylePropCase = {
 
 export const classProp = "the class prop";
 export const elsewhere = "/elsewhere";
-
-export function stylePropClassName(suffix: string): string {
-  return `${LIBRARY_CLASS_PREFIX}-${suffix}`;
-}
 
 export function classValueFrom(tokens: ClassToken[]): JSX.ClassValue {
   const written = (shape: string) => tokens.filter(({ writtenAs: as }) => as === shape);

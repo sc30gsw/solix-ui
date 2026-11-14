@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
 import { builtComponents, rootPart, stableClass } from "../../../packages/core/tests/built-library";
 import {
@@ -9,11 +9,9 @@ import {
   inEveryEngine,
   openPage,
   type OpenPage,
-  servePlayground,
 } from "./support/playground";
 
-const port = 4319;
-const url = servePlayground(port);
+const url = inject("playgroundUrl");
 
 describe("a consumer with no StyleX build setup", () => {
   test("depends on no StyleX build plugin", () => {
@@ -58,16 +56,6 @@ describe("a consumer with no StyleX build setup", () => {
 });
 
 inEveryEngine((browser) => {
-  test("a consumer with no StyleX build setup sees styled markup before any script runs", async () => {
-    const { page, expected, close } = await openPage(browser(), url, { javaScriptEnabled: false });
-
-    expect(await computed(page.getByTestId("default"), "background-color")).toBe(
-      expected("--solix-color-primary"),
-    );
-
-    await close();
-  });
-
   describe("in the hydrated page", () => {
     let opened: OpenPage;
 

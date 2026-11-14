@@ -19,13 +19,16 @@ import {
   type DrawnDeclaration,
   type PartClassToken,
   type StylePropCase,
-  stylePropClassName,
 } from "./consumer-props";
 
 type Drawn = { value: string | number | null; kept: boolean };
 
 const consumerOverride = "7px";
 const stylesOverride = "9px";
+
+function customPropertyOf(name: StylePropName): string {
+  return `--${stylePropClass(canonicalOf(name), baseKey)}`;
+}
 
 const consumerToken = fc
   .stringMatching(/^[a-z][a-z0-9-]{0,8}$/)
@@ -190,7 +193,7 @@ export const stylePropCases: fc.Arbitrary<StylePropCase> = fc
       .record({
         overrides: fc.subarray(
           generated.styleProps.map(([name]): Declaration => [
-            `--${stylePropClassName(name)}`,
+            customPropertyOf(name),
             consumerOverride,
           ]),
         ),
@@ -198,11 +201,7 @@ export const stylePropCases: fc.Arbitrary<StylePropCase> = fc
           .tuple(
             consumerDeclarations(true),
             fc
-              .subarray(
-                generated.styleProps.map(
-                  ([name]) => `--${stylePropClass(canonicalOf(name), baseKey)}`,
-                ),
-              )
+              .subarray(generated.styleProps.map(([name]) => customPropertyOf(name)))
               .chain((properties) =>
                 fc.tuple(
                   ...properties.map((property) =>

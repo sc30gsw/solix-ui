@@ -11,7 +11,7 @@ const featureIndex = `${featureDirectory}/README.md`;
 const driveScript = `${skill}/scripts/drive.mjs`;
 const evidenceScript = `${skill}/scripts/evidence.mjs`;
 const launchScript = `${skill}/scripts/launch.sh`;
-const packageTests = "{packages,apps}/*/tests/*.test.ts";
+const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
 const featureSections = [
   "Sub-features",
   "How to get to it (user POV)",
@@ -23,7 +23,8 @@ const journeyListLine = /^Journeys: (.*?)\.(?:\s|$)/m;
 const backticked = /`([^`]+)`/g;
 const featureLink = /\]\(\.\/([\w-]+)\.md\)/g;
 const secondLevelHeading = /^## (.+)$/gm;
-const testPort = /^const port = (\d+);$/m;
+const portName = /port/i;
+const portNumbers = { lowest: 1024, highest: 65_535 };
 const launchDefaultPort = /\$\{VERIFY_PLAYGROUND_PORT:-(\d+)\}/;
 const localAddress = /127\.0\.0\.1:(\d+)/g;
 
@@ -154,14 +155,51 @@ test("every feature file names its own journey and has the four sections of the 
   expect(violations).toEqual([]);
 });
 
+function namesAPort(name: ts.Node): boolean {
+  return portName.test(name.getText());
+}
+
+function holdsAPort(literal: ts.NumericLiteral): boolean {
+  const value = Number(literal.text);
+  if (!Number.isInteger(value) || value < portNumbers.lowest || value > portNumbers.highest)
+    return false;
+  const holder = literal.parent;
+  if (ts.isCallExpression(holder) || ts.isNewExpression(holder)) {
+    return holder.arguments?.some((argument) => argument === literal) ?? false;
+  }
+  if (
+    ts.isVariableDeclaration(holder) ||
+    ts.isPropertyAssignment(holder) ||
+    ts.isParameter(holder) ||
+    ts.isBindingElement(holder)
+  ) {
+    return namesAPort(holder.name);
+  }
+  return false;
+}
+
+function portsIn(path: string): string[] {
+  const source = ts.createSourceFile(
+    path,
+    read(path),
+    ts.ScriptTarget.Latest,
+    true,
+    path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const found = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isNumericLiteral(node) && holdsAPort(node)) found.add(String(Number(node.text)));
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return [...found];
+}
+
 test("every test server and the verification instance listen on ports of their own", () => {
   const launchPort = launchDefaultPort.exec(read(launchScript))?.[1];
-  const ports = globSync(packageTests, { cwd: repositoryRoot })
+  const ports = globSync(testCode, { cwd: repositoryRoot })
     .sort()
-    .flatMap((path) => {
-      const port = testPort.exec(read(path))?.[1];
-      return port ? [{ path, port }] : [];
-    });
+    .flatMap((path) => portsIn(path).map((port) => ({ path, port })));
   const violations = ports.flatMap(({ path, port }, index) => [
     ...ports
       .slice(0, index)
@@ -184,6 +222,9 @@ test("every test server and the verification instance listen on ports of their o
     launchPort,
     `${launchScript}: set the default as \${VERIFY_PLAYGROUND_PORT:-NNNN}`,
   ).toBeDefined();
-  expect(ports.length, `${packageTests}: no \`const port = N;\` was found`).toBeGreaterThan(0);
+  expect(
+    ports.length,
+    `${testCode}: no port was found, written as a call argument or as the value of a name that holds "port"`,
+  ).toBeGreaterThan(0);
   expect([...violations, ...documented]).toEqual([]);
 });

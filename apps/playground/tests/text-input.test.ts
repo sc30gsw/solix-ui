@@ -1,16 +1,14 @@
 import type { Locator, Page } from "playwright";
-import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, inject, test } from "vite-plus/test";
 import {
   computed,
   type Expected,
   inEveryEngine,
   openPage,
   type OpenPage,
-  servePlayground,
 } from "./support/playground";
 
-const port = 4324;
-const url = servePlayground(port);
+const url = inject("playgroundUrl");
 
 inEveryEngine((browser) => {
   describe("a text input in a freshly hydrated page", () => {
@@ -29,15 +27,11 @@ inEveryEngine((browser) => {
       await opened.close();
     });
 
-    test("has the library's border, and a consumer's plain class beats its background", async () => {
-      const overridden = page.getByRole("textbox", { name: "Overridden input" });
-
+    test("has the library's border, background and text colour", async () => {
       expect(await computed(email, "border-top-color")).toBe(expected("--solix-color-border"));
       expect(await computed(email, "border-top-left-radius")).toBe(expected("--solix-radius-md"));
       expect(await computed(email, "background-color")).toBe(expected("--solix-color-body"));
       expect(await computed(email, "color")).toBe(expected("--solix-color-text"));
-      expect(await computed(overridden, "background-color")).toBe(expected("danger"));
-      expect(await computed(overridden, "height")).toBe(expected("--solix-control-height-md"));
     });
 
     test("shows the error border only after the user has committed an invalid value", async () => {

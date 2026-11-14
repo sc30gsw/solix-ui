@@ -14,6 +14,8 @@ const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
 const partsHelperFile = "packages/core/src/parts.ts";
+const partsModule = "parts.ts";
+const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
 const rootBinding = "root";
 const partBinding = "part";
 const stylesApiTypeArgument = `typeof ${stylesVariable}`;
@@ -45,7 +47,7 @@ function parse(file: string): ts.SourceFile {
     readFileSync(file, "utf8"),
     ts.ScriptTarget.Latest,
     true,
-    ts.ScriptKind.TSX,
+    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 }
 
@@ -171,18 +173,31 @@ function propsShapeOf(alias: ts.TypeAliasDeclaration | undefined): PropsShape | 
   return { kind, element, stylesApi, ownProps, alias };
 }
 
-function ownPropNames(ownProps: ts.TypeNode | undefined): string[] {
-  if (!ownProps) return [];
-  const literals = ts.isIntersectionTypeNode(ownProps)
-    ? ownProps.types.filter(ts.isTypeLiteralNode)
-    : [ownProps].filter(ts.isTypeLiteralNode);
-  return literals.flatMap((literal) =>
-    literal.members.flatMap((member) =>
+type OwnPropNames = { names: string[]; unread: string[] };
+
+function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
+  const members = !ownProps
+    ? []
+    : ts.isIntersectionTypeNode(ownProps)
+      ? [...ownProps.types]
+      : [ownProps];
+  const literalMembers = members.filter(ts.isTypeLiteralNode).flatMap((literal) => literal.members);
+  return {
+    names: literalMembers.flatMap((member) =>
       member.name && (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name))
         ? [member.name.text]
         : [],
     ),
-  );
+    unread: [
+      ...members.filter(
+        (member) => !ts.isTypeLiteralNode(member) && member.getText() !== displayPropsRefused,
+      ),
+      ...literalMembers.filter(
+        (member) =>
+          !member.name || (!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name)),
+      ),
+    ].map((member) => member.getText()),
+  };
 }
 
 function keptOffRootProblems(
@@ -197,16 +212,20 @@ function keptOffRootProblems(
   const readsChildren = descendants(fn).some(
     (node) => ts.isPropertyAccessExpression(node) && node.getText() === `props.${childrenProp}`,
   );
-  const handledByTheComponent = [
-    ...ownPropNames(shape.ownProps),
-    ...(readsChildren ? [childrenProp] : []),
+  const { names, unread } = ownPropNames(shape.ownProps);
+  const handledByTheComponent = [...names, ...(readsChildren ? [childrenProp] : [])];
+  return [
+    ...unread.map(
+      (member) =>
+        `write ${member} in the own props of ${name}Props as an inline type literal, such as { label: string }, so this check reads each key it declares and requires it off the root. Only ${displayPropsRefused} may stand on its own.`,
+    ),
+    ...handledByTheComponent
+      .filter((prop) => !kept.includes(prop))
+      .map(
+        (prop) =>
+          `pass "${prop}" to ${partsHelper} after props, so it stays off the root: ${prop === childrenProp ? `${name} renders props.${childrenProp} itself` : `${name}Props declares it in its own props type`}.`,
+      ),
   ];
-  return handledByTheComponent
-    .filter((prop) => !kept.includes(prop))
-    .map(
-      (prop) =>
-        `pass "${prop}" to ${partsHelper} after props, so it stays off the root: ${prop === childrenProp ? `${name} renders props.${childrenProp} itself` : `${name}Props declares it in its own props type`}.`,
-    );
 }
 
 function stylexRuntimeCalls(source: ts.SourceFile): string[] {
@@ -432,10 +451,6 @@ function problemsWith({ name, file, source }: Component): string[] {
       ...keptOffRootProblems(name, fn, call, shape),
       ...rootProblems(fn, shape),
       ...partProblems(fn),
-      ...stylexRuntimeCalls(source).map(
-        (callee) =>
-          `call no ${callee}: ${partsHelper} gives each part the classes of its ${stylesVariable} entry.`,
-      ),
       ...descendants(fn)
         .filter(
           (node): node is ts.JsxAttribute =>
@@ -456,6 +471,23 @@ test("the library has components to check", () => {
 
 test("every component is written the one way: one function, and its root and every other part from one createParts call", () => {
   expect(components.flatMap(problemsWith)).toEqual([]);
+});
+
+test("no source file of the library but parts.ts calls stylex.attrs or stylex.props", () => {
+  const files = libraries.flatMap(({ source }) =>
+    globSync("**/*.{ts,tsx}", { cwd: source })
+      .filter((entry) => entry !== partsModule)
+      .map((entry) => join(source, entry)),
+  );
+  const violations = files.flatMap((file) =>
+    stylexRuntimeCalls(parse(file)).map(
+      (callee) =>
+        `${relativePath(file)}: call no ${callee}. ${partsHelper} in ${partsHelperFile} gives each part the classes of its ${stylesVariable} entry, and no other file calls the StyleX runtime.`,
+    ),
+  );
+
+  expect(files.length).toBeGreaterThan(components.length);
+  expect(violations).toEqual([]);
 });
 
 test("every other source file is the barrel, a StyleX definition, or a kebab-case module", () => {

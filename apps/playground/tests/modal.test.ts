@@ -1,16 +1,14 @@
 import type { Locator, Page } from "playwright";
-import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, inject, test } from "vite-plus/test";
 import {
   computed,
   type Expected,
   inEveryEngine,
   openPage,
   type OpenPage,
-  servePlayground,
 } from "./support/playground";
 
-const port = 4325;
-const url = servePlayground(port);
+const url = inject("playgroundUrl");
 
 inEveryEngine((browser) => {
   describe("a modal in a freshly hydrated page", () => {

@@ -5,8 +5,6 @@ import { stableClass } from "./stable-class";
 import { stylePropKeys } from "./style-prop-table";
 import { presentStyle, resolveStyleProps, type StyleProps, withConsumerStyle } from "./style-props";
 
-export { stableClass };
-
 export const rootPart = "root";
 
 export type StylesApiProps<Styles> = {

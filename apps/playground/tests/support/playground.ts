@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import type { Browser, BrowserContextOptions, Page } from "playwright";
 import { expectedValues } from "../../../../scripts/expected-values";
-import { serveApp } from "../../../../tests/support/served-app";
 
 export { computed, inEveryEngine } from "../../../../tests/support/served-app";
 
@@ -20,10 +19,6 @@ export type OpenPage = {
   consoleProblems: string[];
   close: () => Promise<void>;
 };
-
-export function servePlayground(port: number): string {
-  return serveApp({ directory: appDirectory, port, command: ["node", "dist/server/node.js"] });
-}
 
 export async function openPage(
   browser: Browser,
