@@ -1,6 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { createMemo, merge, omit } from "solid-js";
 import type { JSX } from "@solidjs/web";
+import { displayPropNames } from "./style-prop-table";
 import {
   resolveStyleProps,
   type StyleProps,
@@ -47,6 +48,10 @@ type RootProps<Props, Own extends keyof Props> = Omit<Props, Handled | Own> & Pa
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
+function isDisplayPropName(key: PropertyKey): boolean {
+  return displayPropNames.some((name) => name === key);
+}
+
 /**
  * Splits a component's props into the props of its root element and the class and style of each other part.
  *
@@ -57,7 +62,7 @@ type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
  */
 export function createParts<
   Styles extends Compiled,
-  Props extends PartProps<Styles> & StyleProps & Styling,
+  Props extends PartProps<Styles> & StyleProps & Styling & { component?: unknown },
   Own extends keyof Props = never,
 >(
   component: string,
@@ -77,11 +82,17 @@ export function createParts<
     ...ownKeys,
   ]);
   const styleProps = omit(props, (key) => ownKeys.some((own) => own === key));
-  const resolved = createMemo(() => resolveStyleProps(styleProps));
+  const wrapsAComponent = () => typeof props.component === "function";
+  const forwarded = omit(styleProps, (key) => !isDisplayPropName(key));
+  const resolvedHere = omit(styleProps, (key) => isDisplayPropName(key));
+  const resolved = createMemo(() =>
+    resolveStyleProps(wrapsAComponent() ? resolvedHere : styleProps),
+  );
   const libraryClass = (name: keyof Styles & string) =>
     props.unstyled ? undefined : stylex.attrs(compiled[name]).class;
   const root = merge(
     omit(props, (key) => handled.has(key)),
+    () => (wrapsAComponent() ? forwarded : {}),
     {
       get class() {
         return [

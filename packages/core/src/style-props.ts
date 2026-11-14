@@ -44,9 +44,17 @@ export type ElementProps<T extends ValidComponent, Own extends object = object> 
   Styling &
   Omit<ComponentProps<T>, keyof Own | keyof StyleProps | keyof Styling | "component">;
 
+type RefusedBy<T extends ValidComponent> = {
+  [Key in keyof ComponentProps<T> & keyof StyleProps]-?: [
+    NonNullable<ComponentProps<T>[Key]>,
+  ] extends [never]
+    ? Key
+    : never;
+}[keyof ComponentProps<T> & keyof StyleProps];
+
 export type PolymorphicProps<T extends ValidComponent, Own extends object = object> = ElementProps<
   T,
-  Own & { component?: T }
+  Own & { component?: T } & { [Key in RefusedBy<T>]?: never }
 >;
 
 export const stylePropKeys: (keyof StyleProps)[] = [...stylePropNames, ...visibilityPropNames];
@@ -74,11 +82,15 @@ function cssValue(row: PropertyRow, written: string | number): string | undefine
   return row.scale !== undefined && Object.hasOwn(tokens, token) ? `var(${token})` : written;
 }
 
+function presentEntries(style: JSX.CSSProperties): [string, string | number][] {
+  return Object.entries(style).flatMap(([property, value]): [string, string | number][] =>
+    value === undefined || value === null ? [] : [[property, value]],
+  );
+}
+
 function declarations(style: JSX.CSSProperties): string {
-  return Object.entries(style)
-    .flatMap(([property, value]) =>
-      value === undefined || value === null ? [] : [`${property}:${value};`],
-    )
+  return presentEntries(style)
+    .map(([property, value]) => `${property}:${value};`)
     .join("");
 }
 
@@ -88,7 +100,7 @@ export function withConsumerStyle(
 ): JSX.CSSProperties | string | undefined {
   if (typeof consumer === "string") return `${declarations(own)}${consumer}`;
   if (consumer === undefined && Object.keys(own).length === 0) return undefined;
-  return { ...own, ...consumer };
+  return { ...own, ...Object.fromEntries(presentEntries(consumer ?? {})) };
 }
 
 export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {

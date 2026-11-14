@@ -5,10 +5,16 @@ import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import {
   baseKey,
   breakpoints,
+  canonicalOf,
+  type DisplayPropName,
+  displayPropNames,
   responsiveKeys,
+  stylePropClass,
   type StylePropName,
   stylePropNames,
   stylePropTable,
+  visibilityClass,
+  visibilityPropNames,
 } from "../src/style-prop-table";
 import type { ConsumerProps } from "./built-library";
 
@@ -102,10 +108,8 @@ function declarationsOf<Value>(
     .map((declarations) => declarations.filter((found) => found !== undefined));
 }
 
-export const declarationSet: fc.Arbitrary<Declaration[]> = declarationsOf((value) => value);
-
-const declarationSetWithAbsentValues: fc.Arbitrary<DrawnDeclaration[]> = declarationsOf((value) =>
-  fc.oneof(value, fc.constantFrom(undefined, null)),
+export const declarationSetWithAbsentValues: fc.Arbitrary<DrawnDeclaration[]> = declarationsOf(
+  (value) => fc.oneof(value, fc.constantFrom(undefined, null)),
 );
 
 export function presentDeclarations(declarations: DrawnDeclaration[]): Declaration[] {
@@ -132,15 +136,42 @@ export function declarationsByPart(
     .map((entries) => Object.fromEntries(entries.filter((entry) => entry !== undefined)));
 }
 
-export function styleWritten(declarations: Declaration[], as: string): ConsumerProps {
+export function styleWritten(declarations: DrawnDeclaration[], as: string): ConsumerProps {
   if (as === "absent") return {};
   return {
     style:
       as === "string"
-        ? declarations.map(([property, value]) => `${property}: ${value}`).join("; ")
+        ? presentDeclarations(declarations)
+            .map(([property, value]) => `${property}: ${value}`)
+            .join("; ")
         : Object.fromEntries(declarations),
   };
 }
+
+const displayValue = fc.constantFrom("flex", "grid", "block", "none");
+
+function drawnDisplayProp(name: DisplayPropName): fc.Arbitrary<[DisplayPropName, string, string]> {
+  const visibility = visibilityPropNames.find((found) => found === name);
+  if (visibility !== undefined) {
+    return fc
+      .constantFrom(...breakpoints)
+      .map((breakpoint) => [name, breakpoint, visibilityClass(visibility, breakpoint)]);
+  }
+  const styleProp = stylePropNames.find((found) => found === name) ?? "display";
+  return displayValue.map((value) => [
+    name,
+    value,
+    stylePropClass(canonicalOf(styleProp), baseKey),
+  ]);
+}
+
+export const displayPropCases = fc
+  .subarray([...displayPropNames], { minLength: 1 })
+  .chain((names) => fc.tuple(...names.map(drawnDisplayProp)))
+  .map((drawn) => ({
+    given: Object.fromEntries(drawn.map(([name, value]) => [name, value])),
+    classes: drawn.map(([, , className]) => className),
+  }));
 
 const tokens = tokenValues();
 const passedThrough = ["inherit", "initial", "unset", "revert", "3px"];

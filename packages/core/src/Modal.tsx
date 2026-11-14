@@ -46,19 +46,19 @@ const styles = stylex.create({
   },
 });
 
-export function Modal(
-  props: ElementProps<
-    "dialog",
-    PartProps<typeof styles> & {
-      label: string;
-      opened: boolean;
-      open?: never;
-      display?: never;
-      hiddenFrom?: never;
-      visibleFrom?: never;
-    }
-  >,
-) {
+export type ModalProps = ElementProps<
+  "dialog",
+  PartProps<typeof styles> & {
+    label: string;
+    opened: boolean;
+    open?: never;
+    display?: never;
+    hiddenFrom?: never;
+    visibleFrom?: never;
+  }
+>;
+
+export function Modal(props: ModalProps) {
   const { root, part } = createParts(
     "Modal",
     styles,

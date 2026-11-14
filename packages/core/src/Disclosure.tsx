@@ -30,9 +30,9 @@ const styles = stylex.create({
   },
 });
 
-export function Disclosure(
-  props: ElementProps<"details", PartProps<typeof styles> & { label: string }>,
-) {
+export type DisclosureProps = ElementProps<"details", PartProps<typeof styles> & { label: string }>;
+
+export function Disclosure(props: DisclosureProps) {
   const { root, part } = createParts("Disclosure", styles, props, "label", "children");
   return (
     <details {...root}>

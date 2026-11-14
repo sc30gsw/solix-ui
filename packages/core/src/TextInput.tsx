@@ -29,7 +29,9 @@ const styles = stylex.create({
   },
 });
 
-export function TextInput(props: ElementProps<"input", PartProps<typeof styles>>) {
+export type TextInputProps = ElementProps<"input", PartProps<typeof styles>>;
+
+export function TextInput(props: TextInputProps) {
   const { root } = createParts("TextInput", styles, props);
   return <input type="text" {...root} />;
 }

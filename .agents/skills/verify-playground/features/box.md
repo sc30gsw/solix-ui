@@ -1,6 +1,6 @@
 # Box
 
-At the bottom of the page is a section named `Style props`, a `Box` rendered as a `<section>`. Its padding is a responsive style prop that grows at the md breakpoint. Inside it are a library button that a `Box` renders with a style-prop background, three lines whose top margin comes from a style prop, a consumer class and a consumer `style`, a line whose `pt` longhand sits on a responsive `p` shorthand, a line with `mt="unset"` inside a `Box` with `mt="xl"`, and two lines that `hiddenFrom` and `visibleFrom` show on either side of md.
+At the bottom of the page is a section named `Style props`, a `Box` rendered as a `<section>`. Its padding is a responsive style prop that grows at the md breakpoint. Inside it are a library button with a style-prop background, three lines whose top margin comes from a style prop, a consumer class and a consumer `style`, a line whose `pt` longhand sits on a responsive `p` shorthand, a line with `mt="unset"` inside a `Box` with `mt="xl"`, and two lines that `hiddenFrom` and `visibleFrom` show on either side of md.
 
 ## Sub-features
 

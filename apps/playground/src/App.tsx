@@ -59,9 +59,7 @@ export default function App() {
         p={{ base: "xs", xs: "sm", md: "lg" }}
         ref={refOf("Box")}
       >
-        <Box component={Button} bg="error">
-          Background from a style prop
-        </Box>
+        <Button bg="error">Background from a style prop</Button>
         <Box mt="xl">Style prop margin</Box>
         <Box mt="xl" class="roomy">
           Consumer class margin

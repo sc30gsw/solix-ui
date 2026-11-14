@@ -9,6 +9,7 @@ import { LIBRARY_CLASS_PREFIX, STYLE_PROP_LAYER } from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
 import {
   canonicalOf,
+  type DisplayPropName,
   displayPropNames,
   stylePropNames,
   visibilityPropNames,
@@ -20,7 +21,8 @@ import {
   classTokens,
   classValueFrom,
   declarationsByPart,
-  declarationSet,
+  declarationSetWithAbsentValues,
+  displayPropCases,
   elsewhere,
   type PartClassToken,
   partClassTokens,
@@ -33,6 +35,7 @@ import {
 } from "./arbitraries";
 import { builtComponents } from "./built-components";
 import { type ConsumerProps, library, partPropKeys, renderBuilt, rootPart } from "./built-library";
+import { fixtures, polymorphicComponents } from "./fixtures";
 import {
   classesOf,
   declarationsIn,
@@ -49,55 +52,17 @@ const repositoryRoot = join(import.meta.dirname, "../../..");
 const contractSkill = ".agents/skills/verify-component-contract/SKILL.md";
 const stableRootClass = /^solix-[A-Za-z0-9]+-root$/;
 
-type PropsOf<Component> = Component extends (props: infer Props) => unknown ? Props : never;
-type TakesDisplay<Component> = "display" extends keyof PropsOf<Component>
-  ? [NonNullable<PropsOf<Component>["display"]>] extends [never]
-    ? false
-    : true
+type Refuses<Props, Key extends PropertyKey> = Key extends keyof Props
+  ? [NonNullable<Props[Key]>] extends [never]
+    ? true
+    : false
   : false;
 
-const rootOf: {
-  [Name in keyof typeof Library]: {
-    tag: string;
-    booleanAttribute: string;
-    takesDisplay: TakesDisplay<(typeof Library)[Name]>;
-    render: (props: ConsumerProps) => string;
-  };
-} = {
-  Box: {
-    tag: "div",
-    booleanAttribute: "hidden",
-    takesDisplay: true,
-    render: (props) => renderBuilt("Box", { children: "Content", ...props }),
-  },
-  Button: {
-    tag: "button",
-    booleanAttribute: "disabled",
-    takesDisplay: true,
-    render: (props) => renderBuilt("Button", { children: "Label", ...props }),
-  },
-  Disclosure: {
-    tag: "details",
-    booleanAttribute: "open",
-    takesDisplay: true,
-    render: (props) => renderBuilt("Disclosure", { label: "Label", children: "Content", ...props }),
-  },
-  Modal: {
-    tag: "dialog",
-    booleanAttribute: "hidden",
-    takesDisplay: false,
-    render: (props) =>
-      renderBuilt("Modal", { label: "Label", opened: false, children: "Content", ...props }),
-  },
-  TextInput: {
-    tag: "input",
-    booleanAttribute: "disabled",
-    takesDisplay: true,
-    render: (props) => renderBuilt("TextInput", props),
-  },
-};
+const components = Object.entries(fixtures);
 
-const components = Object.entries(rootOf);
+function render(name: string, props: ConsumerProps): string {
+  return renderBuilt(name, { ...fixtures[name as keyof typeof fixtures].props, ...props });
+}
 
 function inStylePropLayer(node: postcss.Node): boolean {
   const parent = node.parent;
@@ -173,8 +138,8 @@ test("every component the library exports is held to the root contract", () => {
     .filter(([, exported]) => typeof exported === "function")
     .map(([name]) => name);
 
-  expect(exportedComponents.sort()).toEqual(Object.keys(rootOf).sort());
-  expect(builtComponents).toEqual(Object.keys(rootOf).sort());
+  expect(exportedComponents.sort()).toEqual(Object.keys(fixtures).sort());
+  expect(builtComponents).toEqual(Object.keys(fixtures).sort());
 });
 
 test.each(components)(
@@ -183,7 +148,7 @@ test.each(components)(
     const hasDefaultStyles = emitsStyleXClass(name);
     fc.assert(
       fc.property(classTokens, stringAttributes, fc.boolean(), (tokens, attributes, flag) => {
-        const html = component.render({
+        const html = render(name, {
           class: classValueFrom(tokens),
           ...attributes,
           [component.booleanAttribute]: flag,
@@ -290,7 +255,7 @@ test.each(builtComponents)(
     fc.assert(
       fc.property(
         declarationsByPart(parts),
-        declarationSet,
+        declarationSetWithAbsentValues,
         fc.constantFrom("object", "string", "absent"),
         fc.boolean(),
         (byPart, consumerStyle, styleAs, unstyled) => {
@@ -304,7 +269,7 @@ test.each(builtComponents)(
             ...styleWritten(consumerStyle, styleAs),
             unstyled,
           });
-          const consumerGave = styleAs === "absent" ? [] : consumerStyle;
+          const consumerGave = styleAs === "absent" ? [] : presentDeclarations(consumerStyle);
 
           for (const element of elementsOf(html)) {
             const [part] = partsOn(name, element);
@@ -317,7 +282,7 @@ test.each(builtComponents)(
               Object.fromEntries(declarationsIn(valuesOf(element, "style")[0])),
               part === undefined
                 ? `<${element.tag}>, which is no part, has no style`
-                : `the ${part} part's style holds styles.${part} without its undefined and null values${part === rootPart ? ", and then the consumer's style, which wins" : ""}`,
+                : `the ${part} part's style holds styles.${part} without its undefined and null values${part === rootPart ? ", and then the consumer's style without its undefined and null values, which wins" : ""}`,
             ).toEqual(Object.fromEntries(wanted));
           }
           expect(partPropsOn(html), "classes, styles and unstyled reach no element").toEqual([]);
@@ -429,10 +394,10 @@ test("Box gives every kept style-prop value one class and the one custom propert
         ...(component === undefined ? {} : { component }),
         ...(component === "a" ? { href: elsewhere } : {}),
       };
-      const html = rootOf.Box.render(props);
+      const html = render("Box", props);
       const root = rootElementOf(html);
 
-      expect(rootOf.Box.render(props), "a second render gives the same markup").toBe(html);
+      expect(render("Box", props), "a second render gives the same markup").toBe(html);
       expect(root.tag).toBe(component ?? "div");
       expectStylePropsOnRoot("Box", root, generated);
       expect(valuesOf(root, "href")).toEqual(component === "a" ? [elsewhere] : []);
@@ -481,7 +446,52 @@ test("Button takes the attributes of the element its component prop names, and r
   expect(classesOf(rootElementOf(html))).toContain(`solix-Button-${rootPart}`);
 });
 
-test("the contract skill names each component's root tag and boolean attribute as rootOf does", () => {
+test("a polymorphic component wrapping Modal refuses the display props Modal refuses, and wrapping Button takes only Button's props", () => {
+  expectTypeOf<
+    Refuses<Library.BoxProps<typeof Library.Modal>, DisplayPropName>
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    Refuses<Library.ButtonProps<typeof Library.Modal>, DisplayPropName>
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    Refuses<Library.BoxProps<typeof Library.Box>, DisplayPropName>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<"nonsense">().not.toExtend<keyof Library.BoxProps<typeof Library.Button>>();
+  expectTypeOf<"nonsense">().not.toExtend<keyof Library.ButtonProps<typeof Library.Box>>();
+  expectTypeOf<"type">().toExtend<keyof Library.BoxProps<typeof Library.Button>>();
+});
+
+test.each(polymorphicComponents)(
+  "%s passes display, hiddenFrom and visibleFrom to a component its component prop names unresolved, so Modal leaves them off its <dialog> and Box resolves them once",
+  (name) => {
+    fc.assert(
+      fc.property(displayPropCases, ({ given, classes }) => {
+        const dialog = rootElementOf(
+          render(name, { ...fixtures.Modal.props, component: library.Modal, ...given }),
+        );
+        const box = rootElementOf(render(name, { component: library.Box, ...given }));
+        const styleProps = (element: Element) =>
+          classesOf(element).filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`));
+
+        expect(dialog.tag).toBe("dialog");
+        expect(styleProps(dialog), "no style-prop class on the dialog").toEqual([]);
+        expect(declarationsIn(valuesOf(dialog, "style")[0]), "no custom property").toEqual([]);
+        expect(
+          dialog.attributes.filter(([attribute]) =>
+            displayPropNames.some((display) => display.toLowerCase() === attribute.toLowerCase()),
+          ),
+          "no display prop as an attribute",
+        ).toEqual([]);
+        expect(styleProps(box).sort(), "the wrapped Box resolves each one, once").toEqual(
+          [...classes].sort(),
+        );
+      }),
+      { numRuns: generatedRuns },
+    );
+  },
+);
+
+test("the contract skill names each component's root tag and boolean attribute as fixtures does", () => {
   const rows = readFileSync(join(repositoryRoot, contractSkill), "utf8")
     .split("\n")
     .filter((line) => line.startsWith("|"));
@@ -491,7 +501,7 @@ test("the contract skill names each component's root tag and boolean attribute a
     if (!row) return [`${contractSkill}: add a covered-code row for \`${file}\`.`];
     return [`<${tag}>`, `\`${booleanAttribute}\``]
       .filter((fact) => !row.includes(fact))
-      .map((fact) => `${contractSkill}: say ${fact} in the row for \`${file}\`, as rootOf does.`);
+      .map((fact) => `${contractSkill}: say ${fact} in the row for \`${file}\`, as fixtures does.`);
   });
 
   expect(violations).toEqual([]);

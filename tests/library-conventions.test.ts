@@ -84,6 +84,7 @@ function exportedNames(source: ts.SourceFile): string[] {
       : false;
     if (!exported) return [];
     if (ts.isFunctionDeclaration(statement)) return [statement.name?.text ?? "<anonymous>"];
+    if (ts.isTypeAliasDeclaration(statement)) return [statement.name.text];
     if (ts.isVariableStatement(statement)) {
       return statement.declarationList.declarations.map((declaration) =>
         declaration.name.getText(),
@@ -151,10 +152,16 @@ function isDynamicRoot(initializer: ts.Expression | undefined, element: string):
   return factory.body.getText() === `props.component ?? "${element}"`;
 }
 
-type PropsShape = { kind: string; element: string | undefined; own: ts.TypeNode | undefined };
+type PropsShape = {
+  kind: string;
+  element: string | undefined;
+  own: ts.TypeNode | undefined;
+  alias: ts.TypeAliasDeclaration;
+};
 
-function propsShapeOf(type: ts.TypeNode | undefined): PropsShape | undefined {
-  if (!type || !ts.isTypeReferenceNode(type)) return undefined;
+function propsShapeOf(alias: ts.TypeAliasDeclaration | undefined): PropsShape | undefined {
+  const type = alias?.type;
+  if (!alias || !type || !ts.isTypeReferenceNode(type)) return undefined;
   const kind = type.typeName.getText();
   if (kind !== elementPropsType && kind !== polymorphicPropsType) return undefined;
   const [target, own] = type.typeArguments ?? [];
@@ -164,15 +171,49 @@ function propsShapeOf(type: ts.TypeNode | undefined): PropsShape | undefined {
         ? target.literal.text
         : undefined
       : undefined;
-  return { kind, element, own };
+  return { kind, element, own, alias };
 }
 
-function polymorphicDefault(fn: ts.FunctionDeclaration): string | undefined {
-  const [parameter] = fn.typeParameters ?? [];
+function polymorphicDefault(
+  declaration: ts.FunctionDeclaration | ts.TypeAliasDeclaration,
+): string | undefined {
+  const [parameter] = declaration.typeParameters ?? [];
   const fallback = parameter?.default;
   return fallback && ts.isLiteralTypeNode(fallback) && ts.isStringLiteral(fallback.literal)
     ? fallback.literal.text
     : undefined;
+}
+
+function signatureOf(fn: ts.FunctionDeclaration): string {
+  const [parameter] = fn.parameters;
+  return [
+    fn.typeParameters?.map((type) => type.getText()).join(", ") ?? "",
+    parameter?.type?.getText() ?? "",
+    fn.type?.getText() ?? "",
+  ].join(" | ");
+}
+
+function overloadProblems(
+  name: string,
+  implementation: ts.FunctionDeclaration,
+  overloads: ts.FunctionDeclaration[],
+  shape: PropsShape,
+): string[] {
+  const propsType = `${name}Props`;
+  if (shape.kind !== polymorphicPropsType) {
+    return overloads.length === 0
+      ? []
+      : [`declare ${name} once, with no overload: its props type names one element.`];
+  }
+  const element = polymorphicDefault(implementation) ?? "<element>";
+  const generic = `T extends ValidComponent = "${element}" | ${propsType}<T> | JSX.Element`;
+  const byDefault = ` | ${propsType} | JSX.Element`;
+  return overloads.map(signatureOf).join("\n") === [generic, byDefault].join("\n") &&
+    polymorphicDefault(shape.alias) === element
+    ? []
+    : [
+        `type ${propsType} as \`${propsType}<T extends ValidComponent = "${element}">\`, and declare \`export function ${name}<T extends ValidComponent = "${element}">(props: ${propsType}<T>): JSX.Element;\` and then \`export function ${name}(props: ${propsType}): JSX.Element;\` before the implementation, so ComponentProps<typeof ${name}> reads the props of a <${element}> instead of any.`,
+      ];
 }
 
 function rootProblems(fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
@@ -233,17 +274,19 @@ function problemsWith({ name, file, source }: Component): string[] {
   const problems: string[] = [];
   const report = (message: string) => problems.push(`${where}: ${message}`);
 
+  const propsType = `${name}Props`;
   const exported = exportedNames(source);
-  if (exported.length !== 1 || exported[0] !== name) {
+  if (exported.filter((found) => found !== name).join() !== propsType || !exported.includes(name)) {
     report(
-      `export exactly one function named "${name}" and nothing else (found: ${exported.join(", ") || "nothing"}).`,
+      `export one function named "${name}", its props type "${propsType}", and nothing else (found: ${exported.join(", ") || "nothing"}).`,
     );
   }
 
-  const fn = source.statements.find(
+  const declarations = source.statements.filter(
     (statement): statement is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(statement) && statement.name?.text === name,
   );
+  const fn = declarations.find((declaration) => declaration.body !== undefined);
   if (!fn?.body) {
     report(`declare "export function ${name}(props ...)" and nothing that replaces it.`);
     return problems;
@@ -253,10 +296,20 @@ function problemsWith({ name, file, source }: Component): string[] {
   if (fn.parameters.length !== 1 || parameter.name.getText() !== "props") {
     report('take one parameter named "props".');
   }
-  const shape = propsShapeOf(parameter?.type);
+  const typeParameter = fn.typeParameters?.[0]?.name.text;
+  const parameterType = typeParameter === undefined ? propsType : `${propsType}<${typeParameter}>`;
+  if (parameter?.type?.getText() !== parameterType) {
+    report(`type props as ${parameterType}.`);
+  }
+  const shape = propsShapeOf(
+    source.statements.find(
+      (statement): statement is ts.TypeAliasDeclaration =>
+        ts.isTypeAliasDeclaration(statement) && statement.name.text === propsType,
+    ),
+  );
   if (!shape) {
     report(
-      `type props as ${polymorphicPropsType}<T, Own> for a root that \`component\` picks, or as ${elementPropsType}<"element", Own> for a root that is always one element, both from ./style-props.`,
+      `declare \`export type ${propsType}\` as ${polymorphicPropsType}<T, Own> for a root that \`component\` picks, or as ${elementPropsType}<"element", Own> for a root that is always one element, both from ./style-props.`,
     );
     return problems;
   }
@@ -307,6 +360,12 @@ function problemsWith({ name, file, source }: Component): string[] {
   return [
     ...problems,
     ...[
+      ...overloadProblems(
+        name,
+        fn,
+        declarations.filter((declaration) => declaration !== fn),
+        shape,
+      ),
       ...rootProblems(fn, shape),
       ...partProblems(fn),
       ...descendants(fn)
@@ -344,13 +403,13 @@ test("every other source file is the barrel, a StyleX definition, or a kebab-cas
   expect(violations).toEqual([]);
 });
 
-test("the barrel exports every component once, in alphabetical order, and nothing else", () => {
+test("the barrel exports every component and its props type once, in alphabetical order, and nothing else", () => {
   for (const { source } of libraries) {
     const names = components
       .filter(({ file }) => file.startsWith(source))
       .map(({ name }) => name)
       .sort();
-    const expected = names.map((name) => `export { ${name} } from "./${name}";`);
+    const expected = names.map((name) => `export { ${name}, type ${name}Props } from "./${name}";`);
     const actual = readFileSync(join(source, "index.ts"), "utf8").trim().split("\n");
 
     expect(actual, `${relativePath(join(source, "index.ts"))}`).toEqual(expected);

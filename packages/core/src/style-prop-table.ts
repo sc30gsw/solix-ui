@@ -133,8 +133,9 @@ function setsDisplay(name: StylePropName): name is DisplayStylePropName {
   return stylePropTable[canonicalOf(name)].property === "display";
 }
 
-/** The style props that decide whether an element is displayed, which a component whose element the platform shows and hides leaves out. */
 export const displayPropNames = [...stylePropNames.filter(setsDisplay), ...visibilityPropNames];
+
+export type DisplayPropName = (typeof displayPropNames)[number];
 
 function shorthandDepth(name: CanonicalStylePropName): number {
   const row = stylePropTable[name];
