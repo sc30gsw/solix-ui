@@ -115,7 +115,7 @@ inEveryEngine((browser) => {
       await opened.close();
     });
 
-    test("styles on a part beats the library's style and the consumer's class on that part", async () => {
+    test("styles on a part beats the library's style and the consumer's class on that part, closed and open", async () => {
       const summary = opened.page.locator("summary").filter({ hasText: "Styled parts" });
 
       expect(
@@ -131,6 +131,20 @@ inEveryEngine((browser) => {
         "the .outlined class that classes.summary names still applies",
       ).toBe("solid");
       expect(await computed(summary, "cursor"), "the library's cursor stays").toBe("pointer");
+
+      await summary.click();
+      await expect
+        .poll(() => opened.page.getByText("Content of the styled parts").isVisible())
+        .toBe(true);
+
+      expect(
+        await computed(summary, "background-color"),
+        "styles.summary beats the library's open background",
+      ).toBe(opened.expected("partBackground"));
+      expect(
+        await computed(summary, "color"),
+        "styles.summary beats the library's open text colour",
+      ).toBe(opened.expected("partText"));
     });
   });
 });

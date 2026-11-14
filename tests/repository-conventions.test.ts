@@ -172,7 +172,7 @@ test("every row of the rules table in AGENTS.md is compact, so a rule edit chang
 
   expect(
     padded,
-    "Write each row as `| Rule | Enforced by |`, with one space on each side of every |. Compact rows keep each rule edit to one line; padded rows make the formatter rewrite the whole table when one cell grows.",
+    "Write each row as `| Rule | Enforced by |`, with one space on each side of every |. Compact rows keep each rule edit to one line.",
   ).toEqual([]);
 });
 

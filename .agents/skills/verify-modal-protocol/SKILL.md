@@ -23,7 +23,7 @@ It does if it edits any of these:
 | --- | --- |
 | `packages/core/src/Modal.tsx`: `Modal` | Its `opened` prop drives `showModal()` and `close()` from one effect. A consumer's `onClose` reaches the `<dialog>`. It has one `<form method="dialog">` button named `Close`. |
 | `packages/core/src/light-dismiss.ts` | The fallback runs only where `closedBy` is missing. It closes when the press and the release are both outside the dialog's box. |
-| `apps/playground/src/App.tsx` | The page has one `<dialog>`, a button named `Open modal`, a first button directly under `main`, a text input named `Name` inside the dialog, the text `Modal content`, and a paragraph that starts `The app records the modal as` and ends `opened.` or `closed.` |
+| `apps/playground/src/App.tsx` and `apps/playground/src/sections` | The page has one `<dialog>`, a button named `Open modal`, a first button directly under `main`, a text input named `Name` inside the dialog, the text `Modal content`, and a paragraph that starts `The app records the modal as` and ends `opened.` or `closed.` |
 | `apps/playground/tests/modal-protocol.test.ts` | It runs the commands against the built app in each installed engine and holds the model of the two facts. |
 | `tests/support/global-setup.ts` | It runs `vp run -r build` in production mode before any test, which builds the library and the app. |
 | `scripts/browser-engines.mjs` | It lists the engines the test runs on, and which of them are installed. |

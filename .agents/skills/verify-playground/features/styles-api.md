@@ -5,9 +5,9 @@ At the end of the page is a section named `Styles API`. Every component takes `c
 ## Sub-features
 
 - `classes-root-beats-default` shows the `.danger` background on the button named `Class from classes.root`, while its height stays the library's.
-- `styles-beat-class-and-default` shows the `--playground-part-background` colour that `styles.summary` sets on the `Styled parts` summary, not the `.danger` background its class sets nor the library's surface or primary background, and the `--playground-part-text` colour on it, not the library's text colours. The text reaches at least 4.5:1 contrast against that background, open or closed.
+- `styles-beat-class-and-default` shows the `--playground-part-background` colour that `styles.summary` sets on the `Styled parts` summary, not the `.danger` background its class sets nor the library's surface or primary background, and the `--playground-part-text` colour on it, not the library's text colours.
 - `classes-on-a-part` shows the `.outlined` outline that `classes.summary` puts on the same summary.
-- `unstyled-drops-the-look` shows the button named `Unstyled` with the same background, colour, border, radius, height and padding as the `Plain button` next to it, still carrying its stable class `solix-Button-root`.
+- `unstyled-drops-the-look` shows the button named `Unstyled` looking like the `Plain button` next to it, in every property that `lookOf` in `scripts/expected-values.ts` reads, still carrying its stable class `solix-Button-root`.
 - `style-prop-on-button` shows the error token's background that `bg="error"` sets on the button named `Style prop on a Button`.
 
 ## How to get to it (user POV)
@@ -29,5 +29,4 @@ Preconditions:
 
 - `styles` writes inline declarations, so it beats every class, the consumer's included. On the root, a consumer's `style` comes after `styles.root` and wins over it.
 - A class that `classes` names is a plain consumer class, unlayered, so it beats the library's `solix` layer the same way `class` does.
-- `unstyled` drops only the library's StyleX classes. The stable class `solix-<Component>-<part>` stays on every part, and style props, `classes`, `styles`, `class` and `style` still apply.
-- `apps/playground/tests/consumer.test.ts` checks the same cases with scripts on and off, in every installed engine.
+- `apps/playground/tests/button.test.ts` and `apps/playground/tests/disclosure.test.ts` check the same cases with scripts on and off, in every installed engine, the open `Styled parts` summary included.
