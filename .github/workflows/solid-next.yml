@@ -22,3 +22,5 @@ jobs:
       - run: vp install --no-frozen-lockfile
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp run verify
+        env:
+          SOLIX_PRIVATE_TERMS: ${{ secrets.SOLIX_PRIVATE_TERMS }}
