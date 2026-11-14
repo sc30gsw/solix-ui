@@ -12,21 +12,31 @@ type Library = typeof Primitives;
 type Primitive = Extract<keyof Library, `create${string}`>;
 type ServerCase<F> = {
   create: (primitive: F) => unknown;
-  read: (returned: never) => unknown;
-  expected: unknown;
+  read?: (returned: never) => unknown;
+  expected?: unknown;
 };
 
 const primitivePrefix = "create";
 
 function serverCase<F, R>(cases: {
   create: (primitive: F) => R;
-  read: (returned: R) => unknown;
-  expected: unknown;
+  read?: (returned: R) => unknown;
+  expected?: unknown;
 }): ServerCase<F> {
   return cases;
 }
 
 const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
+  createClickOutside: serverCase({
+    create: (createClickOutside) => [
+      createClickOutside(() => undefined),
+      createClickOutside(
+        () => undefined,
+        ["mousedown"],
+        () => [undefined],
+      ),
+    ],
+  }),
   createCounter: serverCase({
     create: (createCounter) => createCounter(11, { min: 0, max: 10 }),
     read: ([count]) => count(),
@@ -36,6 +46,23 @@ const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createDisclosure) => createDisclosure(true),
     read: ([opened]) => opened(),
     expected: true,
+  }),
+  createEventListener: serverCase({
+    create: (createEventListener) =>
+      createEventListener(
+        "click",
+        () => undefined,
+        () => ({ capture: true }),
+      ),
+  }),
+  createFocusReturn: serverCase({
+    create: (createFocusReturn) => createFocusReturn({ opened: true, surface: () => undefined }),
+  }),
+  createFocusTrap: serverCase({
+    create: (createFocusTrap) => createFocusTrap(() => true),
+  }),
+  createHotkeys: serverCase({
+    create: (createHotkeys) => createHotkeys(() => [["mod+K", () => undefined]]),
   }),
   createInputState: serverCase({
     create: (createInputState) => createInputState("typed"),
@@ -94,6 +121,14 @@ const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     read: ([state]) => [state.value(), state.lastValidValue(), state.valid()],
     expected: ["ab", undefined, true],
   }),
+  createWindowEvent: serverCase({
+    create: (createWindowEvent) =>
+      createWindowEvent(
+        "resize",
+        () => undefined,
+        () => ({ passive: true }),
+      ),
+  }),
 };
 
 function isPrimitive(name: string): name is Primitive {
@@ -109,7 +144,7 @@ function renderOnTheServer<K extends Primitive>(name: K) {
   const touched = browserResourcesReadDuring(() => {
     renderedOnTheServer(() => {
       rendered.returned = create(primitive);
-      rendered.value = read(rendered.returned as never);
+      rendered.value = read?.(rendered.returned as never);
       return serialized(rendered.value);
     });
   });

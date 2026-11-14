@@ -1,6 +1,6 @@
 # Styles API
 
-At the end of the page is a section named `Styles API`. Every component takes `classes` and `styles`, keyed by the names of its parts, and `unstyled`. The section holds a library button that `classes.root` gives the consumer's `.danger` class, a disclosure named `Styled parts` whose summary gets the consumer's `.danger` and `.outlined` classes through `classes.summary` and a background and a text colour through `styles.summary`, a library button with `unstyled`, and a plain `<button>` named `Plain button` that the library does not style.
+A section named `Styles API` shows the Styles API. Every component takes `classes` and `styles`, keyed by the names of its parts, and `unstyled`. The section holds a library button that `classes.root` gives the consumer's `.danger` class, a disclosure named `Styled parts` whose summary gets the consumer's `.danger` and `.outlined` classes through `classes.summary` and a background and a text colour through `styles.summary`, a library button with `unstyled`, and a plain `<button>` named `Plain button` that the library does not style.
 
 ## Sub-features
 
@@ -11,7 +11,7 @@ At the end of the page is a section named `Styles API`. Every component takes `c
 
 ## How to get to it (user POV)
 
-- Open the page and scroll to the end. The section named `Styles API` comes after the section named `Style props`.
+- Open the page and scroll to the section named `Styles API`.
 - Click the summary named `Styled parts` to open it.
 
 ## Driving it with drive.mjs

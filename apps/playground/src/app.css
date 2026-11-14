@@ -20,3 +20,8 @@
 .roomy {
   margin-top: 2.6rem;
 }
+
+.region {
+  padding: 1rem;
+  border: 1px dashed currentColor;
+}

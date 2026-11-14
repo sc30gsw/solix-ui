@@ -7,8 +7,10 @@ import { enginesToVerify } from "./scripts/browser-engines.mjs";
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
 const tablesKeptCompact = ["AGENTS.md"];
+const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
+const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
@@ -17,10 +19,15 @@ export default defineConfig({
     "*.{ts,tsx,jsx}": "solid2-kit check",
   },
   fmt: {
-    ignorePatterns: [...filesOwnedByOtherTools, ...generatedEvidence, ...tablesKeptCompact],
+    ignorePatterns: [
+      ...filesOwnedByOtherTools,
+      ...generatedEvidence,
+      ...tablesKeptCompact,
+      ...ruleFixtures,
+    ],
   },
   lint: {
-    ignorePatterns: filesOwnedByOtherTools,
+    ignorePatterns: [...filesOwnedByOtherTools, ...ruleFixtures],
     plugins: ["typescript", "unicorn", "oxc", "import"],
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: {
@@ -64,12 +71,13 @@ export default defineConfig({
             "packages/*/tests/**/*.test.{ts,tsx}",
             "apps/*/tests/**/*.test.{ts,tsx}",
           ],
-          exclude: ["**/node_modules/**", browserTests],
+          exclude: ["**/node_modules/**", browserTests, ...ruleFixtures],
           globalSetup: ["tests/support/global-setup.ts"],
         },
       },
       {
         extends: true,
+        optimizeDeps: { include: preBundledForBrowserTests },
         test: {
           name: "browser",
           include: [browserTests],

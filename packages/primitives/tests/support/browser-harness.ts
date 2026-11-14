@@ -6,6 +6,8 @@ import {
   OBSERVE,
 } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
+import type { EventOf } from "../../src/internal-listener";
+import type { RefSetter } from "../../src/types";
 import { listenerMethods, observers, timers } from "./browser-resources";
 
 type Listener = {
@@ -24,12 +26,14 @@ type ObserverClass = new (callback: (...args: unknown[]) => void, ...rest: unkno
 const browserGlobals = globalThis as unknown as Record<string, unknown>;
 const listening = EventTarget.prototype as unknown as Record<string, unknown>;
 const addListener = listening[listenerMethods.add] as EventTarget["addEventListener"];
+const removeListener = listening[listenerMethods.remove] as EventTarget["removeEventListener"];
 const returnedFunctionsWrappedToDepth = 2;
 
 const liveListeners = new Set<Listener>();
 const liveTimers = new Map<string, string>();
 const liveObservations = new Map<object, Set<Node>>();
 const disposers: (() => void)[] = [];
+const recorders: (() => void)[] = [];
 const scope = { depth: 0 };
 let diagnostics: DiagnosticCapture | undefined;
 
@@ -247,14 +251,24 @@ export function watch<T>(read: () => T): T[] {
   return seen;
 }
 
-export function attached<E extends HTMLElement>(
-  element: E,
-  type?: string,
-  listener?: (event: Event) => void,
-): E {
-  if (type && listener) addListener.call(element, type, listener);
-  document.body.append(element);
-  return element;
+export function mountOn<E extends Element>(create: () => RefSetter<E>, element: E): RefSetter<E> {
+  const ref = mount(create);
+  ref(element);
+  flush();
+  return ref;
+}
+
+export function record<T extends EventTarget, K extends string>(
+  target: T,
+  type: K,
+): EventOf<T, K>[] {
+  const seen: EventOf<T, K>[] = [];
+  const listener = (event: Event) => {
+    seen.push(event as EventOf<T, K>);
+  };
+  addListener.call(target, type, listener);
+  recorders.push(() => removeListener.call(target, type, listener));
+  return seen;
 }
 
 export function unmount(): void {
@@ -276,6 +290,7 @@ beforeEach(() => {
 
 afterEach(() => {
   unmount();
+  for (const remove of recorders.splice(0)) remove();
   document.body.replaceChildren();
   expect(diagnosticsRaised(), "a primitive raised a Solid development diagnostic").toEqual([]);
   expect(
