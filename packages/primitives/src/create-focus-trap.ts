@@ -1,13 +1,9 @@
 import { access } from "./internal-access";
 import { createElementAttachment } from "./internal-attachment";
-import {
-  activeElementOf,
-  containsComposed,
-  deepActiveElement,
-  focusFirst,
-  moveFocus,
-} from "./internal-focus";
+import { activeElementOf, containsComposed, deepActiveElement } from "./internal-active";
+import { focusFirst, moveFocus } from "./internal-focus";
 import { disposeAll, listen, listenerSettings } from "./internal-listener";
+import { isHtmlElement, isNode, isShadowRoot } from "./internal-node";
 import { initialFocusCandidates, tabStopCandidates } from "./internal-tabbable";
 import type { MaybeAccessor, RefSetter } from "./types";
 
@@ -26,8 +22,10 @@ function liesOutside(box: DOMRect, view: Window | null): boolean {
 
 function frameFocusedOutside(container: HTMLElement): HTMLIFrameElement | undefined {
   const active = deepActiveElement(container.ownerDocument);
-  return active instanceof HTMLIFrameElement && !containsComposed(container, active)
-    ? active
+  return isHtmlElement(active) &&
+    active.localName === "iframe" &&
+    !containsComposed(container, active)
+    ? (active as HTMLIFrameElement)
     : undefined;
 }
 
@@ -40,7 +38,7 @@ function comesBefore(node: Node, container: HTMLElement): boolean {
   const anchor: { at: Node } = { at: container };
   while (anchor.at.getRootNode() !== node.getRootNode()) {
     const root = anchor.at.getRootNode();
-    if (!(root instanceof ShadowRoot)) break;
+    if (!isShadowRoot(root)) break;
     anchor.at = root.host;
   }
   return (anchor.at.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
@@ -83,13 +81,14 @@ function trap(container: HTMLElement): () => void {
   };
   const removeListeners = disposeAll([
     listen(container.ownerDocument, listenerSettings(activated), (event) => {
-      if (event instanceof CustomEvent && event.detail !== token) newer.add(event.detail);
+      const detail: unknown = Reflect.get(event, "detail");
+      if (detail !== token) newer.add(detail);
     }),
     listen(container.ownerDocument, listenerSettings(released), (event) => {
-      if (event instanceof CustomEvent) newer.delete(event.detail);
+      newer.delete(Reflect.get(event, "detail"));
     }),
     listen(container.ownerDocument, listenerSettings(focusin, true), (event) => {
-      if (event.target instanceof Node) bringBack(event.target, event.relatedTarget === null);
+      if (isNode(event.target)) bringBack(event.target, event.relatedTarget === null);
     }),
     listen(container, listenerSettings(focusout, true), (event) => {
       if (event.relatedTarget === null) bringBackFromFrameOnNextTask();

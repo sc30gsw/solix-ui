@@ -102,6 +102,7 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-sized.ts", "import { createMemo }"),
     forbiddenAt("src/create-sized.ts", "import { createSignal }"),
   ],
+  instanceofChecks: [forbiddenAt("src/create-misbehaving.ts", "instanceof Element")],
   focusMoves: [
     forbiddenAt("src/create-forbidden.ts", "element.focus()"),
     forbiddenAt("src/internal-focus.ts", "target.focus({ preventScroll: true })"),

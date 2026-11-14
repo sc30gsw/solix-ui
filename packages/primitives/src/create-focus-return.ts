@@ -1,6 +1,7 @@
 import { type Accessor, createEffect, onCleanup, untrack } from "solid-js";
 import { access } from "./internal-access";
-import { containsComposed, deepActiveElement, isFocusTarget, moveFocus } from "./internal-focus";
+import { containsComposed, deepActiveElement } from "./internal-active";
+import { isFocusTarget, moveFocus } from "./internal-focus";
 import type { MaybeAccessor } from "./types";
 
 /** Each option is live. */

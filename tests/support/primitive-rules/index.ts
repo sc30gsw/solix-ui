@@ -3,6 +3,7 @@ import { barrelOrderRule } from "./barrel-order";
 import { browserTestsUseTheHarnessRule } from "./browser-tests-use-the-harness";
 import { elementAttachmentsRule } from "./element-attachments";
 import { accessibilityTestsRule, focusMovesRule } from "./focus";
+import { instanceofChecksRule } from "./instanceof-checks";
 import { type Library, type PrimitiveRule, publicModules } from "./library";
 import { modelTestsRule } from "./model-tests";
 import { moduleStateRule } from "./module-state";
@@ -27,6 +28,7 @@ export const primitiveRules = {
   argumentReads: argumentReadsRule,
   styleAndClassWrites: styleAndClassWritesRule,
   elementAttachments: elementAttachmentsRule,
+  instanceofChecks: instanceofChecksRule,
   focusMoves: focusMovesRule,
   testsNamedForModules: testsNamedForModulesRule,
   modelTests: modelTestsRule,

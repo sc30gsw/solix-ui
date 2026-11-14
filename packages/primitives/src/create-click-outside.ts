@@ -2,6 +2,7 @@ import { access } from "./internal-access";
 import { createElementAttachment } from "./internal-attachment";
 import { sameItems } from "./internal-equal";
 import { disposeAll, listen, listenerSettings } from "./internal-listener";
+import { isNode } from "./internal-node";
 import type { MaybeAccessor, RefSetter } from "./types";
 
 type Exactly<T, U> = [T] extends [U] ? ([U] extends [T] ? true : false) : false;
@@ -34,7 +35,7 @@ function isPresent(node: Element | null | undefined): node is Element {
 }
 
 function isOnPage(target: EventTarget | null): boolean {
-  if (!(target instanceof Node) || target.ownerDocument === null) return false;
+  if (!isNode(target) || target.ownerDocument === null) return false;
   return (
     target === target.ownerDocument.documentElement || target.ownerDocument.body.contains(target)
   );

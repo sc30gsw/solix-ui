@@ -1,4 +1,5 @@
 import type { Focusable } from "./internal-focus";
+import { isHtmlElement, isHtmlOrSvgElement, isInputOfType } from "./internal-node";
 
 const autofocus = "[data-autofocus]";
 const inert = "[inert]";
@@ -16,7 +17,7 @@ function treeOrder(root: ParentNode): Element[] {
 
 function isEditingHost(element: Element): boolean {
   return (
-    element instanceof HTMLElement &&
+    isHtmlElement(element) &&
     element.isContentEditable &&
     !(element.parentElement?.isContentEditable ?? false)
   );
@@ -24,7 +25,7 @@ function isEditingHost(element: Element): boolean {
 
 function isFocusable(element: Element): element is Focusable {
   return (
-    (element instanceof HTMLElement || element instanceof SVGElement) &&
+    isHtmlOrSvgElement(element) &&
     (element.tabIndex >= 0 || element.hasAttribute(tabindex) || isEditingHost(element)) &&
     !element.matches(disabled) &&
     element.closest(inert) === null &&
@@ -40,15 +41,12 @@ function isTabStop(element: Element): element is Focusable {
 }
 
 function radioGroupOf(element: Element, among: readonly Focusable[]): HTMLInputElement[] {
-  if (!(element instanceof HTMLInputElement) || element.type !== radio || element.name === "") {
+  if (!isInputOfType(element, radio) || element.name === "") {
     return [];
   }
   return among.filter(
     (other): other is HTMLInputElement =>
-      other instanceof HTMLInputElement &&
-      other.type === radio &&
-      other.name === element.name &&
-      other.form === element.form,
+      isInputOfType(other, radio) && other.name === element.name && other.form === element.form,
   );
 }
 

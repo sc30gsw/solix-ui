@@ -1,12 +1,6 @@
 import { expect, test } from "vite-plus/test";
-import {
-  activeElementOf,
-  containsComposed,
-  deepActiveElement,
-  focusFirst,
-  isFocusTarget,
-  moveFocus,
-} from "../src/internal-focus";
+import { activeElementOf, containsComposed, deepActiveElement } from "../src/internal-active";
+import { focusFirst, isFocusTarget, moveFocus } from "../src/internal-focus";
 import "./support/browser-harness";
 import { attached, button, html } from "./support/dom";
 
