@@ -16,15 +16,21 @@ export function createMisbehaving(options: { size: MaybeSize }, element: Element
       return listen(element, "ping", () => undefined);
     },
   );
+  const observer = new ResizeObserver(() => undefined);
+  const Observer = browserApi(window, "MutationObserver");
   const known = "document" in globalThis && globalThis.window !== undefined;
   const server = import.meta.env.SSR;
   try {
-    element.getBoundingClientRect();
+    observer.observe(element);
   } catch {
-    element.remove();
+    observer.disconnect();
   }
   const isElement = element instanceof Element;
-  return () => (isElement && known && server && live ? read() : 0);
+  return () => (isElement && known && server && Observer && live ? read() : 0);
 }
 
 type MaybeSize = number | (() => number);
+
+function browserApi<O extends object, K extends keyof O>(owner: O, name: K): O[K] {
+  return owner[name];
+}

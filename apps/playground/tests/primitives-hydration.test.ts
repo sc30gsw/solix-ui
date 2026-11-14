@@ -9,8 +9,67 @@ const engineWait = { timeout: 5_000 };
 
 type Revealed = { expected: string; restore: () => Promise<unknown> };
 
+function scrolledTo(page: Page, y: number): Promise<void> {
+  return page.evaluate(async (top) => {
+    window.scrollTo({ top, behavior: "instant" });
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  }, y);
+}
+
+function region(page: Page, name: string) {
+  return page.locator(`[data-case-region="${name}"]`);
+}
+
+async function sized(page: Page, name: string): Promise<() => Promise<unknown>> {
+  await region(page, name).evaluate((element) => {
+    if (!(element instanceof HTMLElement)) return;
+    Object.assign(element.style, {
+      boxSizing: "border-box",
+      width: "200px",
+      height: "50px",
+      padding: "10px",
+      border: "0",
+    });
+  });
+  return () => region(page, name).evaluate((element) => element.removeAttribute("style"));
+}
+
+async function scrolledIntoView(page: Page, name: string): Promise<Revealed> {
+  await region(page, name).scrollIntoViewIfNeeded();
+  return { expected: "true", restore: () => scrolledTo(page, 0) };
+}
+
 const reveal: { [K in BrowserValuePrimitive]: (page: Page) => Promise<Revealed> } = {
+  createElementSize: async (page) => ({
+    expected: "[200,50]",
+    restore: await sized(page, "createElementSize"),
+  }),
+  createHover: async (page) => {
+    await region(page, "createHover").hover();
+    return {
+      expected: "true",
+      restore: async () => {
+        await page.mouse.move(0, 0);
+        await scrolledTo(page, 0);
+      },
+    };
+  },
+  createInViewport: (page) => scrolledIntoView(page, "createInViewport"),
+  createIntersection: (page) => scrolledIntoView(page, "createIntersection"),
   createMediaQuery: async () => ({ expected: "[true,true]", restore: async () => undefined }),
+  createResizeObserver: async (page) => ({
+    expected: JSON.stringify({
+      x: 10,
+      y: 10,
+      width: 180,
+      height: 30,
+      top: 10,
+      left: 10,
+      bottom: 40,
+      right: 190,
+    }),
+    restore: await sized(page, "createResizeObserver"),
+  }),
 };
 
 function line(page: Page, start: string): Promise<string | null> {

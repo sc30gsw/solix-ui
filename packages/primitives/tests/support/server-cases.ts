@@ -63,6 +63,12 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
       handlers.set(false);
     },
   }),
+  createElementSize: serverCase({
+    create: (createElementSize) => createElementSize({ box: "border-box" }),
+    read: ({ width, height }) => [width(), height()],
+    expected: [0, 0],
+    ref: ({ ref }) => ref,
+  }),
   createEventListener: serverCase({
     create: (createEventListener) =>
       createEventListener(
@@ -83,11 +89,29 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
   createHotkeys: serverCase({
     create: (createHotkeys) => createHotkeys(() => [["mod+K", () => undefined]]),
   }),
+  createHover: serverCase({
+    create: (createHover) => createHover(),
+    read: ({ hovered }) => hovered(),
+    expected: false,
+    ref: ({ ref }) => ref,
+  }),
+  createInViewport: serverCase({
+    create: (createInViewport) => createInViewport(),
+    read: ({ inViewport }) => inViewport(),
+    expected: false,
+    ref: ({ ref }) => ref,
+  }),
   createInputState: serverCase({
     create: (createInputState) => createInputState("typed"),
     read: ([value]) => value(),
     expected: "typed",
     commands: ([, onChange]) => onChange("changed"),
+  }),
+  createIntersection: serverCase({
+    create: (createIntersection) => createIntersection(() => ({ threshold: [0, 1] })),
+    read: ({ entry }) => entry()?.isIntersecting ?? null,
+    expected: null,
+    ref: ({ ref }) => ref,
   }),
   createListState: serverCase({
     create: (createListState) => createListState(() => [1, 2]),
@@ -115,6 +139,22 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     read: ([withoutInitial, withInitial]) => [withoutInitial(), withInitial()],
     expected: [false, true],
   }),
+  createMutationObserver: serverCase({
+    create: (createMutationObserver) =>
+      createMutationObserver(
+        () => undefined,
+        () => ({ childList: true }),
+      ),
+    ref: (ref) => ref,
+  }),
+  createMutationObserverTarget: serverCase({
+    create: (createMutationObserverTarget) =>
+      createMutationObserverTarget(
+        () => undefined,
+        { attributes: true },
+        () => document.documentElement,
+      ),
+  }),
   createPrevious: serverCase({
     create: (createPrevious) => createPrevious(() => "now"),
     read: (previous) => previous(),
@@ -129,6 +169,12 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
       update((items) => items.slice(1));
       cleanQueue();
     },
+  }),
+  createResizeObserver: serverCase({
+    create: (createResizeObserver) => createResizeObserver(),
+    read: ([, rect]) => rect(),
+    expected: { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0 },
+    ref: ([ref]) => ref,
   }),
   createSet: serverCase({
     create: (createSet) => createSet(["member"]),

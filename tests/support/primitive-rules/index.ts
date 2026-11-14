@@ -14,6 +14,7 @@ import { listenerRolesRule } from "./listener-roles";
 import { liveOptionsRule } from "./live-options";
 import { modelTestsRule } from "./model-tests";
 import { moduleStateRule } from "./module-state";
+import { observerConstructionRule } from "./observer-construction";
 import { publicExportsRule } from "./public-exports";
 import { serverBranchesRule } from "./server-branches";
 import { serverEffectsRule } from "./server-effects";
@@ -40,6 +41,7 @@ export const primitiveRules = {
   browserGlobalReads: browserGlobalReadsRule,
   liveOptions: liveOptionsRule,
   listenerRoles: listenerRolesRule,
+  observerConstruction: observerConstructionRule,
   caughtErrors: caughtErrorsRule,
   instanceofChecks: instanceofChecksRule,
   focusMoves: focusMovesRule,

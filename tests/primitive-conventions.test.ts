@@ -119,12 +119,17 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-forbidden.ts", "document.adoptedStyleSheets"),
     forbiddenAt("src/create-forbidden.ts", 'document.createElement("style")'),
     forbiddenAt("src/create-misbehaving.ts", "const width = window"),
+    forbiddenAt("src/create-misbehaving.ts", "const Observer"),
     forbiddenAt("src/create-misbehaving.ts", "const known"),
   ],
   liveOptions: [forbiddenAt("src/create-misbehaving.ts", "const size = access")],
   listenerRoles: [
     forbiddenAt("src/create-misbehaving.ts", "import { listen }"),
     forbiddenAt("src/create-misbehaving.ts", "element.addEventListener"),
+  ],
+  observerConstruction: [
+    forbiddenAt("src/create-misbehaving.ts", "new ResizeObserver"),
+    forbiddenAt("src/create-misbehaving.ts", "const Observer"),
   ],
   caughtErrors: [forbiddenAt("src/create-misbehaving.ts", "} catch {")],
   instanceofChecks: [forbiddenAt("src/create-misbehaving.ts", "instanceof Element")],

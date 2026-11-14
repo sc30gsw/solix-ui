@@ -26,6 +26,22 @@ export type BrowserValue<T> = Accessor<T> & { readonly [browserValue]?: T };
 export type ReadOnce<T> = T | Accessor<T>;
 
 /**
+ * The size and position of an element's box, as a resize observer reports them. `x`, `y`, `top`,
+ * `left`, `bottom` and `right` are those of the content box, from `contentRect`. `width` and
+ * `height` are the physical width and height of the box the observer watches, in any writing mode.
+ */
+export type ObserverRect = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly top: number;
+  readonly left: number;
+  readonly bottom: number;
+  readonly right: number;
+};
+
+/**
  * The ref an element primitive returns. Put it on one element, alone or in a ref array:
  * `<div ref={[props.ref, trap]}>`. The primitive works on the latest element the ref received.
  * Solid never calls a ref with `null`, so an element that leaves the page stays current until
