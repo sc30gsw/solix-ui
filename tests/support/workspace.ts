@@ -17,7 +17,7 @@ export type Manifest = {
   peerDependencies?: Record<string, string>;
 };
 
-function outsideGeneratedOrInstalled(entry: string | Dirent): boolean {
+export function outsideGeneratedOrInstalled(entry: string | Dirent): boolean {
   return (typeof entry === "string" ? entry : entry.name)
     .split(sep)
     .some((segment) => generatedOrInstalled.has(segment));
@@ -44,3 +44,5 @@ export const scriptFiles = globSync("**/*.{ts,tsx,mjs,cjs,js}", {
   cwd: repositoryRoot,
   exclude: outsideGeneratedOrInstalled,
 });
+
+export const workflowFiles = globSync(".github/workflows/*.{yml,yaml}", { cwd: repositoryRoot });

@@ -16,7 +16,7 @@ Every rule in this repository is enforced by a check. Run all of them with `vp r
 | `vp run verify` runs before each commit and in CI, on every browser engine, and CI gives it the private-term list. | `tests/repository-conventions.test.ts`. |
 | Components follow Solid 2.0, not React or Solid 1.x. | `solid2-kit check` and `solid2-kit doctor`. |
 | A dependency version is written once, in the catalog. | `catalogMode: strict` in `pnpm-workspace.yaml` and `tests/workspace-rules.test.ts`. |
-| The Node version is written once, in `engines.node` in the root `package.json`. Every workflow reads it from there through `node-version-file`, no `.node-version`, `.nvmrc` or other manifest names one, and `@types/node` shares its major. | `tests/workspace-rules.test.ts`. |
+| The root `package.json` sets `engines.node` to a range with a lowest major, and `@types/node` shares that major. In every `.yml` or `.yaml` workflow, each `node-version-file:` is `package.json`, no line says `node-version:`, and `node-version-file: package.json` lines are at least as many as `runs-on:` lines. No `.node-version`, `.nvmrc` or `.tool-versions` file exists outside generated and installed files, no manifest sets `devEngines.runtime`, and no manifest but the root sets `engines.node`. | `tests/workspace-rules.test.ts`. |
 | The project is MIT-licensed, and every library package declares the same licence as the root. | `tests/workspace-rules.test.ts`. |
 | A library's peer range accepts the version the catalog pins. | `tests/workspace-rules.test.ts`. |
 | Compiler settings are written once, in `tsconfig.base.json`. | `tests/workspace-rules.test.ts`. |
