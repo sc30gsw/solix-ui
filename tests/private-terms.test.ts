@@ -4,7 +4,11 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { linesNamingATerm, parseTerms, privateTermsVariable } from "../scripts/private-terms.mjs";
+import {
+  lineNumbersNamingATerm,
+  parseTerms,
+  privateTermsVariable,
+} from "../scripts/private-terms.mjs";
 import { repositoryRoot } from "./support/workspace";
 
 const script = join(repositoryRoot, "scripts/check-private-terms.mjs");
@@ -34,7 +38,8 @@ test("a line names a term whatever its case, and other lines do not", () => {
     "\n",
   );
 
-  expect(linesNamingATerm(text, [madeUpTerm, otherMadeUpTerm])).toEqual([2, 3]);
+  expect(lineNumbersNamingATerm(text, [madeUpTerm, otherMadeUpTerm])).toEqual([2, 3]);
+  expect(lineNumbersNamingATerm(text, ["ZORBLAX"])).toEqual([2]);
 });
 
 test("the check names the file and line of each hit and never the term itself", () => {
