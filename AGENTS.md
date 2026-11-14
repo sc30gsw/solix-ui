@@ -13,6 +13,7 @@ Every rule in this repository is enforced by a check. Run all of them with `vp r
 | Skills, agents and this table stay true to the repository, and every agent is started by an installed skill. | `tests/repository-conventions.test.ts`. |
 | Every row of this table is compact, with one space on each side of each cell border and no padding, so a rule edit changes one line. The formatter leaves this file alone. | `tests/repository-conventions.test.ts`, and `fmt.ignorePatterns` in `vite.config.ts`. |
 | Every list of the playground's journeys names the same journeys, each feature file has the same four sections, and no two test servers share a port. | `tests/playground-verification-conventions.test.ts`. |
+| The evidence comment on a pull request holds one row per journey, with each engine's count of passed observations and a link to its recording, and fits in GitHub's 65,536 characters for 100 journeys on every engine. Steps, screenshots and observed values stay in the full report it links. | `tests/evidence-summary.test.ts`. |
 | `vp run verify` runs before each commit and in CI, on every browser engine, and CI gives it the private-term list. | `tests/repository-conventions.test.ts`. |
 | Components follow Solid 2.0, not React or Solid 1.x. | `solid2-kit check` and `solid2-kit doctor`. |
 | A dependency version is written once, in the catalog. | `catalogMode: strict` in `pnpm-workspace.yaml` and `tests/workspace-rules.test.ts`. |
