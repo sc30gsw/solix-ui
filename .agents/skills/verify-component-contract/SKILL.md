@@ -38,7 +38,7 @@ It does if it edits any of these:
 | `vite.config.ts` | It sets the test include globs, the global setup, and the Solid plugin. |
 | `solid-js`, `@solidjs/web` and `@solidjs/vite-plugin` in the catalog in `pnpm-workspace.yaml` | 2.0.0-rc.21, 2.0.0-rc.21 and 3.0.0-next.57. They decide how a `class` value becomes a class attribute. |
 
-Last confirmed against commit `c1a47cd`. Run `git diff c1a47cd -- packages/core apps/playground tests/support/global-setup.ts scripts/browser-engines.mjs tests/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `5f40ea0`. Run `git diff 5f40ea0 -- packages/core apps/playground tests/support/global-setup.ts scripts/browser-engines.mjs tests/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 

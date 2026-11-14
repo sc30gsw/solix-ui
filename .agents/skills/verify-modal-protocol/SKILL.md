@@ -30,7 +30,7 @@ It does if it edits any of these:
 | `vite.config.ts` | It sets the test include globs and the global setup. |
 | `playwright`, `solid-js`, `@solidjs/web`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | Playwright 1.63.0, Solid 2.0.0-rc.21, Solid plugin 3.0.0-next.57, fast-check 4.10.2. |
 
-Last confirmed against commit `c1a47cd`. Run `git diff c1a47cd -- packages/core apps/playground tests/support/global-setup.ts scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `5f40ea0`. Run `git diff 5f40ea0 -- packages/core apps/playground tests/support/global-setup.ts scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 
