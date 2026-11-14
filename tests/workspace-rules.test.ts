@@ -6,10 +6,12 @@ import { expect, test } from "vite-plus/test";
 import {
   type Manifest,
   libraryPackages,
+  outsideGeneratedOrInstalled,
   packages,
   repositoryRoot,
   rootManifest,
   scriptFiles,
+  workflowFiles,
 } from "./support/workspace";
 
 const vitePlusCommandFor: Record<string, string> = {
@@ -34,6 +36,12 @@ const workspaceFile = "pnpm-workspace.yaml";
 const catalogBlock = /^catalog:\n((?:[ \t]+.*\n?)+)/m;
 const catalogEntry = /^\s+("?)([^":\s]+)\1:\s*"?([^"\s]+)"?\s*$/;
 
+const nodeVersionHome = "package.json";
+const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
+const namesNodeVersion = /node-version["']?\s*:/;
+const namesNodeVersionFile = /node-version-file["']?\s*:\s*(.*?)\s*$/;
+const namesRunner = /runs-on["']?\s*:/;
+
 function catalogVersions(): Record<string, string> {
   const block = catalogBlock.exec(readFileSync(join(repositoryRoot, workspaceFile), "utf8"))?.[1];
   const entries = (block ?? "")
@@ -48,6 +56,21 @@ function catalogVersions(): Record<string, string> {
 function installedDependencies(manifest: Manifest): [string, string][] {
   return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });
 }
+
+function lowestMajorOf(range: string): number | undefined {
+  return semver.validRange(range) === null ? undefined : semver.minVersion(range)?.major;
+}
+
+function nodeRangeAndLowestMajor(): [string, number] {
+  const range = rootManifest.engines?.node;
+  const major =
+    range === undefined || semver.validRange(range) === "*" ? undefined : lowestMajorOf(range);
+  if (range === undefined || major === undefined)
+    throw new Error(`${nodeVersionHome}: set "engines.node" to the Node range the project runs on`);
+  return [range, major];
+}
+
+const [nodeRange, nodeMajor] = nodeRangeAndLowestMajor();
 
 test("the workspace has packages to check", () => {
   expect(packages.length).toBeGreaterThan(1);
@@ -210,4 +233,59 @@ test("the project is MIT-licensed in its licence text, its root manifest and eve
     `${projectLicence} License`,
   );
   expect(violations).toEqual([]);
+});
+
+test("in every workflow, each node-version-file is package.json, no line names node-version, and node-version-file lines are at least as many as runs-on lines", () => {
+  const readFromHome = `Set \`node-version-file: ${nodeVersionHome}\`, so CI runs the Node that engines.node in ${nodeVersionHome} names (${nodeRange}).`;
+  const violations = workflowFiles.flatMap((file) => {
+    const lines = readFileSync(join(repositoryRoot, file), "utf8").split("\n");
+    const numbered = lines.map((line, index) => ({ line, at: `${file}:${index + 1}` }));
+    const sources = numbered.flatMap(({ line, at }) => {
+      const source = namesNodeVersionFile.exec(line)?.[1];
+      return source === undefined ? [] : [{ source, at }];
+    });
+    const runners = lines.filter((line) => namesRunner.test(line)).length;
+    const readsFromHome = sources.filter(({ source }) => source === nodeVersionHome).length;
+    return [
+      ...sources
+        .filter(({ source }) => source !== nodeVersionHome)
+        .map(({ source, at }) => `${at}: reads Node from ${source}. ${readFromHome}`),
+      ...numbered
+        .filter(({ line }) => namesNodeVersion.test(line))
+        .map(({ line, at }) => `${at}: remove \`${line.trim()}\`. ${readFromHome}`),
+      ...(readsFromHome >= runners
+        ? []
+        : [
+            `${file}: ${runners} runs-on lines but ${readsFromHome} \`node-version-file: ${nodeVersionHome}\` lines. Give every job a setup step that reads Node from ${nodeVersionHome}.`,
+          ]),
+    ];
+  });
+
+  expect(workflowFiles.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
+test("no .node-version, .nvmrc or .tool-versions file, devEngines.runtime or engines.node outside package.json exists, and @types/node shares the lowest major of engines.node", () => {
+  const typesRange = catalogVersions()["@types/node"] ?? "";
+  const writtenAgain = [
+    ...globSync(nodeVersionFilesThatCompete, {
+      cwd: repositoryRoot,
+      exclude: outsideGeneratedOrInstalled,
+    }),
+    ...packages.flatMap(({ path, manifest }) => [
+      ...(manifest.devEngines?.runtime === undefined ? [] : [`${path} devEngines.runtime`]),
+      ...(manifest.engines?.node === undefined || path === nodeVersionHome
+        ? []
+        : [`${path} engines.node`]),
+    ]),
+  ];
+
+  expect(
+    writtenAgain,
+    `Remove these. The Node version lives only in engines.node in ${nodeVersionHome}, which Vite+, pnpm and CI all read.`,
+  ).toEqual([]);
+  expect(
+    lowestMajorOf(typesRange),
+    `${workspaceFile}: set "@types/node" (now ${typesRange}) to Node ${nodeMajor}, the major that engines.node in ${nodeVersionHome} names (${nodeRange}).`,
+  ).toBe(nodeMajor);
 });

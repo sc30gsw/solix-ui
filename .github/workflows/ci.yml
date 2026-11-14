@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
-          node-version: "22"
+          node-version-file: package.json
           cache: true
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp run verify
@@ -38,7 +38,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
-          node-version: "22"
+          node-version-file: package.json
           cache: true
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: sudo apt-get update && sudo apt-get install --yes ffmpeg

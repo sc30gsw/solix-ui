@@ -9,13 +9,15 @@ const peerDependencyThatMarksALibrary = "solid-js";
 export type Manifest = {
   name?: string;
   license?: string;
+  engines?: Record<string, string>;
+  devEngines?: Record<string, unknown>;
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
 };
 
-function outsideGeneratedOrInstalled(entry: string | Dirent): boolean {
+export function outsideGeneratedOrInstalled(entry: string | Dirent): boolean {
   return (typeof entry === "string" ? entry : entry.name)
     .split(sep)
     .some((segment) => generatedOrInstalled.has(segment));
@@ -42,3 +44,5 @@ export const scriptFiles = globSync("**/*.{ts,tsx,mjs,cjs,js}", {
   cwd: repositoryRoot,
   exclude: outsideGeneratedOrInstalled,
 });
+
+export const workflowFiles = globSync(".github/workflows/*.{yml,yaml}", { cwd: repositoryRoot });

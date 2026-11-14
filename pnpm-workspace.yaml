@@ -10,7 +10,7 @@ catalog:
   "@stylexjs/babel-plugin": 0.19.2
   "@stylexjs/stylex": 0.19.2
   "@stylexjs/unplugin": 0.19.2
-  "@types/node": ^22.18.0
+  "@types/node": ^26.6.6
   "@types/semver": 7.8.0
   fast-check: 4.10.2
   modern-web-guidance: 1.0.0
@@ -19,7 +19,7 @@ catalog:
   semver: 7.8.5
   solid-js: 2.0.0-rc.21
   solid2-agent-kit: 0.25.0
-  typescript: ^5.9.0
+  typescript: ^6.0.3
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   vite-plus: 1.6.0
 overrides:
