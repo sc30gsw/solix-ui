@@ -52,3 +52,96 @@ export function exportsOf(source: ts.SourceFile): Exports {
   }
   return found;
 }
+
+export type ImportedName = { imported: string; local: string; node: ts.ImportSpecifier };
+
+export type Import = {
+  specifier: string;
+  names: ImportedName[];
+  typeOnly: boolean;
+  node: ts.ImportDeclaration;
+};
+
+const flowsThrough = [
+  ts.SyntaxKind.QuestionQuestionToken,
+  ts.SyntaxKind.BarBarToken,
+  ts.SyntaxKind.AmpersandAmpersandToken,
+  ts.SyntaxKind.CommaToken,
+];
+
+export function importsOf(source: ts.SourceFile): Import[] {
+  return source.statements.flatMap((statement) => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      return [];
+    }
+    const bindings = statement.importClause?.namedBindings;
+    const names =
+      bindings && ts.isNamedImports(bindings)
+        ? bindings.elements.map((element) => ({
+            imported: (element.propertyName ?? element.name).text,
+            local: element.name.text,
+            node: element,
+          }))
+        : [];
+    return [
+      {
+        specifier: statement.moduleSpecifier.text,
+        names,
+        typeOnly: statement.importClause?.isTypeOnly ?? false,
+        node: statement,
+      },
+    ];
+  });
+}
+
+export function unwrapped(expression: ts.Expression): ts.Expression {
+  return ts.isParenthesizedExpression(expression) ||
+    ts.isSatisfiesExpression(expression) ||
+    ts.isNonNullExpression(expression) ||
+    ts.isTypeAssertionExpression(expression) ||
+    ts.isAsExpression(expression)
+    ? unwrapped(expression.expression)
+    : expression;
+}
+
+export function isAsConst(expression: ts.Expression): boolean {
+  if (ts.isParenthesizedExpression(expression) || ts.isSatisfiesExpression(expression)) {
+    return isAsConst(expression.expression);
+  }
+  return ts.isAsExpression(expression) && expression.type.getText() === "const";
+}
+
+export function sourcesOf(expression: ts.Expression): ts.Identifier[] {
+  const value = unwrapped(expression);
+  if (ts.isIdentifier(value)) return [value];
+  if (ts.isPropertyAccessExpression(value) || ts.isElementAccessExpression(value)) {
+    return sourcesOf(value.expression);
+  }
+  if (ts.isBinaryExpression(value) && flowsThrough.includes(value.operatorToken.kind)) {
+    return [...sourcesOf(value.left), ...sourcesOf(value.right)];
+  }
+  if (ts.isConditionalExpression(value)) {
+    return [...sourcesOf(value.whenTrue), ...sourcesOf(value.whenFalse)];
+  }
+  return [];
+}
+
+export function outsideClosures(root: ts.Node | undefined): ts.Node[] {
+  const found: ts.Node[] = [];
+  const visit = (node: ts.Node): void => {
+    found.push(node);
+    if (!ts.isFunctionLike(node) && !ts.isClassLike(node)) ts.forEachChild(node, visit);
+  };
+  if (root) visit(root);
+  return found;
+}
+
+export function isCallTo(node: ts.Node, name: string): node is ts.CallExpression {
+  return (
+    ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name
+  );
+}
+
+export function isInTypePosition(node: ts.Node): boolean {
+  return ts.findAncestor(node.parent, (ancestor) => ts.isTypeNode(ancestor)) !== undefined;
+}

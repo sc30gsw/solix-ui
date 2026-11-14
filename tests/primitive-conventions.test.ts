@@ -3,12 +3,12 @@ import { dirname, join, relative, resolve } from "node:path";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import {
-  importsOf,
   loadLibrary,
   primitiveRules,
   type PrimitiveRuleName,
   publicModuleCount,
-} from "./support/primitive-rules";
+} from "./support/primitive-rules/index";
+import { importsOf } from "./support/syntax";
 import { primitivesPackage, repositoryRoot } from "./support/workspace";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
@@ -98,6 +98,9 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-ref.ts", "export function createRef"),
     forbiddenAt("src/create-ref.ts", "createEffect,"),
     forbiddenAt("src/create-ref.ts", "createMemo,"),
+    forbiddenAt("src/create-sized.ts", "export function createSized"),
+    forbiddenAt("src/create-sized.ts", "import { createMemo }"),
+    forbiddenAt("src/create-sized.ts", "import { createSignal }"),
   ],
   focusMoves: [
     forbiddenAt("src/create-forbidden.ts", "element.focus()"),
@@ -117,7 +120,7 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
   serverRenderTest: [forbiddenAt("tests/server-render.test.ts")],
 };
 
-test("each rule passes a fixture that holds only what it allows: read-once arguments, reads of a class or a style, Symbol and Object.freeze at module level, a plain helper with a Node test, an element primitive built on createElementAttachment, a primitive that moves focus through moveFocus and awaits the axe assertion, internal modules with tests, and a shadowed parameter", () => {
+test("each rule passes a fixture that holds only what it allows", () => {
   const fixture = loadLibrary(join(fixtureDirectory, "allowed"));
   const findings = Object.fromEntries(
     Object.entries(primitiveRules).map(([name, { rule }]) => [name, rule(fixture)]),
