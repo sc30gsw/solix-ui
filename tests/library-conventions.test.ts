@@ -4,9 +4,14 @@ import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
-import { libraryPackages, repositoryRoot, scriptFiles } from "./support/workspace";
+import {
+  componentFile,
+  componentLibraries,
+  libraryPackages,
+  repositoryRoot,
+  scriptFiles,
+} from "./support/workspace";
 
-const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
   /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
 const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -34,7 +39,7 @@ const fixturesFile = "packages/core/tests/fixtures.ts";
 const testDirectory = "tests";
 const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
 
-const libraries = libraryPackages.map(({ directory, manifest }) => ({
+const libraries = componentLibraries.map(({ directory, manifest }) => ({
   name: manifest.name ?? directory,
   source: join(directory, "src"),
 }));
@@ -515,12 +520,12 @@ test("no source file of the library but parts.ts calls stylex.attrs or stylex.pr
 });
 
 test("every other source file is the barrel, a StyleX definition, or a kebab-case module", () => {
-  const violations = libraries.flatMap(({ source }) =>
-    readdirSync(source)
+  const violations = libraryPackages.flatMap(({ directory }) =>
+    readdirSync(join(directory, "src"))
       .filter((entry) => !componentFile.test(entry) && !helperFile.test(entry))
       .map(
         (entry) =>
-          `${relativePath(join(source, entry))}: name it Component.tsx for a component, kebab-case.ts for a module, or name.stylex.ts for StyleX variables.`,
+          `${relativePath(join(directory, "src", entry))}: name it Component.tsx for a component, kebab-case.ts for a module, or name.stylex.ts for StyleX variables.`,
       ),
   );
 
@@ -607,7 +612,7 @@ function listsOfStylePropsIn(file: string, names: string[]): { line: number; lis
 
 test("no array or argument list outside the style-prop table names two or more style props", () => {
   const names: string[] = stylePropKeys;
-  const violations = libraryPackages.flatMap(({ directory }) =>
+  const violations = componentLibraries.flatMap(({ directory }) =>
     globSync(libraryCode, { cwd: directory })
       .map((path) => join(directory, path))
       .filter((file) => relativePath(file) !== stylePropTableFile)

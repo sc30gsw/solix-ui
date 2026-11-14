@@ -1,10 +1,12 @@
-import { type Dirent, globSync, readFileSync } from "node:fs";
+import { type Dirent, globSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 
 export const repositoryRoot = join(import.meta.dirname, "../..");
 
 const generatedOrInstalled = new Set(["node_modules", "dist", ".git"]);
 const peerDependencyThatMarksALibrary = "solid-js";
+
+export const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 
 export type Manifest = {
   name?: string;
@@ -38,6 +40,22 @@ export const rootManifest = JSON.parse(
 
 export const libraryPackages = packages.filter(
   ({ manifest }) => peerDependencyThatMarksALibrary in (manifest.peerDependencies ?? {}),
+);
+
+function holdsComponents(directory: string): boolean {
+  return readdirSync(join(directory, "src")).some((entry) => componentFile.test(entry));
+}
+
+export const componentLibraries = libraryPackages.filter(({ directory }) =>
+  holdsComponents(directory),
+);
+
+export const primitiveLibraries = libraryPackages.filter(
+  ({ directory }) => !holdsComponents(directory),
+);
+
+export const libraryNames = libraryPackages.flatMap(({ manifest }) =>
+  manifest.name === undefined ? [] : [manifest.name],
 );
 
 export const scriptFiles = globSync("**/*.{ts,tsx,mjs,cjs,js}", {

@@ -5,8 +5,10 @@ import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import {
   type Manifest,
+  libraryNames,
   libraryPackages,
   packages,
+  primitiveLibraries,
   repositoryRoot,
   rootManifest,
   scriptFiles,
@@ -26,9 +28,12 @@ const vitePlusCommandFor: Record<string, string> = {
 };
 
 const projectLicence = "MIT";
-const peerDependenciesALibraryMayHave = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
+const frameworkPeers = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
+const peerDependenciesALibraryMayHave = [...frameworkPeers, ...libraryNames];
+const ownLibraryPeerRange = "workspace:^";
+const ownLibraryLink = "workspace:*";
 const webStandardsOnly =
-  "The library is built on web standards only and has no runtime dependency. Use a platform feature or a fallback written in this repository.";
+  "The library is built on web standards only and has no runtime dependency beyond Solid, StyleX and the libraries of this repository. Use a platform feature or a fallback written in this repository.";
 
 const workspaceFile = "pnpm-workspace.yaml";
 const catalogBlock = /^catalog:\n((?:[ \t]+.*\n?)+)/m;
@@ -140,7 +145,7 @@ test("every package with TypeScript sources inherits the shared compiler setting
   expect(violations).toEqual([]);
 });
 
-test("a library package depends on nothing but Solid and StyleX, and only as peers", () => {
+test("a library package depends on nothing but Solid, StyleX and the libraries of this repository, and only as peers", () => {
   const violations = libraryPackages.flatMap(({ path, manifest }) => [
     ...Object.keys(manifest.dependencies ?? {}).map(
       (name) =>
@@ -155,6 +160,44 @@ test("a library package depends on nothing but Solid and StyleX, and only as pee
   ]);
 
   expect(libraryPackages.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
+test("a library names another library of this repository as a workspace:^ peer, linked as a workspace:* devDependency", () => {
+  const violations = libraryPackages.flatMap(({ path, manifest }) =>
+    Object.entries(manifest.peerDependencies ?? {})
+      .filter(([name]) => libraryNames.includes(name))
+      .flatMap(([name, range]) => [
+        ...(range === ownLibraryPeerRange
+          ? []
+          : [
+              `${path}: write the peer "${name}" as "${ownLibraryPeerRange}", so publishing pins the version this workspace builds against.`,
+            ]),
+        ...(manifest.devDependencies?.[name] === ownLibraryLink
+          ? []
+          : [
+              `${path}: add "${name}": "${ownLibraryLink}" to devDependencies, so the workspace links the library it names as a peer.`,
+            ]),
+      ]),
+  );
+
+  expect(violations).toEqual([]);
+});
+
+test("dependencies between libraries go one way: a primitives library depends on no other library of this repository", () => {
+  const violations = primitiveLibraries.flatMap(({ path, manifest }) =>
+    [
+      ...Object.keys(manifest.peerDependencies ?? {}),
+      ...installedDependencies(manifest).map(([name]) => name),
+    ]
+      .filter((name) => libraryNames.includes(name))
+      .map(
+        (name) =>
+          `${path}: package "${manifest.name}" depends on "${name}". A primitives library depends on no other library of this repository, so a component library can build on it and never the reverse.`,
+      ),
+  );
+
+  expect(primitiveLibraries.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 });
 
@@ -191,6 +234,7 @@ test("every peer range of a library package accepts the version the catalog pins
   const catalog = catalogVersions();
   const violations = libraryPackages.flatMap(({ path, manifest }) =>
     Object.entries(manifest.peerDependencies ?? {}).flatMap(([name, range]) => {
+      if (libraryNames.includes(name)) return [];
       const pinned = catalog[name];
       if (pinned === undefined)
         return [`${workspaceFile}: add "${name}" to the catalog, which ${path} names as a peer.`];

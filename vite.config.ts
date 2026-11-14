@@ -1,9 +1,14 @@
 import solid from "@solidjs/vite-plugin";
 import { defineConfig, lazyPlugins } from "vite-plus";
+import { playwright } from "vite-plus/test/browser-playwright";
+import type { BrowserInstanceOption } from "vite-plus/test/node";
+import { enginesToVerify } from "./scripts/browser-engines.mjs";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
 const tablesKeptCompact = ["AGENTS.md"];
+const browserTests = "packages/*/tests/**/*.browser.test.ts";
+const browserTestServerPort = 4322;
 
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
@@ -46,14 +51,43 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
-    environment: "node",
-    include: [
-      "tests/**/*.test.ts",
-      "packages/*/tests/**/*.test.{ts,tsx}",
-      "apps/*/tests/**/*.test.{ts,tsx}",
-    ],
-    globalSetup: ["tests/support/global-setup.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "node",
+          environment: "node",
+          include: [
+            "tests/**/*.test.ts",
+            "packages/*/tests/**/*.test.{ts,tsx}",
+            "apps/*/tests/**/*.test.{ts,tsx}",
+          ],
+          exclude: ["**/node_modules/**", browserTests],
+          globalSetup: ["tests/support/global-setup.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "browser",
+          include: [browserTests],
+          setupFiles: ["packages/primitives/tests/support/browser-harness.ts"],
+          api: { port: browserTestServerPort, strictPort: true },
+          browser: {
+            enabled: true,
+            headless: true,
+            provider: playwright(),
+            screenshotFailures: false,
+            get instances() {
+              return enginesToVerify().map((engine) => ({
+                browser: engine as BrowserInstanceOption["browser"],
+              }));
+            },
+          },
+        },
+      },
+    ],
   },
 });

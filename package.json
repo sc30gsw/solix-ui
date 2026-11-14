@@ -16,6 +16,7 @@
     "@solidjs/web": "catalog:",
     "@types/node": "catalog:",
     "@types/semver": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
     "fast-check": "catalog:",
     "modern-web-guidance": "catalog:",
     "playwright": "catalog:",
