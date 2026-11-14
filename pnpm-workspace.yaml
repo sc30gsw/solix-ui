@@ -3,8 +3,9 @@ packages:
   - apps/*
 catalogMode: strict
 catalog:
-  "@babel/core": ^7.26.8
-  "@babel/preset-typescript": ^7.26.0
+  "@babel/core": ^8.1.2
+  "@babel/plugin-syntax-jsx": ^8.0.1
+  "@babel/preset-typescript": ^8.0.7
   "@solidjs/vite-plugin": 3.0.0-next.57
   "@solidjs/web": 2.0.0-rc.21
   "@stylexjs/babel-plugin": 0.19.2
