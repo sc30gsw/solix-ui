@@ -1,5 +1,6 @@
 import { argumentReadsRule, readOnceArgumentsRule } from "./arguments";
 import { barrelOrderRule } from "./barrel-order";
+import { browserTestWaitsRule } from "./browser-test-waits";
 import { browserTestsUseTheHarnessRule } from "./browser-tests-use-the-harness";
 import { elementAttachmentsRule } from "./element-attachments";
 import { accessibilityTestsRule, focusMovesRule } from "./focus";
@@ -38,6 +39,7 @@ export const primitiveRules = {
   modelTests: modelTestsRule,
   accessibilityTests: accessibilityTestsRule,
   browserTestsUseTheHarness: browserTestsUseTheHarnessRule,
+  browserTestWaits: browserTestWaitsRule,
   serverRenderTest: serverRenderTestRule,
 } satisfies Record<string, PrimitiveRule>;
 

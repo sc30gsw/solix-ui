@@ -1,15 +1,36 @@
 import type { Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
+import type { BrowserValuePrimitive } from "../../../packages/primitives/tests/support/primitive-kinds";
 import { inEveryEngine, openPage, type OpenPage } from "./support/playground";
 
 const url = inject("playgroundUrl");
 const probe = "output[data-hydration-probe]";
+const engineWait = { timeout: 5_000 };
+
+type Revealed = { expected: string; restore: () => Promise<unknown> };
+
+const reveal: { [K in BrowserValuePrimitive]: (page: Page) => Promise<Revealed> } = {};
 
 function line(page: Page, start: string): Promise<string | null> {
   return page.getByText(new RegExp(`^${start}: `)).textContent();
 }
 
-test("the server renders the element each element primitive takes a ref to, with its state at the server value, and a probe after it", async () => {
+function decoded(markup: string): string {
+  return markup
+    .replace(/<!--.*?-->/gs, "")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&");
+}
+
+function shownInMarkup(html: string): Map<string, string> {
+  const outputs = html.matchAll(/<output[^>]*data-case-value="([^"]+)"[^>]*>(.*?)<\/output>/gs);
+  return new Map([...outputs].map(([, name, text]) => [name, decoded(text)]));
+}
+
+test("the server renders the regions and lines the page shows, and a probe after each primitive", async () => {
   const html = await (await fetch(url)).text();
 
   expect(html).toMatch(/<div[^>]*class="region"[^>]*>A region that counts presses outside it/);
@@ -30,7 +51,7 @@ inEveryEngine((browser) => {
       await opened.close();
     });
 
-    test("after each element primitive, the client claims the element the server sent, with the server's id", async () => {
+    test("after each primitive, the client claims the probe the server sent, with the server's id", async () => {
       const probes = await opened.page.locator(probe).evaluateAll((elements) =>
         elements.map((element) => ({
           after: element.getAttribute("data-after"),
@@ -45,6 +66,34 @@ inEveryEngine((browser) => {
           client,
           `after ${after}, the client claimed the server's element with the server's id`,
         ).toBe(server);
+      }
+    });
+
+    test("each value a primitive returns reads, while the page hydrates, what the server's markup shows", async () => {
+      const html = await (await fetch(url)).text();
+      const shown = shownInMarkup(html);
+
+      expect(shown.size).toBeGreaterThan(0);
+      for (const [name, text] of shown) {
+        const hydrating = await opened.page
+          .locator(`${probe}[data-after="${name}"]`)
+          .getAttribute("data-read-while-hydrating");
+        expect(hydrating, `${name}: what it read while the page hydrated`).toBe(text);
+      }
+    });
+
+    test("each value only the browser knows then reads the browser's value", async () => {
+      const { page } = opened;
+
+      for (const [name, revealed] of Object.entries<(page: Page) => Promise<Revealed>>(reveal)) {
+        const { expected, restore } = await revealed(page);
+        try {
+          await expect
+            .poll(() => page.locator(`[data-case-value="${name}"]`).textContent(), engineWait)
+            .toBe(expected);
+        } finally {
+          await restore();
+        }
       }
     });
 
