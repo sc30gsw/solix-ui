@@ -3,6 +3,7 @@ import { ButtonSection } from "./sections/ButtonSection";
 import { ChangingPropsSection } from "./sections/ChangingPropsSection";
 import { DisclosureSection } from "./sections/DisclosureSection";
 import { ModalSection } from "./sections/ModalSection";
+import { PrimitivesSection } from "./sections/PrimitivesSection";
 import { StylesApiSection } from "./sections/StylesApiSection";
 import { TextInputSection } from "./sections/TextInputSection";
 import "./app.css";
@@ -19,6 +20,7 @@ export default function App() {
       <ModalSection />
       <BoxSection />
       <StylesApiSection />
+      <PrimitivesSection />
     </main>
   );
 }

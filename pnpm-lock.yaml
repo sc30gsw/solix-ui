@@ -125,6 +125,9 @@ importers:
       '@solix/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@solix/primitives':
+        specifier: workspace:*
+        version: link:../../packages/primitives
       '@stylexjs/stylex':
         specifier: 'catalog:'
         version: 0.19.2

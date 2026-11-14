@@ -91,6 +91,8 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden" });
     await page.getByRole("textbox", { name: "Email" }).fill("someone@example.com");
+    await page.getByText("A region that counts presses outside it").click();
+    await page.getByRole("heading", { name: "Primitives" }).click();
   });
 
   afterAll(async () => {

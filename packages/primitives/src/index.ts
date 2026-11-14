@@ -1,9 +1,11 @@
+export { createClickOutside, type ClickOutsideHandler } from "./create-click-outside";
 export { createCounter, type CounterHandlers, type CounterOptions } from "./create-counter";
 export {
   createDisclosure,
   type DisclosureHandlers,
   type DisclosureOptions,
 } from "./create-disclosure";
+export { createEventListener } from "./create-event-listener";
 export { createInputState, type InputChange } from "./create-input-state";
 export { createListState, type ListMove, type ListStateHandlers } from "./create-list-state";
 export { createMap } from "./create-map";
@@ -23,4 +25,5 @@ export {
   type UncontrolledReturn,
 } from "./create-uncontrolled";
 export { createValidatedState, type ValidatedState } from "./create-validated-state";
-export type { MaybeAccessor, ReadOnce } from "./types";
+export { createWindowEvent } from "./create-window-event";
+export type { ListenerOptions, MaybeAccessor, ReadOnce, RefSetter } from "./types";

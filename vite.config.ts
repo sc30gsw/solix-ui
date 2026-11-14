@@ -9,6 +9,7 @@ const generatedEvidence = ["docs/verification/**"];
 const tablesKeptCompact = ["AGENTS.md"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
+const preBundledForBrowserTests = ["fast-check", "vite-plus/test/browser"];
 
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
@@ -70,6 +71,7 @@ export default defineConfig({
       },
       {
         extends: true,
+        optimizeDeps: { include: preBundledForBrowserTests },
         test: {
           name: "browser",
           include: [browserTests],

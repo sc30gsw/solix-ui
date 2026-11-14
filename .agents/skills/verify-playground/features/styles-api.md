@@ -1,6 +1,6 @@
 # Styles API
 
-At the end of the page is a section named `Styles API`. Every component takes `classes` and `styles`, keyed by the names of its parts, and `unstyled`. The section holds a library button that `classes.root` gives the consumer's `.danger` class, a disclosure named `Styled parts` whose summary gets the consumer's `.danger` and `.outlined` classes through `classes.summary` and a background and a text colour through `styles.summary`, a library button with `unstyled`, and a plain `<button>` named `Plain button` that the library does not style.
+Near the end of the page, before the `Primitives` section, is a section named `Styles API`. Every component takes `classes` and `styles`, keyed by the names of its parts, and `unstyled`. The section holds a library button that `classes.root` gives the consumer's `.danger` class, a disclosure named `Styled parts` whose summary gets the consumer's `.danger` and `.outlined` classes through `classes.summary` and a background and a text colour through `styles.summary`, a library button with `unstyled`, and a plain `<button>` named `Plain button` that the library does not style.
 
 ## Sub-features
 

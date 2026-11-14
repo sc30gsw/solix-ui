@@ -27,6 +27,18 @@ function serverCase<F, R>(cases: {
 }
 
 const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
+  createClickOutside: serverCase({
+    create: (createClickOutside) => {
+      const withNodes = createClickOutside(
+        () => undefined,
+        ["mousedown"],
+        () => [undefined],
+      );
+      return [createClickOutside(() => undefined), () => withNodes] as const;
+    },
+    read: ([ref, withNodes]) => [typeof ref, withNodes()],
+    expected: ["function", undefined],
+  }),
   createCounter: serverCase({
     create: (createCounter) => createCounter(11, { min: 0, max: 10 }),
     read: ([count]) => count(),
@@ -36,6 +48,16 @@ const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createDisclosure) => createDisclosure(true),
     read: ([opened]) => opened(),
     expected: true,
+  }),
+  createEventListener: serverCase({
+    create: (createEventListener) =>
+      createEventListener(
+        "click",
+        () => undefined,
+        () => ({ capture: true }),
+      ),
+    read: (ref) => typeof ref,
+    expected: "function",
   }),
   createInputState: serverCase({
     create: (createInputState) => createInputState("typed"),
@@ -93,6 +115,16 @@ const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
       createValidatedState("ab", (text: string) => text.length > 2, true),
     read: ([state]) => [state.value(), state.lastValidValue(), state.valid()],
     expected: ["ab", undefined, true],
+  }),
+  createWindowEvent: serverCase({
+    create: (createWindowEvent) =>
+      createWindowEvent(
+        "resize",
+        () => undefined,
+        () => ({ passive: true }),
+      ),
+    read: (returned) => returned,
+    expected: undefined,
   }),
 };
 

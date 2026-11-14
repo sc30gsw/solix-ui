@@ -38,6 +38,7 @@ Every value that changes is an accessor, so call it: `value()`. Commands, such a
 - **Requests.** Solid applies writes at its next flush. Each request decides on the value staged by the requests before it in the same tick; a request that changes nothing writes nothing and calls nothing.
 - **Owner.** Call a primitive under an owner: a component, `createRoot` or another primitive. Its state and its cleanup belong to that owner, and once the owner is disposed its commands write nothing and call nothing.
 - **Server.** A primitive renders on the server, where it reads no browser global.
+- **Elements.** A primitive that works on an element returns a ref setter: `<div ref={[props.ref, trap]}>`. It creates the same reactive nodes on the server and the client, so hydration stays aligned, and it adds its listeners once the owner's effects run, which never happens on the server, and removes them when the owner is disposed.
 - **Look.** A primitive writes no style and no class. The component that renders the element styles it.
 
 ## Primitives

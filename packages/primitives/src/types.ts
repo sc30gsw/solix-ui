@@ -14,3 +14,14 @@ export type MaybeAccessor<T> = T | Accessor<T>;
  * cannot travel through it, since it would be called.
  */
 export type ReadOnce<T> = T | Accessor<T>;
+
+/**
+ * The ref an element primitive returns. Put it on one element, alone or in a ref array:
+ * `<div ref={[props.ref, trap]}>`. The primitive works on the latest element the ref received.
+ * Solid never calls a ref with `null`, so an element that leaves the page stays current until
+ * another element arrives or the owner is disposed.
+ */
+export type RefSetter<E extends Element> = (element: E) => void;
+
+/** The options of `addEventListener`: `true` means `capture`. */
+export type ListenerOptions = boolean | AddEventListenerOptions;
