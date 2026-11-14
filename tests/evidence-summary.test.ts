@@ -3,10 +3,12 @@ import { engineNames } from "../scripts/browser-engines.mjs";
 import {
   commentSizeLimit,
   evidenceComment,
-  evidenceSummary,
+  evidenceReports,
+  headingAnchors,
 } from "../scripts/evidence-summary.mjs";
 
-const journeysThePlaygroundWillHave = 100;
+const journeysThePlaygroundMayReach = 200;
+const titleLengthAboveTodaysMean = 70;
 const observationsPerRun = 20;
 const fullLengthCommit = "0123456789abcdef0123456789abcdef01234567";
 
@@ -23,6 +25,30 @@ const facts = [
   ],
 ];
 
+const renderedByGitHub = [
+  ["# Verification evidence", "verification-evidence"],
+  ["## How this was verified", "how-this-was-verified"],
+  ["## A library button with its default style", "a-library-button-with-its-default-style"],
+  ["### chromium 153.0.8010.12", "chromium-1530801012"],
+  ["### firefox 155.0", "firefox-1550"],
+  [
+    "## A consumer's plain class overrides the library",
+    "a-consumers-plain-class-overrides-the-library",
+  ],
+  ["### chromium 153.0.8010.12", "chromium-1530801012-1"],
+  ["### firefox 155.0", "firefox-1550-1"],
+  [
+    "## A text input shows its border, its disabled look and its error after the user leaves it",
+    "a-text-input-shows-its-border-its-disabled-look-and-its-error-after-the-user-leaves-it",
+  ],
+  [
+    "## The page is server-rendered and styled without JavaScript",
+    "the-page-is-server-rendered-and-styled-without-javascript",
+  ],
+  ["## How to get to it (user POV)", "how-to-get-to-it-user-pov"],
+  ["## Driving it with drive.mjs", "driving-it-with-drivemjs"],
+];
+
 function observation(index: number, pass = true) {
   return {
     what: `observation ${index}: the part's computed background once the user has pressed it`,
@@ -32,21 +58,31 @@ function observation(index: number, pass = true) {
   };
 }
 
-function journey(index: number) {
+function journey(index: number, title?: string) {
   const name = `component-${String(index).padStart(3, "0")}-journey`;
   return {
     journey: name,
-    title: `Component ${index} shows its default look, takes a consumer's override and follows the user`,
+    title:
+      title ??
+      `Component ${index} shows its default look and follows the user's actions`.padEnd(
+        titleLengthAboveTodaysMean,
+        ".",
+      ),
     runs: Object.fromEntries(
       engineNames.map((engine) => [
         engine,
         {
-          recording: `${engine}/${name}/recording.gif`,
+          browserVersion: "153.0.8010.12",
+          steps: [{ description: "Open the page.", image: "01-page.png" }],
           observations: Array.from({ length: observationsPerRun }, (_, at) => observation(at)),
         },
       ]),
     ),
   };
+}
+
+function reportsFor(journeys: ReturnType<typeof journey>[]) {
+  return evidenceReports({ facts, engines: engineNames, journeys, upstreamExceptions: [] });
 }
 
 function postedComment(summary: string): string {
@@ -59,35 +95,50 @@ function postedComment(summary: string): string {
   });
 }
 
-test("the evidence comment fits in one pull request comment with 100 journeys on every engine", () => {
-  const summary = evidenceSummary({
-    facts,
-    engines: engineNames,
-    journeys: Array.from({ length: journeysThePlaygroundWillHave }, (_, index) => journey(index)),
-    upstreamExceptions: [],
-  });
+test("the evidence comment fits in one pull request comment with 200 journeys on every engine", () => {
+  const { summary } = reportsFor(
+    Array.from({ length: journeysThePlaygroundMayReach }, (_, index) => journey(index)),
+  );
 
   expect(
     postedComment(summary).length,
-    "The comment grows with each journey and engine. Keep each journey to one row of counts and recording links, and leave steps, screenshots and observed values to the full report.",
+    "The comment grows with each journey. Keep each journey to one row with one link and a count per engine, and leave steps, screenshots, recordings and observed values to the full report.",
   ).toBeLessThan(commentSizeLimit);
 });
 
-test("a journey's cell names each observation that failed in that engine", () => {
-  const [engine] = engineNames;
-  const withAFailure = journey(1);
-  withAFailure.runs[engine].observations[2] = observation(2, false);
-  const summary = evidenceSummary({
-    facts,
-    engines: engineNames,
-    journeys: [withAFailure],
-    upstreamExceptions: [],
-  });
+test("a journey's cell names each observation that failed in that engine and counts the others", () => {
+  const [failing] = engineNames;
+  const withAFailure = journey(1, "A journey with a failure");
+  withAFailure.runs[failing].observations[2] = observation(2, false);
+  const { summary } = reportsFor([withAFailure]);
 
   expect(summary).toContain(
-    `[FAIL, ${observationsPerRun - 1} of ${observationsPerRun} passed](${engine}/component-001-journey/recording.gif). Failed: ${observation(2).what}`,
+    `| [A journey with a failure](README.md#a-journey-with-a-failure) | FAIL: ${observation(2).what} | ${observationsPerRun} of ${observationsPerRun} |`,
   );
-  expect(summary).toContain(
-    `[${observationsPerRun} of ${observationsPerRun} passed](${engineNames[1]}/component-001-journey/recording.gif)`,
+});
+
+test("each anchor is the one GitHub renders for its heading, numbering a repeated heading", () => {
+  const markdown = renderedByGitHub.map(([heading]) => heading).join("\n\n");
+
+  expect(headingAnchors(markdown).map(({ anchor }) => anchor)).toEqual(
+    renderedByGitHub.map(([, anchor]) => anchor),
+  );
+});
+
+test("each journey row links to the heading of that journey's section in the full report, at the evidence commit in the comment", () => {
+  const titles = ["How this was verified", "A Box, styled", "A box styled"];
+  const { fullReport, summary } = reportsFor(titles.map((title, index) => journey(index, title)));
+  const journeyHeadings = headingAnchors(fullReport)
+    .filter(({ level }) => level === 2)
+    .slice(-titles.length);
+  const linked = journeyHeadings.map(({ text, anchor }, index) => {
+    expect(text).toBe(titles[index]);
+    expect(summary).toContain(`[${text}](README.md#${anchor})`);
+    return anchor;
+  });
+
+  expect(linked).toEqual(["how-this-was-verified-1", "a-box-styled", "a-box-styled-1"]);
+  expect(postedComment(summary)).toContain(
+    `[A box styled](https://github.com/sc30gsw/solix-ui/blob/${fullLengthCommit}/docs/verification/README.md#a-box-styled-1)`,
   );
 });
