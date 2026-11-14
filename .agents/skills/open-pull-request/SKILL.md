@@ -34,6 +34,7 @@ Read `.agents/skills/thermos/SKILL.md` and follow it. Start the two reviewers in
 - Stack the branch on the pull request it builds on, and target that branch. Target `main` only for work that builds on nothing unmerged.
 - Title: Conventional Commits, `type(scope): subject`.
 - Body: `## Why`, `## What changed`, `## Scope`, `## Tradeoffs`, `## Blast Radius`, `## Verification`, in that order. Drop a section with nothing to say. Keep `## Scope`.
+- Before you open it, write the title and the body to a file and run `node scripts/check-private-terms.mjs --text <file>`. It must pass.
 - Open it ready, not as a draft.
 
 ## What this skill does not cover

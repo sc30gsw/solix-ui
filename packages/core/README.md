@@ -24,7 +24,7 @@ vp run -r build
 - Styles that are known at build time compile to plain class strings, so those components do not call the StyleX runtime at all.
 - It compiles with its own class name prefix, `sx`, so its classes cannot collide with a consumer who also uses StyleX.
 - It has no runtime dependencies. The disclosure needs no JavaScript: it opens and closes with scripts turned off.
-- With Kobalte as the headless layer, Solid's development build reported two diagnostics from `@solid-primitives/presence`. On `<details>` it reports none.
+- With a headless component library underneath, Solid's development build reported two diagnostics that could not be fixed from this side. On `<details>` it reports none.
 
 ## Not covered
 
