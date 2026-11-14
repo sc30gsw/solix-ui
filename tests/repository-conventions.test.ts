@@ -10,6 +10,8 @@ const agentsDirectory = join(repositoryRoot, ".claude/agents");
 const agentPathInBackticks = /`(\.(?:agents|claude)\/[^`*\s]+)`/g;
 const trailingPunctuation = /[:.,]$/;
 const workflowFiles = globSync(".github/workflows/*.yml", { cwd: repositoryRoot });
+const verifyWithPrivateTerms =
+  /- run: vp run verify\n\s+env:\n\s+SOLIX_PRIVATE_TERMS: \$\{\{ secrets\.SOLIX_PRIVATE_TERMS \}\}$/m;
 const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github)\/[^`:*\s]+)`/g;
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 
@@ -167,6 +169,7 @@ test("every check in the repository runs through vp run verify, before a commit 
   expect(verify.split(" && ")).toEqual([
     "vp check --deny-warnings",
     "vp run lint:solid",
+    "vp run check:private-terms",
     "vp test",
   ]);
   expect(read(".vite-hooks/pre-commit").trim()).toBe("vp staged && vp run verify");
@@ -176,6 +179,11 @@ test("every check in the repository runs through vp run verify, before a commit 
     const installs = workflow.split("\n").filter((line) => line.includes("playwright install"));
     if (/vp run (verify|evidence)/.test(workflow)) {
       expect(installs.length, `${file} installs the browser engines`).toBeGreaterThan(0);
+    }
+    if (/vp run verify/.test(workflow)) {
+      expect(workflow, `${file} gives verify the private-term list`).toMatch(
+        verifyWithPrivateTerms,
+      );
     }
     for (const line of installs) {
       expect(line, `${file} installs every browser engine, as verify needs`).toContain(everyEngine);

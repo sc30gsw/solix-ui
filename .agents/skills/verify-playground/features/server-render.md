@@ -20,9 +20,9 @@ Preconditions:
 - `doctor.sh` exits 0.
 
 - **Markup.** Request the page. Run `.agents/skills/verify-playground/scripts/drive.mjs server-render`. The observations `the response already contains the Default button` and `the response already contains the Toggle summary` pass.
-- **Styled with scripts off.** Open the page with JavaScript off. The same run observes `with JavaScript off the Default button is styled` (`rgb(34, 139, 230)`).
-- **Disclosure with scripts off.** Still with JavaScript off, click `Toggle`. The same run observes `with JavaScript off the disclosure opens on a click` (`true`) and `with JavaScript off the open summary takes the primary colour` (`rgb(34, 139, 230)`).
-- **Modal and Email with scripts off.** Still with JavaScript off, look at the dialog and the `Email` input. The same run observes `with JavaScript off the modal is not showing` (`false`) and `with JavaScript off the Email input is styled` (`rgb(206, 212, 218)`).
+- **Styled with scripts off.** Open the page with JavaScript off. The same run observes `with JavaScript off the Default button is styled` (the primary token).
+- **Disclosure with scripts off.** Still with JavaScript off, click `Toggle`. The same run observes `with JavaScript off the disclosure opens on a click` (`true`) and `with JavaScript off the open summary takes the primary colour` (the primary token).
+- **Modal and Email with scripts off.** Still with JavaScript off, look at the dialog and the `Email` input. The same run observes `with JavaScript off the modal is not showing` (`false`) and `with JavaScript off the Email input is styled` (the border token).
 - **Console.** The same run ends with `console errors and warnings` (an empty string), which every journey records.
 - **Proof.** The evidence directory holds `response.html` with the bytes the server sent, `01-javascript-off.png`, `02-disclosure-opens-without-javascript.png`, `recording.webm` and `observations.json`.
 

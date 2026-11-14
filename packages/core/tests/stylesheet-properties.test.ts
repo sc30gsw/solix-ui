@@ -7,21 +7,24 @@ import {
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
   libraryStylesheet,
+  STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
+import { stylePropRules } from "../src/style-prop-table";
+import { nestedLayerOrder } from "./cascade-layers";
 
 const packageRoot = join(import.meta.dirname, "..");
 const generatedRuns = 300;
 
 const valuesByProperty: Record<string, (string | number)[]> = {
-  backgroundColor: ["red", "rgb(34, 139, 230)", "transparent"],
-  borderColor: ["rgb(206, 212, 218)", "red"],
-  borderRadius: ["0.25rem", "50%"],
+  backgroundColor: ["red", "rgb(10, 20, 30)", "transparent"],
+  borderColor: ["rgb(40, 50, 60)", "red"],
+  borderRadius: ["1.5rem", "50%"],
   borderStyle: ["solid", "none"],
   borderWidth: [0, "1px"],
   color: ["black", "white"],
   cursor: ["pointer", "not-allowed"],
   display: ["flex", "grid", "none"],
-  height: ["2.25rem", "100%"],
+  height: ["3rem", "100%"],
   marginTop: ["4px", "auto"],
   maxWidth: ["32rem", "min(32rem, calc(100vw - 2rem))"],
   opacity: [0, 0.5, 1],
@@ -138,7 +141,7 @@ function sourceFor(definitions: Definition[]): string {
   return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "./disclosure-state.stylex";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
 }
 
-test("for every generated style definition, the stylesheet stays inside the library layer with prefixed classes and nothing important", async () => {
+test("for every generated style definition, the stylesheet stays inside the library layer with prefixed classes and registered custom properties, the style-prop layer last, and nothing important", async () => {
   await fc.assert(
     fc.asyncProperty(styleDefinitions, async (definitions) => {
       const { rules } = await compileLibrarySource({
@@ -146,7 +149,7 @@ test("for every generated style definition, the stylesheet stays inside the libr
         source: sourceFor(definitions),
         packageRoot,
       });
-      const stylesheet = postcss.parse(libraryStylesheet(rules));
+      const stylesheet = postcss.parse(libraryStylesheet(rules, stylePropRules()));
 
       expect(rules.length).toBeGreaterThan(0);
       expect(
@@ -154,6 +157,9 @@ test("for every generated style definition, the stylesheet stays inside the libr
           node.type === "atrule" ? `@${node.name} ${node.params}` : node.type,
         ),
       ).toEqual([`@layer ${LIBRARY_CASCADE_LAYER}`]);
+      stylesheet.each((layer) => {
+        if (layer.type === "atrule") expect(nestedLayerOrder(layer).at(-1)).toBe(STYLE_PROP_LAYER);
+      });
 
       stylesheet.walkRules((rule) => {
         const classNames = rule.selector.match(/\.[A-Za-z_][\w-]*/g) ?? [];
@@ -161,6 +167,14 @@ test("for every generated style definition, the stylesheet stays inside the libr
           [],
         );
       });
+      const registered: string[] = [];
+      stylesheet.walkAtRules("property", (registration) => {
+        registered.push(registration.params);
+      });
+      expect(registered.length).toBeGreaterThan(0);
+      expect(registered.filter((name) => !name.startsWith(`--${LIBRARY_CLASS_PREFIX}-`))).toEqual(
+        [],
+      );
       stylesheet.walkDecls((declaration) => {
         expect(declaration.important).toBeFalsy();
       });

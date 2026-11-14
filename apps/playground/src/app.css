@@ -1,11 +1,20 @@
+:root {
+  --playground-danger: oklch(0.58 0.22 20);
+  --playground-pinned-margin: 3.4rem;
+}
+
 .danger {
-  background-color: rgb(250, 82, 82);
+  background-color: var(--playground-danger);
 }
 
 .brand-green {
-  --solix-color-primary: rgb(47, 158, 68);
+  --solix-color-primary: oklch(0.54 0.12 155);
 }
 
 .outlined {
-  outline: 2px solid rgb(250, 82, 82);
+  outline: 2px solid var(--playground-danger);
+}
+
+.roomy {
+  margin-top: 2.6rem;
 }

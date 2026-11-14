@@ -8,10 +8,10 @@ const styles = stylex.create({
     backgroundColor: tokens["--solix-color-primary"],
     borderRadius: tokens["--solix-radius-md"],
     borderWidth: 0,
-    color: "white",
+    color: tokens["--solix-color-on-primary"],
     cursor: "pointer",
     fontSize: "0.875rem",
-    height: "2.25rem",
+    height: tokens["--solix-control-height-md"],
     paddingInline: "1rem",
   },
 });
