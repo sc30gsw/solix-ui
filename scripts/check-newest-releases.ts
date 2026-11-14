@@ -65,7 +65,7 @@ const { rows, problems } = newestReleases({
   pins,
   documents,
   nodeReleases: (await fetched(nodeIndex)) as NodeRelease[],
-  minimumReleaseAge,
+  minimumReleaseAgeMinutes: minimumReleaseAge,
   excluded: (pnpmSetting("minimumReleaseAgeExclude") ?? []) as string[],
   heldBack: JSON.parse(readFileSync(join(repositoryRoot, heldBackFile), "utf8")) as HeldBack[],
   now: Date.now(),

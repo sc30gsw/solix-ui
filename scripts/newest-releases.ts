@@ -24,7 +24,7 @@ export type Row = Pin & {
 
 type Context = {
   documents: Record<string, RegistryDocument>;
-  minimumReleaseAge: number;
+  minimumReleaseAgeMinutes: number;
   excluded: readonly string[];
   now: number;
   nodeLtsMajor: number;
@@ -82,11 +82,6 @@ function lowestVersionOf(specifier: string | undefined): string | undefined {
   return specifier === undefined ? undefined : semver.minVersion(specifier)?.version;
 }
 
-/**
- * The versions this repository pins: every catalog entry, the package manager and the lowest Node
- * version `engines.node` accepts. A catalog entry written as an npm alias is checked as the package
- * it names.
- */
 export function pinsOf(pinned: {
   catalog: Record<string, string>;
   packageManager: string;
@@ -128,7 +123,7 @@ function packageFound(pin: Pin, context: Context): Found {
     .sort(semver.rcompare)
     .map((version) => {
       const eligibleAt =
-        Date.parse(document.time?.[version] ?? "") + context.minimumReleaseAge * minute;
+        Date.parse(document.time?.[version] ?? "") + context.minimumReleaseAgeMinutes * minute;
       const excluded =
         context.excluded.includes(pin.registryName ?? "") ||
         context.excluded.includes(`${pin.registryName}@${version}`);
@@ -150,18 +145,11 @@ function statusOf(pin: Pin, found: Found, held: HeldBack | undefined): Status {
   return "not yet eligible";
 }
 
-/**
- * Compares each pin with the newest release on its channel. A release younger than the minimum
- * release age, in minutes, is not yet eligible unless the exclusions name it, and an entry of the
- * held-back list keeps a pin that is behind from failing. The problems are what fails the check: a
- * pin behind its channel, a pin the registry gives no release for, and a held-back entry that holds
- * nothing back or gives no reason or no lifting condition.
- */
 export function newestReleases(input: {
   pins: readonly Pin[];
   documents: Record<string, RegistryDocument>;
   nodeReleases: readonly NodeRelease[];
-  minimumReleaseAge: number;
+  minimumReleaseAgeMinutes: number;
   excluded?: readonly string[];
   heldBack?: readonly HeldBack[];
   now: number;
@@ -169,7 +157,7 @@ export function newestReleases(input: {
   const heldBack = input.heldBack ?? [];
   const context: Context = {
     documents: input.documents,
-    minimumReleaseAge: input.minimumReleaseAge,
+    minimumReleaseAgeMinutes: input.minimumReleaseAgeMinutes,
     excluded: input.excluded ?? [],
     now: input.now,
     nodeLtsMajor: semver.major(newestNodeLts(input.nodeReleases) ?? "0.0.0"),

@@ -13,7 +13,7 @@ import { catalogVersions, repositoryRoot, rootManifest, workspaceFile } from "./
 
 const now = Date.parse("2026-11-14T12:00:00Z");
 const day = 24 * 60 * 60_000;
-const minimumReleaseAge = 24 * 60;
+const minimumReleaseAgeMinutes = 24 * 60;
 const heldBackFile = "scripts/held-back-releases.json";
 
 type Release = [version: string, daysAgo: number];
@@ -76,7 +76,14 @@ const pins = pinsOf({
 });
 
 function check(options: { excluded?: string[]; heldBack?: HeldBack[] } = {}) {
-  return newestReleases({ pins, documents, nodeReleases, minimumReleaseAge, now, ...options });
+  return newestReleases({
+    pins,
+    documents,
+    nodeReleases,
+    minimumReleaseAgeMinutes,
+    now,
+    ...options,
+  });
 }
 
 function statuses(options: Parameters<typeof check>[0] = {}): Record<string, string> {
