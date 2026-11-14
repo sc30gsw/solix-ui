@@ -13,16 +13,16 @@ import { libraryPackages, packages, repositoryRoot } from "./support/workspace";
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
   /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
-const partName = /^[a-z][A-Za-z0-9]*$/;
 const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const stylexImport = 'import * as stylex from "@stylexjs/stylex";';
 const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
-const rootComponent = "Box";
 const partsHelper = "createParts";
 const partsHelperFile = "packages/core/src/parts.ts";
+const rootBinding = "root";
+const partBinding = "part";
 const partPropsType = `PartProps<typeof ${stylesVariable}>`;
-const rootPart = "root";
+const elementPropsType = "ElementProps";
+const polymorphicPropsType = "PolymorphicProps";
 const featureDirectory = join(repositoryRoot, ".agents/skills/verify-playground/features");
 const contractSkill = join(repositoryRoot, ".agents/skills/verify-component-contract/SKILL.md");
 const stylePropTableFile = "packages/core/src/style-prop-table.ts";
@@ -36,22 +36,6 @@ const libraries = libraryPackages.map(({ directory, manifest }) => ({
 type Component = { name: string; file: string; source: ts.SourceFile };
 
 type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
-
-type ComponentBody = {
-  name: string;
-  fn: ts.FunctionDeclaration;
-  source: ts.SourceFile;
-  propsType: ts.TypeNode | undefined;
-  shape: RootShape;
-};
-
-type RootShape = {
-  alsoOmits: string[];
-  rendersItsElement: (component: ts.Expression | undefined) => boolean;
-  componentAttribute: string;
-};
-
-type PartUse = { part: string | undefined; call: ts.CallExpression; tag: JsxTag | undefined };
 
 function parse(file: string): ts.SourceFile {
   return ts.createSourceFile(
@@ -114,331 +98,132 @@ function callsOf(node: ts.Node, callee: string): ts.CallExpression[] {
   );
 }
 
-function stylesBlock(source: ts.SourceFile): ts.ObjectLiteralExpression | undefined {
-  const declaration = descendants(source).find(
-    (node): node is ts.VariableDeclaration =>
-      ts.isVariableDeclaration(node) &&
-      node.name.getText() === stylesVariable &&
-      node.initializer !== undefined &&
-      ts.isCallExpression(node.initializer) &&
-      node.initializer.expression.getText() === stylesFactory,
-  );
-  const argument =
-    declaration?.initializer && ts.isCallExpression(declaration.initializer)
-      ? declaration.initializer.arguments[0]
-      : undefined;
-  return argument && ts.isObjectLiteralExpression(argument) ? argument : undefined;
-}
-
-function stylesKeys(source: ts.SourceFile): string[] {
-  return (stylesBlock(source)?.properties ?? []).flatMap((property) =>
-    ts.isPropertyAssignment(property) && ts.isIdentifier(property.name) ? [property.name.text] : [],
+function variableNamed(node: ts.Node, name: string): ts.VariableDeclaration | undefined {
+  return descendants(node).find(
+    (found): found is ts.VariableDeclaration =>
+      ts.isVariableDeclaration(found) && ts.isIdentifier(found.name) && found.name.text === name,
   );
 }
 
-function jsxAttributes(fn: ts.FunctionDeclaration, names: string[]): ts.JsxAttribute[] {
-  return descendants(fn).filter(
-    (node): node is ts.JsxAttribute =>
-      ts.isJsxAttribute(node) && names.includes(node.name.getText()),
-  );
-}
-
-function stringLiteralText(node: ts.Node | undefined): string | undefined {
-  return node && ts.isStringLiteral(node) ? node.text : undefined;
-}
-
-function attributeNamesOf(tag: JsxTag): string[] {
-  return tag.attributes.properties.map((property) =>
-    ts.isJsxSpreadAttribute(property)
-      ? `...${property.expression.getText()}`
-      : property.name.getText(),
-  );
-}
-
-function spreadsRestBefore(tag: JsxTag, names: string[]): boolean {
-  const written = attributeNamesOf(tag);
-  const spreadAt = written.indexOf("...rest");
-  return spreadAt !== -1 && names.every((name) => spreadAt < written.indexOf(name));
-}
-
-function attributeValue(tag: JsxTag, name: string): ts.Expression | undefined {
-  const found = tag.attributes.properties.find(
-    (property): property is ts.JsxAttribute =>
-      ts.isJsxAttribute(property) && property.name.getText() === name,
-  );
-  if (!found?.initializer) return undefined;
-  return ts.isJsxExpression(found.initializer) ? found.initializer.expression : found.initializer;
-}
-
-function isPropsMember(node: ts.Node, member: string): boolean {
+function isConst(declaration: ts.VariableDeclaration): boolean {
   return (
-    ts.isPropertyAccessExpression(node) &&
-    node.expression.getText() === "props" &&
-    node.name.text === member
+    ts.isVariableDeclarationList(declaration.parent) &&
+    (declaration.parent.flags & ts.NodeFlags.Const) !== 0
   );
 }
 
-function isComponentPropWithDefault(node: ts.Node | undefined): boolean {
-  return (
-    node !== undefined &&
-    ts.isBinaryExpression(node) &&
-    node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
-    isPropsMember(node.left, "component") &&
-    ts.isStringLiteral(node.right)
-  );
-}
-
-function isDynamicRootWithDefault(initializer: ts.Expression | undefined): boolean {
-  if (!initializer || !ts.isCallExpression(initializer)) return false;
-  const [factory, ...others] = initializer.arguments;
-  if (initializer.expression.getText() !== "dynamic" || !factory || others.length > 0) return false;
-  if (!ts.isArrowFunction(factory) || factory.parameters.length > 0) return false;
-  return isComponentPropWithDefault(factory.body);
-}
-
-function memberOf(node: ts.Node | undefined, member: string): string | undefined {
-  return node && ts.isPropertyAccessExpression(node) && node.name.text === member
-    ? node.expression.getText()
-    : undefined;
+function unwrapped(node: ts.Expression): ts.Expression {
+  return ts.isParenthesizedExpression(node) ? unwrapped(node.expression) : node;
 }
 
 function returnedRoots(fn: ts.FunctionDeclaration): JsxTag[] {
   return descendants(fn).flatMap((node): JsxTag[] => {
     if (!ts.isReturnStatement(node) || !node.expression) return [];
-    const returned = ts.isParenthesizedExpression(node.expression)
-      ? node.expression.expression
-      : node.expression;
+    const returned = unwrapped(node.expression);
     if (ts.isJsxElement(returned)) return [returned.openingElement];
     return ts.isJsxSelfClosingElement(returned) ? [returned] : [];
   });
 }
 
-function rootComponentProblems({ name, fn, source }: ComponentBody): string[] {
-  const problems: string[] = [];
-  if (stylesKeys(source).length > 0 || callsOf(source, stylesFactory).length > 0) {
-    problems.push(
-      `${name} has one unstyled root, so it calls no ${stylesFactory}. Write a component that renders a <${name}> for anything with a default style.`,
-    );
-  }
-  const [root, ...otherRoots] = returnedRoots(fn);
-  const classAttributes = jsxAttributes(fn, ["class"]);
-  const [classAttribute] = classAttributes;
-  const classes =
-    classAttribute?.initializer && ts.isJsxExpression(classAttribute.initializer)
-      ? classAttribute.initializer.expression
+function jsxTags(fn: ts.FunctionDeclaration): JsxTag[] {
+  return descendants(fn).filter(
+    (node): node is JsxTag => ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node),
+  );
+}
+
+function spreadsOn(tag: JsxTag): string[] {
+  return tag.attributes.properties.flatMap((property) =>
+    ts.isJsxSpreadAttribute(property) ? [property.expression.getText()] : [],
+  );
+}
+
+function intersected(type: ts.TypeNode): ts.TypeNode[] {
+  return ts.isIntersectionTypeNode(type) ? type.types.flatMap(intersected) : [type];
+}
+
+function isDynamicRoot(initializer: ts.Expression | undefined, element: string): boolean {
+  if (!initializer || !ts.isCallExpression(initializer)) return false;
+  const [factory, ...others] = initializer.arguments;
+  if (initializer.expression.getText() !== "dynamic" || !factory || others.length > 0) return false;
+  if (!ts.isArrowFunction(factory) || factory.parameters.length > 0) return false;
+  return factory.body.getText() === `props.component ?? "${element}"`;
+}
+
+type PropsShape = { kind: string; element: string | undefined; own: ts.TypeNode | undefined };
+
+function propsShapeOf(type: ts.TypeNode | undefined): PropsShape | undefined {
+  if (!type || !ts.isTypeReferenceNode(type)) return undefined;
+  const kind = type.typeName.getText();
+  if (kind !== elementPropsType && kind !== polymorphicPropsType) return undefined;
+  const [target, own] = type.typeArguments ?? [];
+  const element =
+    kind === elementPropsType
+      ? target && ts.isLiteralTypeNode(target) && ts.isStringLiteral(target.literal)
+        ? target.literal.text
+        : undefined
       : undefined;
-  if (
-    !root ||
-    otherRoots.length > 0 ||
-    classAttributes.length !== 1 ||
-    classAttribute.parent.parent !== root ||
-    !classes ||
-    !ts.isArrayLiteralExpression(classes)
-  ) {
-    return [
-      ...problems,
-      `return one root element, and write its class, and no other, as an array: ["solix-${name}-root", <resolved style props>.classes, props.class].`,
-    ];
-  }
-  const tag = root.tagName.getText();
-  const tagDeclaration = descendants(fn).find(
-    (node): node is ts.VariableDeclaration =>
-      ts.isVariableDeclaration(node) && node.name.getText() === tag,
-  );
-  if (!isDynamicRootWithDefault(tagDeclaration?.initializer)) {
-    problems.push(
-      `render the root as a component made by \`const ${tag} = dynamic(() => props.component ?? "<element>")\`, the dynamic() of @solidjs/web with the element it renders by default.`,
-    );
-  }
-  const [stable, styleProps, consumer, ...extra] = classes.elements;
-  const resolved = memberOf(styleProps, "classes");
-  if (
-    stringLiteralText(stable) !== `solix-${name}-root` ||
-    resolved === undefined ||
-    consumer?.getText() !== "props.class" ||
-    extra.length > 0
-  ) {
-    problems.push(
-      `write the root class array as ["solix-${name}-root", <resolved style props>.classes, props.class], so the style-prop classes sit before the consumer's class.`,
-    );
-  }
-  if (resolved === undefined || memberOf(attributeValue(root, "style"), "style") !== resolved) {
-    problems.push(
-      "set style to the .style of the same resolved style props, which puts the consumer's style after the style props'.",
-    );
-  }
-  const resolvesProps = callsOf(fn, "resolveStyleProps").some(
-    (call) => call.arguments.map((argument) => argument.getText()).join() === "props",
-  );
-  if (!resolvesProps) {
-    problems.push("resolve the style props with resolveStyleProps(props) from ./style-props.");
-  }
-  if (!spreadsRestBefore(root, ["class", "style"])) {
-    problems.push(
-      "spread {...rest} on the root element before its class and style, so the library's merged values are the ones that apply.",
-    );
-  }
-  return problems;
+  return { kind, element, own };
 }
 
-function partsFunctionOf(fn: ts.FunctionDeclaration, name: string): string | undefined {
-  const calls = callsOf(fn, partsHelper);
-  const [call] = calls;
-  const declaration = call?.parent;
-  const isDeclared =
-    calls.length === 1 &&
-    ts.isVariableDeclaration(declaration) &&
-    ts.isIdentifier(declaration.name) &&
-    ts.isVariableDeclarationList(declaration.parent) &&
-    (declaration.parent.flags & ts.NodeFlags.Const) !== 0 &&
-    call.arguments.map((argument) => argument.getText()).join(", ") ===
-      `"${name}", ${stylesVariable}, props`;
-  return isDeclared ? declaration.name.text : undefined;
+function polymorphicDefault(fn: ts.FunctionDeclaration): string | undefined {
+  const [parameter] = fn.typeParameters ?? [];
+  const fallback = parameter?.default;
+  return fallback && ts.isLiteralTypeNode(fallback) && ts.isStringLiteral(fallback.literal)
+    ? fallback.literal.text
+    : undefined;
 }
 
-function partUsesOf(fn: ts.FunctionDeclaration, partsFunction: string): PartUse[] {
-  return callsOf(fn, partsFunction).map((call) => {
-    const [argument, ...others] = call.arguments;
-    const spread = call.parent;
-    const onTag =
-      ts.isJsxSpreadAttribute(spread) && spread.expression === call
-        ? spread.parent.parent
-        : undefined;
-    return {
-      part: others.length === 0 ? stringLiteralText(argument) : undefined,
-      call,
-      tag: onTag,
-    };
-  });
-}
-
-function styledComponentProblems({ name, fn, source, propsType, shape }: ComponentBody): string[] {
-  const problems: string[] = [];
-  const imports = source.statements
-    .filter(ts.isImportDeclaration)
-    .map((statement) => statement.getText());
-  if (!imports.includes(stylexImport)) problems.push(`import styles with \`${stylexImport}\`.`);
-  if (!stylesBlock(source)) {
-    problems.push(
-      `declare the styles once, as \`const ${stylesVariable} = ${stylesFactory}({ ${rootPart}: { ... }, ... })\`, keyed by part.`,
-    );
-  }
-  if (!propsType?.getText().includes(partPropsType)) {
-    problems.push(
-      `take ${partPropsType} among the props, so classes, styles and unstyled name exactly the parts of ${stylesVariable}.`,
-    );
-  }
-
-  for (const call of descendants(source).filter(
-    (node): node is ts.CallExpression =>
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.expression.getText() === "stylex" &&
-      node.expression.getText() !== stylesFactory,
-  )) {
-    problems.push(
-      `call ${call.expression.getText()} nowhere: ${partsHelper} in ${partsHelperFile} reads every part's class from ${stylesVariable}, so no component calls StyleX at run time itself.`,
-    );
-  }
-
-  const partsFunction = partsFunctionOf(fn, name);
-  if (!partsFunction) {
-    problems.push(
-      `declare the parts once, as \`const part = ${partsHelper}("${name}", ${stylesVariable}, props)\` from ${partsHelperFile}.`,
-    );
-    return problems;
-  }
-
-  for (const attribute of jsxAttributes(fn, ["class", "style"])) {
-    problems.push(
-      `set no ${attribute.name.getText()} attribute: spread {...${partsFunction}("<part>")} on the element, which gives it the part's class and style.`,
-    );
-  }
-
-  const uses = partUsesOf(fn, partsFunction);
-  for (const { part, call, tag } of uses) {
-    if (part === undefined) {
-      problems.push(`name the part in ${call.getText()} with one string literal.`);
-    }
-    if (!tag) {
-      problems.push(
-        `spread ${call.getText()} on its element as {...${call.getText()}}, so the element takes both the part's class and its style.`,
-      );
-    }
-  }
-
+function rootProblems(fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
   const roots = returnedRoots(fn);
   const [root] = roots;
-  if (roots.length !== 1 || root.tagName.getText() !== rootComponent) {
+  const rootSpreads = jsxTags(fn).filter((tag) => spreadsOn(tag).includes(rootBinding));
+  const problems: string[] = [];
+  if (roots.length !== 1) {
+    return [`return one root element, and spread {...${rootBinding}} from ${partsHelper} on it.`];
+  }
+  if (rootSpreads.length !== 1 || rootSpreads[0] !== root) {
     problems.push(
-      `return one root element, a <${rootComponent}>, so the root takes every style prop, hiddenFrom and visibleFrom.`,
+      `spread {...${rootBinding}} once, on the returned root element, so it takes the consumer's attributes, the style props and its class and style.`,
     );
-  } else {
-    const written = attributeNamesOf(root);
-    const rootSpread = `...${partsFunction}("${rootPart}")`;
-    if (!spreadsRestBefore(root, ["component", rootSpread]) || written.at(-1) !== rootSpread) {
+  }
+  const tag = root.tagName.getText();
+  if (shape.kind === polymorphicPropsType) {
+    const element = polymorphicDefault(fn) ?? "<element>";
+    if (!isDynamicRoot(variableNamed(fn, tag)?.initializer, element)) {
       problems.push(
-        `spread {...rest} on the root <${rootComponent}> before its component, and {${rootSpread}} last, so the part's class and style are the ones that apply.`,
+        `render the root as \`const ${tag} = dynamic(() => props.component ?? "${element}")\`, the dynamic() of @solidjs/web with the element the type parameter defaults to.`,
       );
     }
-    if (!shape.rendersItsElement(attributeValue(root, "component"))) {
-      problems.push(`set ${shape.componentAttribute} on the root <${rootComponent}>.`);
-    }
-  }
-
-  const onRoot = uses.filter(({ tag }) => tag !== undefined && tag === root);
-  const rootUses = uses.filter(({ part }) => part === rootPart);
-  if (
-    rootUses.length !== 1 ||
-    rootUses[0].tag !== root ||
-    onRoot.some(({ part }) => part !== rootPart)
-  ) {
+  } else if (tag !== shape.element) {
     problems.push(
-      `spread {...${partsFunction}("${rootPart}")} on the returned root, once, and no other part there.`,
-    );
-  }
-
-  const keys = stylesKeys(source);
-  const parts = [...new Set(uses.flatMap(({ part }) => (part === undefined ? [] : [part])))];
-  for (const key of keys.filter((found) => !parts.includes(found))) {
-    problems.push(
-      `${stylesVariable}.${key} styles no element: spread {...${partsFunction}("${key}")} on the element it styles, or remove the style.`,
-    );
-  }
-  for (const part of parts.filter((found) => !keys.includes(found))) {
-    problems.push(
-      `the part "${part}" has no style: add a ${part} key to ${stylesVariable}, or remove the part.`,
-    );
-  }
-  for (const key of keys.filter((found) => !partName.test(found))) {
-    problems.push(
-      `name the part ${key} in camelCase, so its stable class is "solix-${name}-<part>".`,
+      `return the <${shape.element ?? "element"}> that ${elementPropsType} names as the root, not <${tag}>.`,
     );
   }
   return problems;
 }
 
-const elementRoot: RootShape = {
-  alsoOmits: [],
-  rendersItsElement: (component) => component !== undefined && ts.isStringLiteral(component),
-  componentAttribute: 'component="<element>"',
-};
-
-const polymorphicRoot: RootShape = {
-  alsoOmits: ['"component"'],
-  rendersItsElement: isComponentPropWithDefault,
-  componentAttribute: 'component={props.component ?? "<element>"}',
-};
-
-function rootShapeOf(propsType: ts.TypeNode | undefined): RootShape | undefined {
-  if (
-    propsType &&
-    ts.isTypeReferenceNode(propsType) &&
-    propsType.typeName.getText() === "PolymorphicProps"
-  ) {
-    return polymorphicRoot;
-  }
-  return propsType?.getText().includes('ElementProps<"') ? elementRoot : undefined;
+function partProblems(fn: ts.FunctionDeclaration): string[] {
+  const spreads = new Set(jsxTags(fn).flatMap(spreadsOn));
+  return callsOf(fn, partBinding).flatMap((call) => {
+    const [argument, ...others] = call.arguments;
+    const problems: string[] = [];
+    if (!argument || !ts.isStringLiteral(argument) || others.length > 0) {
+      problems.push(`name the part in ${call.getText()} with one string literal.`);
+    }
+    const holder = call.parent;
+    const spreadInline = ts.isJsxSpreadAttribute(holder) && holder.expression === call;
+    const stored =
+      ts.isVariableDeclaration(holder) &&
+      ts.isIdentifier(holder.name) &&
+      isConst(holder) &&
+      spreads.has(holder.name.text);
+    if (!spreadInline && !stored) {
+      problems.push(
+        `spread ${call.getText()} on the element it styles, as {...${call.getText()}} or through a const that is spread there.`,
+      );
+    }
+    return problems;
+  });
 }
 
 function problemsWith({ name, file, source }: Component): string[] {
@@ -466,48 +251,81 @@ function problemsWith({ name, file, source }: Component): string[] {
   if (fn.parameters.length !== 1 || parameter.name.getText() !== "props") {
     report('take one parameter named "props".');
   }
-  const propsType = parameter?.type;
-  const shape = rootShapeOf(propsType);
-  const isRootComponent = name === rootComponent;
-  if (!shape || (isRootComponent && shape !== polymorphicRoot)) {
+  const shape = propsShapeOf(parameter?.type);
+  if (!shape) {
     report(
-      `type props as PolymorphicProps<T, Own> for a root that \`component\` picks${isRootComponent ? "" : ', or as ElementProps<"element", Own> for a root that is always one element'}, both from ./style-props, so the root's attributes and every style prop are the component's props.`,
+      `type props as ${polymorphicPropsType}<T, Own> for a root that \`component\` picks, or as ${elementPropsType}<"element", Own> for a root that is always one element, both from ./style-props.`,
+    );
+    return problems;
+  }
+  if (!shape.own || !intersected(shape.own).some((type) => type.getText() === partPropsType)) {
+    report(
+      `take ${partPropsType} in the Own type of ${shape.kind}, so classes, styles and unstyled name exactly the parts of ${stylesVariable}.`,
+    );
+  }
+
+  const stylesDeclaration = variableNamed(source, stylesVariable);
+  if (
+    !stylesDeclaration?.initializer ||
+    !ts.isCallExpression(stylesDeclaration.initializer) ||
+    stylesDeclaration.initializer.expression.getText() !== stylesFactory
+  ) {
+    report(
+      `declare the styles once, as \`const ${stylesVariable} = ${stylesFactory}({ ... })\`, keyed by part.`,
+    );
+  }
+
+  const calls = callsOf(fn, partsHelper);
+  const [call] = calls;
+  const declaration = call?.parent;
+  const bound =
+    declaration !== undefined &&
+    ts.isVariableDeclaration(declaration) &&
+    isConst(declaration) &&
+    ts.isObjectBindingPattern(declaration.name)
+      ? declaration.name.elements.map((element) => element.getText())
+      : [];
+  const [componentName, compiled, consumer] = call?.arguments ?? [];
+  if (
+    calls.length !== 1 ||
+    !bound.includes(rootBinding) ||
+    bound.some((binding) => binding !== rootBinding && binding !== partBinding) ||
+    !componentName ||
+    !ts.isStringLiteral(componentName) ||
+    componentName.text !== name ||
+    compiled?.getText() !== stylesVariable ||
+    consumer?.getText() !== "props"
+  ) {
+    report(
+      `call ${partsHelper} once, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...ownKeys)\` from ${partsHelperFile}.`,
     );
     return problems;
   }
 
-  const first = fn.body.statements[0];
-  const firstInitializer =
-    first && ts.isVariableStatement(first)
-      ? first.declarationList.declarations[0]?.initializer
-      : undefined;
-  const omitted =
-    firstInitializer &&
-    ts.isCallExpression(firstInitializer) &&
-    firstInitializer.expression.getText() === "omit"
-      ? firstInitializer.arguments.map((argument) => argument.getText())
-      : [];
-  const mustOmit = isRootComponent
-    ? ['"class"', '"style"', '"component"', "...stylePropKeys"]
-    : ['"class"', '"style"', ...shape.alsoOmits, "...partPropKeys"];
-  if (omitted[0] !== "props" || mustOmit.some((key) => !omitted.includes(key))) {
-    report(
-      `start the body with \`const rest = omit(props, ${mustOmit.join(", ")}, ...)\`, so the consumer's class and style are merged and not overwritten, and no prop of the library's own reaches the element.`,
-    );
-  }
-
-  const body: ComponentBody = { name, fn, source, propsType, shape };
-  const found = isRootComponent ? rootComponentProblems(body) : styledComponentProblems(body);
-  return [...problems, ...found.map((problem) => `${where}: ${problem}`)];
+  return [
+    ...problems,
+    ...[
+      ...rootProblems(fn, shape),
+      ...partProblems(fn),
+      ...descendants(fn)
+        .filter(
+          (node): node is ts.JsxAttribute =>
+            ts.isJsxAttribute(node) && ["class", "style"].includes(node.name.getText()),
+        )
+        .map(
+          (attribute) =>
+            `set no ${attribute.name.getText()} by hand: ${partsHelper} gives the root and each part its class and style.`,
+        ),
+    ].map((problem) => `${where}: ${problem}`),
+  ];
 }
 
 test("the library has components to check", () => {
   expect(libraries.length).toBeGreaterThan(0);
   expect(components.length).toBeGreaterThan(1);
-  expect(components.map(({ name }) => name)).toContain(rootComponent);
 });
 
-test("every component is written the one way: one function, a Box root, and every part's class and style from createParts", () => {
+test("every component is written the one way: one function, and its root and every other part from one createParts call", () => {
   expect(components.flatMap(problemsWith)).toEqual([]);
 });
 

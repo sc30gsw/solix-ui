@@ -13,7 +13,7 @@ import {
   vi,
 } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
-import { expectedValues } from "../../../scripts/expected-values";
+import { expectedValues, lookOf } from "../../../scripts/expected-values";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
 import { breakpointWidths } from "../../../packages/core/src/style-prop-table";
 import { builtComponents } from "../../../packages/core/tests/built-components";
@@ -164,18 +164,26 @@ describe.each(enginesToVerify())("in %s", (engine) => {
       );
     });
 
-    test("a class and an attribute that change after the first render reach each component's root", async () => {
+    test("a class and an attribute that change after the first render reach each component's root, and a class that classes names reaches its part", async () => {
       const emphasise = page.getByRole("button", { name: "Emphasise" });
       const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
+      const followerSummary = follower.locator("summary");
       expect(await computed(emphasise, "background-color")).toBe(expected("--solix-color-primary"));
       expect(await emphasise.getAttribute("aria-pressed")).toBe("false");
       expect(await computed(follower, "outline-style")).toBe("none");
+      expect(await computed(followerSummary, "background-color")).toBe(
+        expected("--solix-color-surface"),
+      );
 
       await emphasise.click();
 
       await expect.poll(() => computed(emphasise, "background-color")).toBe(expected("danger"));
       expect(await emphasise.getAttribute("aria-pressed")).toBe("true");
       expect(await computed(follower, "outline-style")).toBe("solid");
+      expect(
+        await computed(followerSummary, "background-color"),
+        "the class that classes.summary now names",
+      ).toBe(expected("danger"));
 
       await emphasise.click();
 
@@ -183,6 +191,27 @@ describe.each(enginesToVerify())("in %s", (engine) => {
         .poll(() => computed(emphasise, "background-color"))
         .toBe(expected("--solix-color-primary"));
       expect(await computed(follower, "outline-style")).toBe("none");
+      expect(await computed(followerSummary, "background-color")).toBe(
+        expected("--solix-color-surface"),
+      );
+    });
+
+    test("a consumer's ref receives the root element of every component", async () => {
+      const received = await page.evaluate(() =>
+        [...document.querySelectorAll("[data-ref]")].map((node) => ({
+          component: node.getAttribute("data-ref"),
+          classes: [...node.classList],
+        })),
+      );
+
+      for (const name of builtComponents) {
+        expect(
+          received
+            .filter(({ component }) => component === name)
+            .map(({ classes }) => classes.includes(`solix-${name}-root`)),
+          `${name}: give the consumer's ref the element that carries solix-${name}-root, once, next to any ref of its own. apps/playground/src/App.tsx passes ref={refOf("${name}")} to one <${name}>, which marks the node it receives with data-ref.`,
+        ).toEqual([true]);
+      }
     });
 
     test("a consumer rethemes a subtree by overriding a public token", async () => {
@@ -503,25 +532,27 @@ describe.each(enginesToVerify())("in %s", (engine) => {
         "styles.summary beats both the .danger class that classes.summary names and the library's background",
       ).toBe(expected("partBackground"));
       expect(
+        await computed(summary, "color"),
+        "styles.summary beats the library's text colour",
+      ).toBe(expected("partText"));
+      expect(
         await computed(summary, "outline-style"),
         "the .outlined class that classes.summary names still applies",
       ).toBe("solid");
-      expect(await computed(summary, "color"), "the library's text colour stays").toBe(
-        expected("--solix-color-text"),
-      );
+      expect(await computed(summary, "cursor"), "the library's cursor stays").toBe("pointer");
     });
 
-    test("unstyled drops the library's look and keeps the stable class", async () => {
+    test("unstyled leaves a button that looks like a button the library does not style, and keeps the stable class", async () => {
       const button = page.getByRole("button", { name: "Unstyled" });
 
-      expect(await computed(button, "background-color")).not.toBe(
-        expected("--solix-color-primary"),
-      );
-      expect(await computed(button, "height")).not.toBe(expected("--solix-control-height-md"));
+      expect(
+        await lookOf(button),
+        "packages/core/src/parts.ts: with unstyled, leave out the library's classes, so the Unstyled button has the background, colour, border, radius, height and padding of the Plain button the library does not style",
+      ).toEqual(await lookOf(page.getByRole("button", { name: "Plain button" })));
       expect((await button.getAttribute("class"))?.split(/\s+/)).toContain("solix-Button-root");
     });
 
-    test("a style prop on Button, which is not a Box, beats its default", async () => {
+    test("a style prop on Button beats its default", async () => {
       expect(
         await computed(
           page.getByRole("button", { name: "Style prop on a Button" }),

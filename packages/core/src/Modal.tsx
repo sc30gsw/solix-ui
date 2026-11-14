@@ -1,8 +1,8 @@
 import * as stylex from "@stylexjs/stylex";
-import { createEffect, createUniqueId, omit, onSettled } from "solid-js";
-import { Box } from "./Box";
+import { createEffect, createUniqueId, onSettled } from "solid-js";
 import { dismissOnOutsidePress, supportsClosedBy } from "./light-dismiss";
-import { createParts, type PartProps, partPropKeys } from "./parts";
+import { createParts, type PartProps } from "./parts";
+import { displayPropNames } from "./style-prop-table";
 import type { ElementProps } from "./style-props";
 import { tokens } from "./tokens.stylex";
 
@@ -47,13 +47,29 @@ const styles = stylex.create({
 });
 
 export function Modal(
-  props: Omit<
-    ElementProps<"dialog", PartProps<typeof styles> & { label: string; opened: boolean }>,
-    "open"
+  props: ElementProps<
+    "dialog",
+    PartProps<typeof styles> & {
+      label: string;
+      opened: boolean;
+      open?: never;
+      display?: never;
+      hiddenFrom?: never;
+      visibleFrom?: never;
+    }
   >,
 ) {
-  const rest = omit(props, "class", "style", "label", "children", "opened", ...partPropKeys);
-  const part = createParts("Modal", styles, props);
+  const { root, part } = createParts(
+    "Modal",
+    styles,
+    props,
+    "label",
+    "children",
+    "opened",
+    "open",
+    "ref",
+    ...displayPropNames,
+  );
   const headingId = createUniqueId();
   let dialog: HTMLDialogElement;
 
@@ -70,13 +86,11 @@ export function Modal(
   });
 
   return (
-    <Box
+    <dialog
       aria-labelledby={headingId}
       closedby="any"
-      {...rest}
-      component="dialog"
-      ref={(node: HTMLDialogElement) => (dialog = node)}
-      {...part("root")}
+      {...root}
+      ref={[props.ref, (node: HTMLDialogElement) => (dialog = node)]}
     >
       <header {...part("header")}>
         <h2 id={headingId} {...part("heading")}>
@@ -89,6 +103,6 @@ export function Modal(
         </form>
       </header>
       <div {...part("content")}>{props.children}</div>
-    </Box>
+    </dialog>
   );
 }

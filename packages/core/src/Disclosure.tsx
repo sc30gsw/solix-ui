@@ -1,8 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
-import { omit } from "solid-js";
-import { Box } from "./Box";
 import { disclosureState } from "./disclosure-state.stylex";
-import { createParts, type PartProps, partPropKeys } from "./parts";
+import { createParts, type PartProps } from "./parts";
 import type { ElementProps } from "./style-props";
 import { tokens } from "./tokens.stylex";
 
@@ -35,12 +33,11 @@ const styles = stylex.create({
 export function Disclosure(
   props: ElementProps<"details", PartProps<typeof styles> & { label: string }>,
 ) {
-  const rest = omit(props, "class", "style", "label", "children", ...partPropKeys);
-  const part = createParts("Disclosure", styles, props);
+  const { root, part } = createParts("Disclosure", styles, props, "label", "children");
   return (
-    <Box {...rest} component="details" {...part("root")}>
+    <details {...root}>
       <summary {...part("summary")}>{props.label}</summary>
       <div {...part("content")}>{props.children}</div>
-    </Box>
+    </details>
   );
 }

@@ -1,16 +1,16 @@
-import { createMemo, omit } from "solid-js";
+import * as stylex from "@stylexjs/stylex";
 import { dynamic, type ValidComponent } from "@solidjs/web";
-import { type PolymorphicProps, resolveStyleProps, stylePropKeys } from "./style-props";
+import { createParts, type PartProps } from "./parts";
+import type { PolymorphicProps } from "./style-props";
 
-export function Box<T extends ValidComponent = "div">(props: PolymorphicProps<T>) {
-  const rest = omit(props, "class", "style", "component", ...stylePropKeys);
+const styles = stylex.create({
+  root: {},
+});
+
+export function Box<T extends ValidComponent = "div">(
+  props: PolymorphicProps<T, PartProps<typeof styles>>,
+) {
+  const { root } = createParts("Box", styles, props);
   const Root = dynamic(() => props.component ?? "div");
-  const resolved = createMemo(() => resolveStyleProps(props));
-  return (
-    <Root
-      {...rest}
-      class={["solix-Box-root", resolved().classes, props.class]}
-      style={resolved().style}
-    />
-  );
+  return <Root {...root} />;
 }

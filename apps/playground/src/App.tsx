@@ -3,6 +3,8 @@ import { Box, Button, Disclosure, Modal, TextInput } from "@solix/core";
 import "./app.css";
 import "@solix/core/styles.css";
 
+const refOf = (component: string) => (node: Element) => node.setAttribute("data-ref", component);
+
 export default function App() {
   const [emphasised, setEmphasised] = createSignal(false);
   const [modalOpened, setModalOpened] = createSignal(false);
@@ -10,7 +12,9 @@ export default function App() {
   return (
     <main>
       <h1>Solix playground</h1>
-      <Button data-testid="default">Default</Button>
+      <Button data-testid="default" ref={refOf("Button")}>
+        Default
+      </Button>
       <Button data-testid="overridden" class="danger">
         Overridden
       </Button>
@@ -24,23 +28,37 @@ export default function App() {
       >
         Emphasise
       </Button>
-      <Disclosure label="Follows" class={{ outlined: emphasised() }}>
+      <Disclosure
+        label="Follows"
+        class={{ outlined: emphasised() }}
+        classes={{ summary: { danger: emphasised() } }}
+      >
         Follows the Emphasise button
       </Disclosure>
-      <Disclosure label="Toggle">
+      <Disclosure label="Toggle" ref={refOf("Disclosure")}>
         Hidden content
         <Disclosure label="Inner">Inner content</Disclosure>
       </Disclosure>
-      <TextInput aria-label="Email" type="email" placeholder="Email" />
+      <TextInput aria-label="Email" type="email" placeholder="Email" ref={refOf("TextInput")} />
       <TextInput aria-label="Overridden input" class="danger" />
       <TextInput aria-label="Disabled input" disabled />
       <Button onClick={() => setModalOpened(true)}>Open modal</Button>
       <p>The app records the modal as {modalOpened() ? "opened" : "closed"}.</p>
-      <Modal label="Settings" opened={modalOpened()} onClose={() => setModalOpened(false)}>
+      <Modal
+        label="Settings"
+        opened={modalOpened()}
+        onClose={() => setModalOpened(false)}
+        ref={refOf("Modal")}
+      >
         <TextInput aria-label="Name" />
         <p>Modal content</p>
       </Modal>
-      <Box component="section" aria-label="Style props" p={{ base: "xs", xs: "sm", md: "lg" }}>
+      <Box
+        component="section"
+        aria-label="Style props"
+        p={{ base: "xs", xs: "sm", md: "lg" }}
+        ref={refOf("Box")}
+      >
         <Box component={Button} bg="error">
           Background from a style prop
         </Box>
@@ -65,11 +83,17 @@ export default function App() {
         <Disclosure
           label="Styled parts"
           classes={{ summary: "danger outlined" }}
-          styles={{ summary: { "background-color": "var(--playground-part-background)" } }}
+          styles={{
+            summary: {
+              "background-color": "var(--playground-part-background)",
+              color: "var(--playground-part-text)",
+            },
+          }}
         >
           Content of the styled parts
         </Disclosure>
         <Button unstyled>Unstyled</Button>
+        <button>Plain button</button>
         <Button bg="error">Style prop on a Button</Button>
       </Box>
     </main>

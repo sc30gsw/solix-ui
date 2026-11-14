@@ -1,7 +1,8 @@
 :root {
   --playground-danger: oklch(0.58 0.22 20);
   --playground-pinned-margin: 3.4rem;
-  --playground-part-background: oklch(0.5 0.15 300);
+  --playground-part-background: oklch(0.45 0.15 300);
+  --playground-part-text: oklch(0.97 0.01 300);
 }
 
 .danger {

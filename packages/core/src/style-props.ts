@@ -53,7 +53,7 @@ export const stylePropKeys: (keyof StyleProps)[] = [...stylePropNames, ...visibi
 
 type ResolvedStyleProps = {
   classes: string[];
-  style: JSX.CSSProperties | string | undefined;
+  properties: Record<`--${string}`, string>;
 };
 
 function responsiveEntries(value: StyleProp<string | number>): [ResponsiveKey, string | number][] {
@@ -76,7 +76,9 @@ function cssValue(row: PropertyRow, written: string | number): string | undefine
 
 function declarations(style: JSX.CSSProperties): string {
   return Object.entries(style)
-    .map(([property, value]) => `${property}:${value};`)
+    .flatMap(([property, value]) =>
+      value === undefined || value === null ? [] : [`${property}:${value};`],
+    )
     .join("");
 }
 
@@ -89,9 +91,9 @@ export function withConsumerStyle(
   return { ...own, ...consumer };
 }
 
-export function resolveStyleProps(props: StyleProps & Pick<Styling, "style">): ResolvedStyleProps {
+export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
   const classes = new Set<string>();
-  const own: Record<`--${string}`, string> = {};
+  const properties: Record<`--${string}`, string> = {};
   for (const name of stylePropNames) {
     const canonical = canonicalOf(name);
     for (const [key, written] of responsiveEntries(props[name])) {
@@ -99,7 +101,7 @@ export function resolveStyleProps(props: StyleProps & Pick<Styling, "style">): R
       if (value === undefined) continue;
       const className = stylePropClass(canonical, key);
       classes.add(className);
-      own[`--${className}`] = value;
+      properties[`--${className}`] = value;
     }
   }
   for (const name of visibilityPropNames) {
@@ -108,5 +110,5 @@ export function resolveStyleProps(props: StyleProps & Pick<Styling, "style">): R
       classes.add(visibilityClass(name, breakpoint));
     }
   }
-  return { classes: [...classes], style: withConsumerStyle(own, props.style) };
+  return { classes: [...classes], properties };
 }

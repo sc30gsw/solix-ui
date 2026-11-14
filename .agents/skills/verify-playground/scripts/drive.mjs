@@ -10,7 +10,7 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 }).trim();
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
-const { expectedValues } = await repositoryModule("scripts/expected-values.ts");
+const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
 const { breakpointWidths } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const state = join(root, ".verify-playground");
 const pixelsPerMediaQueryEm = 16;
@@ -46,10 +46,12 @@ const journeys = {
   "changing-props": async ({ page, observe, shot, expected }) => {
     const emphasise = page.getByRole("button", { name: "Emphasise" });
     const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
+    const followerSummary = follower.locator("summary");
     await shot("before", "Open the page. The Emphasise button has the default colour and the Follows disclosure has no outline.");
     observe("before: Emphasise background", await style(emphasise, "background-color"), expected("--solix-color-primary"));
     observe("before: Emphasise aria-pressed", await emphasise.getAttribute("aria-pressed"), "false");
     observe("before: Follows outline", await style(follower, "outline-style"), "none");
+    observe("before: Follows summary background", await style(followerSummary, "background-color"), expected("--solix-color-surface"));
 
     await emphasise.click();
     await page.waitForFunction((element) => element.getAttribute("aria-pressed") === "true", await emphasise.elementHandle());
@@ -57,12 +59,14 @@ const journeys = {
     observe("after a click: Emphasise background comes from the class the app now passes", await style(emphasise, "background-color"), expected("danger"));
     observe("after a click: Emphasise aria-pressed", await emphasise.getAttribute("aria-pressed"), "true");
     observe("after a click: Follows outline comes from the class the app now passes", await style(follower, "outline-style"), "solid");
+    observe("after a click: Follows summary background comes from the class classes.summary now names", await style(followerSummary, "background-color"), expected("danger"));
 
     await emphasise.click();
     await page.waitForFunction((element) => element.getAttribute("aria-pressed") === "false", await emphasise.elementHandle());
     await shot("after-second-click", "Click Emphasise again. Both return to how they started.");
     observe("after a second click: Emphasise background", await style(emphasise, "background-color"), expected("--solix-color-primary"));
     observe("after a second click: Follows outline", await style(follower, "outline-style"), "none");
+    observe("after a second click: Follows summary background", await style(followerSummary, "background-color"), expected("--solix-color-surface"));
   },
   disclosure: async ({ page, observe, shot, expected }) => {
     const summary = page.locator("summary").filter({ hasText: "Toggle" });
@@ -221,15 +225,19 @@ const journeys = {
     const summary = page.locator("summary").filter({ hasText: "Styled parts" });
     const content = page.getByText("Content of the styled parts");
     const unstyled = page.getByRole("button", { name: "Unstyled" });
+    const plain = page.getByRole("button", { name: "Plain button" });
     const styleProp = page.getByRole("button", { name: "Style prop on a Button" });
     await section.scrollIntoViewIfNeeded();
     await shot("styles-api", "Open the page and scroll to the section named Styles API, at the end.", section);
     observe("classes.root: background comes from the consumer's class", await style(fromClasses, "background-color"), expected("danger"));
     observe("classes.root: height still comes from the library", await style(fromClasses, "height"), expected("--solix-control-height-md"));
     observe("styles.summary: background comes from styles, not from the class classes.summary names or the library", await style(summary, "background-color"), expected("partBackground"));
+    observe("styles.summary: text colour comes from styles, not from the library", await style(summary, "color"), expected("partText"));
     observe("classes.summary: the consumer's class still sets the outline", await style(summary, "outline-style"), "solid");
-    observe("unstyled: background is the primary token", (await style(unstyled, "background-color")) === expected("--solix-color-primary"), false);
-    observe("unstyled: height is the control-height token", (await style(unstyled, "height")) === expected("--solix-control-height-md"), false);
+    const plainLook = await lookOf(plain);
+    for (const [property, value] of Object.entries(await lookOf(unstyled))) {
+      observe(`unstyled: ${property} is the Plain button's`, value, plainLook[property]);
+    }
     observe("unstyled: the button keeps its stable class", (await unstyled.getAttribute("class")).split(/\s+/).includes("solix-Button-root"), true);
     observe("a style prop on Button: background comes from bg", await style(styleProp, "background-color"), expected("--solix-color-error"));
 
@@ -239,6 +247,7 @@ const journeys = {
     await shot("styled-parts-open", "Click the summary named Styled parts. It opens, and its background still comes from styles.", section);
     observe("open: content is visible", await content.isVisible(), true);
     observe("open: styles.summary still beats the library's open background", await style(summary, "background-color"), expected("partBackground"));
+    observe("open: styles.summary still beats the library's open text colour", await style(summary, "color"), expected("partText"));
   },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();

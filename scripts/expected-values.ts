@@ -1,10 +1,20 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Page } from "playwright";
+import type { Locator, Page } from "playwright";
 import postcss from "postcss";
 import { type TokenKind, tokenKind, tokenValues } from "./tokens.ts";
 
 const playgroundStylesheet = "apps/playground/src/app.css";
+const sides = ["top", "right", "bottom", "left"];
+const corners = ["top-left", "top-right", "bottom-right", "bottom-left"];
+const lookProperties = [
+  "background-color",
+  "color",
+  ...sides.flatMap((side) => ["width", "style", "color"].map((part) => `border-${side}-${part}`)),
+  ...corners.map((corner) => `border-${corner}-radius`),
+  "height",
+  ...sides.map((side) => `padding-${side}`),
+];
 
 const repositoryRoot = join(import.meta.dirname, "..");
 
@@ -110,6 +120,7 @@ export async function expectedValues(
     ["roomy", "margin-top", playgroundValue(".roomy", "margin-top")],
     ["pinnedMargin", "margin-top", playgroundValue(":root", "--playground-pinned-margin")],
     ["partBackground", "color", playgroundValue(":root", "--playground-part-background")],
+    ["partText", "color", playgroundValue(":root", "--playground-part-text")],
     ["zero", "margin-top", "0"],
   ];
   const rootRule =
@@ -133,4 +144,15 @@ export async function expectedValues(
     }
     return values[name];
   };
+}
+
+/** The computed background, colour, border, radius, height and padding of an element, to compare with another element in the same page and engine. */
+export function lookOf(element: Locator): Promise<Record<string, string>> {
+  return element.evaluate(
+    (node, properties) =>
+      Object.fromEntries(
+        properties.map((property) => [property, getComputedStyle(node).getPropertyValue(property)]),
+      ),
+    lookProperties,
+  );
 }
