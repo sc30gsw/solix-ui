@@ -34,7 +34,7 @@ It does if it edits any of these:
 | `@stylexjs/babel-plugin` and `@stylexjs/stylex` in the catalog in `pnpm-workspace.yaml` | Version 0.19.2. |
 | `@babel/core`, `@babel/preset-typescript` and `postcss` in the catalog in `pnpm-workspace.yaml` | `@babel/core` ^7.26.8 and `@babel/preset-typescript` ^7.26.0 run the build pipeline. `postcss` 8.5.33 parses the stylesheet in the tests. |
 
-Last confirmed against commit `5f40ea0`. Run `git diff 5f40ea0 -- packages/core apps/playground/tests tests/support/global-setup.ts scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `269433e`. Run `git diff 269433e -- packages/core apps/playground/tests tests/support/global-setup.ts scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 
