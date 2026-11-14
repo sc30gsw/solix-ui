@@ -1,6 +1,12 @@
 import { access } from "./internal-access";
 import { createElementAttachment } from "./internal-attachment";
-import { activeElementOf, focusFirst, moveFocus } from "./internal-focus";
+import {
+  activeElementOf,
+  containsComposed,
+  deepActiveElement,
+  focusFirst,
+  moveFocus,
+} from "./internal-focus";
 import { disposeAll, listen, listenerSettings } from "./internal-listener";
 import { initialFocusCandidates, tabStopCandidates } from "./internal-tabbable";
 import type { MaybeAccessor, RefSetter } from "./types";
@@ -8,6 +14,7 @@ import type { MaybeAccessor, RefSetter } from "./types";
 const activated = "solix-focus-trap-activated";
 const released = "solix-focus-trap-released";
 const focusin = "focusin";
+const focusout = "focusout";
 const blur = "blur";
 
 function liesOutside(box: DOMRect, view: Window | null): boolean {
@@ -15,6 +22,13 @@ function liesOutside(box: DOMRect, view: Window | null): boolean {
     view !== null &&
     (box.top < 0 || box.left < 0 || box.bottom > view.innerHeight || box.right > view.innerWidth)
   );
+}
+
+function frameFocusedOutside(container: HTMLElement): HTMLIFrameElement | undefined {
+  const active = deepActiveElement(container.ownerDocument);
+  return active instanceof HTMLIFrameElement && !containsComposed(container, active)
+    ? active
+    : undefined;
 }
 
 function holdsFocus(container: HTMLElement): boolean {
@@ -48,6 +62,9 @@ function focusInitially(container: HTMLElement): void {
 function trap(container: HTMLElement): () => void {
   const token = Symbol(activated);
   const newer = new Set<unknown>();
+  const frameCheck: { pending: ReturnType<typeof setTimeout> | undefined } = {
+    pending: undefined,
+  };
   const bringBack = (landed: Node, fromOutsideThePage: boolean) => {
     if (newer.size === 0 && !holdsFocus(container)) {
       focusEdge(
@@ -55,6 +72,14 @@ function trap(container: HTMLElement): () => void {
         !fromOutsideThePage && comesBefore(activeElementOf(container) ?? landed, container),
       );
     }
+  };
+  const bringBackFromFrame = () => {
+    const frame = frameFocusedOutside(container);
+    if (frame !== undefined) bringBack(frame, false);
+  };
+  const bringBackFromFrameOnNextTask = () => {
+    clearTimeout(frameCheck.pending);
+    frameCheck.pending = setTimeout(bringBackFromFrame, 0);
   };
   const removeListeners = disposeAll([
     listen(container.ownerDocument, listenerSettings(activated), (event) => {
@@ -66,9 +91,12 @@ function trap(container: HTMLElement): () => void {
     listen(container.ownerDocument, listenerSettings(focusin, true), (event) => {
       if (event.target instanceof Node) bringBack(event.target, event.relatedTarget === null);
     }),
+    listen(container, listenerSettings(focusout, true), (event) => {
+      if (event.relatedTarget === null) bringBackFromFrameOnNextTask();
+    }),
     listen(container.ownerDocument.defaultView ?? window, listenerSettings(blur), () => {
-      const active = container.ownerDocument.activeElement;
-      if (active instanceof HTMLIFrameElement) bringBack(active, false);
+      bringBackFromFrame();
+      bringBackFromFrameOnNextTask();
     }),
   ]);
   container.ownerDocument.dispatchEvent(new CustomEvent(activated, { detail: token }));
@@ -77,6 +105,7 @@ function trap(container: HTMLElement): () => void {
   }, 0);
   return () => {
     clearTimeout(initial);
+    clearTimeout(frameCheck.pending);
     removeListeners();
     container.ownerDocument.dispatchEvent(new CustomEvent(released, { detail: token }));
   };
@@ -103,7 +132,9 @@ function trap(container: HTMLElement): () => void {
  * does from a modal `<dialog>`, lands where the dialog's would. Each move is confirmed, and an
  * element that does not take focus, such as a link without `href`, is passed over for the next
  * one. With no tab stop that takes focus, focus moves to the container, so keep the container
- * focusable with `tabindex="-1"`.
+ * focusable with `tabindex="-1"`. Engines report a move into a frame at different times, so the
+ * trap also looks on the next task after focus leaves the container or the window, and brings back
+ * focus that a frame outside the container holds by then.
  *
  * Only the trap turned on last guards focus: turning one on suspends every other, in any order of
  * nesting, and turning it off or disposing it resumes them. Turning `active` off releases the trap

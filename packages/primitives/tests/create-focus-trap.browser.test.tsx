@@ -156,9 +156,9 @@ test("focus that a click, a script or a frame moves outside comes back: to the f
   seen.push(focusedId());
   after.focus();
   seen.push(focusedId());
+  expect(seen).toEqual(["a", "b", "a"]);
   frame.contentDocument?.getElementById("inner")?.focus();
-  seen.push(focusedId());
-  expect(seen).toEqual(["a", "b", "a", "a"]);
+  await expect.poll(focusedId, { timeout: 1_000 }).toBe("a");
 });
 
 test("focus that enters the page with nothing focused before it, as when it comes back from the browser's own controls, lands on the first stop", async () => {
