@@ -25,16 +25,16 @@ It does if it edits any of these:
 | `packages/core/src/**` | Library styles are written with `stylex.create` and `stylex.defineVars`. A component may set a private custom property from `disclosure-state.stylex.ts` inside `stylex.create`, with conditions, and may style `::backdrop` in a nested block, as `Modal.tsx` does. |
 | `packages/core/tests/stylesheet-properties.test.ts` | It calls `compileLibrarySource` and `libraryStylesheet` directly, with the real style-prop rules, and parses the result with PostCSS. |
 | `packages/core/tests/cascade-layers.ts` | It lists the layers nested in a layer in the order the cascade ranks them, for both tests. |
-| `packages/core/tests/build-output.test.ts` | It reads `packages/core/dist/styles.css`, the built components and the built `dist/style-prop-table.js`, and parses the stylesheet with PostCSS. Which property a shorthand sets comes from `longhandsSetBy`, written from the CSS specification for horizontal, left-to-right text: `margin`, `padding`, their `-inline` and `-block` forms, `inset` and `background`. |
-| `tests/support/global-setup.ts` | It runs `vp run -r build` in production mode before any test, which is what writes `packages/core/dist`. |
-| `packages/core/tests/built-components.ts` | It lists the components that `packages/core/dist` holds. |
-| `apps/playground/tests/consumer.test.ts` | It checks that the app's own rule comes before the library layer in the bundle, and the cascade in each installed engine. |
-| `scripts/browser-engines.mjs` | It lists the engines `consumer.test.ts` runs on. |
+| `packages/core/tests/build-output.test.ts` | It reads `packages/core/dist/styles.css` and the built components through `packages/core/tests/built-library.ts`, reads the built `dist/style-prop-table.js`, and parses the stylesheet with PostCSS. Which property a shorthand sets comes from `longhandsSetBy`, written from the CSS specification for horizontal, left-to-right text: `margin`, `padding`, their `-inline` and `-block` forms, `inset` and `background`. |
+| `tests/support` | It runs `vp run -r build` in production mode before any test, which is what writes `packages/core/dist`. |
+| `packages/core/tests/built-library.ts` | It lists the components that `packages/core/dist` holds, and reads `dist/styles.css` as `stylesheet` and each built component as `builtSource(name)`. |
+| `apps/playground/tests/consumer.test.ts` and `apps/playground/tests/box.test.ts` | `consumer.test.ts` checks that the app's own rule comes before the library layer in the bundle, and `box.test.ts` checks the cascade in each installed engine. |
+| `scripts/browser-engines.mjs` | It lists the engines the browser tests run on. |
 | `vite.config.ts` | It sets the test include globs and the global setup. |
 | `@stylexjs/babel-plugin` and `@stylexjs/stylex` in the catalog in `pnpm-workspace.yaml` | Version 0.19.2. |
 | `@babel/core`, `@babel/preset-typescript` and `postcss` in the catalog in `pnpm-workspace.yaml` | `@babel/core` ^7.26.8 and `@babel/preset-typescript` ^7.26.0 run the build pipeline. `postcss` 8.5.33 parses the stylesheet in the tests. |
 
-Last confirmed against commit `269433e`. Run `git diff 269433e -- packages/core apps/playground/tests tests/support/global-setup.ts scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `e7aea22`. Run `git diff e7aea22 -- packages/core apps/playground/tests tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 
@@ -58,7 +58,7 @@ No verifier runs on a JavaScript build script, so this is not a proof. `styleshe
 ## What a pass does not cover
 
 - `stylex.keyframes`, `stylex.createTheme`, pseudo-elements other than `::backdrop`, conditions inside a `::backdrop` block, and styles whose values are only known at run time.
-- The browser's cascade itself. That an unlayered rule beats a layered one comes from the CSS specification; `apps/playground/tests/consumer.test.ts` checks it in each installed engine for one case.
+- The browser's cascade itself. That an unlayered rule beats a layered one comes from the CSS specification; `apps/playground/tests/button.test.ts` and `apps/playground/tests/box.test.ts` check it in each installed engine for a few cases.
 - A consumer who puts their own CSS in a layer declared before `solix`. That consumer loses to the library.
 - `!important` in generated definitions. The generator never writes it, so only the real sources are checked for it.
 
@@ -72,7 +72,7 @@ No verifier runs on a JavaScript build script, so this is not a proof. `styleshe
 
 - Renaming the layer or the prefix: change the constant in `build-pipeline.mjs`. The tests import it, so they follow.
 - Adding a second top-level layer, or emitting rules outside the layer on purpose: this changes the contract in `AGENTS.md`. Change that rule first, then the assertion on the stylesheet's top-level nodes.
-- Changing a breakpoint: the owner fixed them. Change the table in `packages/core/src/style-prop-table.ts` and `ownerBreakpoints` in `build-output.test.ts` together. `apps/playground/tests/consumer.test.ts` and `drive.mjs` read the widths from the table.
+- Changing a breakpoint: the owner fixed them. Change the table in `packages/core/src/style-prop-table.ts` and `ownerBreakpoints` in `build-output.test.ts` together. `apps/playground/tests/box.test.ts` and `drive.mjs` read the widths from the table.
 - A new shorthand style prop: give each of its longhand rows `within` naming it. If its CSS property is not one `longhandsSetBy` knows, add the longhands it sets there, from the CSS specification.
 - Upgrading StyleX: run the check, then update the version in the table above.
 - Using a StyleX feature listed under "does not cover": add it to the generator first.

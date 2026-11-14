@@ -1,6 +1,5 @@
 import * as stylex from "@stylexjs/stylex";
-import { omit } from "solid-js";
-import type { ComponentProps } from "@solidjs/web";
+import { createParts, type ElementProps } from "./parts";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -29,13 +28,9 @@ const styles = stylex.create({
   },
 });
 
-export function TextInput(props: ComponentProps<"input">) {
-  const rest = omit(props, "class");
-  return (
-    <input
-      type="text"
-      {...rest}
-      class={[stylex.attrs(styles.root).class, "solix-TextInput-root", props.class]}
-    />
-  );
+export type TextInputProps = ElementProps<"input", typeof styles>;
+
+export function TextInput(props: TextInputProps) {
+  const { root } = createParts("TextInput", styles, props);
+  return <input type="text" {...root} />;
 }

@@ -2,10 +2,15 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  commentSizeLimit,
+  evidenceComment,
+  evidenceDirectory,
+  evidenceMarker,
+  summaryFile,
+} from "./evidence-summary.mjs";
 
 const root = join(import.meta.dirname, "..");
-const evidenceDirectory = "docs/verification";
-const commentSizeLimit = 65_536;
 
 function fromTheEvidenceJob(name) {
   const value = process.env[name];
@@ -17,7 +22,7 @@ const repository = fromTheEvidenceJob("GITHUB_REPOSITORY");
 const pullRequest = fromTheEvidenceJob("PULL_REQUEST");
 const headCommit = fromTheEvidenceJob("HEAD_COMMIT");
 const evidenceRef = `refs/evidence/pull-${pullRequest}`;
-const marker = `<!-- verification-evidence:${headCommit} -->`;
+const marker = evidenceMarker(headCommit);
 const bot = "github-actions[bot]";
 const botEmail = "41898282+github-actions[bot]@users.noreply.github.com";
 
@@ -67,11 +72,13 @@ function commitEvidenceOutsideEveryBranch() {
 }
 
 function commentLinkingTo(evidenceCommit) {
-  const report = readFileSync(join(root, evidenceDirectory, "README.md"), "utf8").replace(
-    /\]\((?!https?:)([^)]+\.(?:png|gif))\)/g,
-    `](https://github.com/${repository}/blob/${evidenceCommit}/${evidenceDirectory}/$1?raw=true)`,
-  );
-  const comment = `${marker}\nRecorded by CI for ${headCommit.slice(0, 7)}. The images are kept outside every branch, under \`${evidenceRef}\`.\n\n${report}`;
+  const comment = evidenceComment({
+    summary: readFileSync(join(root, evidenceDirectory, summaryFile), "utf8"),
+    repository,
+    evidenceCommit,
+    evidenceRef,
+    headCommit,
+  });
   if (comment.length > commentSizeLimit) {
     throw new Error(
       `The evidence report is ${comment.length} characters and a pull request comment holds ${commentSizeLimit}. Shorten the report in evidence.mjs.`,

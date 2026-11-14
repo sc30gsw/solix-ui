@@ -5,7 +5,7 @@ description: Drives the playground (a server-rendered Solid 2.0 page that consum
 
 # Verify the playground
 
-The app is the web page in `apps/playground`. A user sees four buttons, `Default`, `Overridden`, `Themed` and `Emphasise`, a disclosure whose summary reads `Follows`, and a disclosure whose summary reads `Toggle` with a third, `Inner`, inside it. Below them are three text inputs, an `Open modal` button, and a line saying whether the app records the modal as opened or closed. The button opens a modal dialog named `Settings`. Last is a section named `Style props`, built from `Box` with style props: a button named `Background from a style prop`, the lines `Style prop margin`, `Consumer class margin`, `Consumer style margin`, `Longhand padding` and `Unset margin`, and the lines `Hidden from md` and `Visible from md`, only one of which shows at a time. The library the page consumes is `packages/core`. There is no other surface: no CLI, no API, no stored data.
+The app is the web page in `apps/playground`. A user sees four buttons, `Default`, `Overridden`, `Themed` and `Emphasise`, a disclosure whose summary reads `Follows`, and a disclosure whose summary reads `Toggle` with a third, `Inner`, inside it. Below them are three text inputs, an `Open modal` button, and a line saying whether the app records the modal as opened or closed. The button opens a modal dialog named `Settings`. Then comes a section named `Style props`, built from `Box` with style props: a button named `Background from a style prop`, the lines `Style prop margin`, `Consumer class margin`, `Consumer style margin`, `Longhand padding` and `Unset margin`, and the lines `Hidden from md` and `Visible from md`, only one of which shows at a time. After it is a section named `Styles API`: a button named `Class from classes.root`, a disclosure whose summary reads `Styled parts`, a button named `Unstyled`, and a button named `Plain button` that the library does not style. The library the page consumes is `packages/core`. There is no other surface: no CLI, no API, no stored data.
 
 All helpers are in `.agents/skills/verify-playground/scripts`. Run them from anywhere inside the repository. Run `vp install` first in a fresh checkout.
 
@@ -15,9 +15,14 @@ All helpers are in `.agents/skills/verify-playground/scripts`. Run them from any
 vp run evidence
 ```
 
-This one command runs the checks, then Launch, Doctor, every journey in the feature map on every installed browser engine, and Cleanup. It writes `docs/verification` with the steps, screenshots, a recording of each journey and the observed values, and names any engine that was not installed.
+This one command runs the checks, then Launch, Doctor, every journey in the feature map on every installed browser engine, and Cleanup. It writes two reports to `docs/verification`, and both name any engine that was not installed:
 
-`docs/verification` is ignored by git. Never commit it. On a pull request the CI `evidence` job runs the same command on all three engines, stores the result in a commit outside every branch under `refs/evidence/pull-<number>`, and posts the report with its images as a comment. Pushing the change is all it takes.
+- `README.md`, the full report, with the steps, screenshots, a recording of each journey and the observed values.
+- `SUMMARY.md`, with the same header and the steps condensed, one table row per journey and one column per engine, and the Solid diagnostics line. Each row links once, to that journey's section of `README.md`, by the anchor GitHub gives its heading. Each cell counts the observations that passed in that engine, or names those that failed.
+
+`scripts/evidence-summary.mjs` builds both reports.
+
+`docs/verification` is ignored by git. Never commit it. On a pull request the CI `evidence` job runs the same command on all three engines, stores the result in a commit outside every branch under `refs/evidence/pull-<number>`, and posts `SUMMARY.md` as a comment, with its links pointing into `README.md` at that commit. A pull request comment holds at most 65,536 characters, so the comment carries no step, screenshot, recording or observed value, and `tests/evidence-summary.test.ts` keeps it under that limit for 200 journeys on every engine. Pushing the change is all it takes.
 
 The sections below are the same steps run one at a time, for driving a single journey or investigating a failure.
 
@@ -45,7 +50,7 @@ Read-only. It prints one `ok` or `FAIL` line for each of: an instance was launch
 .agents/skills/verify-playground/scripts/drive.mjs <journey> [engine]
 ```
 
-Journeys: `button-default`, `consumer-override`, `token-theme`, `changing-props`, `disclosure`, `text-input`, `modal`, `box`, `server-render`. Each is described in [features/](features/README.md). Engines: `chromium`, `firefox`, `webkit`. Without an engine the script uses the first one installed. The list of engines lives in `scripts/browser-engines.mjs` at the repository root; an engine that is not installed cannot be driven, and with `CI` set a missing engine is an error. The script uses Playwright, finds buttons by role and name and a disclosure by its summary text, prints one `PASS` or `FAIL` line per observation, and exits non-zero if any fails.
+Journeys: `button-default`, `consumer-override`, `token-theme`, `changing-props`, `disclosure`, `text-input`, `modal`, `box`, `styles-api`, `server-render`. Each is described in [features/](features/README.md). Engines: `chromium`, `firefox`, `webkit`. Without an engine the script uses the first one installed. The list of engines lives in `scripts/browser-engines.mjs` at the repository root; an engine that is not installed cannot be driven, and with `CI` set a missing engine is an error. The script uses Playwright, finds buttons by role and name and a disclosure by its summary text, prints one `PASS` or `FAIL` line per observation, and exits non-zero if any fails.
 
 To check something no journey covers, add a journey to `drive.mjs` and a file to `features/`. Do not drive the page by test id or class when a role, a name or visible text exists.
 

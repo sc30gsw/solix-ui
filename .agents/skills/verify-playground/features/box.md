@@ -1,6 +1,6 @@
 # Box
 
-At the bottom of the page is a section named `Style props`, a `Box` rendered as a `<section>`. Its padding is a responsive style prop that grows at the md breakpoint. Inside it are a library button that a `Box` renders with a style-prop background, three lines whose top margin comes from a style prop, a consumer class and a consumer `style`, a line whose `pt` longhand sits on a responsive `p` shorthand, a line with `mt="unset"` inside a `Box` with `mt="xl"`, and two lines that `hiddenFrom` and `visibleFrom` show on either side of md.
+Before the section named `Styles API` is a section named `Style props`, a `Box` rendered as a `<section>`. Its padding is a responsive style prop that grows at the md breakpoint. Inside it are a library button with a style-prop background, three lines whose top margin comes from a style prop, a consumer class and a consumer `style`, a line whose `pt` longhand sits on a responsive `p` shorthand, a line with `mt="unset"` inside a `Box` with `mt="xl"`, and two lines that `hiddenFrom` and `visibleFrom` show on either side of md.
 
 ## Sub-features
 
@@ -15,7 +15,7 @@ At the bottom of the page is a section named `Style props`, a `Box` rendered as 
 
 ## How to get to it (user POV)
 
-- Open the page and scroll to the end. The section named `Style props` is after the line that says whether the app records the modal as opened.
+- Open the page and scroll down. The section named `Style props` is after the line that says whether the app records the modal as opened, and before the section named `Styles API`.
 - Make the window 992 pixels wide or wider to cross the md breakpoint.
 
 ## Driving it with drive.mjs
@@ -34,4 +34,4 @@ Preconditions:
 - `hiddenFrom` and `visibleFrom` are classes in the same `style-props` layer, so a consumer's class that sets `display` beats them, by the same precedence that lets `.roomy` beat `mt`. A consumer who wants an element hidden from md must not give it a class that sets `display`.
 - If `Longhand padding` takes the `lg` top padding at md, a shorthand's rule was emitted after the longhand's at that breakpoint. If `Unset margin` takes the `xl` margin, its custom property was registered to inherit, or not registered.
 - The margin and padding are measured through `margin-top` and `padding-top`, not `height`. Chromium snaps a `height` to layout units and keeps a margin unsnapped, so the same length reads differently through the two properties.
-- `apps/playground/tests/consumer.test.ts` checks the same cascade one pixel below md and at md, with scripts on and off, in every installed engine.
+- `apps/playground/tests/box.test.ts` checks the same cascade one pixel below md and at md, with scripts on and off, in every installed engine.

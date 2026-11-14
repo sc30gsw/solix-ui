@@ -3,6 +3,7 @@ import { defineConfig, lazyPlugins } from "vite-plus";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
+const tablesKeptCompact = ["AGENTS.md"];
 
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
@@ -11,7 +12,7 @@ export default defineConfig({
     "*.{ts,tsx,jsx}": "solid2-kit check",
   },
   fmt: {
-    ignorePatterns: [...filesOwnedByOtherTools, ...generatedEvidence],
+    ignorePatterns: [...filesOwnedByOtherTools, ...generatedEvidence, ...tablesKeptCompact],
   },
   lint: {
     ignorePatterns: filesOwnedByOtherTools,

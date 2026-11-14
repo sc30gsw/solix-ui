@@ -1,7 +1,8 @@
 import * as stylex from "@stylexjs/stylex";
-import { createEffect, createUniqueId, omit, onSettled } from "solid-js";
-import type { ComponentProps } from "@solidjs/web";
+import { createEffect, createUniqueId, onSettled } from "solid-js";
 import { dismissOnOutsidePress, supportsClosedBy } from "./light-dismiss";
+import { createParts, type ElementProps } from "./parts";
+import { type DisplayPropName, displayPropNames } from "./style-prop-table";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -44,10 +45,24 @@ const styles = stylex.create({
   },
 });
 
-export function Modal(
-  props: Omit<ComponentProps<"dialog">, "open"> & { label: string; opened: boolean },
-) {
-  const rest = omit(props, "class", "label", "children", "opened");
+export type ModalProps = ElementProps<
+  "dialog",
+  typeof styles,
+  { label: string; opened: boolean; open?: never } & Partial<Record<DisplayPropName, never>>
+>;
+
+export function Modal(props: ModalProps) {
+  const { root, part } = createParts(
+    "Modal",
+    styles,
+    props,
+    "label",
+    "children",
+    "opened",
+    "open",
+    "ref",
+    ...displayPropNames,
+  );
   const headingId = createUniqueId();
   let dialog: HTMLDialogElement;
 
@@ -67,27 +82,20 @@ export function Modal(
     <dialog
       aria-labelledby={headingId}
       closedby="any"
-      {...rest}
-      ref={(node) => (dialog = node)}
-      class={[stylex.attrs(styles.root).class, "solix-Modal-root", props.class]}
+      {...root}
+      ref={[props.ref, (node: HTMLDialogElement) => (dialog = node)]}
     >
-      <header class={[stylex.attrs(styles.header).class, "solix-Modal-header"]}>
-        <h2 id={headingId} class={[stylex.attrs(styles.heading).class, "solix-Modal-heading"]}>
+      <header {...part("header")}>
+        <h2 id={headingId} {...part("heading")}>
           {props.label}
         </h2>
         <form method="dialog">
-          <button
-            type="submit"
-            aria-label="Close"
-            class={[stylex.attrs(styles.close).class, "solix-Modal-close"]}
-          >
+          <button type="submit" aria-label="Close" {...part("close")}>
             ×
           </button>
         </form>
       </header>
-      <div class={[stylex.attrs(styles.content).class, "solix-Modal-content"]}>
-        {props.children}
-      </div>
+      <div {...part("content")}>{props.children}</div>
     </dialog>
   );
 }

@@ -1,7 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
-import { omit } from "solid-js";
-import type { ComponentProps } from "@solidjs/web";
 import { disclosureState } from "./disclosure-state.stylex";
+import { createParts, type ElementProps } from "./parts";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -30,19 +29,14 @@ const styles = stylex.create({
   },
 });
 
-export function Disclosure(props: ComponentProps<"details"> & { label: string }) {
-  const rest = omit(props, "class", "label", "children");
+export type DisclosureProps = ElementProps<"details", typeof styles, { label: string }>;
+
+export function Disclosure(props: DisclosureProps) {
+  const { root, part } = createParts("Disclosure", styles, props, "label", "children");
   return (
-    <details
-      {...rest}
-      class={[stylex.attrs(styles.root).class, "solix-Disclosure-root", props.class]}
-    >
-      <summary class={[stylex.attrs(styles.summary).class, "solix-Disclosure-summary"]}>
-        {props.label}
-      </summary>
-      <div class={[stylex.attrs(styles.content).class, "solix-Disclosure-content"]}>
-        {props.children}
-      </div>
+    <details {...root}>
+      <summary {...part("summary")}>{props.label}</summary>
+      <div {...part("content")}>{props.children}</div>
     </details>
   );
 }

@@ -1,41 +1,14 @@
-import { type ChildProcess, spawn } from "node:child_process";
-import { join } from "node:path";
 import fc from "fast-check";
-import type { Browser, Locator, Page } from "playwright";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
-import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
+import type { Locator, Page } from "playwright";
+import { expect, inject, test } from "vite-plus/test";
+import { inEveryEngine } from "./support/playground";
 
-const appDirectory = join(import.meta.dirname, "..");
-const port = 4321;
-const url = `http://127.0.0.1:${port}/`;
+const url = inject("playgroundUrl");
 const generatedRuns = 15;
 const longestSequence = 10;
 
 type Model = { open: boolean; name: string };
 type Real = { page: Page; dialog: Locator; opener: Locator; readout: Locator };
-
-let server: ChildProcess;
-
-async function serverAnswers(): Promise<boolean> {
-  try {
-    return (await fetch(url)).ok;
-  } catch {
-    return false;
-  }
-}
-
-beforeAll(async () => {
-  server = spawn("node", ["dist/server/node.js"], {
-    cwd: appDirectory,
-    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
-    stdio: "ignore",
-  });
-  await vi.waitUntil(serverAnswers, { timeout: 10_000 });
-});
-
-afterAll(() => {
-  server.kill();
-});
 
 function present<T>(value: T | null | undefined, what: string): T {
   if (value === null || value === undefined) throw new Error(`${what} is not on the page`);
@@ -175,19 +148,9 @@ const steps = [
   fc.stringMatching(/^[a-z]{0,6}$/).map((text) => new TypeAName(text)),
 ];
 
-describe.each(enginesToVerify())("in %s", (engine) => {
-  let browser: Browser;
-
-  beforeAll(async () => {
-    browser = await browserType(engine).launch();
-  });
-
-  afterAll(async () => {
-    await browser.close();
-  });
-
+inEveryEngine((browser) => {
   test("for every generated sequence of user actions, the modal agrees with a model of open and closed", async () => {
-    const page = await browser.newPage();
+    const page = await browser().newPage();
 
     await fc.assert(
       fc.asyncProperty(fc.commands(steps, { maxCommands: longestSequence }), async (sequence) => {
@@ -210,7 +173,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
   });
 
   test("the fallback alone closes on a press outside, and not on a press inside or a drag that ends outside", async () => {
-    const context = await browser.newContext();
+    const context = await browser().newContext();
     await context.addInitScript(() => {
       Reflect.deleteProperty(HTMLDialogElement.prototype, "closedBy");
     });

@@ -98,6 +98,9 @@ export type RowOf<Name extends StylePropName> = Rows[Name] extends {
 export type Breakpoint = keyof typeof breakpointWidths;
 export type ResponsiveKey = typeof baseKey | Breakpoint;
 export type VisibilityPropName = keyof typeof visibilityTable;
+type DisplayStylePropName = {
+  [Name in StylePropName]: RowOf<Name> extends { property: "display" } ? Name : never;
+}[StylePropName];
 
 function isStylePropName(name: string): name is StylePropName {
   return Object.hasOwn(stylePropTable, name);
@@ -125,6 +128,16 @@ export function canonicalOf(name: StylePropName): CanonicalStylePropName {
   if (isCanonical(name)) return name;
   return stylePropTable[name].aliasOf;
 }
+
+function setsDisplay(name: StylePropName): name is DisplayStylePropName {
+  return stylePropTable[canonicalOf(name)].property === "display";
+}
+
+export const displayPropNames = [...stylePropNames.filter(setsDisplay), ...visibilityPropNames];
+
+export type DisplayPropName = (typeof displayPropNames)[number];
+
+export const stylePropKeys = [...stylePropNames, ...visibilityPropNames];
 
 function shorthandDepth(name: CanonicalStylePropName): number {
   const row = stylePropTable[name];
