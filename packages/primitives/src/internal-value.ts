@@ -1,5 +1,5 @@
 import { type Accessor, createMemo, createSignal, untrack } from "solid-js";
-import { createCommand } from "./internal-command";
+import { createStateCommand } from "./internal-command";
 
 export type Equals<T> = (left: T, right: T) => boolean;
 
@@ -14,7 +14,7 @@ export function createValue<T>(initial: T, equals: Equals<T> = Object.is): Value
   const [box, setBox] = createSignal({ value: initial });
   return {
     get: createMemo(() => box().value, { equals }),
-    update: createCommand(
+    update: createStateCommand(
       (decide: (staged: T) => T) => {
         const update: Update<T> = { changed: false, value: untrack(box).value };
         setBox((staged) => {

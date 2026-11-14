@@ -5,6 +5,7 @@ import { browserTestWaitsRule } from "./browser-test-waits";
 import { browserTestsUseTheHarnessRule } from "./browser-tests-use-the-harness";
 import { browserValuesRule } from "./browser-values";
 import { caughtErrorsRule } from "./caught-errors";
+import { commandKindsRule } from "./command-kinds";
 import { elementAttachmentsRule } from "./element-attachments";
 import { accessibilityTestsRule, focusMovesRule } from "./focus";
 import { hydrationPolicyRule } from "./hydration-policy";
@@ -39,6 +40,7 @@ export const primitiveRules = {
   browserValues: browserValuesRule,
   hydrationPolicy: hydrationPolicyRule,
   browserGlobalReads: browserGlobalReadsRule,
+  commandKinds: commandKindsRule,
   liveOptions: liveOptionsRule,
   listenerRoles: listenerRolesRule,
   observerConstruction: observerConstructionRule,

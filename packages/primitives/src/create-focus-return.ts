@@ -1,7 +1,7 @@
 import { type Accessor, createEffect, untrack } from "solid-js";
 import { access } from "./internal-access";
 import { containsComposed, deepActiveElement } from "./internal-active";
-import { createCommand } from "./internal-command";
+import { createBrowserCommand } from "./internal-command";
 import { isFocusTarget, moveFocus } from "./internal-focus";
 import type { MaybeAccessor } from "./types";
 
@@ -29,9 +29,8 @@ export type FocusReturnOptions = {
  * there: a click on a focusable element outside that closed the surface leaves focus on it. An
  * element that has left the page is not focused, and that is no error.
  *
- * It returns `returnFocus`, which focuses the remembered element at once. It does nothing before
- * the owner's effects run, so never during the server render, and nothing once the owner is
- * disposed.
+ * It returns `returnFocus`, which focuses the remembered element at once. It does nothing during
+ * the server render and while the page hydrates, and nothing once the owner is disposed.
  *
  * ```tsx
  * const [surface, setSurface] = createSignal<HTMLElement>();
@@ -41,7 +40,7 @@ export type FocusReturnOptions = {
  */
 export function createFocusReturn(options: FocusReturnOptions): () => void {
   const state: { remembered: Element | null } = { remembered: null };
-  const returnFocus = createCommand(
+  const returnFocus = createBrowserCommand(
     () => {
       const target = state.remembered;
       if (isFocusTarget(target)) moveFocus(target, { preventScroll: true });

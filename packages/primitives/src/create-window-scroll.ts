@@ -1,6 +1,6 @@
 import { browserApi } from "./internal-browser-api";
 import { createBrowserValue, readOn } from "./internal-browser-value";
-import { createCommand } from "./internal-command";
+import { createBrowserCommand } from "./internal-command";
 import type { BrowserValue } from "./types";
 
 /** A scroll position of the window, in CSS pixels. */
@@ -18,8 +18,8 @@ export type WindowScrollReturn = [
  * browser leaves out reads `0`. A position equal by value to the one before changes nothing.
  *
  * `scrollTo` scrolls the window smoothly to the axes it is given as numbers, and leaves the other
- * where it is. It does nothing before the owner's effects run, so never during the server render,
- * and nothing once the owner is disposed.
+ * where it is. It does nothing during the server render and while the page hydrates, and nothing
+ * once the owner is disposed.
  *
  * ```tsx
  * const [position, scrollTo] = createWindowScroll();
@@ -36,7 +36,7 @@ export function createWindowScroll(): WindowScrollReturn {
     ),
     { loadingValue: { x: 0, y: 0 } },
   );
-  const scrollTo = createCommand(
+  const scrollTo = createBrowserCommand(
     (target: Partial<ScrollPosition>) => {
       const options: ScrollToOptions = { behavior: "smooth" };
       if (typeof target.x === "number") options.left = target.x;

@@ -19,16 +19,22 @@ function isPrimitive(name: string): name is Primitive {
 const primitives = Object.keys(serverCases).filter(isPrimitive).sort();
 
 function renderOnTheServer<K extends Primitive>(name: K) {
-  const { create, read, commands }: ServerCase<Library[K]> = serverCases[name];
+  const { create, read, stateCommands, browserCommands }: ServerCase<Library[K]> =
+    serverCases[name];
   const primitive = library[name];
-  const rendered = { returned: undefined as unknown, value: undefined as unknown, after: "" };
+  const rendered = {
+    returned: undefined as unknown,
+    value: undefined as unknown,
+    afterBrowserCommands: "",
+  };
   const touched = browserResourcesReadDuring(() => {
     renderedOnTheServer(() => {
       rendered.returned = create(primitive);
       rendered.value = read?.(rendered.returned as never);
-      commands?.(rendered.returned as never);
-      rendered.after = serialized(read?.(rendered.returned as never));
-      return rendered.after;
+      browserCommands?.(rendered.returned as never);
+      rendered.afterBrowserCommands = serialized(read?.(rendered.returned as never));
+      stateCommands?.(rendered.returned as never);
+      return rendered.afterBrowserCommands;
     });
   });
   return { ...rendered, touched };
@@ -53,13 +59,15 @@ test("a primitive that returns nothing, or only functions, passes; one that retu
 });
 
 test.each(primitives)(
-  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, does nothing for a command called there, and returns nothing or only functions",
+  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, keeps it when a browser command is called there, runs a state command there without a browser read, and returns nothing or only functions",
   (name) => {
-    const { returned, value, after, touched } = renderOnTheServer(name);
+    const { returned, value, afterBrowserCommands, touched } = renderOnTheServer(name);
 
     expect(touched, `${name} reads these browser resources on the server`).toEqual([]);
     expect(value, `${name}: its server value`).toEqual(serverCases[name].expected);
-    expect(after, `${name}: its server value after its commands ran`).toBe(serialized(value));
+    expect(afterBrowserCommands, `${name}: its server value after its browser commands ran`).toBe(
+      serialized(value),
+    );
     expect(
       plainValuesIn(returned, name),
       `${name}: return accessors and handlers only, so destructuring the result never freezes a value`,

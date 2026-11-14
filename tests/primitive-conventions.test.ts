@@ -122,6 +122,10 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-misbehaving.ts", "const Observer"),
     forbiddenAt("src/create-misbehaving.ts", "const known"),
   ],
+  commandKinds: [
+    forbiddenAt("src/create-commanded.ts", "createStateCommand(() => window"),
+    forbiddenAt("src/create-commanded.ts", "createStateCommand(() => home()"),
+  ],
   liveOptions: [forbiddenAt("src/create-misbehaving.ts", "const size = access")],
   listenerRoles: [
     forbiddenAt("src/create-misbehaving.ts", "import { listen }"),

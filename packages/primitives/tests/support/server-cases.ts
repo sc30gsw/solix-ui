@@ -9,7 +9,9 @@ export type ServerCase<F> = {
   read?: (returned: never) => unknown;
   expected?: unknown;
   ref?: (returned: never) => Primitives.RefSetter<HTMLElement>;
-  commands?: (returned: never) => void;
+  stateCommands?: (returned: never) => void;
+  afterStateCommands?: unknown;
+  browserCommands?: (returned: never) => void;
 };
 
 function serverCase<F, R>(cases: {
@@ -17,7 +19,9 @@ function serverCase<F, R>(cases: {
   read?: (returned: R) => unknown;
   expected?: unknown;
   ref?: (returned: R) => Primitives.RefSetter<HTMLElement>;
-  commands?: (returned: R) => void;
+  stateCommands?: (returned: R) => void;
+  afterStateCommands?: unknown;
+  browserCommands?: (returned: R) => void;
 }): ServerCase<F> {
   return cases;
 }
@@ -50,23 +54,15 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createCounter) => createCounter(11, { min: 0, max: 10 }),
     read: ([count]) => count(),
     expected: 10,
-    commands: ([, handlers]) => {
-      handlers.decrement();
-      handlers.increment();
-      handlers.set(3);
-      handlers.reset();
-    },
+    stateCommands: ([, handlers]) => handlers.decrement(),
+    afterStateCommands: 9,
   }),
   createDisclosure: serverCase({
     create: (createDisclosure) => createDisclosure(true),
     read: ([opened]) => opened(),
     expected: true,
-    commands: ([, handlers]) => {
-      handlers.close();
-      handlers.open();
-      handlers.toggle();
-      handlers.set(false);
-    },
+    stateCommands: ([, handlers]) => handlers.close(),
+    afterStateCommands: false,
   }),
   createDocumentVisibility: serverCase({
     create: (createDocumentVisibility) => createDocumentVisibility(),
@@ -90,7 +86,7 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
   }),
   createFocusReturn: serverCase({
     create: (createFocusReturn) => createFocusReturn({ opened: true, surface: () => undefined }),
-    commands: (returnFocus) => returnFocus(),
+    browserCommands: (returnFocus) => returnFocus(),
   }),
   createFocusTrap: serverCase({
     create: (createFocusTrap) => createFocusTrap(() => false),
@@ -126,7 +122,8 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createInputState) => createInputState("typed"),
     read: ([value]) => value(),
     expected: "typed",
-    commands: ([, onChange]) => onChange("changed"),
+    stateCommands: ([, onChange]) => onChange("changed"),
+    afterStateCommands: "changed",
   }),
   createIntersection: serverCase({
     create: (createIntersection) => createIntersection(() => ({ threshold: [0, 1] })),
@@ -138,19 +135,20 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createListState) => createListState(() => [1, 2]),
     read: ([list]) => list(),
     expected: [1, 2],
-    commands: ([, handlers]) => {
-      handlers.append(3);
-      handlers.reorder({ from: 0, to: 1 });
-      handlers.remove(0);
-    },
+    stateCommands: ([, handlers]) => handlers.append(3),
+    afterStateCommands: [1, 2, 3],
   }),
   createMap: serverCase({
     create: (createMap) => createMap([["key", 1]]),
     read: (map) => map(),
     expected: new Map([["key", 1]]),
-    commands: (map) => {
+    stateCommands: (map) => {
       map().set("other", 2);
     },
+    afterStateCommands: new Map([
+      ["key", 1],
+      ["other", 2],
+    ]),
   }),
   createMediaQuery: serverCase({
     create: (createMediaQuery) => [
@@ -188,11 +186,11 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createQueue) => createQueue({ initialValues: [1, 2, 3], limit: 2 }),
     read: ({ state, queue }) => [state(), queue()],
     expected: [[1, 2], [3]],
-    commands: ({ add, update, cleanQueue }) => {
-      add(4);
-      update((items) => items.slice(1));
-      cleanQueue();
-    },
+    stateCommands: ({ add }) => add(4),
+    afterStateCommands: [
+      [1, 2],
+      [3, 4],
+    ],
   }),
   createResizeObserver: serverCase({
     create: (createResizeObserver) => createResizeObserver(),
@@ -209,26 +207,24 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createSet) => createSet(["member"]),
     read: (set) => set(),
     expected: new Set(["member"]),
-    commands: (set) => {
+    stateCommands: (set) => {
       set().add("other");
     },
+    afterStateCommands: new Set(["member", "other"]),
   }),
   createSetState: serverCase({
     create: (createSetState) => createSetState({ page: 1 }),
     read: ([state]) => state(),
     expected: { page: 1 },
-    commands: ([, setState]) => setState({ page: 2 }),
+    stateCommands: ([, setState]) => setState({ page: 2 }),
+    afterStateCommands: { page: 2 },
   }),
   createStateHistory: serverCase({
     create: (createStateHistory) => createStateHistory("first"),
     read: ([value, , { history, current }]) => [value(), history(), current()],
     expected: ["first", ["first"], 0],
-    commands: ([, handlers]) => {
-      handlers.set("second");
-      handlers.back();
-      handlers.forward();
-      handlers.reset();
-    },
+    stateCommands: ([, handlers]) => handlers.set("second"),
+    afterStateCommands: ["second", ["first", "second"], 1],
   }),
   createTextSelection: serverCase({
     create: (createTextSelection) => createTextSelection(),
@@ -239,21 +235,24 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createToggle) => createToggle(["light", "dark"]),
     read: ([value]) => value(),
     expected: "light",
-    commands: ([, toggle]) => toggle(),
+    stateCommands: ([, toggle]) => toggle(),
+    afterStateCommands: "dark",
   }),
   createUncontrolled: serverCase({
     create: (createUncontrolled) =>
       createUncontrolled({ defaultValue: "default", finalValue: "final" }),
     read: ([value, , controlled]) => [value(), controlled()],
     expected: ["default", false],
-    commands: ([, setValue]) => setValue("changed"),
+    stateCommands: ([, setValue]) => setValue("changed"),
+    afterStateCommands: ["changed", false],
   }),
   createValidatedState: serverCase({
     create: (createValidatedState) =>
       createValidatedState("ab", (text: string) => text.length > 2, true),
     read: ([state]) => [state.value(), state.lastValidValue(), state.valid()],
     expected: ["ab", undefined, true],
-    commands: ([, setValue]) => setValue("abc"),
+    stateCommands: ([, setValue]) => setValue("abc"),
+    afterStateCommands: ["abc", "abc", true],
   }),
   createViewportSize: serverCase({
     create: (createViewportSize) => createViewportSize(),
@@ -272,6 +271,6 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createWindowScroll) => createWindowScroll(),
     read: ([position]) => position(),
     expected: { x: 0, y: 0 },
-    commands: ([, scrollTo]) => scrollTo({ y: 10 }),
+    browserCommands: ([, scrollTo]) => scrollTo({ y: 10 }),
   }),
 };

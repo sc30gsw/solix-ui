@@ -1,20 +1,39 @@
 import { expect, test } from "vite-plus/test";
-import { createCommand } from "../src/internal-command";
+import { createBrowserCommand, createStateCommand } from "../src/internal-command";
 import { mount, unmount } from "./support/browser-harness";
 
-test("a command runs once its owner's effects have run, its idle form before then and once the owner is disposed", () => {
+function recorder(kind: string, seen: string[]) {
+  return {
+    run: (label: string) => seen.push(`${kind} ran ${label}`),
+    idle: (label: string) => seen.push(`${kind} idle ${label}`),
+  };
+}
+
+test("a state command and a browser command run whenever their owner is live in the browser, before its effects run too, and are idle once it is disposed", () => {
   const seen: string[] = [];
-  const command = mount(() => {
-    const created = createCommand(
-      (label: string) => seen.push(`ran ${label}`),
-      (label: string) => seen.push(`idle ${label}`),
-    );
-    created("while created");
+  const commands = mount(() => {
+    const state = recorder("state", seen);
+    const browser = recorder("browser", seen);
+    const created = {
+      state: createStateCommand(state.run, state.idle),
+      browser: createBrowserCommand(browser.run, browser.idle),
+    };
+    created.state("while created");
+    created.browser("while created");
     return created;
   });
 
-  command("once mounted");
+  commands.state("once mounted");
+  commands.browser("once mounted");
   unmount();
-  command("after dispose");
-  expect(seen).toEqual(["idle while created", "ran once mounted", "idle after dispose"]);
+  commands.state("after dispose");
+  commands.browser("after dispose");
+  expect(seen).toEqual([
+    "state ran while created",
+    "browser ran while created",
+    "state ran once mounted",
+    "browser ran once mounted",
+    "state idle after dispose",
+    "browser idle after dispose",
+  ]);
 });

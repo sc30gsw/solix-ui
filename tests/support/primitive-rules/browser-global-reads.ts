@@ -1,6 +1,6 @@
 import ts from "typescript";
 import { browserOnlyGlobals } from "../../../packages/primitives/tests/support/browser-resources";
-import { descendants, isInTypePosition } from "../syntax";
+import { descendants, isCallTo, isInTypePosition } from "../syntax";
 import {
   at,
   isGlobal,
@@ -12,6 +12,7 @@ import {
 } from "./library";
 
 const browserOnly: readonly string[] = browserOnlyGlobals;
+const stateCommand = "createStateCommand";
 
 const browserOnlyArguments: Record<string, number[]> = {
   createBrowserValue: [0],
@@ -22,7 +23,7 @@ const browserOnlyArguments: Record<string, number[]> = {
   createElementValue: [1],
   createTargetListener: [0, 2],
   createWindowHandler: [1],
-  createCommand: [0],
+  createBrowserCommand: [0],
   createClientMemo: [0],
   createEffect: [1],
 };
@@ -81,26 +82,72 @@ function moduleFunctionsUsedOnlyIn(
   return allowed;
 }
 
+function isBrowserGlobalRead(library: Library, node: ts.Node): node is ts.Identifier {
+  return (
+    ts.isIdentifier(node) &&
+    browserOnly.includes(node.text) &&
+    !isInTypePosition(node) &&
+    isGlobal(library, node)
+  );
+}
+
+export function stateCommandBodies(module: Module): Set<ts.Node> {
+  return new Set(
+    descendants(module.source).flatMap((node) =>
+      isCallTo(node, stateCommand) && node.arguments[0] ? [node.arguments[0]] : [],
+    ),
+  );
+}
+
+export function browserGlobalReadsReachedFrom(
+  library: Library,
+  module: Module,
+  root: ts.Node,
+): ts.Identifier[] {
+  const reached = new Set<ts.Node>([root]);
+  const queue: ts.Node[] = [root];
+  while (queue.length > 0) {
+    const at = queue.pop();
+    if (!at) continue;
+    for (const node of descendants(at)) {
+      if (!ts.isIdentifier(node)) continue;
+      const declaration = library.checker.getSymbolAtLocation(node)?.valueDeclaration;
+      if (
+        declaration &&
+        ts.isFunctionDeclaration(declaration) &&
+        declaration.getSourceFile() === module.source &&
+        !reached.has(declaration)
+      ) {
+        reached.add(declaration);
+        queue.push(declaration);
+      }
+    }
+  }
+  return [...reached].flatMap((node) =>
+    descendants(node).filter((found) => isBrowserGlobalRead(library, found)),
+  );
+}
+
 const browserGlobalReads: Rule = (library) =>
   publicModules(library).flatMap((module) => {
-    const allowed = moduleFunctionsUsedOnlyIn(library, module, browserOnlyFunctions(module));
+    const reportedAsCommands = new Set([
+      ...browserOnlyFunctions(module),
+      ...stateCommandBodies(module),
+    ]);
+    const allowed = moduleFunctionsUsedOnlyIn(library, module, reportedAsCommands);
     return descendants(module.source)
       .filter(
         (node): node is ts.Identifier =>
-          ts.isIdentifier(node) &&
-          browserOnly.includes(node.text) &&
-          !isInTypePosition(node) &&
-          isGlobal(library, node) &&
-          !insideOneOf(node, allowed),
+          isBrowserGlobalRead(library, node) && !insideOneOf(node, allowed),
       )
       .map(
         (node) =>
-          `${at(module, node)}: ${node.text}: read a browser-only global only inside a browser-value subscription, an attachment's attach function, a command or an effect's apply, which the server never runs.`,
+          `${at(module, node)}: ${node.text}: read a browser-only global only inside a browser-value subscription, an attachment's attach function, a browser command or an effect's apply, which the server never runs.`,
       );
   });
 
 export const browserGlobalReadsRule: PrimitiveRule = {
   description:
-    "a public module reads a browser-only global only inside a browser-value subscription, an attach function, a command or an effect's apply",
+    "a public module reads a browser-only global only inside a browser-value subscription, an attach function, a browser command or an effect's apply",
   rule: browserGlobalReads,
 };
