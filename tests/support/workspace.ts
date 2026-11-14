@@ -15,6 +15,7 @@ export type Manifest = {
   name?: string;
   license?: string;
   engines?: Record<string, string>;
+  packageManager?: string;
   devEngines?: Record<string, unknown>;
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
