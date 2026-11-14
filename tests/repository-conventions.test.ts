@@ -22,9 +22,8 @@ const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 const notOneSpaceAtACellBorder = / {2,}\||\| {2,}|\S\||\|\S/;
 const confirmedCommit = /Last confirmed against commit `([0-9a-f]{7,40})`/;
-const checkoutStep =
-  /- uses: actions\/checkout@\S+\n(\s+)with:\n(?:\1\s+.*\n)*?\1\s+fetch-depth: 0\n/;
-const runsVerify = /vp run verify/;
+const checkoutSteps = /- uses: actions\/checkout@/g;
+const fullHistory = /^\s+fetch-depth: 0$/gm;
 const versionPrefix = /^[\^~]/;
 
 const skillNames = readdirSync(skillsDirectory).sort();
@@ -185,10 +184,13 @@ test("every verification skill was last confirmed against a commit that HEAD con
       ];
     });
   const shallow = workflowFiles
-    .filter((file) => runsVerify.test(read(file)) && !checkoutStep.test(read(file)))
+    .filter((file) => {
+      const text = read(file);
+      return (text.match(fullHistory) ?? []).length < (text.match(checkoutSteps) ?? []).length;
+    })
     .map(
       (file) =>
-        `${file}: check out with \`fetch-depth: 0\`, so verify can tell whether a skill's commit is in the history.`,
+        `${file}: give every actions/checkout step \`fetch-depth: 0\`, so the tests can tell whether a skill's commit is in the history.`,
     );
 
   expect([...violations, ...shallow]).toEqual([]);
