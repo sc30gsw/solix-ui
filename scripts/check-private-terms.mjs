@@ -1,17 +1,26 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { lstatSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 
 const privateTermsVariable = "SOLIX_PRIVATE_TERMS";
 const termSeparator = /[,\n]/;
-const filesWhoseHashesLookLikeWords = new Set(["pnpm-lock.yaml"]);
+const filesWhoseHashesLookLikeWords = ["pnpm-lock.yaml"];
 const verboseCommitScissors = / -{24} >8 -{24}/;
 const nulByte = "\0";
+const mask = "***";
 const usage = "usage: check-private-terms.mjs [--message <commit message file> | --text <file>]";
 
-function git(args, input) {
-  return execFileSync("git", args, { encoding: "utf8", input });
+function git(args) {
+  return execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+}
+
+function gitAllowingNoMatch(args) {
+  try {
+    return git(args);
+  } catch (error) {
+    if (error.status === 1) return "";
+    throw error;
+  }
 }
 
 function parseTerms(value) {
@@ -29,32 +38,65 @@ function lineNumbersNamingATerm(text, terms) {
     .map(({ number }) => number);
 }
 
-function messageAsGitStoresIt(text) {
-  const lines = text.split("\n");
-  const scissorsAt = lines.findIndex((line) => verboseCommitScissors.test(line));
-  const beforeScissors = scissorsAt === -1 ? lines : lines.slice(0, scissorsAt);
-  return git(["stripspace", "--strip-comments"], beforeScissors.join("\n"));
+function masked(path, terms) {
+  return terms.reduce(
+    (current, term) =>
+      current.replace(new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), mask),
+    path,
+  );
 }
 
-function findingsInRepository(terms) {
-  const root = git(["rev-parse", "--show-toplevel"]).trim();
-  return git(["-C", root, "ls-files", "-z"])
-    .split(nulByte)
-    .filter((path) => path.length > 0)
-    .flatMap((path) => {
-      const inName = lineNumbersNamingATerm(path, terms).length > 0 ? [`${path}: its name`] : [];
-      const file = join(root, path);
-      const isReadable = lstatSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
-      if (!isReadable || filesWhoseHashesLookLikeWords.has(path)) return inName;
-      const text = readFileSync(file, "utf8");
-      if (text.includes(nulByte)) return inName;
-      return [...inName, ...lineNumbersNamingATerm(text, terms).map((line) => `${path}:${line}`)];
+function messageBeforeScissors(text) {
+  const lines = text.split("\n");
+  const scissorsAt = lines.findIndex((line) => verboseCommitScissors.test(line));
+  return (scissorsAt === -1 ? lines : lines.slice(0, scissorsAt)).join("\n");
+}
+
+function findingsInStagedFiles(terms) {
+  const output = gitAllowingNoMatch([
+    "grep",
+    "--cached",
+    "-I",
+    "-i",
+    "-n",
+    "-z",
+    "-F",
+    ...terms.flatMap((term) => ["-e", term]),
+    "--",
+    ".",
+    ...filesWhoseHashesLookLikeWords.map((file) => `:!${file}`),
+  ]);
+  return output
+    .split("\n")
+    .filter((record) => record.length > 0)
+    .map((record) => {
+      const [path, line] = record.split(nulByte);
+      return `${masked(path, terms)}:${line}`;
     });
+}
+
+function findingsInFileNames(terms) {
+  return git(["ls-files", "-z"])
+    .split(nulByte)
+    .filter((path) => lineNumbersNamingATerm(path, terms).length > 0)
+    .map((path) => `${masked(path, terms)}: its name`);
+}
+
+function findingsInCommitMessages(terms) {
+  const hasCommits = gitAllowingNoMatch(["rev-parse", "--verify", "-q", "HEAD"]).length > 0;
+  if (!hasCommits) return [];
+  return git(["log", "-z", "--format=%h%n%B"])
+    .split(nulByte)
+    .filter((record) => record.trim().length > 0)
+    .filter(
+      (record) => lineNumbersNamingATerm(record.slice(record.indexOf("\n") + 1), terms).length > 0,
+    )
+    .map((record) => `commit ${record.trim().split("\n")[0]}: its message`);
 }
 
 const textModes = {
   "--message": (path, terms) =>
-    lineNumbersNamingATerm(messageAsGitStoresIt(readFileSync(path, "utf8")), terms).length > 0
+    lineNumbersNamingATerm(messageBeforeScissors(readFileSync(path, "utf8")), terms).length > 0
       ? [`${path}: the commit message`]
       : [],
   "--text": (path, terms) =>
@@ -76,6 +118,13 @@ if (terms.length === 0) {
   process.exit(0);
 }
 
-const findings = mode === undefined ? findingsInRepository(terms) : textModes[mode](path, terms);
+const findings =
+  mode === undefined
+    ? [
+        ...findingsInFileNames(terms),
+        ...findingsInStagedFiles(terms),
+        ...findingsInCommitMessages(terms),
+      ]
+    : textModes[mode](path, terms);
 for (const finding of findings) console.error(`${finding}: names a private term. Remove it.`);
 process.exit(findings.length === 0 ? 0 : 1);

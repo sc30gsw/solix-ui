@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
@@ -10,6 +10,17 @@ const commitMessageHook = join(repositoryRoot, ".vite-hooks/commit-msg");
 const madeUpTerm = "zorblax";
 const otherMadeUpTerm = "quindle widgets";
 const scissors = "# ------------------------ >8 ------------------------";
+const gitVariable = /^GIT_/;
+
+function environment(terms: string | undefined): NodeJS.ProcessEnv {
+  const inherited = Object.entries(process.env).filter(
+    ([name]) => !gitVariable.test(name) && name !== "SOLIX_PRIVATE_TERMS",
+  );
+  return {
+    ...Object.fromEntries(inherited),
+    ...(terms === undefined ? {} : { SOLIX_PRIVATE_TERMS: terms }),
+  };
+}
 
 function temporaryDirectory(): string {
   return mkdtempSync(join(tmpdir(), "private-terms-"));
@@ -22,14 +33,27 @@ function textFile(content: string): string {
 }
 
 function run(command: string, args: string[], terms: string | undefined, cwd = repositoryRoot) {
-  const env = { ...process.env };
-  delete env.SOLIX_PRIVATE_TERMS;
-  if (terms !== undefined) env.SOLIX_PRIVATE_TERMS = terms;
-  return spawnSync(command, args, { cwd, env, encoding: "utf8" });
+  return spawnSync(command, args, { cwd, env: environment(terms), encoding: "utf8" });
 }
 
 function check(args: string[], terms: string | undefined, cwd = repositoryRoot) {
   return run("node", [script, ...args], terms, cwd);
+}
+
+function gitIn(repository: string, args: string[]): void {
+  execFileSync(
+    "git",
+    [
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@example.com",
+      "-c",
+      "core.hooksPath=/dev/null",
+      ...args,
+    ],
+    { cwd: repository, env: environment(undefined) },
+  );
 }
 
 test("text names a term in any case, and the report gives each line but never the term", () => {
@@ -46,35 +70,36 @@ test("text names a term in any case, and the report gives each line but never th
   expect(result.stderr.toLowerCase()).not.toContain(otherMadeUpTerm);
 });
 
-test("the commit-msg hook rejects a message that names a term and ignores what git strips", () => {
-  const naming = textFile(["feat: add a thing", "", "Built like zorblax."].join("\n"));
-  const strippedOnly = textFile(
-    ["feat: add a thing", "# zorblax in a git comment", scissors, "+ zorblax in the diff"].join(
-      "\n",
-    ),
+test("the commit-msg hook rejects a term anywhere above the scissors line, comment lines included", () => {
+  const inBody = textFile(["feat: add a thing", "", "Built like zorblax."].join("\n"));
+  const onHashLine = textFile(["feat: add a thing", "#42 zorblax"].join("\n"));
+  const belowScissors = textFile(
+    ["feat: add a thing", scissors, "- zorblax in the diff"].join("\n"),
   );
 
-  expect(run("sh", [commitMessageHook, naming], madeUpTerm).status).toBe(1);
-  expect(run("sh", [commitMessageHook, strippedOnly], madeUpTerm).status).toBe(0);
+  expect(run("sh", [commitMessageHook, inBody], madeUpTerm).status).toBe(1);
+  expect(run("sh", [commitMessageHook, onHashLine], madeUpTerm).status).toBe(1);
+  expect(run("sh", [commitMessageHook, belowScissors], madeUpTerm).status).toBe(0);
 });
 
-test("a repository scan reports names and lines, and survives symlinks and unstaged deletions", () => {
+test("a repository scan reads what is staged, file names and commit messages, and masks the term", () => {
   const repository = temporaryDirectory();
-  execFileSync("git", ["init", "-q"], { cwd: repository });
+  gitIn(repository, ["init", "-q"]);
+  writeFileSync(join(repository, "plain.txt"), "plain\n");
+  gitIn(repository, ["add", "."]);
+  gitIn(repository, ["commit", "-q", "-m", "start", "-m", "made like zorblax"]);
   writeFileSync(join(repository, "zorblax.md"), "plain\n");
   writeFileSync(join(repository, "notes.txt"), "plain\nmade like zorblax\n");
-  writeFileSync(join(repository, "gone.txt"), "zorblax\n");
-  mkdirSync(join(repository, "folder"));
-  symlinkSync("folder", join(repository, "link"));
-  execFileSync("git", ["add", "."], { cwd: repository });
-  rmSync(join(repository, "gone.txt"));
+  gitIn(repository, ["add", "."]);
+  rmSync(join(repository, "notes.txt"));
 
   const result = check([], madeUpTerm, repository);
 
   expect(result.status).toBe(1);
-  expect(result.stderr).toContain("zorblax.md: its name");
+  expect(result.stderr).toContain("***.md: its name");
   expect(result.stderr).toContain("notes.txt:2:");
-  expect(result.stderr).not.toContain("gone.txt");
+  expect(result.stderr).toMatch(/commit [0-9a-f]+: its message/);
+  expect(result.stderr.toLowerCase()).not.toContain(madeUpTerm);
   expect(check([], "nothing-here-at-all", repository).status).toBe(0);
 });
 
