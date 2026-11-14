@@ -1,7 +1,11 @@
 import fc from "fast-check";
 import { createSignal, flush, type Setter } from "solid-js";
-import { expect, test } from "vite-plus/test";
-import { createUncontrolled, type UncontrolledReturn } from "../src/index";
+import { expect, expectTypeOf, test } from "vite-plus/test";
+import {
+  createUncontrolled,
+  type UncontrolledOptions,
+  type UncontrolledReturn,
+} from "../src/index";
 import { mount, unmount } from "./support/browser-harness";
 
 type Call = [value: string, payload: number];
@@ -89,7 +93,7 @@ test("requests before a flush resolve to the last one, and a request for the cur
   expect(calls).toEqual(["b", "a"]);
 });
 
-test("controlled, a request back to the value before the flush still reaches onChange", () => {
+test("controlled, a request reaches onChange unless the request before it in the same tick asked for the same value", () => {
   const calls: string[] = [];
   const [outside, setOutside] = createSignal<string | undefined>("a");
   const [value, setValue] = mount(() =>
@@ -107,14 +111,34 @@ test("controlled, a request back to the value before the flush still reaches onC
   setValue("b");
   setValue("a");
   flush();
-  expect(calls).toEqual(["b", "a"]);
+  expect(calls).toEqual(["a", "b", "a"]);
+  expect(value()).toBe("a");
+});
+
+test("controlled, a request for the committed value reaches onChange after the consumer wrote another value in the same tick", () => {
+  const calls: string[] = [];
+  const [outside, setOutside] = createSignal<string | undefined>("a");
+  const [value, setValue] = mount(() =>
+    createUncontrolled({
+      value: outside,
+      onChange: (next: string) => {
+        calls.push(next);
+        setOutside(next);
+      },
+    }),
+  );
+
+  setOutside("b");
+  setValue("a");
+  flush();
+  expect(calls).toEqual(["a"]);
   expect(value()).toBe("a");
 });
 
 test("controlled, a request the consumer refused can be made again", () => {
   const calls: string[] = [];
   const [value, setValue] = mount(() =>
-    createUncontrolled({ value: "fixed", onChange: (next: string) => calls.push(next) }),
+    createUncontrolled({ value: () => "fixed", onChange: (next: string) => calls.push(next) }),
   );
 
   setValue("other");
@@ -123,6 +147,39 @@ test("controlled, a request the consumer refused can be made again", () => {
   flush();
   expect(calls).toEqual(["other", "other"]);
   expect(value()).toBe("fixed");
+});
+
+test("after its owner is disposed, a request writes nothing and calls no onChange, controlled or not", () => {
+  const calls: string[] = [];
+  const onChange = (next: string) => calls.push(next);
+  const [uncontrolled, setUncontrolled] = mount(() =>
+    createUncontrolled({ defaultValue: "a", onChange }),
+  );
+  const [, setControlled] = mount(() => createUncontrolled({ value: () => "a", onChange }));
+
+  unmount();
+  setUncontrolled("b");
+  setControlled("b");
+  flush();
+  expect(calls).toEqual([]);
+  expect(uncontrolled()).toBe("a");
+});
+
+test("the controlled value is an accessor, so value: props.value does not type-check", () => {
+  type Props = { value?: string };
+
+  expectTypeOf<{ value: Props["value"] }>().not.toExtend<UncontrolledOptions<string>>();
+  expectTypeOf<{ value: () => Props["value"] }>().toExtend<UncontrolledOptions<string>>();
+});
+
+test("setValue takes a value, never undefined, with or without finalValue", () => {
+  const [withFinal, setWithFinal] = mount(() => createUncontrolled({ finalValue: "" }));
+  const [withoutFinal, setWithoutFinal] = mount(() => createUncontrolled<string>({}));
+
+  expectTypeOf(withFinal).returns.toEqualTypeOf<string>();
+  expectTypeOf(withoutFinal).returns.toEqualTypeOf<string | undefined>();
+  expectTypeOf(setWithFinal).parameter(0).toEqualTypeOf<string>();
+  expectTypeOf(setWithoutFinal).parameter(0).toEqualTypeOf<string>();
 });
 
 test("onChange is read when a request is made, so the latest one runs", () => {
@@ -144,12 +201,12 @@ type Model = {
   stagedOutside: string | undefined;
   committedInside: string | undefined;
   stagedInside: string | undefined;
-  stagedRequest: { value: string } | undefined;
+  requestThisTick: string | undefined;
   calls: Call[];
 };
 
 type Real = {
-  primitive: UncontrolledReturn<string | undefined, [number]>;
+  primitive: UncontrolledReturn<string, [number], string | undefined>;
   setOutside: Setter<string | undefined>;
   calls: Call[];
 };
@@ -184,13 +241,10 @@ class Request implements fc.Command<Model, Real> {
         model.stagedInside = this.next;
         model.calls.push([this.next, this.payload]);
       }
-    } else {
-      const current = model.stagedRequest?.value ?? model.committedOutside;
-      if (current !== this.next) {
-        model.stagedRequest = { value: this.next };
-        model.calls.push([this.next, this.payload]);
-        if (model.follows) model.stagedOutside = this.next;
-      }
+    } else if (model.requestThisTick !== this.next) {
+      model.requestThisTick = this.next;
+      model.calls.push([this.next, this.payload]);
+      if (model.follows) model.stagedOutside = this.next;
     }
     expectAgreement(model, real);
   }
@@ -203,7 +257,7 @@ class Flush implements fc.Command<Model, Real> {
     flush();
     model.committedOutside = model.stagedOutside;
     model.committedInside = model.stagedInside;
-    model.stagedRequest = undefined;
+    model.requestThisTick = undefined;
     const [value, , controlled] = real.primitive;
     expect(value(), "the value after the flush").toBe(
       model.committedOutside ?? model.committedInside,
@@ -252,7 +306,7 @@ test("for every generated sequence of requests, consumer writes and flushes, it 
           stagedOutside: start.outside,
           committedInside: inside,
           stagedInside: inside,
-          stagedRequest: undefined,
+          requestThisTick: undefined,
           calls: [],
         };
         fc.modelRun(() => ({ model, real: { primitive, setOutside, calls } }), sequence);

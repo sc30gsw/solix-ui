@@ -55,7 +55,7 @@ const [value, setValue, controlled] = createUncontrolled({
 });
 ```
 
-The state of a control that a consumer may own. While `value` reads anything but `undefined`, the state is controlled: `value()` is that value, and `setValue` only calls `onChange`, so the consumer decides. Otherwise it is uncontrolled: it starts at `defaultValue`, or `finalValue` when that is `undefined`, and `setValue` writes the value and then calls `onChange` with it and any payload. It may switch while it runs, and the uncontrolled value survives a controlled stretch. A request for the value it would replace calls nothing, and while controlled a request the consumer refused can be made again after the flush. Passing `finalValue` types the value as `T`; without it the value may be `undefined`.
+The state of a control that a consumer may own. While `value` reads anything but `undefined`, the state is controlled: `value()` is that value, and `setValue` only calls `onChange`, so the consumer decides. Otherwise it is uncontrolled: it starts at `defaultValue`, or `finalValue` when that is `undefined`, and `setValue` writes the value and then calls `onChange` with it and any payload. It may switch while it runs, and the uncontrolled value survives a controlled stretch. While uncontrolled, a request for the value it would replace calls nothing. While controlled, every request calls `onChange` unless the request before it in the same tick asked for the same value. `setValue` takes a `T` either way; passing `finalValue` types the value as `T` too, and without it the value may be `undefined`. Once its owner is disposed, no request writes or calls anything.
 
 ### createToggle
 

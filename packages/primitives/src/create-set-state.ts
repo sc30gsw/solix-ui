@@ -24,8 +24,8 @@ export function createSetState<T extends object>(
   const setState = (patch: SetStatePatch<T>) => {
     state.update((staged) => {
       const keys = typeof patch === "function" ? patch(staged) : patch;
-      const unchanged = Object.entries(keys).every(
-        ([key, value]) => key in staged && Object.is(staged[key as keyof T], value),
+      const unchanged = Reflect.ownKeys(keys).every(
+        (key) => key in staged && Object.is(staged[key as keyof T], keys[key as keyof typeof keys]),
       );
       return unchanged ? staged : { ...staged, ...keys };
     });

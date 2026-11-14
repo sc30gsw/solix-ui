@@ -110,6 +110,21 @@ test("the callbacks are read when they run, and initialState is read once", () =
   expect(calls).toEqual(["second"]);
 });
 
+test("after its owner is disposed, open, close and toggle write nothing and run no callback", () => {
+  const { calls, options } = recording();
+  const [closed, closedHandlers] = mount(() => createDisclosure(false, options));
+  const [opened, openedHandlers] = mount(() => createDisclosure(true, options));
+
+  unmount();
+  closedHandlers.open();
+  closedHandlers.toggle();
+  openedHandlers.close();
+  openedHandlers.toggle();
+  flush();
+  expect(calls).toEqual([]);
+  expect([closed(), opened()]).toEqual([false, true]);
+});
+
 type Model = { staged: boolean; committed: boolean; calls: string[] };
 type Real = { opened: () => boolean; handlers: DisclosureHandlers; calls: string[] };
 

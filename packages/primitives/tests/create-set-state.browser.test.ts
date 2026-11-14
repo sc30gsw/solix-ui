@@ -46,3 +46,21 @@ test("updates before a flush build on each other, and one that sets every key to
     { query: "x", page: 3 },
   ]);
 });
+
+test("a symbol key is merged like any other, and setting it to the value it holds writes nothing", () => {
+  const marker = Symbol("marker");
+  const { state, setState, seen } = mount(() => {
+    const [state, setState] = createSetState<{ [marker]: number; page: number }>({
+      [marker]: 1,
+      page: 1,
+    });
+    return { state, setState, seen: watch(state) };
+  });
+
+  setState({ [marker]: 2 });
+  flush();
+  expect(state()[marker]).toBe(2);
+  setState({ [marker]: 2 });
+  flush();
+  expect(seen.length).toBe(2);
+});
