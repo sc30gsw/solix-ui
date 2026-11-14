@@ -1,8 +1,15 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "../scripts/browser-engines.mjs";
-import { repositoryRoot, rootManifest, workflowFiles } from "./support/workspace";
+import {
+  catalogVersions,
+  repositoryRoot,
+  rootManifest,
+  workflowFiles,
+  workspaceFile,
+} from "./support/workspace";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -14,6 +21,10 @@ const verifyWithPrivateTerms =
 const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github)\/[^`:*\s]+)`/g;
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 const notOneSpaceAtACellBorder = / {2,}\||\| {2,}|\S\||\|\S/;
+const confirmedCommit = /Last confirmed against commit `([0-9a-f]{7,40})`/;
+const checkoutSteps = /- uses: actions\/checkout@/g;
+const fullHistory = /^\s+fetch-depth: 0$/gm;
+const versionPrefix = /^[\^~]/;
 
 const skillNames = readdirSync(skillsDirectory).sort();
 
@@ -146,6 +157,64 @@ test("every verification skill says which commit it was last confirmed against",
       (name) => `.agents/skills/${name}/SKILL.md: add "Last confirmed against commit \`<hash>\`."`,
     );
 
+  expect(violations).toEqual([]);
+});
+
+function ancestryOf(commit: string): "ancestor" | "not an ancestor" | "unknown" {
+  const { status } = spawnSync("git", ["merge-base", "--is-ancestor", commit, "HEAD"], {
+    cwd: repositoryRoot,
+    stdio: "ignore",
+  });
+  if (status === 0) return "ancestor";
+  return status === 1 ? "not an ancestor" : "unknown";
+}
+
+test("every verification skill was last confirmed against a commit that HEAD contains, and CI checks out the history to tell", () => {
+  const violations = skillNames
+    .filter((name) => name.startsWith("verify-"))
+    .flatMap((name) => {
+      const commit = confirmedCommit.exec(skillText(name))?.[1];
+      if (commit === undefined) return [];
+      const ancestry = ancestryOf(commit);
+      if (ancestry === "ancestor") return [];
+      return [
+        ancestry === "unknown"
+          ? `.agents/skills/${name}/SKILL.md: it was last confirmed against ${commit}, which this clone does not hold. Name a commit of this branch.`
+          : `.agents/skills/${name}/SKILL.md: it was last confirmed against ${commit}, which HEAD does not contain. Confirm the skill against a commit of this branch and name that one.`,
+      ];
+    });
+  const shallow = workflowFiles
+    .filter((file) => {
+      const text = read(file);
+      return (text.match(fullHistory) ?? []).length < (text.match(checkoutSteps) ?? []).length;
+    })
+    .map(
+      (file) =>
+        `${file}: give every actions/checkout step \`fetch-depth: 0\`, so the tests can tell whether a skill's commit is in the history.`,
+    );
+
+  expect([...violations, ...shallow]).toEqual([]);
+});
+
+test("no project-owned skill copies a version from the catalog", () => {
+  const vendored = Object.keys(
+    (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
+  );
+  const versions = Object.entries(catalogVersions())
+    .filter(([, version]) => !version.includes(":"))
+    .map(([name, version]): [string, string] => [name, version.replace(versionPrefix, "")]);
+  const violations = skillNames
+    .filter((name) => !vendored.includes(name))
+    .flatMap((name) =>
+      versions
+        .filter(([, version]) => skillText(name).includes(version))
+        .map(
+          ([dependency, version]) =>
+            `.agents/skills/${name}/SKILL.md: it copies ${version}, the version of ${dependency}. Point at the catalog in ${workspaceFile} instead, so an upgrade changes one line.`,
+        ),
+    );
+
+  expect(versions.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 });
 

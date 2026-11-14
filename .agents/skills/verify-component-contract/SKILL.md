@@ -45,7 +45,7 @@ It does if it edits any of these:
 | `scripts/expected-values.ts`: `lookOf` | It reads the properties that `button.test.ts` compares between the `Unstyled` button and the `Plain button`. |
 | `tests/library-conventions.test.ts` | It requires every component to type its props as `ElementProps` or `PolymorphicProps`, imported from `./parts`, with `typeof styles` as the Styles API type argument, to write its own props as inline type literals, to call `createParts` once and keep every member of its own props type off the root, to spread `root` on the element it returns, which is the element `ElementProps` names or the `dynamic()` element `component` picks, to spread each `part("<name>")` inline on an intrinsic element, and to write no `class` or `style` by hand. |
 | `vite.config.ts` | It sets the test include globs, the global setup, and the Solid plugin. |
-| `solid-js`, `@solidjs/web` and `@solidjs/vite-plugin` in the catalog in `pnpm-workspace.yaml` | 2.0.0-rc.21, 2.0.0-rc.21 and 3.0.0-next.57. They decide how a `class` value becomes a class attribute. |
+| `solid-js`, `@solidjs/web` and `@solidjs/vite-plugin` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins, they decide how a `class` value becomes a class attribute. |
 
 Last confirmed against commit `e7aea22`. Run `git diff e7aea22 -- packages/core apps/playground tests/support scripts/browser-engines.mjs scripts/expected-values.ts tests/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
@@ -104,4 +104,4 @@ No verifier runs on Solid components, so this is not a proof. The test uses fast
 - A new style prop: add a row to the table in `packages/core/src/style-prop-table.ts` and nothing else. The check draws it from there. A second name for an existing prop is a row with `aliasOf`.
 - A new component: add it to `fixtures` with its root tag, one boolean attribute, whether it takes the display props and `component`, and the props that render every part. Its parts come from its build. If its root should not take consumer attributes, that breaks the contract in `AGENTS.md`, so change that rule and its check first.
 - A component's root tag or boolean attribute changes: change it in `fixtures` and in that component's row in the table above. The test fails until both agree.
-- Upgrading Solid or the Solid plugin: run the check, then update the versions in the table above.
+- Upgrading Solid or the Solid plugin: change the versions in the catalog in `pnpm-workspace.yaml`, then run the check.

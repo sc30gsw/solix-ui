@@ -28,7 +28,7 @@ It does if it edits any of these:
 | `tests/support` | It runs `vp run -r build` in production mode before any test, which builds the library and the app, and then starts the built app once and gives the test its URL as `playgroundUrl`. |
 | `scripts/browser-engines.mjs` | It lists the engines the test runs on, and which of them are installed. |
 | `vite.config.ts` | It sets the test include globs and the global setup. |
-| `playwright`, `solid-js`, `@solidjs/web`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | Playwright 1.63.0, Solid 2.0.0-rc.21, Solid plugin 3.0.0-next.57, fast-check 4.10.2. |
+| `playwright`, `solid-js`, `@solidjs/web`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
 Last confirmed against commit `e7aea22`. Run `git diff e7aea22 -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
@@ -70,5 +70,5 @@ No model checker runs on a Solid component, so this is not a proof. The test use
 
 - A new way to close the modal: add a command class to `steps`, with its precondition and the model change.
 - A new element in the dialog that takes focus: keep the focus assertion as it is. It only forbids focus on the page behind.
-- Upgrading Solid, Playwright or fast-check: run the check, then update the versions in the table above.
+- Upgrading Solid, Playwright or fast-check: change the versions in the catalog in `pnpm-workspace.yaml`, then run the check.
 - Mutation check after editing the skill's covered code: remove `closedby="any"` from `Modal.tsx` on Chromium and run the test. It must fail with `press the Open modal button, press outside the dialog`. Restore the attribute afterwards.

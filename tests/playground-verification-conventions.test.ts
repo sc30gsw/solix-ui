@@ -12,6 +12,7 @@ const driveScript = `${skill}/scripts/drive.mjs`;
 const evidenceScript = `${skill}/scripts/evidence.mjs`;
 const launchScript = `${skill}/scripts/launch.sh`;
 const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
+const testConfig = "vite.config.ts";
 const featureSections = [
   "Sub-features",
   "How to get to it (user POV)",
@@ -197,7 +198,7 @@ function portsIn(path: string): string[] {
 
 test("every test server and the verification instance listen on ports of their own", () => {
   const launchPort = launchDefaultPort.exec(read(launchScript))?.[1];
-  const ports = globSync(testCode, { cwd: repositoryRoot })
+  const ports = globSync([testConfig, testCode], { cwd: repositoryRoot })
     .sort()
     .flatMap((path) => portsIn(path).map((port) => ({ path, port })));
   const violations = ports.flatMap(({ path, port }, index) => [

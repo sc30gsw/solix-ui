@@ -4,14 +4,19 @@ import semver from "semver";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import {
+  catalogVersions,
   type Manifest,
+  libraryNames,
   libraryPackages,
   outsideGeneratedOrInstalled,
   packages,
+  primitivesDirectory,
+  primitivesPackage,
   repositoryRoot,
   rootManifest,
   scriptFiles,
   workflowFiles,
+  workspaceFile,
 } from "./support/workspace";
 
 const vitePlusCommandFor: Record<string, string> = {
@@ -28,30 +33,19 @@ const vitePlusCommandFor: Record<string, string> = {
 };
 
 const projectLicence = "MIT";
-const peerDependenciesALibraryMayHave = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
+const frameworkPeers = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
+const allowedForPrimitives = ["solid-js"];
+const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name ?? ""];
+const ownLibraryPeerRange = "workspace:^";
+const ownLibraryLink = "workspace:*";
 const webStandardsOnly =
-  "The library is built on web standards only and has no runtime dependency. Use a platform feature or a fallback written in this repository.";
-
-const workspaceFile = "pnpm-workspace.yaml";
-const catalogBlock = /^catalog:\n((?:[ \t]+.*\n?)+)/m;
-const catalogEntry = /^\s+("?)([^":\s]+)\1:\s*"?([^"\s]+)"?\s*$/;
+  "A library is built on web standards and has no runtime dependency: it names Solid, StyleX and the primitives package as peers. Use a platform feature or a fallback written in this repository.";
 
 const nodeVersionHome = "package.json";
 const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
 const namesNodeVersion = /node-version["']?\s*:/;
 const namesNodeVersionFile = /node-version-file["']?\s*:\s*(.*?)\s*$/;
 const namesRunner = /runs-on["']?\s*:/;
-
-function catalogVersions(): Record<string, string> {
-  const block = catalogBlock.exec(readFileSync(join(repositoryRoot, workspaceFile), "utf8"))?.[1];
-  const entries = (block ?? "")
-    .split("\n")
-    .map((line) => catalogEntry.exec(line))
-    .filter((match): match is RegExpExecArray => match !== null)
-    .map(([, , name, version]): [string, string] => [name, version]);
-  if (entries.length === 0) throw new Error(`${workspaceFile}: no catalog entries were found.`);
-  return Object.fromEntries(entries);
-}
 
 function installedDependencies(manifest: Manifest): [string, string][] {
   return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });
@@ -152,21 +146,54 @@ test("every package with TypeScript sources inherits the shared compiler setting
   expect(violations).toEqual([]);
 });
 
-test("a library package depends on nothing but Solid and StyleX, and only as peers", () => {
-  const violations = libraryPackages.flatMap(({ path, manifest }) => [
-    ...Object.keys(manifest.dependencies ?? {}).map(
-      (name) =>
-        `${path}: package "${manifest.name}" has the dependency "${name}". ${webStandardsOnly}`,
-    ),
-    ...Object.keys(manifest.peerDependencies ?? {})
-      .filter((name) => !peerDependenciesALibraryMayHave.includes(name))
-      .map(
+test("a library has no runtime dependency, and names as a peer, or as a library of this repository in any dependency list, only what its kind allows", () => {
+  const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
+    const [kind, allowed] =
+      directory === primitivesDirectory
+        ? ["the primitives package", allowedForPrimitives]
+        : ["a component library", allowedForComponents];
+    const named = [
+      ...Object.keys(manifest.peerDependencies ?? {}),
+      ...installedDependencies(manifest)
+        .map(([name]) => name)
+        .filter((name) => libraryNames.includes(name)),
+    ];
+    return [
+      ...Object.keys(manifest.dependencies ?? {}).map(
         (name) =>
-          `${path}: package "${manifest.name}" has the peer dependency "${name}". ${webStandardsOnly}`,
+          `${path}: package "${manifest.name}" has the runtime dependency "${name}". ${webStandardsOnly}`,
       ),
-  ]);
+      ...[...new Set(named)]
+        .filter((name) => !allowed.includes(name))
+        .map(
+          (name) =>
+            `${path}: package "${manifest.name}" names "${name}", which ${kind} may not. It may name only ${allowed.join(", ")}.`,
+        ),
+    ];
+  });
 
-  expect(libraryPackages.length).toBeGreaterThan(0);
+  expect(libraryPackages.length).toBeGreaterThan(1);
+  expect(violations).toEqual([]);
+});
+
+test("a library names another library of this repository as a workspace:^ peer, linked as a workspace:* devDependency", () => {
+  const violations = libraryPackages.flatMap(({ path, manifest }) =>
+    Object.entries(manifest.peerDependencies ?? {})
+      .filter(([name]) => libraryNames.includes(name))
+      .flatMap(([name, range]) => [
+        ...(range === ownLibraryPeerRange
+          ? []
+          : [
+              `${path}: write the peer "${name}" as "${ownLibraryPeerRange}", so publishing pins the version this workspace builds against.`,
+            ]),
+        ...(manifest.devDependencies?.[name] === ownLibraryLink
+          ? []
+          : [
+              `${path}: add "${name}": "${ownLibraryLink}" to devDependencies, so the workspace links the library it names as a peer.`,
+            ]),
+      ]),
+  );
+
   expect(violations).toEqual([]);
 });
 
@@ -203,6 +230,7 @@ test("every peer range of a library package accepts the version the catalog pins
   const catalog = catalogVersions();
   const violations = libraryPackages.flatMap(({ path, manifest }) =>
     Object.entries(manifest.peerDependencies ?? {}).flatMap(([name, range]) => {
+      if (libraryNames.includes(name)) return [];
       const pinned = catalog[name];
       if (pinned === undefined)
         return [`${workspaceFile}: add "${name}" to the catalog, which ${path} names as a peer.`];
