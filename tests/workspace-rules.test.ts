@@ -1,5 +1,5 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import semver from "semver";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
@@ -7,11 +7,13 @@ import {
   type Manifest,
   libraryNames,
   libraryPackages,
+  outsideGeneratedOrInstalled,
   packages,
   primitiveLibraries,
   repositoryRoot,
   rootManifest,
   scriptFiles,
+  workflowFiles,
 } from "./support/workspace";
 
 const vitePlusCommandFor: Record<string, string> = {
@@ -40,11 +42,10 @@ const catalogBlock = /^catalog:\n((?:[ \t]+.*\n?)+)/m;
 const catalogEntry = /^\s+("?)([^":\s]+)\1:\s*"?([^"\s]+)"?\s*$/;
 
 const nodeVersionHome = "package.json";
-const nodeVersionFilesThatCompete = [".node-version", ".nvmrc"];
-const workflowFiles = globSync(".github/workflows/*.yml", { cwd: repositoryRoot });
-const setupVpStep = /^( *)- uses: voidzero-dev\/setup-vp@\S+\n((?:\1 {2,}\S.*\n?)*)/gm;
-const nodeVersionInput = /^\s*node-version:\s*(.*?)\s*$/gm;
-const nodeVersionFileInput = /^\s*node-version-file:\s*(\S+)\s*$/m;
+const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
+const namesNodeVersion = /node-version["']?\s*:/;
+const namesNodeVersionFile = /node-version-file["']?\s*:\s*(.*?)\s*$/;
+const namesRunner = /runs-on["']?\s*:/;
 
 function catalogVersions(): Record<string, string> {
   const block = catalogBlock.exec(readFileSync(join(repositoryRoot, workspaceFile), "utf8"))?.[1];
@@ -64,6 +65,17 @@ function installedDependencies(manifest: Manifest): [string, string][] {
 function lowestMajorOf(range: string): number | undefined {
   return semver.validRange(range) === null ? undefined : semver.minVersion(range)?.major;
 }
+
+function nodeRangeAndLowestMajor(): [string, number] {
+  const range = rootManifest.engines?.node;
+  const major =
+    range === undefined || semver.validRange(range) === "*" ? undefined : lowestMajorOf(range);
+  if (range === undefined || major === undefined)
+    throw new Error(`${nodeVersionHome}: set "engines.node" to the Node range the project runs on`);
+  return [range, major];
+}
+
+const [nodeRange, nodeMajor] = nodeRangeAndLowestMajor();
 
 test("the workspace has packages to check", () => {
   expect(packages.length).toBeGreaterThan(1);
@@ -267,52 +279,50 @@ test("the project is MIT-licensed in its licence text, its root manifest and eve
   expect(violations).toEqual([]);
 });
 
-test("every workflow runs the Node that engines.node in package.json names, and names none of its own", () => {
-  const nodeRange = rootManifest.engines?.node ?? "";
+test("in every workflow, each node-version-file is package.json, no line names node-version, and node-version-file lines are at least as many as runs-on lines", () => {
   const readFromHome = `Set \`node-version-file: ${nodeVersionHome}\`, so CI runs the Node that engines.node in ${nodeVersionHome} names (${nodeRange}).`;
-  const workflows = workflowFiles.map((file) => ({
-    file,
-    text: readFileSync(join(repositoryRoot, file), "utf8"),
-  }));
-  const ownVersions = workflows.flatMap(({ file, text }) =>
-    [...text.matchAll(nodeVersionInput)].map(
-      ([, version]) => `${file}: remove \`node-version: ${version}\`. ${readFromHome}`,
-    ),
-  );
-  const setupSteps = workflows.flatMap(({ file, text }) =>
-    [...text.matchAll(setupVpStep)].map(([, , inputs]) => ({
-      file,
-      source: nodeVersionFileInput.exec(inputs)?.[1],
-    })),
-  );
-  const otherSources = setupSteps
-    .filter(({ source }) => source !== nodeVersionHome)
-    .map(
-      ({ file, source }) =>
-        `${file}: a setup-vp step reads Node from ${source ?? "no file"}. ${readFromHome}`,
-    );
+  const violations = workflowFiles.flatMap((file) => {
+    const lines = readFileSync(join(repositoryRoot, file), "utf8").split("\n");
+    const numbered = lines.map((line, index) => ({ line, at: `${file}:${index + 1}` }));
+    const sources = numbered.flatMap(({ line, at }) => {
+      const source = namesNodeVersionFile.exec(line)?.[1];
+      return source === undefined ? [] : [{ source, at }];
+    });
+    const runners = lines.filter((line) => namesRunner.test(line)).length;
+    const readsFromHome = sources.filter(({ source }) => source === nodeVersionHome).length;
+    return [
+      ...sources
+        .filter(({ source }) => source !== nodeVersionHome)
+        .map(({ source, at }) => `${at}: reads Node from ${source}. ${readFromHome}`),
+      ...numbered
+        .filter(({ line }) => namesNodeVersion.test(line))
+        .map(({ line, at }) => `${at}: remove \`${line.trim()}\`. ${readFromHome}`),
+      ...(readsFromHome >= runners
+        ? []
+        : [
+            `${file}: ${runners} runs-on lines but ${readsFromHome} \`node-version-file: ${nodeVersionHome}\` lines. Give every job a setup step that reads Node from ${nodeVersionHome}.`,
+          ]),
+    ];
+  });
 
-  expect(
-    lowestMajorOf(nodeRange),
-    `${nodeVersionHome}: set "engines.node" to the Node range the project runs on`,
-  ).toBeDefined();
-  expect(setupSteps.length).toBeGreaterThan(0);
-  expect([...ownVersions, ...otherSources]).toEqual([]);
+  expect(workflowFiles.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
 });
 
-test("the Node version is written once, in engines.node in package.json, and @types/node shares its major", () => {
-  const nodeRange = rootManifest.engines?.node ?? "";
-  const nodeMajor = lowestMajorOf(nodeRange);
+test("no .node-version, .nvmrc or .tool-versions file, devEngines.runtime or engines.node outside package.json exists, and @types/node shares the lowest major of engines.node", () => {
   const typesRange = catalogVersions()["@types/node"] ?? "";
-  const writtenAgain = packages.flatMap(({ path, directory, manifest }) => [
-    ...nodeVersionFilesThatCompete
-      .filter((file) => existsSync(join(directory, file)))
-      .map((file) => join(dirname(path), file)),
-    ...(manifest.devEngines?.runtime === undefined ? [] : [`${path} devEngines.runtime`]),
-    ...(manifest.engines?.node === undefined || path === nodeVersionHome
-      ? []
-      : [`${path} engines.node`]),
-  ]);
+  const writtenAgain = [
+    ...globSync(nodeVersionFilesThatCompete, {
+      cwd: repositoryRoot,
+      exclude: outsideGeneratedOrInstalled,
+    }),
+    ...packages.flatMap(({ path, manifest }) => [
+      ...(manifest.devEngines?.runtime === undefined ? [] : [`${path} devEngines.runtime`]),
+      ...(manifest.engines?.node === undefined || path === nodeVersionHome
+        ? []
+        : [`${path} engines.node`]),
+    ]),
+  ];
 
   expect(
     writtenAgain,
