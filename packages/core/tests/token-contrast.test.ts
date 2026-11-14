@@ -1,26 +1,22 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import ts from "typescript";
 import { expect, test } from "vite-plus/test";
-import { isColourToken, tokensFile, tokenValues } from "../../../scripts/tokens.mjs";
+import { tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens.mjs";
 
-type Pairing = [foreground: string, background: string, minimumRatio: number, why: string];
+type Minimum = { ratio: number; criterion: string };
+type Conditional = Map<string, ts.Expression>;
+type Block = { name: string; properties: Map<string, Conditional> };
+type Side = { property: string; token: string | undefined; written: string };
+type Pairing = { where: string; foreground: Side; background: Side; minimum: Minimum };
 
-const pairings: Pairing[] = [
-  [
-    "--solix-color-on-primary",
-    "--solix-color-primary",
-    4.5,
-    "Button text and the open Disclosure summary (WCAG 1.4.3)",
-  ],
-  ["--solix-color-text", "--solix-color-body", 4.5, "text in TextInput and Modal (WCAG 1.4.3)"],
-  [
-    "--solix-color-text",
-    "--solix-color-surface",
-    4.5,
-    "the closed Disclosure summary (WCAG 1.4.3)",
-  ],
-  ["--solix-color-border", "--solix-color-body", 3, "the TextInput boundary (WCAG 1.4.11)"],
-  ["--solix-color-primary", "--solix-color-body", 3, "the TextInput focus border (WCAG 1.4.11)"],
-  ["--solix-color-error", "--solix-color-body", 3, "the TextInput invalid border (WCAG 1.4.11)"],
+const minimumContrast: [property: RegExp, minimum: Minimum][] = [
+  [/^color$/, { ratio: 4.5, criterion: "WCAG 1.4.3" }],
+  [/^(?:border\w*Color|outlineColor)$/, { ratio: 3, criterion: "WCAG 1.4.11" }],
 ];
+const pageBackground = "--solix-color-body";
+const repositoryRoot = join(import.meta.dirname, "../../..");
+const sourceDirectory = dirname(tokensFile);
 
 const remLength = /^\d+(?:\.\d+)?rem$/;
 const number = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
@@ -32,8 +28,8 @@ const gamutTolerance = 1e-4;
 type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
 
 const tokens = tokenValues();
-const colourTokens = Object.keys(tokens).filter((name) => isColourToken(name));
-const lengthTokens = Object.keys(tokens).filter((name) => !isColourToken(name));
+const colourTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
+const lengthTokens = Object.keys(tokens).filter((name) => tokenKind(name) !== "colour");
 
 function oklch(value: string): Oklch | undefined {
   const match = oklchNotation.exec(value);
@@ -72,6 +68,138 @@ function contrastRatio(first: Oklch, second: Oklch): number {
   );
   return (lighter + 0.05) / (darker + 0.05);
 }
+
+function keyText(name: ts.PropertyName): string {
+  if (ts.isComputedPropertyName(name)) return name.expression.getText();
+  return ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : name.getText();
+}
+
+function conditional(value: ts.Expression): Conditional {
+  if (!ts.isObjectLiteralExpression(value)) return new Map([["default", value]]);
+  return new Map(
+    value.properties
+      .filter(ts.isPropertyAssignment)
+      .map((property) => [keyText(property.name), property.initializer]),
+  );
+}
+
+function blocksIn(name: string, style: ts.ObjectLiteralExpression): Block[] {
+  const properties = new Map<string, Conditional>();
+  const pseudoElements: Block[] = [];
+  for (const property of style.properties.filter(ts.isPropertyAssignment)) {
+    const key = keyText(property.name);
+    if (key.startsWith("::") && ts.isObjectLiteralExpression(property.initializer)) {
+      pseudoElements.push(...blocksIn(`${name}${key}`, property.initializer));
+    } else {
+      properties.set(key, conditional(property.initializer));
+    }
+  }
+  return [{ name, properties }, ...pseudoElements];
+}
+
+function stylexBlocks(file: string): Block[] {
+  const source = ts.createSourceFile(
+    file,
+    readFileSync(join(repositoryRoot, file), "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const blocks: Block[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && node.expression.getText() === "stylex.create") {
+      const [styles] = node.arguments;
+      if (styles && ts.isObjectLiteralExpression(styles)) {
+        for (const block of styles.properties.filter(ts.isPropertyAssignment)) {
+          if (ts.isObjectLiteralExpression(block.initializer)) {
+            blocks.push(...blocksIn(keyText(block.name), block.initializer));
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return blocks;
+}
+
+function minimumFor(property: string): Minimum | undefined {
+  return minimumContrast.find(([pattern]) => pattern.test(property))?.[1];
+}
+
+function valueUnder(values: Conditional, condition: string): ts.Expression | undefined {
+  return values.get(condition) ?? values.get("default");
+}
+
+function variableIn(root: Block | undefined, value: ts.Expression): Conditional | undefined {
+  return ts.isPropertyAccessExpression(value) ? root?.properties.get(value.getText()) : undefined;
+}
+
+function tokenReferencedBy(value: ts.Expression | undefined): string | undefined {
+  return value &&
+    ts.isElementAccessExpression(value) &&
+    ts.isStringLiteral(value.argumentExpression) &&
+    value.argumentExpression.text in tokens
+    ? value.argumentExpression.text
+    : undefined;
+}
+
+function side(
+  property: string,
+  values: Conditional,
+  condition: string,
+  root: Block | undefined,
+): Side {
+  const written = valueUnder(values, condition);
+  const variable = written && variableIn(root, written);
+  const resolved = variable ? valueUnder(variable, condition) : written;
+  return {
+    property,
+    token: tokenReferencedBy(resolved),
+    written: variable
+      ? `${written.getText()}, which the root block sets to ${resolved?.getText() ?? "nothing"}`
+      : (written?.getText() ?? "nothing"),
+  };
+}
+
+function conditionsOf(values: Conditional, root: Block | undefined): string[] {
+  return [...values].flatMap(([condition, value]) => [
+    condition,
+    ...(variableIn(root, value)?.keys() ?? []),
+  ]);
+}
+
+function pairingsIn(file: string): Pairing[] {
+  const blocks = stylexBlocks(file);
+  const root = blocks.find(({ name }) => name === "root");
+  return blocks.flatMap(({ name, properties }) => {
+    const background = properties.get("backgroundColor");
+    const foregrounds = [...properties].flatMap(([property, values]) => {
+      const minimum = minimumFor(property);
+      return minimum ? [{ property, values, minimum }] : [];
+    });
+    const conditions = new Set(
+      [...foregrounds.map(({ values }) => values), ...(background ? [background] : [])].flatMap(
+        (values) => conditionsOf(values, root),
+      ),
+    );
+    return [...conditions].flatMap((condition) =>
+      foregrounds.map(({ property, values, minimum }) => ({
+        where: `${file} styles.${name} (${condition})`,
+        foreground: side(property, values, condition, root),
+        background: background
+          ? side("backgroundColor", background, condition, root)
+          : { property: "the page", token: pageBackground, written: pageBackground },
+        minimum,
+      })),
+    );
+  });
+}
+
+const pairings = readdirSync(join(repositoryRoot, sourceDirectory))
+  .filter((entry) => entry.endsWith(".tsx"))
+  .sort()
+  .flatMap((entry) => pairingsIn(join(sourceDirectory, entry)));
 
 test("every colour token is written in OKLCH", () => {
   const violations = colourTokens
@@ -115,22 +243,34 @@ test("every colour token lies inside sRGB", () => {
   expect(violations).toEqual([]);
 });
 
-test("every foreground and background pairing meets its minimum contrast", () => {
-  const violations = pairings.flatMap(([foreground, background, minimumRatio, why]) => {
-    const front = opaqueColour(foreground);
-    const back = opaqueColour(background);
-    if (!front || !back) {
+test("in every stylex.create block and condition, text and borders meet their contrast against the background", () => {
+  const violations = pairings.flatMap(({ where, foreground, background, minimum }) => {
+    const front = foreground.token;
+    const back = background.token;
+    if (front === undefined || back === undefined) {
+      return [foreground, background]
+        .filter(({ token }) => token === undefined)
+        .map(
+          ({ property, written }) =>
+            `${where}: ${property} is ${written}, which is not a token. Use a --solix-color-* token from ${tokensFile}.`,
+        );
+    }
+    const frontColour = opaqueColour(front);
+    const backColour = opaqueColour(back);
+    const pair = `${foreground.property} ${front} on ${background.property} ${back}`;
+    if (!frontColour || !backColour) {
       return [
-        `${foreground} and ${background} must both be opaque OKLCH colours in ${tokensFile}, because ${why} is measured between them.`,
+        `${where}: ${pair} cannot be measured. Make both opaque OKLCH colours in ${tokensFile}.`,
       ];
     }
-    const ratio = contrastRatio(front, back);
-    return ratio >= minimumRatio
+    const ratio = contrastRatio(frontColour, backColour);
+    return ratio >= minimum.ratio
       ? []
       : [
-          `${foreground} on ${background} has contrast ${ratio.toFixed(2)}:1, below the ${minimumRatio}:1 that ${why} needs. Change one of them in ${tokensFile}.`,
+          `${where}: ${pair} has contrast ${ratio.toFixed(2)}:1, below the ${minimum.ratio}:1 that ${minimum.criterion} asks for. Change one of them in ${tokensFile}.`,
         ];
   });
 
+  expect(pairings.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 });

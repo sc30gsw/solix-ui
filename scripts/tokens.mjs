@@ -6,17 +6,23 @@ export const tokensFile = "packages/core/src/tokens.stylex.ts";
 
 const repositoryRoot = join(import.meta.dirname, "..");
 
+const kindByPrefix = [
+  ["--solix-color-", "colour"],
+  ["--solix-radius-", "radius"],
+];
+
 function lineOf(source, node) {
   return source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
 }
 
 /**
+ * @param {string} [file]
  * @returns {Record<string, string>}
  */
-export function tokenValues() {
+export function tokenValues(file = tokensFile) {
   const source = ts.createSourceFile(
-    tokensFile,
-    readFileSync(join(repositoryRoot, tokensFile), "utf8"),
+    file,
+    readFileSync(join(repositoryRoot, file), "utf8"),
     ts.ScriptTarget.Latest,
     true,
   );
@@ -36,7 +42,7 @@ export function tokenValues() {
 
   const values = {};
   for (const property of definitions) {
-    const where = `${tokensFile}:${lineOf(source, property)}`;
+    const where = `${file}:${lineOf(source, property)}`;
     if (
       !ts.isPropertyAssignment(property) ||
       !ts.isStringLiteral(property.name) ||
@@ -50,61 +56,15 @@ export function tokenValues() {
     values[property.name.text] = property.initializer.text;
   }
   if (Object.keys(values).length === 0) {
-    throw new Error(`${tokensFile}: no tokens were found in a stylex.defineVars({ ... }) call.`);
+    throw new Error(`${file}: no tokens were found in a stylex.defineVars({ ... }) call.`);
   }
   return values;
 }
 
-const colourTokenPrefix = "--solix-color-";
-
 /**
  * @param {string} name
- * @returns {boolean}
+ * @returns {"colour" | "radius" | "length"}
  */
-export function isColourToken(name) {
-  return name.startsWith(colourTokenPrefix);
-}
-
-function probed(page, values, property) {
-  return page.evaluate(
-    ([written, probedProperty]) => {
-      const computed = {};
-      for (const [name, value] of Object.entries(written)) {
-        const probe = document.createElement("div");
-        probe.style.setProperty(probedProperty, value);
-        if (probe.style.getPropertyValue(probedProperty) === "") {
-          throw new Error(`${name}: "${value}" is not a valid ${probedProperty} in this browser.`);
-        }
-        document.body.append(probe);
-        computed[name] = getComputedStyle(probe).getPropertyValue(probedProperty);
-        probe.remove();
-      }
-      return computed;
-    },
-    [values, property],
-  );
-}
-
-/**
- * @template {string} Name
- * @param {import("playwright").Page} page
- * @param {Record<Name, string>} values
- * @returns {Promise<Record<Name, string>>}
- */
-export function computedColours(page, values) {
-  return probed(page, values, "color");
-}
-
-/**
- * @param {import("playwright").Page} page
- * @returns {Promise<Record<string, string>>}
- */
-export async function computedTokens(page) {
-  const entries = Object.entries(tokenValues());
-  const colours = Object.fromEntries(entries.filter(([name]) => isColourToken(name)));
-  const lengths = Object.fromEntries(entries.filter(([name]) => !isColourToken(name)));
-  return {
-    ...(await computedColours(page, colours)),
-    ...(await probed(page, lengths, "height")),
-  };
+export function tokenKind(name) {
+  return kindByPrefix.find(([prefix]) => name.startsWith(prefix))?.[1] ?? "length";
 }

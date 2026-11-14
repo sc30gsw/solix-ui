@@ -16,7 +16,7 @@ vp run -r build
 
 `build.mjs` runs Babel with the StyleX plugin through `build-pipeline.mjs` and writes `dist/*.jsx` (StyleX compiled away, JSX kept) and `dist/styles.css` (every rule inside `@layer solix`). A consumer imports the components from `@solix/core` and the stylesheet from `@solix/core/styles.css`.
 
-`vp test` builds the library and the playground in `apps/playground` in production mode before it runs any test. `tests/build-output.test.ts` checks what the library build writes, `tests/stylesheet-properties.test.ts` checks the build pipeline on generated style definitions, `tests/component-contract.test.tsx` checks the root contract of every exported component, and `tests/token-contrast.test.ts` checks that every colour token is written in OKLCH, lies inside sRGB and meets the contrast its pairing needs. What a consumer sees in a browser is checked in `apps/playground/tests`.
+`vp test` builds the library and the playground in `apps/playground` in production mode before it runs any test. `tests/build-output.test.ts` checks what the library build writes, `tests/stylesheet-properties.test.ts` checks the build pipeline on generated style definitions, `tests/component-contract.test.tsx` checks the root contract of every exported component, and `tests/token-contrast.test.ts` checks how each token is written and the WCAG contrast of the colour pairs in each component's `stylex.create` blocks. What a consumer sees in a browser is checked in `apps/playground/tests`.
 
 ## How it is built
 
@@ -24,6 +24,8 @@ vp run -r build
 - Styles that are known at build time compile to plain class strings, so those components do not call the StyleX runtime at all.
 - It compiles with its own class name prefix, `sx`, so its classes cannot collide with a consumer who also uses StyleX.
 - It has no runtime dependencies. The disclosure needs no JavaScript: it opens and closes with scripts turned off.
+- Its tokens are the CSS custom properties `--solix-*` in `src/tokens.stylex.ts`. A colour token is written in OKLCH. Every other token is a length in rem, so it measures the same wherever it is used.
+- The modal's backdrop reads `--solix-color-backdrop` inside `::backdrop`, which inherits it from the dialog only in a 2024 engine: Chromium 122, Firefox 120 or Safari 17.4 or later.
 - With a headless component library underneath, Solid's development build reported two diagnostics that could not be fixed from this side. On `<details>` it reports none.
 
 ## Not covered

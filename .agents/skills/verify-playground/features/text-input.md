@@ -1,6 +1,6 @@
 # Text input
 
-Three text inputs sit below the disclosures: `Email`, `Overridden input` and `Disabled input`. `Email` has a grey border, the border token. After the user types a value that is not an address and leaves the field, its border turns red, the error token.
+Three text inputs sit below the disclosures: `Email`, `Overridden input` and `Disabled input`. `Email` has a border in the border token, `--solix-color-border`. After the user types a value that is not an address and leaves the field, its border takes the error token, `--solix-color-error`.
 
 ## Sub-features
 
