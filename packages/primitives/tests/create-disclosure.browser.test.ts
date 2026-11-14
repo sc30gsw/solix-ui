@@ -3,6 +3,7 @@ import { createSignal, flush } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createDisclosure, type DisclosureHandlers } from "../src/index";
 import { mount, unmount, watch } from "./support/browser-harness";
+import { command, flushCommand, type Tick } from "./support/model";
 
 function recording() {
   const calls: string[] = [];
@@ -125,72 +126,59 @@ test("after its owner is disposed, open, close and toggle write nothing and run 
   expect([closed(), opened()]).toEqual([false, true]);
 });
 
-type Model = { staged: boolean; committed: boolean; calls: string[] };
+type Model = Tick<boolean> & { calls: string[] };
 type Real = { opened: () => boolean; handlers: DisclosureHandlers; calls: string[] };
 
-function transition(model: Model, next: boolean): void {
-  if (model.staged === next) return;
-  model.staged = next;
-  model.calls.push(next ? "open" : "close");
-}
-
-class Open implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.open();
-    transition(model, true);
+function request(
+  label: string,
+  act: (handlers: DisclosureHandlers) => void,
+  next: (staged: boolean) => boolean,
+) {
+  return command<Model, Real>(label, (model, real) => {
+    act(real.handlers);
+    const decided = next(model.staged);
+    if (decided !== model.staged) {
+      model.staged = decided;
+      model.calls.push(decided ? "open" : "close");
+    }
     expect(real.calls, "the callbacks that ran").toEqual(model.calls);
-  }
-  toString = () => "open()";
-}
-
-class Close implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.close();
-    transition(model, false);
-    expect(real.calls, "the callbacks that ran").toEqual(model.calls);
-  }
-  toString = () => "close()";
-}
-
-class Toggle implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.toggle();
-    transition(model, !model.staged);
-    expect(real.calls, "the callbacks that ran").toEqual(model.calls);
-  }
-  toString = () => "toggle()";
-}
-
-class SetOpened implements fc.Command<Model, Real> {
-  constructor(readonly opened: boolean) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.set(this.opened);
-    model.staged = this.opened;
-    expect(real.calls, "the callbacks that ran").toEqual(model.calls);
-  }
-  toString = () => `set(${this.opened})`;
-}
-
-class Flush implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    flush();
-    model.committed = model.staged;
-    expect(real.opened(), "opened after the flush").toBe(model.committed);
-  }
-  toString = () => "flush";
+  });
 }
 
 const commands = [
-  fc.constant(new Open()),
-  fc.constant(new Close()),
-  fc.constant(new Toggle()),
-  fc.boolean().map((opened) => new SetOpened(opened)),
-  fc.constant(new Flush()),
+  fc.constant(
+    request(
+      "open()",
+      (handlers) => handlers.open(),
+      () => true,
+    ),
+  ),
+  fc.constant(
+    request(
+      "close()",
+      (handlers) => handlers.close(),
+      () => false,
+    ),
+  ),
+  fc.constant(
+    request(
+      "toggle()",
+      (handlers) => handlers.toggle(),
+      (staged) => !staged,
+    ),
+  ),
+  fc.boolean().map((opened) =>
+    command<Model, Real>(`set(${opened})`, (model, real) => {
+      real.handlers.set(opened);
+      model.staged = opened;
+      expect(real.calls, "the callbacks that ran").toEqual(model.calls);
+    }),
+  ),
+  fc.constant(
+    flushCommand<Model, Real>((model, real) => {
+      expect(real.opened(), "opened after the flush").toBe(model.committed);
+    }),
+  ),
 ];
 
 test("for every generated sequence of commands and flushes, it agrees with a model of open and closed and its callbacks", () => {

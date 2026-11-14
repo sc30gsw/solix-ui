@@ -1,20 +1,20 @@
 import type { Accessor } from "solid-js";
 import { accessUntracked } from "./internal-access";
 import { createValue } from "./internal-value";
-import type { MaybeAccessor } from "./types";
+import type { ReadOnce } from "./types";
 
 /** What `onChange` takes: a value, an updater, or the event of a form control. */
 export type InputChange<T> = T | ((current: T) => T) | Event;
 
 /**
  * A value with one handler that takes either a value or a form control's event, so it can sit on
- * `onInput` or `onChange` as it is. It starts at `initialState`, read once.
+ * `onInput` or `onChange` as it is. It starts at `initialState`.
  *
  * Given an event, it stores the `checked` of a checkbox and the `value` of any other control, read
  * from `currentTarget`, or from `target` when the event has left its handler. Given a function, it
  * stores what the function returns for the current value. Anything else, `""`, `0`, `false` and
- * `null` included, is stored as it is. Requests made before Solid's next flush resolve to the last
- * one.
+ * `null` included, is stored as it is. Each request decides on the value staged by the requests
+ * before it in the same tick; a request that changes nothing writes nothing and calls nothing.
  *
  * ```tsx
  * const [name, onNameInput] = createInputState("");
@@ -22,7 +22,7 @@ export type InputChange<T> = T | ((current: T) => T) | Event;
  * ```
  */
 export function createInputState<T>(
-  initialState: MaybeAccessor<T>,
+  initialState: ReadOnce<T>,
 ): [value: Accessor<T>, onChange: (next: InputChange<T>) => void] {
   const value = createValue(accessUntracked(initialState));
   const fromEvent = (event: Event): T => {

@@ -125,9 +125,6 @@ importers:
       '@solix/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@solix/primitives':
-        specifier: workspace:*
-        version: link:../../packages/primitives
       '@stylexjs/stylex':
         specifier: 'catalog:'
         version: 0.19.2
@@ -156,9 +153,6 @@ importers:
       '@solix/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@solix/primitives':
-        specifier: workspace:*
-        version: link:../../packages/primitives
       '@stylexjs/stylex':
         specifier: 'catalog:'
         version: 0.19.2
@@ -193,9 +187,6 @@ importers:
       '@solidjs/web':
         specifier: 'catalog:'
         version: 2.0.0-rc.21(solid-js@2.0.0-rc.21)
-      '@solix/primitives':
-        specifier: workspace:*
-        version: link:../primitives
       '@stylexjs/babel-plugin':
         specifier: 'catalog:'
         version: 0.19.2

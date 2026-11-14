@@ -3,6 +3,7 @@ import { flush } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createToggle, type ToggleReturn } from "../src/index";
 import { mount, unmount, watch } from "./support/browser-harness";
+import { command, flushCommand, type Tick } from "./support/model";
 
 test("by default it starts at false and each toggle flips it", () => {
   const [value, toggle] = mount(() => createToggle());
@@ -64,7 +65,7 @@ test("a value that is not an option, or the current one, changes nothing", () =>
   expect(seen).toEqual(["a"]);
 });
 
-test("toggles before a flush build on each other, so two of two options end where they started", () => {
+test("each request decides on the value staged by the requests before it in the same tick, so two toggles of two options end where they started", () => {
   const { toggle, seen } = mount(() => {
     const [value, toggle] = createToggle();
     return { toggle, seen: watch(value) };
@@ -95,62 +96,45 @@ test("with no options its value is undefined and toggle does nothing", () => {
   expect(value()).toBeUndefined();
 });
 
-type Model = { options: string[]; staged: number; committed: number; received: string[] };
+type Model = Tick<number> & { options: string[]; received: string[] };
 type Real = { primitive: ToggleReturn<string>; received: string[] };
 
 const letters = fc.constantFrom("a", "b", "c", "d", "e");
 
-class Toggle implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.primitive[1]();
-    model.staged = (model.staged + 1) % model.options.length;
-  }
-  toString = () => "toggle()";
-}
-
-class ToggleTo implements fc.Command<Model, Real> {
-  constructor(readonly option: string) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.primitive[1](this.option);
-    const found = model.options.indexOf(this.option);
-    if (found !== -1) model.staged = found;
-  }
-  toString = () => `toggle("${this.option}")`;
-}
-
-class ToggleWith implements fc.Command<Model, Real> {
-  constructor(readonly option: string) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.primitive[1]((current) => {
-      real.received.push(current);
-      return this.option;
-    });
-    model.received.push(model.options[model.staged]);
-    const found = model.options.indexOf(this.option);
-    if (found !== -1) model.staged = found;
-    expect(real.received, "the values the updaters received").toEqual(model.received);
-  }
-  toString = () => `toggle(() => "${this.option}")`;
-}
-
-class Flush implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    flush();
-    model.committed = model.staged;
-    expect(real.primitive[0](), "the value after the flush").toBe(model.options[model.committed]);
-  }
-  toString = () => "flush";
+function moveTo(model: Model, option: string): void {
+  const found = model.options.indexOf(option);
+  if (found !== -1) model.staged = found;
 }
 
 const commands = [
-  fc.constant(new Toggle()),
-  letters.map((option) => new ToggleTo(option)),
-  letters.map((option) => new ToggleWith(option)),
-  fc.constant(new Flush()),
+  fc.constant(
+    command<Model, Real>("toggle()", (model, real) => {
+      real.primitive[1]();
+      model.staged = (model.staged + 1) % model.options.length;
+    }),
+  ),
+  letters.map((option) =>
+    command<Model, Real>(`toggle("${option}")`, (model, real) => {
+      real.primitive[1](option);
+      moveTo(model, option);
+    }),
+  ),
+  letters.map((option) =>
+    command<Model, Real>(`toggle(() => "${option}")`, (model, real) => {
+      real.primitive[1]((current) => {
+        real.received.push(current);
+        return option;
+      });
+      model.received.push(model.options[model.staged]);
+      moveTo(model, option);
+      expect(real.received, "the values the updaters received").toEqual(model.received);
+    }),
+  ),
+  fc.constant(
+    flushCommand<Model, Real>((model, real) => {
+      expect(real.primitive[0](), "the value after the flush").toBe(model.options[model.committed]);
+    }),
+  ),
 ];
 
 test("for every generated sequence of toggles and flushes, it agrees with a model of the option it is at", () => {

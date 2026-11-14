@@ -1,7 +1,8 @@
 import { type Accessor, createMemo } from "solid-js";
 import { accessUntracked } from "./internal-access";
+import { sameItems } from "./internal-equal";
 import { createValue } from "./internal-value";
-import type { MaybeAccessor } from "./types";
+import type { ReadOnce } from "./types";
 
 /** The commands of `createStateHistory`. */
 export type StateHistoryHandlers<T> = {
@@ -23,26 +24,29 @@ export type StateHistory<T> = {
 };
 
 /**
- * A value with an undo history. It starts with one entry, `initialValue`, read once. `set` drops
- * the entries after the current one and appends, as an editor's undo does, `back` and `forward`
- * move through the entries and stop at either end, and `reset` returns to the initial value alone.
- * Requests made before Solid's next flush build on each other, and a move past either end writes
- * nothing.
+ * A value with an undo history. It starts with one entry, `initialValue`. `set` drops the entries
+ * after the current one and appends, as an editor's undo does, `back` and `forward` move through the
+ * entries and stop at either end, and `reset` returns to the initial value alone. Each request
+ * decides on the value staged by the requests before it in the same tick; a request that changes
+ * nothing writes nothing and calls nothing. A move past either end changes nothing.
  *
  * ```ts
  * const [text, { set, back, forward }, { history, current }] = createStateHistory("");
  * ```
  */
 export function createStateHistory<T>(
-  initialValue: MaybeAccessor<T>,
+  initialValue: ReadOnce<T>,
 ): [value: Accessor<T>, handlers: StateHistoryHandlers<T>, history: StateHistory<T>] {
   const initial = accessUntracked(initialValue);
-  const state = createValue({ history: [initial], current: 0 });
+  const state = createValue(
+    { history: [initial], current: 0 },
+    (left, right) => left.current === right.current && sameItems(left.history, right.history),
+  );
   const move = (steps: number) => {
-    state.update((staged) => {
-      const current = Math.min(Math.max(staged.current + steps, 0), staged.history.length - 1);
-      return current === staged.current ? staged : { history: staged.history, current };
-    });
+    state.update((staged) => ({
+      history: staged.history,
+      current: Math.min(Math.max(staged.current + steps, 0), staged.history.length - 1),
+    }));
   };
   return [
     createMemo(() => state.get().history[state.get().current]),
@@ -56,11 +60,7 @@ export function createStateHistory<T>(
       back: (steps = 1) => move(-steps),
       forward: (steps = 1) => move(steps),
       reset: () => {
-        state.update((staged) =>
-          staged.history.length === 1 && Object.is(staged.history[0], initial)
-            ? staged
-            : { history: [initial], current: 0 },
-        );
+        state.update(() => ({ history: [initial], current: 0 }));
       },
     },
     {

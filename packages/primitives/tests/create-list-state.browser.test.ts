@@ -1,7 +1,9 @@
+import fc from "fast-check";
 import { flush } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createListState, type ListStateHandlers } from "../src/index";
-import { mount, watch } from "./support/browser-harness";
+import { mount, unmount, watch } from "./support/browser-harness";
+import { command, flushCommand, type Tick } from "./support/model";
 
 type Item = { id: number; label: string };
 
@@ -117,7 +119,7 @@ test("every command makes a new array and leaves the old one as it was", () => {
   expect(list()).not.toBe(before);
 });
 
-test("commands before a flush build on each other, and one that leaves every item in place writes nothing", () => {
+test("each request decides on the value staged by the requests before it in the same tick, and one that leaves every item in place writes nothing", () => {
   const { handlers, seen } = listOf([1]);
 
   handlers.append(2);
@@ -128,4 +130,168 @@ test("commands before a flush build on each other, and one that leaves every ite
   handlers.setState((current) => [...current]);
   flush();
   expect(seen).toEqual([[1], [1, 2, 3]]);
+});
+
+type Model = Tick<number[]> & { shown: number[][] };
+type Real = { list: () => number[]; handlers: ListStateHandlers<number>; seen: number[][] };
+
+const item = fc.integer({ min: 0, max: 5 });
+const position = fc.nat(6);
+
+function edit(
+  label: string,
+  next: (staged: number[]) => number[],
+  act: (handlers: ListStateHandlers<number>, staged: number[]) => void,
+) {
+  return command<Model, Real>(label, (model, real) => {
+    act(real.handlers, model.staged);
+    model.staged = next(model.staged);
+  });
+}
+
+function wrapped(at: number, list: number[]): number {
+  return list.length === 0 ? 0 : at % list.length;
+}
+
+function moved(list: number[], from: number, to: number): number[] {
+  const copy = [...list];
+  copy.splice(to, 0, ...copy.splice(from, 1));
+  return copy;
+}
+
+function swapped(list: number[], from: number, to: number): number[] {
+  const copy = [...list];
+  copy[from] = list[to];
+  copy[to] = list[from];
+  return copy;
+}
+
+const commands = [
+  item.map((value) =>
+    edit(
+      `append(${value})`,
+      (staged) => [...staged, value],
+      (handlers) => handlers.append(value),
+    ),
+  ),
+  item.map((value) =>
+    edit(
+      `prepend(${value})`,
+      (staged) => [value, ...staged],
+      (handlers) => handlers.prepend(value),
+    ),
+  ),
+  fc.tuple(position, item).map(([at, value]) =>
+    edit(
+      `insert(${at}, ${value}) at most at the end`,
+      (staged) => {
+        const index = Math.min(at, staged.length);
+        return [...staged.slice(0, index), value, ...staged.slice(index)];
+      },
+      (handlers, staged) => handlers.insert(Math.min(at, staged.length), value),
+    ),
+  ),
+  fc.constant(
+    edit(
+      "pop()",
+      (staged) => staged.slice(0, -1),
+      (handlers) => handlers.pop(),
+    ),
+  ),
+  fc.constant(
+    edit(
+      "shift()",
+      (staged) => staged.slice(1),
+      (handlers) => handlers.shift(),
+    ),
+  ),
+  fc.tuple(position, position).map(([first, second]) =>
+    edit(
+      `remove(${first}, ${second}) wrapped into the list`,
+      (staged) => {
+        const removed = [wrapped(first, staged), wrapped(second, staged)];
+        return staged.filter((_item, index) => !removed.includes(index));
+      },
+      (handlers, staged) => handlers.remove(wrapped(first, staged), wrapped(second, staged)),
+    ),
+  ),
+  fc.tuple(position, position).map(([from, to]) =>
+    edit(
+      `reorder({ from: ${from}, to: ${to} }) wrapped into the list`,
+      (staged) =>
+        staged.length === 0 ? staged : moved(staged, wrapped(from, staged), wrapped(to, staged)),
+      (handlers, staged) => {
+        if (staged.length > 0) {
+          handlers.reorder({ from: wrapped(from, staged), to: wrapped(to, staged) });
+        }
+      },
+    ),
+  ),
+  fc.tuple(position, position).map(([from, to]) =>
+    edit(
+      `swap({ from: ${from}, to: ${to} }) wrapped into the list`,
+      (staged) =>
+        staged.length === 0 ? staged : swapped(staged, wrapped(from, staged), wrapped(to, staged)),
+      (handlers, staged) => {
+        if (staged.length > 0) {
+          handlers.swap({ from: wrapped(from, staged), to: wrapped(to, staged) });
+        }
+      },
+    ),
+  ),
+  fc.tuple(position, item).map(([at, value]) =>
+    edit(
+      `setItem(${at}, ${value}) wrapped into the list`,
+      (staged) => (staged.length === 0 ? staged : staged.with(wrapped(at, staged), value)),
+      (handlers, staged) => {
+        if (staged.length > 0) handlers.setItem(wrapped(at, staged), value);
+      },
+    ),
+  ),
+  item.map((value) =>
+    edit(
+      `filter(every item but ${value})`,
+      (staged) => staged.filter((kept) => kept !== value),
+      (handlers) => handlers.filter((kept) => kept !== value),
+    ),
+  ),
+  fc.integer({ min: 0, max: 1 }).map((added) =>
+    edit(
+      `apply(item + ${added})`,
+      (staged) => staged.map((kept) => kept + added),
+      (handlers) => handlers.apply((kept) => kept + added),
+    ),
+  ),
+  fc.array(item, { maxLength: 3 }).map((list) =>
+    edit(
+      `setState([${list.join(", ")}])`,
+      () => list,
+      (handlers) => handlers.setState([...list]),
+    ),
+  ),
+  fc.constant(
+    flushCommand<Model, Real>((model, real) => {
+      const last = model.shown[model.shown.length - 1];
+      if (JSON.stringify(last) !== JSON.stringify(model.committed)) {
+        model.shown.push(model.committed);
+      }
+      expect(real.list(), "the list after the flush").toEqual(model.committed);
+      expect(real.seen, "every list the accessor showed").toEqual(model.shown);
+    }),
+  ),
+];
+
+test("for every generated sequence of commands and flushes, it agrees with a model of the list and shows a list only when its items change", () => {
+  fc.assert(
+    fc.property(
+      fc.array(item, { maxLength: 4 }),
+      fc.commands(commands, { maxCommands: 30, size: "medium" }),
+      (initial, sequence) => {
+        const { list, handlers, seen } = listOf(initial);
+        const model: Model = { staged: initial, committed: initial, shown: [initial] };
+        fc.modelRun(() => ({ model, real: { list, handlers, seen } }), sequence);
+        unmount();
+      },
+    ),
+  );
 });

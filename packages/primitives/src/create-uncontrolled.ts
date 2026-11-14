@@ -1,16 +1,17 @@
 import { type Accessor, createMemo, untrack } from "solid-js";
 import { accessUntracked } from "./internal-access";
+import { createRequest } from "./internal-request";
 import { createValue } from "./internal-value";
-import type { MaybeAccessor } from "./types";
+import type { ReadOnce } from "./types";
 
 /** The options of `createUncontrolled`. */
 export type UncontrolledOptions<T, P extends unknown[] = []> = {
-  /** Live. While it reads anything but `undefined`, the state is controlled and this is its value. */
+  /** While it reads anything but `undefined`, the state is controlled and this is its value. */
   value?: Accessor<T | undefined>;
-  /** Read once. The first uncontrolled value. */
-  defaultValue?: MaybeAccessor<T | undefined>;
-  /** Read once. The first uncontrolled value when `defaultValue` is `undefined`. */
-  finalValue?: MaybeAccessor<T>;
+  /** The first uncontrolled value. */
+  defaultValue?: ReadOnce<T | undefined>;
+  /** The first uncontrolled value when `defaultValue` is `undefined`. */
+  finalValue?: ReadOnce<T>;
   /** Called after a request that changes the value, with the value and the request's payload. */
   onChange?: (value: T, ...payload: P) => void;
 };
@@ -28,12 +29,14 @@ export type UncontrolledReturn<T, P extends unknown[] = [], V extends T | undefi
  * survives a controlled stretch and comes back when `value` reads `undefined` again. Pass the
  * accessor itself, `() => props.value`, so the switch is followed.
  *
- * `setValue` is a request. While uncontrolled, it decides on the value staged by the requests
- * before it in the same tick, writes it and then calls `onChange`; one for the value it would
- * replace writes nothing and calls nothing. While controlled, it writes nothing and calls
- * `onChange`, and the consumer decides; it calls nothing only when the request before it in the
- * same tick asked for the same value. `setValue` takes a `T` with or without `finalValue`; passing
- * `finalValue` makes the value a `T` too, and without it the value may be `undefined`.
+ * `setValue` is a request: each request decides on the value staged by the requests before it in
+ * the same tick; a request that changes nothing writes nothing and calls nothing. While
+ * uncontrolled, the staged value is the uncontrolled value, which the request writes before it
+ * calls `onChange`. While controlled, the staged value is the request made before it in the same
+ * tick, if any, and the request writes nothing and calls `onChange`, so the consumer decides. A
+ * controlled request with none before it always calls `onChange`. `setValue` takes a `T` with or
+ * without `finalValue`; passing `finalValue` makes the value a `T` too, and without it the value
+ * may be `undefined`.
  *
  * ```ts
  * const [value, setValue, controlled] = createUncontrolled({
@@ -45,7 +48,7 @@ export type UncontrolledReturn<T, P extends unknown[] = [], V extends T | undefi
  * ```
  */
 export function createUncontrolled<T, P extends unknown[] = []>(
-  options: UncontrolledOptions<T, P> & { finalValue: MaybeAccessor<T> },
+  options: UncontrolledOptions<T, P> & { finalValue: ReadOnce<T> },
 ): UncontrolledReturn<T, P>;
 export function createUncontrolled<T, P extends unknown[] = []>(
   options: UncontrolledOptions<T, P>,
@@ -56,7 +59,7 @@ export function createUncontrolled<T, P extends unknown[] = []>(
   const uncontrolled = createValue(
     (accessUntracked(options.defaultValue) ?? accessUntracked(options.finalValue)) as T,
   );
-  const requested = createValue<{ value: T } | undefined>(undefined);
+  const request = createRequest<T>();
   const value = createMemo(() => {
     const outside = options.value?.();
     return outside === undefined ? uncontrolled.get() : outside;
@@ -66,11 +69,7 @@ export function createUncontrolled<T, P extends unknown[] = []>(
     return outside !== undefined;
   });
   const setValue = (next: T, ...payload: P) => {
-    const changed = untrack(controlled)
-      ? requested.update((staged, stagedThisTick) =>
-          stagedThisTick && staged && Object.is(staged.value, next) ? staged : { value: next },
-        )
-      : uncontrolled.update(() => next);
+    const changed = untrack(controlled) ? request(next) : uncontrolled.update(() => next).changed;
     if (changed) options.onChange?.(next, ...payload);
   };
   return [value, setValue, controlled];

@@ -35,7 +35,7 @@ Every value that changes is an accessor, so call it: `value()`. Commands, such a
 
 - **Values.** A value that changes is returned as an `Accessor`. A command is a function. A returned tuple or object holds only functions, so destructuring it never freezes a value.
 - **Arguments.** The input a primitive follows, such as a value it remembers, is an accessor: pass `() => props.value`, not `props.value`. An option takes a value or an accessor (`MaybeAccessor`), and is read where it is used, so `() => props.max` stays live. An argument named `initial*`, `default*` or `final*` is read once, when the primitive is created. A callback is read when it is called, so the latest one runs.
-- **Requests.** Solid applies writes at its next flush. Requests made before that flush resolve to the last one, and a request that changes nothing does nothing: it writes nothing and calls no callback.
+- **Requests.** Solid applies writes at its next flush. Each request decides on the value staged by the requests before it in the same tick; a request that changes nothing writes nothing and calls nothing.
 - **Owner.** Call a primitive under an owner: a component, `createRoot` or another primitive. Its state and its cleanup belong to that owner.
 - **Server.** A primitive renders on the server, where it touches no browser global, and creates the same reactive nodes there as in the browser, so hydration lines up.
 - **Look.** A primitive writes no style and no class. The component that renders the element styles it.

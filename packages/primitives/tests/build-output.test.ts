@@ -2,8 +2,9 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "vite-plus/test";
+import { dist, library } from "./built-library";
 
-const builtEntry = join(import.meta.dirname, "../dist/index.js");
+const builtEntry = join(dist, "index.js");
 
 function functionNames(module: Record<string, unknown>): string[] {
   return Object.keys(module)
@@ -20,8 +21,8 @@ console.log(JSON.stringify(Object.keys(built).filter((name) => typeof built[name
   return JSON.parse(printed) as string[];
 }
 
-test("Node's own loader, outside Vite, imports the built package and finds every function Vite finds", async () => {
-  const seenByVite = functionNames((await import(builtEntry)) as Record<string, unknown>);
+test("Node's own loader, outside Vite, imports the built package and finds every function Vite finds", () => {
+  const seenByVite = functionNames({ ...library });
 
   expect(seenByVite.length).toBeGreaterThan(0);
   expect(functionNamesSeenByNode()).toEqual(seenByVite);

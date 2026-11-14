@@ -3,6 +3,7 @@ import { createSignal, flush, type Setter } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { type CounterHandlers, createCounter } from "../src/index";
 import { mount, unmount, watch } from "./support/browser-harness";
+import { command, flushCommand, type Tick } from "./support/model";
 
 test("by default it starts at 0 and moves by 1 with no bounds", () => {
   const [count, { increment, decrement }] = mount(() => createCounter());
@@ -76,7 +77,7 @@ test("new bounds apply from the next handler, and a count out of them stays unti
   expect(count()).toBe(5);
 });
 
-test("requests before a flush build on each other, and one that changes nothing writes nothing", () => {
+test("each request decides on the value staged by the requests before it in the same tick, and one that changes nothing writes nothing", () => {
   const { handlers, seen } = mount(() => {
     const [count, handlers] = createCounter(0, { max: 2 });
     return { handlers, seen: watch(count) };
@@ -103,86 +104,22 @@ test("the initial value is read once", () => {
 });
 
 type Bounds = { min: number; max: number; step: number };
-type Model = {
-  initial: number;
-  staged: number;
-  committed: number;
-  stagedBounds: Bounds;
-  committedBounds: Bounds;
-};
-type Real = {
-  count: () => number;
-  handlers: CounterHandlers;
-  setBounds: Setter<Bounds>;
-};
+type Model = Tick<{ count: number; bounds: Bounds }> & { initial: number };
+type Real = { count: () => number; handlers: CounterHandlers; setBounds: Setter<Bounds> };
 
 function clamp(value: number, bounds: Bounds): number {
   return Math.min(Math.max(value, bounds.min), bounds.max);
 }
 
-class Increment implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.increment();
-    model.staged = clamp(
-      model.staged + Math.abs(model.committedBounds.step),
-      model.committedBounds,
-    );
-  }
-  toString = () => "increment()";
-}
-
-class Decrement implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.decrement();
-    model.staged = clamp(
-      model.staged - Math.abs(model.committedBounds.step),
-      model.committedBounds,
-    );
-  }
-  toString = () => "decrement()";
-}
-
-class SetCount implements fc.Command<Model, Real> {
-  constructor(readonly value: number) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.set(this.value);
-    model.staged = clamp(this.value, model.committedBounds);
-  }
-  toString = () => `set(${this.value})`;
-}
-
-class Reset implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.reset();
-    model.staged = clamp(model.initial, model.committedBounds);
-  }
-  toString = () => "reset()";
-}
-
-class SetBounds implements fc.Command<Model, Real> {
-  constructor(readonly bounds: Bounds) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.setBounds(this.bounds);
-    model.stagedBounds = this.bounds;
-  }
-  toString = () =>
-    `the consumer sets min ${this.bounds.min}, max ${this.bounds.max} and step ${this.bounds.step}`;
-}
-
-class Flush implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    flush();
-    model.committed = model.staged;
-    model.committedBounds = model.stagedBounds;
-    expect(real.count(), "the count after the flush").toBe(model.committed);
-  }
-  toString = () => "flush";
+function move(
+  label: string,
+  act: (handlers: CounterHandlers) => void,
+  next: (model: Model) => number,
+) {
+  return command<Model, Real>(label, (model, real) => {
+    act(real.handlers);
+    model.staged = { ...model.staged, count: clamp(next(model), model.committed.bounds) };
+  });
 }
 
 const small = fc.integer({ min: -6, max: 6 });
@@ -193,12 +130,48 @@ const bounds = fc.tuple(small, small, small).map(([low, high, step]): Bounds => 
 }));
 
 const commands = [
-  fc.constant(new Increment()),
-  fc.constant(new Decrement()),
-  small.map((value) => new SetCount(value)),
-  fc.constant(new Reset()),
-  bounds.map((next) => new SetBounds(next)),
-  fc.constant(new Flush()),
+  fc.constant(
+    move(
+      "increment()",
+      (handlers) => handlers.increment(),
+      (model) => model.staged.count + Math.abs(model.committed.bounds.step),
+    ),
+  ),
+  fc.constant(
+    move(
+      "decrement()",
+      (handlers) => handlers.decrement(),
+      (model) => model.staged.count - Math.abs(model.committed.bounds.step),
+    ),
+  ),
+  small.map((value) =>
+    move(
+      `set(${value})`,
+      (handlers) => handlers.set(value),
+      () => value,
+    ),
+  ),
+  fc.constant(
+    move(
+      "reset()",
+      (handlers) => handlers.reset(),
+      (model) => model.initial,
+    ),
+  ),
+  bounds.map((next) =>
+    command<Model, Real>(
+      `the consumer sets min ${next.min}, max ${next.max} and step ${next.step}`,
+      (model, real) => {
+        real.setBounds(next);
+        model.staged = { ...model.staged, bounds: next };
+      },
+    ),
+  ),
+  fc.constant(
+    flushCommand<Model, Real>((model, real) => {
+      expect(real.count(), "the count after the flush").toBe(model.committed.count);
+    }),
+  ),
 ];
 
 test("for every generated sequence of moves, bound changes and flushes, it agrees with a model of the count", () => {
@@ -216,14 +189,9 @@ test("for every generated sequence of moves, bound changes and flushes, it agree
             step: () => current().step,
           }),
         );
-        const model: Model = {
-          initial,
-          staged: clamp(initial, start),
-          committed: clamp(initial, start),
-          stagedBounds: start,
-          committedBounds: start,
-        };
-        expect(count(), "the first count").toBe(model.committed);
+        const first = { count: clamp(initial, start), bounds: start };
+        const model: Model = { initial, staged: first, committed: first };
+        expect(count(), "the first count").toBe(first.count);
         fc.modelRun(() => ({ model, real: { count, handlers, setBounds } }), sequence);
         unmount();
       },

@@ -1,7 +1,8 @@
 import { type Accessor, createMemo } from "solid-js";
 import { accessUntracked } from "./internal-access";
+import { sameKeys } from "./internal-equal";
 import { createValue } from "./internal-value";
-import type { MaybeAccessor } from "./types";
+import type { ReadOnce } from "./types";
 
 /** The state of `createValidatedState`. */
 export type ValidatedState<T> = {
@@ -14,38 +15,38 @@ export type ValidatedState<T> = {
 };
 
 /**
- * A value that remembers the last one that passed `validate`. It starts at `initialValue`, read
- * once, which is also the last valid value when it passes. `initialValidationState`, read once,
- * replaces the first verdict when it is a boolean; every value set after that is judged by
- * `validate`, called when the value is set. Requests made before Solid's next flush resolve to the
- * last one, and one that changes nothing writes nothing.
+ * A value that remembers the last one that passed `validate`. It starts at `initialValue`, which is
+ * also the last valid value when it passes. `initialValidationState` replaces the first verdict
+ * when it is a boolean; every value set after that is judged by `validate`, called when the value
+ * is set. Each request decides on the value staged by the requests before it in the same tick; a
+ * request that changes nothing writes nothing and calls nothing.
  *
  * ```ts
  * const [{ value, lastValidValue, valid }, setValue] = createValidatedState("", (text) => text.length > 2);
  * ```
  */
 export function createValidatedState<T>(
-  initialValue: MaybeAccessor<T>,
+  initialValue: ReadOnce<T>,
   validate: (value: NoInfer<T>) => boolean,
-  initialValidationState?: MaybeAccessor<boolean | undefined>,
+  initialValidationState?: ReadOnce<boolean | undefined>,
 ): [state: ValidatedState<T>, setValue: (value: T) => void] {
   const initial = accessUntracked(initialValue);
   const initiallyValid = validate(initial);
-  const state = createValue({
-    value: initial,
-    lastValidValue: initiallyValid ? initial : undefined,
-    valid: accessUntracked(initialValidationState) ?? initiallyValid,
-  });
+  const state = createValue(
+    {
+      value: initial,
+      lastValidValue: initiallyValid ? initial : undefined,
+      valid: accessUntracked(initialValidationState) ?? initiallyValid,
+    },
+    sameKeys,
+  );
   const setValue = (value: T) => {
     const valid = validate(value);
-    state.update((staged) => {
-      const lastValidValue = valid ? value : staged.lastValidValue;
-      return Object.is(value, staged.value) &&
-        valid === staged.valid &&
-        Object.is(lastValidValue, staged.lastValidValue)
-        ? staged
-        : { value, lastValidValue, valid };
-    });
+    state.update((staged) => ({
+      value,
+      lastValidValue: valid ? value : staged.lastValidValue,
+      valid,
+    }));
   };
   return [
     {

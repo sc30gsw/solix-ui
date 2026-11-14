@@ -4,14 +4,10 @@ import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
-import {
-  componentFile,
-  componentLibraries,
-  libraryPackages,
-  repositoryRoot,
-  scriptFiles,
-} from "./support/workspace";
+import { descendants, exportsOf, parse } from "./support/syntax";
+import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
 
+const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
   /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
 const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -48,16 +44,6 @@ type Component = { name: string; file: string; source: ts.SourceFile };
 
 type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
 
-function parse(file: string): ts.SourceFile {
-  return ts.createSourceFile(
-    file,
-    readFileSync(file, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
-}
-
 function relativePath(file: string): string {
   return relative(repositoryRoot, file);
 }
@@ -73,34 +59,9 @@ const components: Component[] = libraries.flatMap(({ source }) =>
     })),
 );
 
-function descendants(node: ts.Node): ts.Node[] {
-  const found: ts.Node[] = [];
-  const visit = (child: ts.Node): void => {
-    found.push(child);
-    ts.forEachChild(child, visit);
-  };
-  ts.forEachChild(node, visit);
-  return found;
-}
-
 function exportedNames(source: ts.SourceFile): string[] {
-  return source.statements.flatMap((statement) => {
-    if (ts.isExportAssignment(statement) || ts.isExportDeclaration(statement)) return ["<other>"];
-    const exported = ts.canHaveModifiers(statement)
-      ? ts
-          .getModifiers(statement)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
-      : false;
-    if (!exported) return [];
-    if (ts.isFunctionDeclaration(statement)) return [statement.name?.text ?? "<anonymous>"];
-    if (ts.isTypeAliasDeclaration(statement)) return [statement.name.text];
-    if (ts.isVariableStatement(statement)) {
-      return statement.declarationList.declarations.map((declaration) =>
-        declaration.name.getText(),
-      );
-    }
-    return ["<other>"];
-  });
+  const { functions, types, others } = exportsOf(source);
+  return [...functions, ...types, ...others];
 }
 
 function callsOf(node: ts.Node, callee: string): ts.CallExpression[] {
@@ -520,12 +481,12 @@ test("no source file of the library but parts.ts calls stylex.attrs or stylex.pr
 });
 
 test("every other source file is the barrel, a StyleX definition, or a kebab-case module", () => {
-  const violations = libraryPackages.flatMap(({ directory }) =>
-    readdirSync(join(directory, "src"))
+  const violations = libraries.flatMap(({ source }) =>
+    readdirSync(source)
       .filter((entry) => !componentFile.test(entry) && !helperFile.test(entry))
       .map(
         (entry) =>
-          `${relativePath(join(directory, "src", entry))}: name it Component.tsx for a component, kebab-case.ts for a module, or name.stylex.ts for StyleX variables.`,
+          `${relativePath(join(source, entry))}: name it Component.tsx for a component, kebab-case.ts for a module, or name.stylex.ts for StyleX variables.`,
       ),
   );
 

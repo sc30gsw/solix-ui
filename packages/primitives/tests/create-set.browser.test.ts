@@ -1,7 +1,9 @@
+import fc from "fast-check";
 import { createSignal, flush } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createSet } from "../src/index";
-import { mount, watch } from "./support/browser-harness";
+import { mount, unmount, watch } from "./support/browser-harness";
+import { command, flushCommand, type Tick } from "./support/model";
 
 function setOf(values?: string[]) {
   return mount(() => {
@@ -106,4 +108,74 @@ test("union, intersection, difference and symmetricDifference return a new plain
   ).toBe(true);
   expect([...set()]).toEqual(["a", "b", "c"]);
   expect(seen.length).toBe(1);
+});
+
+type Model = Tick<string[]> & { changedThisTick: boolean; shown: number };
+type Real = { latest: () => Set<string>; seen: Set<string>[] };
+
+const member = fc.constantFrom("a", "b", "c");
+const instance = fc.nat(9);
+
+function nthShown(real: Real, which: number): Set<string> {
+  return real.seen[which % real.seen.length];
+}
+
+function change(model: Model, next: string[]): void {
+  model.staged = next;
+  model.changedThisTick = true;
+}
+
+const commands = [
+  fc.tuple(member, instance).map(([value, which]) =>
+    command<Model, Real>(`add(${value}) on shown instance ${which}`, (model, real) => {
+      const target = nthShown(real, which);
+      expect(target.add(value), "what add returned").toBe(target);
+      if (!model.staged.includes(value)) change(model, [...model.staged, value]);
+    }),
+  ),
+  fc.tuple(member, instance).map(([value, which]) =>
+    command<Model, Real>(`delete(${value}) on shown instance ${which}`, (model, real) => {
+      const held = model.staged.includes(value);
+      expect(nthShown(real, which).delete(value), "what delete returned").toBe(held);
+      if (held)
+        change(
+          model,
+          model.staged.filter((kept) => kept !== value),
+        );
+    }),
+  ),
+  instance.map((which) =>
+    command<Model, Real>(`clear() on shown instance ${which}`, (model, real) => {
+      nthShown(real, which).clear();
+      if (model.staged.length > 0) change(model, []);
+    }),
+  ),
+  fc.constant(
+    flushCommand<Model, Real>((model, real) => {
+      if (model.changedThisTick) model.shown += 1;
+      model.changedThisTick = false;
+      expect([...real.latest()], "the members after the flush").toEqual(model.committed);
+      expect(real.seen.length, "how many sets the accessor showed").toBe(model.shown);
+    }),
+  ),
+];
+
+test("for every generated sequence of mutations on any instance it showed, and flushes, it agrees with a model of the members and shows a new set once per tick that changed it", () => {
+  fc.assert(
+    fc.property(
+      fc.uniqueArray(member, { maxLength: 3 }),
+      fc.commands(commands, { maxCommands: 30, size: "medium" }),
+      (initial, sequence) => {
+        const { set, seen } = setOf(initial);
+        const model: Model = {
+          staged: initial,
+          committed: initial,
+          changedThisTick: false,
+          shown: 1,
+        };
+        fc.modelRun(() => ({ model, real: { latest: set, seen } }), sequence);
+        unmount();
+      },
+    ),
+  );
 });

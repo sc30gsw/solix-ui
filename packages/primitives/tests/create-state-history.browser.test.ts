@@ -3,6 +3,7 @@ import { createSignal, flush } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createStateHistory, type StateHistory, type StateHistoryHandlers } from "../src/index";
 import { mount, unmount, watch } from "./support/browser-harness";
+import { command, flushCommand, type Tick } from "./support/model";
 
 function shown<T>(value: () => T, history: StateHistory<T>): [T, T[], number] {
   return [value(), history.history(), history.current()];
@@ -73,92 +74,63 @@ test("moves past either end, and a reset of a fresh history, write nothing", () 
   expect(seen.length).toBe(1);
 });
 
-type Model = {
-  initial: number;
-  staged: { history: number[]; current: number };
-  committed: { history: number[]; current: number };
-};
+type Entries = { history: number[]; current: number };
+type Model = Tick<Entries> & { initial: number };
 type Real = {
   value: () => number;
   handlers: StateHistoryHandlers<number>;
   history: StateHistory<number>;
 };
 
-function clampIndex(index: number, model: Model): number {
-  return Math.min(Math.max(index, 0), model.staged.history.length - 1);
+function moveBy(steps: number, staged: Entries): Entries {
+  return {
+    history: staged.history,
+    current: Math.min(Math.max(staged.current + steps, 0), staged.history.length - 1),
+  };
 }
 
-class SetValue implements fc.Command<Model, Real> {
-  constructor(readonly value: number) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.set(this.value);
-    model.staged = {
-      history: [...model.staged.history.slice(0, model.staged.current + 1), this.value],
-      current: model.staged.current + 1,
-    };
-  }
-  toString = () => `set(${this.value})`;
-}
-
-class Back implements fc.Command<Model, Real> {
-  constructor(readonly steps: number) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.back(this.steps);
-    model.staged = {
-      ...model.staged,
-      current: clampIndex(model.staged.current - this.steps, model),
-    };
-  }
-  toString = () => `back(${this.steps})`;
-}
-
-class Forward implements fc.Command<Model, Real> {
-  constructor(readonly steps: number) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.forward(this.steps);
-    model.staged = {
-      ...model.staged,
-      current: clampIndex(model.staged.current + this.steps, model),
-    };
-  }
-  toString = () => `forward(${this.steps})`;
-}
-
-class Reset implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.handlers.reset();
-    model.staged = { history: [model.initial], current: 0 };
-  }
-  toString = () => "reset()";
-}
-
-class Flush implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    flush();
-    model.committed = model.staged;
-    expect(
-      shown(real.value, real.history),
-      "the value, the history and the index after the flush",
-    ).toEqual([
-      model.committed.history[model.committed.current],
-      model.committed.history,
-      model.committed.current,
-    ]);
-  }
-  toString = () => "flush";
-}
+const steps = fc.integer({ min: 0, max: 4 });
 
 const commands = [
-  fc.integer({ min: 0, max: 9 }).map((value) => new SetValue(value)),
-  fc.integer({ min: 0, max: 4 }).map((steps) => new Back(steps)),
-  fc.integer({ min: 0, max: 4 }).map((steps) => new Forward(steps)),
-  fc.constant(new Reset()),
-  fc.constant(new Flush()),
+  fc.integer({ min: 0, max: 9 }).map((value) =>
+    command<Model, Real>(`set(${value})`, (model, real) => {
+      real.handlers.set(value);
+      model.staged = {
+        history: [...model.staged.history.slice(0, model.staged.current + 1), value],
+        current: model.staged.current + 1,
+      };
+    }),
+  ),
+  steps.map((count) =>
+    command<Model, Real>(`back(${count})`, (model, real) => {
+      real.handlers.back(count);
+      model.staged = moveBy(-count, model.staged);
+    }),
+  ),
+  steps.map((count) =>
+    command<Model, Real>(`forward(${count})`, (model, real) => {
+      real.handlers.forward(count);
+      model.staged = moveBy(count, model.staged);
+    }),
+  ),
+  fc.constant(
+    command<Model, Real>("reset()", (model, real) => {
+      real.handlers.reset();
+      model.staged = { history: [model.initial], current: 0 };
+    }),
+  ),
+  fc.constant(
+    flushCommand<Model, Real>((model, real) => {
+      expect(
+        shown(real.value, real.history),
+        "the value, the history and the index after the flush",
+      ).toEqual([
+        model.committed.history[model.committed.current],
+        model.committed.history,
+        model.committed.current,
+      ]);
+    }),
+  ),
 ];
 
 test("for every generated sequence of sets, moves, resets and flushes, it agrees with a model of the history", () => {

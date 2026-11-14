@@ -2,12 +2,12 @@ import { type Accessor, createMemo } from "solid-js";
 import { accessUntracked } from "./internal-access";
 import { sameItems } from "./internal-equal";
 import { createValue } from "./internal-value";
-import type { MaybeAccessor } from "./types";
+import type { MaybeAccessor, ReadOnce } from "./types";
 
 /** The options of `createQueue`. */
 export type QueueOptions<T> = {
-  /** Read once. The items it starts with, split by `limit`. */
-  initialValues?: MaybeAccessor<readonly T[]>;
+  /** The items it starts with, split by `limit`. */
+  initialValues?: ReadOnce<readonly T[]>;
   /** How many items `state` holds. Read by each command, so a new limit applies from the next one. */
   limit: MaybeAccessor<number>;
 };
@@ -29,8 +29,9 @@ export type QueueReturn<T> = {
 /**
  * A list split in two: the first `limit` items in `state`, the rest waiting in `queue`, as a stack
  * of notifications shows a few and holds the others. Removing an item from `state` through
- * `update` moves the next queued item up. Requests made before Solid's next flush build on each
- * other, and one that leaves both lists as they were writes nothing.
+ * `update` moves the next queued item up. Each request decides on the value staged by the requests
+ * before it in the same tick; a request that changes nothing writes nothing and calls nothing. One
+ * that leaves both lists as they were changes nothing.
  *
  * ```ts
  * const { state, queue, add, update } = createQueue<Notice>({ limit: 3 });
@@ -41,20 +42,16 @@ export function createQueue<T>(options: QueueOptions<T>): QueueReturn<T> {
     const limit = accessUntracked(options.limit);
     return { state: items.slice(0, limit), queue: items.slice(limit) };
   };
-  const lists = createValue(split([...(accessUntracked(options.initialValues) ?? [])]));
-  const change = (next: (staged: { state: T[]; queue: T[] }) => { state: T[]; queue: T[] }) => {
-    lists.update((staged) => {
-      const changed = next(staged);
-      const state = sameItems(changed.state, staged.state) ? staged.state : changed.state;
-      const queue = sameItems(changed.queue, staged.queue) ? staged.queue : changed.queue;
-      return state === staged.state && queue === staged.queue ? staged : { state, queue };
-    });
-  };
+  const lists = createValue(
+    split([...(accessUntracked(options.initialValues) ?? [])]),
+    (left, right) => sameItems(left.state, right.state) && sameItems(left.queue, right.queue),
+  );
   return {
-    state: createMemo(() => lists.get().state),
-    queue: createMemo(() => lists.get().queue),
-    add: (...items) => change((staged) => split([...staged.state, ...staged.queue, ...items])),
-    update: (fn) => change((staged) => split(fn([...staged.state, ...staged.queue]))),
-    cleanQueue: () => change((staged) => ({ state: staged.state, queue: [] })),
+    state: createMemo(() => lists.get().state, { equals: sameItems }),
+    queue: createMemo(() => lists.get().queue, { equals: sameItems }),
+    add: (...items) =>
+      lists.update((staged) => split([...staged.state, ...staged.queue, ...items])),
+    update: (fn) => lists.update((staged) => split(fn([...staged.state, ...staged.queue]))),
+    cleanQueue: () => lists.update((staged) => ({ state: staged.state, queue: [] })),
   };
 }

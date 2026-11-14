@@ -1,5 +1,6 @@
 import { createEffect, createRoot, type DiagnosticCapture, flush, OBSERVE } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
+import { listenerMethods, observers, timers } from "./browser-resources";
 
 type Listener = {
   target: EventTarget;
@@ -15,13 +16,6 @@ type Unobserve = (this: object, target?: Node) => void;
 
 const primitiveSource = /\/packages\/primitives\/src\//;
 const framesEnoughToReachThePrimitive = 100;
-const timerFunctions: [schedule: string, cancel: string, kind: string, firesOnce: boolean][] = [
-  ["setTimeout", "clearTimeout", "timeout", true],
-  ["setInterval", "clearInterval", "interval", false],
-  ["requestAnimationFrame", "cancelAnimationFrame", "animation frame", true],
-  ["requestIdleCallback", "cancelIdleCallback", "idle callback", true],
-];
-const observerClasses = ["ResizeObserver", "IntersectionObserver", "MutationObserver"];
 const browserGlobals = globalThis as unknown as Record<string, unknown>;
 
 const liveListeners = new Set<Listener>();
@@ -56,12 +50,14 @@ function forget(registration: Listener): void {
   }
 }
 
-const addListener = Object.getOwnPropertyDescriptor(EventTarget.prototype, "addEventListener")
-  ?.value as EventTarget["addEventListener"];
-const removeListener = Object.getOwnPropertyDescriptor(EventTarget.prototype, "removeEventListener")
-  ?.value as EventTarget["removeEventListener"];
+const listening = EventTarget.prototype as unknown as Record<string, unknown>;
+const addListener = listening[listenerMethods.add] as EventTarget["addEventListener"];
+const removeListener = listening[listenerMethods.remove] as EventTarget["removeEventListener"];
 
-EventTarget.prototype.addEventListener = function (this: EventTarget, type, listener, options) {
+listening[listenerMethods.add] = function (
+  this: EventTarget,
+  ...[type, listener, options]: Parameters<EventTarget["addEventListener"]>
+) {
   addListener.call(this, type, listener, options);
   if (!listener || !calledByAPrimitive()) return;
   const registration = { target: this, type, listener, capture: capturesIn(options) };
@@ -76,12 +72,15 @@ EventTarget.prototype.addEventListener = function (this: EventTarget, type, list
   options.signal?.addEventListener("abort", () => forget(registration), { once: true });
 };
 
-EventTarget.prototype.removeEventListener = function (this: EventTarget, type, listener, options) {
+listening[listenerMethods.remove] = function (
+  this: EventTarget,
+  ...[type, listener, options]: Parameters<EventTarget["removeEventListener"]>
+) {
   removeListener.call(this, type, listener, options);
   if (listener) forget({ target: this, type, listener, capture: capturesIn(options) });
 };
 
-for (const [scheduleName, cancelName, kind, firesOnce] of timerFunctions) {
+for (const { schedule: scheduleName, cancel: cancelName, kind, firesOnce } of timers) {
   const schedule = browserGlobals[scheduleName] as Schedule | undefined;
   const cancel = browserGlobals[cancelName] as Cancel | undefined;
   if (!schedule || !cancel) continue;
@@ -108,7 +107,7 @@ for (const [scheduleName, cancelName, kind, firesOnce] of timerFunctions) {
   };
 }
 
-for (const name of observerClasses) {
+for (const name of observers) {
   const observer = browserGlobals[name] as { prototype: Record<string, unknown> } | undefined;
   if (!observer) continue;
   const prototype = observer.prototype;
@@ -162,6 +161,16 @@ export function watch<T>(read: () => T): T[] {
   return seen;
 }
 
+export function attached<E extends HTMLElement>(
+  element: E,
+  type?: string,
+  listener?: (event: Event) => void,
+): E {
+  if (type && listener) element.addEventListener(type, listener);
+  document.body.append(element);
+  return element;
+}
+
 export function unmount(): void {
   for (const dispose of disposers.splice(0).reverse()) dispose();
   flush();
@@ -177,6 +186,7 @@ beforeEach(() => {
 
 afterEach(() => {
   unmount();
+  document.body.replaceChildren();
   const raised = (diagnostics?.stop() ?? []).map(
     ({ code, message }) => `${code}: ${message.split("\n")[0]}`,
   );

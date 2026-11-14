@@ -1,7 +1,9 @@
+import fc from "fast-check";
 import { createSignal, flush } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createValidatedState, type ValidatedState } from "../src/index";
-import { mount, watch } from "./support/browser-harness";
+import { mount, unmount, watch } from "./support/browser-harness";
+import { command, flushCommand, type Tick } from "./support/model";
 
 const longerThanTwo = (text: string) => text.length > 2;
 
@@ -60,7 +62,7 @@ test("validate runs when a value is set, with that value, and the initial values
   expect(shown(state)).toEqual(["wxyz", "wxyz", true]);
 });
 
-test("values set before a flush resolve to the last one, and one that changes nothing writes nothing", () => {
+test("each request decides on the value staged by the requests before it in the same tick, and one that changes nothing writes nothing", () => {
   const { setValue, seen } = mount(() => {
     const [state, setValue] = createValidatedState("abc", longerThanTwo);
     return { setValue, seen: watch(() => shown(state)) };
@@ -77,4 +79,59 @@ test("values set before a flush resolve to the last one, and one that changes no
     ["abc", "abc", true],
     ["wxyz", "wxyz", true],
   ]);
+});
+
+type Verdict = [value: string, lastValidValue: string | undefined, valid: boolean];
+type Model = Tick<Verdict> & { shown: Verdict[] };
+type Real = { state: ValidatedState<string>; setValue: (value: string) => void; seen: Verdict[] };
+
+const text = fc.constantFrom("", "a", "ab", "abc", "abcd");
+
+const commands = [
+  text.map((value) =>
+    command<Model, Real>(`setValue("${value}")`, (model, real) => {
+      real.setValue(value);
+      const valid = longerThanTwo(value);
+      model.staged = [value, valid ? value : model.staged[1], valid];
+    }),
+  ),
+  fc.constant(
+    flushCommand<Model, Real>((model, real) => {
+      if (JSON.stringify(model.shown[model.shown.length - 1]) !== JSON.stringify(model.committed)) {
+        model.shown.push(model.committed);
+      }
+      expect(shown(real.state), "the value, the last valid value and the verdict").toEqual(
+        model.committed,
+      );
+      expect(real.seen, "every verdict the accessors showed").toEqual(model.shown);
+    }),
+  ),
+];
+
+test("for every generated sequence of values and flushes, it agrees with a model of the value, the last valid value and the verdict", () => {
+  fc.assert(
+    fc.property(
+      text,
+      fc.option(fc.boolean(), { nil: undefined }),
+      fc.commands(commands, { maxCommands: 30, size: "medium" }),
+      (initial, initialValidationState, sequence) => {
+        const { state, setValue, seen } = mount(() => {
+          const [state, setValue] = createValidatedState<string>(
+            initial,
+            longerThanTwo,
+            initialValidationState,
+          );
+          return { state, setValue, seen: watch(() => shown(state)) };
+        });
+        const first: Verdict = [
+          initial,
+          longerThanTwo(initial) ? initial : undefined,
+          initialValidationState ?? longerThanTwo(initial),
+        ];
+        const model: Model = { staged: first, committed: first, shown: [first] };
+        fc.modelRun(() => ({ model, real: { state, setValue, seen } }), sequence);
+        unmount();
+      },
+    ),
+  );
 });

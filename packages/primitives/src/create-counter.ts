@@ -1,7 +1,7 @@
 import type { Accessor } from "solid-js";
 import { accessUntracked } from "./internal-access";
 import { createValue } from "./internal-value";
-import type { MaybeAccessor } from "./types";
+import type { MaybeAccessor, ReadOnce } from "./types";
 
 /** The options of `createCounter`. Each is read when a handler runs. */
 export type CounterOptions = {
@@ -22,18 +22,19 @@ export type CounterHandlers = {
 };
 
 /**
- * A number kept between `min` and `max`. It starts at `initialValue`, read once and clamped.
+ * A number kept between `min` and `max`. It starts at `initialValue`, clamped.
  * `increment` and `decrement` move it by the absolute value of `step`, `set` writes a value, and
  * `reset` returns to `initialValue`, each clamped to the bounds as they are when the handler runs. A
- * count that is already out of new bounds stays until the next handler. Requests made before
- * Solid's next flush build on each other, and one that changes nothing writes nothing.
+ * count that is already out of new bounds stays until the next handler. Each request decides on
+ * the value staged by the requests before it in the same tick; a request that changes nothing
+ * writes nothing and calls nothing.
  *
  * ```ts
  * const [count, { increment, decrement, set, reset }] = createCounter(0, { min: 0, max: () => props.max });
  * ```
  */
 export function createCounter(
-  initialValue: MaybeAccessor<number> = 0,
+  initialValue: ReadOnce<number> = 0,
   options?: CounterOptions,
 ): [count: Accessor<number>, handlers: CounterHandlers] {
   const clamped = (value: number) =>

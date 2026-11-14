@@ -23,4 +23,4 @@ export {
   type UncontrolledReturn,
 } from "./create-uncontrolled";
 export { createValidatedState, type ValidatedState } from "./create-validated-state";
-export type { MaybeAccessor } from "./types";
+export type { MaybeAccessor, ReadOnce } from "./types";

@@ -7,6 +7,7 @@ import {
   type UncontrolledReturn,
 } from "../src/index";
 import { mount, unmount } from "./support/browser-harness";
+import { command, flushCommand, type Tick } from "./support/model";
 
 type Call = [value: string, payload: number];
 
@@ -77,7 +78,7 @@ test("switching to controlled and back keeps the uncontrolled value", () => {
   expect([value(), controlled()]).toEqual(["kept", false]);
 });
 
-test("requests before a flush resolve to the last one, and a request for the current value does nothing", () => {
+test("uncontrolled, each request decides on the value staged by the requests before it in the same tick, and a request for the value it would replace writes nothing and calls nothing", () => {
   const calls: string[] = [];
   const [value, setValue] = mount(() =>
     createUncontrolled({ defaultValue: "a", onChange: (next: string) => calls.push(next) }),
@@ -195,16 +196,12 @@ test("onChange is read when a request is made, so the latest one runs", () => {
   expect(calls).toEqual(["second b"]);
 });
 
-type Model = {
+type Values = { outside: string | undefined; inside: string | undefined };
+type Model = Tick<Values> & {
   follows: boolean;
-  committedOutside: string | undefined;
-  stagedOutside: string | undefined;
-  committedInside: string | undefined;
-  stagedInside: string | undefined;
   requestThisTick: string | undefined;
   calls: Call[];
 };
-
 type Real = {
   primitive: UncontrolledReturn<string, [number], string | undefined>;
   setOutside: Setter<string | undefined>;
@@ -213,65 +210,42 @@ type Real = {
 
 const values = fc.constantFrom("a", "b", "c");
 
-function expectAgreement(model: Model, real: Real): void {
-  expect(real.calls, "the onChange calls").toEqual(model.calls);
-}
-
-class SetOutside implements fc.Command<Model, Real> {
-  constructor(readonly next: string | undefined) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.setOutside(this.next);
-    model.stagedOutside = this.next;
-    expectAgreement(model, real);
-  }
-  toString = () => `the consumer sets value to ${String(this.next)}`;
-}
-
-class Request implements fc.Command<Model, Real> {
-  constructor(
-    readonly next: string,
-    readonly payload: number,
-  ) {}
-  check = () => true;
-  run(model: Model, real: Real) {
-    real.primitive[1](this.next, this.payload);
-    if (model.committedOutside === undefined) {
-      if (model.stagedInside !== this.next) {
-        model.stagedInside = this.next;
-        model.calls.push([this.next, this.payload]);
-      }
-    } else if (model.requestThisTick !== this.next) {
-      model.requestThisTick = this.next;
-      model.calls.push([this.next, this.payload]);
-      if (model.follows) model.stagedOutside = this.next;
-    }
-    expectAgreement(model, real);
-  }
-  toString = () => `setValue(${this.next}, ${this.payload})`;
-}
-
-class Flush implements fc.Command<Model, Real> {
-  check = () => true;
-  run(model: Model, real: Real) {
-    flush();
-    model.committedOutside = model.stagedOutside;
-    model.committedInside = model.stagedInside;
-    model.requestThisTick = undefined;
-    const [value, , controlled] = real.primitive;
-    expect(value(), "the value after the flush").toBe(
-      model.committedOutside ?? model.committedInside,
-    );
-    expect(controlled(), "controlled after the flush").toBe(model.committedOutside !== undefined);
-    expectAgreement(model, real);
-  }
-  toString = () => "flush";
-}
-
 const commands = [
-  fc.option(values, { nil: undefined }).map((next) => new SetOutside(next)),
-  fc.tuple(values, fc.nat(3)).map(([next, payload]) => new Request(next, payload)),
-  fc.constant(new Flush()),
+  fc.option(values, { nil: undefined }).map((next) =>
+    command<Model, Real>(`the consumer sets value to ${String(next)}`, (model, real) => {
+      real.setOutside(next);
+      model.staged = { ...model.staged, outside: next };
+      expect(real.calls, "the onChange calls").toEqual(model.calls);
+    }),
+  ),
+  fc.tuple(values, fc.nat(3)).map(([next, payload]) =>
+    command<Model, Real>(`setValue(${next}, ${payload})`, (model, real) => {
+      real.primitive[1](next, payload);
+      if (model.committed.outside === undefined) {
+        if (model.staged.inside !== next) {
+          model.staged = { ...model.staged, inside: next };
+          model.calls.push([next, payload]);
+        }
+      } else if (model.requestThisTick !== next) {
+        model.requestThisTick = next;
+        model.calls.push([next, payload]);
+        if (model.follows) model.staged = { ...model.staged, outside: next };
+      }
+      expect(real.calls, "the onChange calls").toEqual(model.calls);
+    }),
+  ),
+  fc.constant(
+    flushCommand<Model, Real>((model, real) => {
+      model.requestThisTick = undefined;
+      const [value, , controlled] = real.primitive;
+      expect(value(), "the value after the flush").toBe(
+        model.committed.outside ?? model.committed.inside,
+      );
+      expect(controlled(), "controlled after the flush").toBe(
+        model.committed.outside !== undefined,
+      );
+    }),
+  ),
 ];
 
 test("for every generated sequence of requests, consumer writes and flushes, it agrees with a model of the two values", () => {
@@ -299,13 +273,11 @@ test("for every generated sequence of requests, consumer writes and flushes, it 
             },
           }),
         );
-        const inside = start.defaultValue ?? start.finalValue;
+        const first = { outside: start.outside, inside: start.defaultValue ?? start.finalValue };
         const model: Model = {
           follows: start.follows,
-          committedOutside: start.outside,
-          stagedOutside: start.outside,
-          committedInside: inside,
-          stagedInside: inside,
+          staged: first,
+          committed: first,
           requestThisTick: undefined,
           calls: [],
         };

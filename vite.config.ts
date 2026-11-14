@@ -7,7 +7,7 @@ import { enginesToVerify } from "./scripts/browser-engines.mjs";
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
 const tablesKeptCompact = ["AGENTS.md"];
-const browserTests = "packages/*/tests/**/*.browser.test.ts";
+const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
 
 export default defineConfig({

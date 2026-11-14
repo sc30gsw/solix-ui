@@ -2,12 +2,12 @@ import type { Accessor } from "solid-js";
 import { accessUntracked } from "./internal-access";
 import { sameItems } from "./internal-equal";
 import { createValue } from "./internal-value";
-import type { MaybeAccessor } from "./types";
+import type { ReadOnce } from "./types";
 
 /** Two positions in the list, for `reorder` and `swap`. */
 export type ListMove = { from: number; to: number };
 
-/** The commands of `createListState`. Each one makes a new array and never changes the old one. */
+/** Each command makes a new array and never changes the old one. */
 export type ListStateHandlers<T> = {
   readonly setState: (next: T[] | ((current: T[]) => T[])) => void;
   readonly append: (...items: T[]) => void;
@@ -33,25 +33,20 @@ export type ListStateHandlers<T> = {
 };
 
 /**
- * A list with commands that each make a new array. It starts with `initialValue`, read once, which
- * may be an array or a function that returns one, `[]` by default. Indices are not checked: one out
- * of range does what the array method does. Requests made before Solid's next flush build on each
- * other, and a request that leaves every item where it was writes nothing.
+ * A list with commands that each make a new array. It starts with `initialValue`, which may be an
+ * array or a function that returns one, `[]` by default. Indices are not checked: one out of range
+ * does what the array method does. Each request decides on the value staged by the requests before
+ * it in the same tick; a request that changes nothing writes nothing and calls nothing. A request
+ * that leaves every item where it was changes nothing.
  *
  * ```ts
  * const [todos, { append, remove, setItemProp }] = createListState<Todo>([]);
  * ```
  */
 export function createListState<T>(
-  initialValue: MaybeAccessor<T[]> = [],
+  initialValue: ReadOnce<T[]> = [],
 ): [list: Accessor<T[]>, handlers: ListStateHandlers<T>] {
-  const list = createValue([...accessUntracked(initialValue)]);
-  const change = (next: (staged: T[]) => T[]) => {
-    list.update((staged) => {
-      const changed = next(staged);
-      return sameItems(changed, staged) ? staged : changed;
-    });
-  };
+  const list = createValue([...accessUntracked(initialValue)], sameItems);
   const edited = (staged: T[], edit: (copy: T[]) => void) => {
     const copy = [...staged];
     edit(copy);
@@ -60,46 +55,47 @@ export function createListState<T>(
   return [
     list.get,
     {
-      setState: (next) => change((staged) => (typeof next === "function" ? next(staged) : next)),
-      append: (...items) => change((staged) => [...staged, ...items]),
-      prepend: (...items) => change((staged) => [...items, ...staged]),
+      setState: (next) =>
+        list.update((staged) => (typeof next === "function" ? next(staged) : next)),
+      append: (...items) => list.update((staged) => [...staged, ...items]),
+      prepend: (...items) => list.update((staged) => [...items, ...staged]),
       insert: (index, ...items) =>
-        change((staged) => [...staged.slice(0, index), ...items, ...staged.slice(index)]),
-      pop: () => change((staged) => staged.slice(0, -1)),
-      shift: () => change((staged) => staged.slice(1)),
-      apply: (fn) => change((staged) => staged.map(fn)),
+        list.update((staged) => [...staged.slice(0, index), ...items, ...staged.slice(index)]),
+      pop: () => list.update((staged) => staged.slice(0, -1)),
+      shift: () => list.update((staged) => staged.slice(1)),
+      apply: (fn) => list.update((staged) => staged.map(fn)),
       applyWhere: (condition, fn) =>
-        change((staged) =>
+        list.update((staged) =>
           staged.map((item, index) => (condition(item, index) ? fn(item, index) : item)),
         ),
       remove: (...indices) =>
-        change((staged) => staged.filter((_item, index) => !indices.includes(index))),
+        list.update((staged) => staged.filter((_item, index) => !indices.includes(index))),
       reorder: (move) =>
-        change((staged) =>
+        list.update((staged) =>
           edited(staged, (copy) => {
             copy.splice(move.to, 0, ...copy.splice(move.from, 1));
           }),
         ),
       swap: (move) =>
-        change((staged) =>
+        list.update((staged) =>
           edited(staged, (copy) => {
             copy[move.from] = staged[move.to];
             copy[move.to] = staged[move.from];
           }),
         ),
       setItem: (index, item) =>
-        change((staged) =>
+        list.update((staged) =>
           edited(staged, (copy) => {
             copy[index] = item;
           }),
         ),
       setItemProp: (index, prop, value) =>
-        change((staged) =>
+        list.update((staged) =>
           edited(staged, (copy) => {
             copy[index] = { ...(staged[index] as object), [prop]: value } as T;
           }),
         ),
-      filter: (fn) => change((staged) => staged.filter(fn)),
+      filter: (fn) => list.update((staged) => staged.filter(fn)),
     },
   ];
 }

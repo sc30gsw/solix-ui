@@ -1,12 +1,11 @@
-import { type Dirent, globSync, readdirSync, readFileSync } from "node:fs";
+import { type Dirent, globSync, readFileSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 
 export const repositoryRoot = join(import.meta.dirname, "../..");
+export const primitivesDirectory = join(repositoryRoot, "packages/primitives");
 
 const generatedOrInstalled = new Set(["node_modules", "dist", ".git"]);
 const peerDependencyThatMarksALibrary = "solid-js";
-
-export const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 
 export type Manifest = {
   name?: string;
@@ -42,16 +41,18 @@ export const libraryPackages = packages.filter(
   ({ manifest }) => peerDependencyThatMarksALibrary in (manifest.peerDependencies ?? {}),
 );
 
-function holdsComponents(directory: string): boolean {
-  return readdirSync(join(directory, "src")).some((entry) => componentFile.test(entry));
+function thePrimitivesPackage(): (typeof libraryPackages)[number] {
+  const found = libraryPackages.find(({ directory }) => directory === primitivesDirectory);
+  if (!found?.manifest.name) {
+    throw new Error(`${primitivesDirectory}: no library package with a name was found there.`);
+  }
+  return found;
 }
 
-export const componentLibraries = libraryPackages.filter(({ directory }) =>
-  holdsComponents(directory),
-);
+export const primitivesPackage = thePrimitivesPackage();
 
-export const primitiveLibraries = libraryPackages.filter(
-  ({ directory }) => !holdsComponents(directory),
+export const componentLibraries = libraryPackages.filter(
+  ({ directory }) => directory !== primitivesDirectory,
 );
 
 export const libraryNames = libraryPackages.flatMap(({ manifest }) =>

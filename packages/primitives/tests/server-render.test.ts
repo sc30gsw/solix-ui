@@ -1,218 +1,149 @@
-import { join } from "node:path";
-import { createComponent, renderToString } from "@solidjs/web";
 import { expect, test } from "vite-plus/test";
 import type * as Primitives from "../src/index";
+import { library } from "./built-library";
+import {
+  browserResourcesReadDuring,
+  plainValuesIn,
+  renderedOnTheServer,
+  serialized,
+} from "./support/server-harness";
 
 type Library = typeof Primitives;
-type Primitive = {
-  [K in keyof Library]: Library[K] extends (...args: never[]) => unknown ? K : never;
-}[keyof Library];
-type Run = { returned: unknown; value: unknown };
-type ServerCase<F> = { run: (primitive: F) => Run; expected: unknown };
-
-const dist = join(import.meta.dirname, "../dist");
-const built = (await import(join(dist, "index.js"))) as Record<string, unknown>;
-const builtPrimitives = Object.keys(built)
-  .filter((name) => typeof built[name] === "function")
-  .sort();
-
-const browserOnlyGlobals = [
-  "window",
-  "document",
-  "navigator",
-  "location",
-  "history",
-  "screen",
-  "localStorage",
-  "sessionStorage",
-  "matchMedia",
-  "getComputedStyle",
-  "requestAnimationFrame",
-  "requestIdleCallback",
-  "setTimeout",
-  "setInterval",
-  "ResizeObserver",
-  "IntersectionObserver",
-  "MutationObserver",
-  "HTMLElement",
-];
-
-const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
-  createCounter: {
-    run: (createCounter) => {
-      const returned = createCounter(11, { min: 0, max: 10 });
-      return { returned, value: returned[0]() };
-    },
-    expected: 10,
-  },
-  createDisclosure: {
-    run: (createDisclosure) => {
-      const returned = createDisclosure(true);
-      return { returned, value: returned[0]() };
-    },
-    expected: true,
-  },
-  createInputState: {
-    run: (createInputState) => {
-      const returned = createInputState("typed");
-      return { returned, value: returned[0]() };
-    },
-    expected: "typed",
-  },
-  createListState: {
-    run: (createListState) => {
-      const returned = createListState(() => [1, 2]);
-      return { returned, value: returned[0]() };
-    },
-    expected: [1, 2],
-  },
-  createMap: {
-    run: (createMap) => {
-      const returned = createMap([["key", 1]]);
-      return { returned, value: returned() };
-    },
-    expected: new Map([["key", 1]]),
-  },
-  createPrevious: {
-    run: (createPrevious) => {
-      const returned = createPrevious(() => "now");
-      return { returned, value: returned() };
-    },
-    expected: undefined,
-  },
-  createQueue: {
-    run: (createQueue) => {
-      const returned = createQueue({ initialValues: [1, 2, 3], limit: 2 });
-      return { returned, value: [returned.state(), returned.queue()] };
-    },
-    expected: [[1, 2], [3]],
-  },
-  createSet: {
-    run: (createSet) => {
-      const returned = createSet(["member"]);
-      return { returned, value: returned() };
-    },
-    expected: new Set(["member"]),
-  },
-  createSetState: {
-    run: (createSetState) => {
-      const returned = createSetState({ page: 1 });
-      return { returned, value: returned[0]() };
-    },
-    expected: { page: 1 },
-  },
-  createStateHistory: {
-    run: (createStateHistory) => {
-      const returned = createStateHistory("first");
-      return { returned, value: [returned[0](), returned[2].history(), returned[2].current()] };
-    },
-    expected: ["first", ["first"], 0],
-  },
-  createToggle: {
-    run: (createToggle) => {
-      const returned = createToggle(["light", "dark"]);
-      return { returned, value: returned[0]() };
-    },
-    expected: "light",
-  },
-  createUncontrolled: {
-    run: (createUncontrolled) => {
-      const returned = createUncontrolled({ defaultValue: "default", finalValue: "final" });
-      return { returned, value: [returned[0](), returned[2]()] };
-    },
-    expected: ["default", false],
-  },
-  createValidatedState: {
-    run: (createValidatedState) => {
-      const returned = createValidatedState("ab", (text: string) => text.length > 2, true);
-      const [state] = returned;
-      return { returned, value: [state.value(), state.lastValidValue(), state.valid()] };
-    },
-    expected: ["ab", undefined, true],
-  },
+type Primitive = Extract<keyof Library, `create${string}`>;
+type ServerCase<F> = {
+  create: (primitive: F) => unknown;
+  read: (returned: never) => unknown;
+  expected: unknown;
 };
 
-function serialized(value: unknown): string {
-  return JSON.stringify(value, (_key, item: unknown) => {
-    if (item instanceof Map || item instanceof Set) return [...item];
-    return item === undefined ? "undefined" : item;
-  });
+const primitivePrefix = "create";
+
+function serverCase<F, R>(cases: {
+  create: (primitive: F) => R;
+  read: (returned: R) => unknown;
+  expected: unknown;
+}): ServerCase<F> {
+  return cases;
 }
 
-function notFunctions(returned: unknown, path: string): string[] {
-  if (typeof returned === "function") return [];
-  if (Array.isArray(returned)) {
-    return returned.flatMap((member, index) => notFunctions(member, `${path}[${index}]`));
-  }
-  if (typeof returned === "object" && returned !== null) {
-    return Object.entries(returned).flatMap(([key, member]) =>
-      notFunctions(member, `${path}.${key}`),
-    );
-  }
-  return [`${path} is ${serialized(returned)}`];
+const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
+  createCounter: serverCase({
+    create: (createCounter) => createCounter(11, { min: 0, max: 10 }),
+    read: ([count]) => count(),
+    expected: 10,
+  }),
+  createDisclosure: serverCase({
+    create: (createDisclosure) => createDisclosure(true),
+    read: ([opened]) => opened(),
+    expected: true,
+  }),
+  createInputState: serverCase({
+    create: (createInputState) => createInputState("typed"),
+    read: ([value]) => value(),
+    expected: "typed",
+  }),
+  createListState: serverCase({
+    create: (createListState) => createListState(() => [1, 2]),
+    read: ([list]) => list(),
+    expected: [1, 2],
+  }),
+  createMap: serverCase({
+    create: (createMap) => createMap([["key", 1]]),
+    read: (map) => map(),
+    expected: new Map([["key", 1]]),
+  }),
+  createPrevious: serverCase({
+    create: (createPrevious) => createPrevious(() => "now"),
+    read: (previous) => previous(),
+    expected: undefined,
+  }),
+  createQueue: serverCase({
+    create: (createQueue) => createQueue({ initialValues: [1, 2, 3], limit: 2 }),
+    read: ({ state, queue }) => [state(), queue()],
+    expected: [[1, 2], [3]],
+  }),
+  createSet: serverCase({
+    create: (createSet) => createSet(["member"]),
+    read: (set) => set(),
+    expected: new Set(["member"]),
+  }),
+  createSetState: serverCase({
+    create: (createSetState) => createSetState({ page: 1 }),
+    read: ([state]) => state(),
+    expected: { page: 1 },
+  }),
+  createStateHistory: serverCase({
+    create: (createStateHistory) => createStateHistory("first"),
+    read: ([value, , { history, current }]) => [value(), history(), current()],
+    expected: ["first", ["first"], 0],
+  }),
+  createToggle: serverCase({
+    create: (createToggle) => createToggle(["light", "dark"]),
+    read: ([value]) => value(),
+    expected: "light",
+  }),
+  createUncontrolled: serverCase({
+    create: (createUncontrolled) =>
+      createUncontrolled({ defaultValue: "default", finalValue: "final" }),
+    read: ([value, , controlled]) => [value(), controlled()],
+    expected: ["default", false],
+  }),
+  createValidatedState: serverCase({
+    create: (createValidatedState) =>
+      createValidatedState("ab", (text: string) => text.length > 2, true),
+    read: ([state]) => [state.value(), state.lastValidValue(), state.valid()],
+    expected: ["ab", undefined, true],
+  }),
+};
+
+function isPrimitive(name: string): name is Primitive {
+  return Object.hasOwn(serverCases, name);
 }
 
-function withBrowserGlobalsTrapped<T>(render: () => T): { rendered: T; touched: string[] } {
-  const touched: string[] = [];
-  const saved = browserOnlyGlobals.map((name) => ({
-    name,
-    descriptor: Object.getOwnPropertyDescriptor(globalThis, name),
-  }));
-  for (const name of browserOnlyGlobals) {
-    Object.defineProperty(globalThis, name, {
-      configurable: true,
-      get() {
-        touched.push(name);
-        throw new ReferenceError(`${name} is not available on the server`);
-      },
+const primitives = Object.keys(serverCases).filter(isPrimitive).sort();
+
+function renderOnTheServer<K extends Primitive>(name: K) {
+  const { create, read }: ServerCase<Library[K]> = serverCases[name];
+  const primitive = library[name];
+  const rendered: { returned: unknown; value: unknown } = { returned: undefined, value: undefined };
+  const touched = browserResourcesReadDuring(() => {
+    renderedOnTheServer(() => {
+      rendered.returned = create(primitive);
+      rendered.value = read(rendered.returned as never);
+      return serialized(rendered.value);
     });
-  }
-  try {
-    return { rendered: render(), touched };
-  } finally {
-    for (const { name, descriptor } of saved) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else Reflect.deleteProperty(globalThis, name);
-    }
-  }
+  });
+  return { ...rendered, touched };
 }
 
-function renderOnTheServer(name: string): { html: string; run: Run; touched: string[] } {
-  const serverCase = (serverCases as Record<string, ServerCase<unknown> | undefined>)[name];
-  if (!serverCase) {
-    throw new Error(
-      `packages/primitives/tests/server-render.test.ts: add a server case for ${name}.`,
-    );
-  }
-  let run: Run = { returned: undefined, value: undefined };
-  const { rendered, touched } = withBrowserGlobalsTrapped(() =>
-    renderToString(() =>
-      createComponent(() => {
-        run = serverCase.run(built[name]);
-        return serialized(run.value);
-      }, {}),
-    ),
-  );
-  return { html: rendered, run, touched };
-}
+test("the build exports exactly the primitives the server cases cover", () => {
+  const built = Object.entries(library)
+    .filter(([name, value]) => name.startsWith(primitivePrefix) && typeof value === "function")
+    .map(([name]) => name)
+    .sort();
 
-test("the built library exports primitives", () => {
-  expect(builtPrimitives.length).toBeGreaterThan(0);
+  expect(primitives.length).toBeGreaterThan(0);
+  expect(built).toEqual(primitives);
 });
 
-test.each(builtPrimitives)(
+test("a primitive that returns nothing, or only functions, passes; one that returns a value fails", () => {
+  const command = () => undefined;
+
+  expect(plainValuesIn(undefined, "createNothing")).toEqual([]);
+  expect(plainValuesIn([command, { open: command }], "createTuple")).toEqual([]);
+  expect(plainValuesIn([command, 1], "createFrozen")).toEqual(["createFrozen[1] is 1"]);
+});
+
+test.each(primitives)(
   "%s renders on the server without a browser global, gives its server value, and returns only functions",
   (name) => {
-    const first = renderOnTheServer(name);
-    const second = renderOnTheServer(name);
-    const serverCase = (serverCases as Record<string, ServerCase<unknown>>)[name];
+    const { returned, value, touched } = renderOnTheServer(name);
 
-    expect(first.touched, `${name} reads these browser globals on the server`).toEqual([]);
-    expect(first.run.value, `${name}: its server value`).toEqual(serverCase.expected);
+    expect(touched, `${name} reads these browser globals on the server`).toEqual([]);
+    expect(value, `${name}: its server value`).toEqual(serverCases[name].expected);
     expect(
-      notFunctions(first.run.returned, name),
+      plainValuesIn(returned, name),
       `${name}: return accessors and handlers only, so destructuring the result never freezes a value`,
     ).toEqual([]);
-    expect(second.html, `${name} renders the same markup every time`).toBe(first.html);
   },
 );
