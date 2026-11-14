@@ -1,12 +1,20 @@
+import { expect } from "vite-plus/test";
 import type * as Library from "../src/index";
-import type { ConsumerProps } from "./built-library";
+import type { DisplayPropName } from "../src/style-prop-table";
+import { type ConsumerProps, renderBuilt, stylesApiPropKeys } from "./built-library";
+import { elementsOf } from "./markup";
 
 type PropsOf<Component> = Component extends (props: infer Props) => unknown ? Props : never;
-type TakesDisplay<Component> = "display" extends keyof PropsOf<Component>
-  ? [NonNullable<PropsOf<Component>["display"]>] extends [never]
+type Refused<Props, Key extends PropertyKey> = Key extends keyof Props
+  ? [NonNullable<Props[Key]>] extends [never]
+    ? true
+    : false
+  : true;
+type TakesDisplay<Component> = [Refused<PropsOf<Component>, DisplayPropName>] extends [false]
+  ? true
+  : [Refused<PropsOf<Component>, DisplayPropName>] extends [true]
     ? false
-    : true
-  : false;
+    : never;
 type Polymorphic<Component> = "component" extends keyof PropsOf<Component> ? true : false;
 
 type Fixture<Component> = {
@@ -17,7 +25,9 @@ type Fixture<Component> = {
   props: ConsumerProps;
 };
 
-export const fixtures: { [Name in keyof typeof Library]: Fixture<(typeof Library)[Name]> } = {
+type ComponentName = keyof typeof Library;
+
+export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]> } = {
   Box: {
     tag: "div",
     booleanAttribute: "hidden",
@@ -55,6 +65,29 @@ export const fixtures: { [Name in keyof typeof Library]: Fixture<(typeof Library
   },
 };
 
-export const polymorphicComponents = Object.entries(fixtures)
+export const components = Object.entries(fixtures);
+
+export const polymorphicComponents = components
   .filter(([, { polymorphic }]) => polymorphic)
   .map(([name]) => name);
+
+function isComponentName(name: string): name is ComponentName {
+  return Object.hasOwn(fixtures, name);
+}
+
+function stylesApiPropsOn(html: string): string[] {
+  return elementsOf(html).flatMap(({ tag, attributes }) =>
+    attributes
+      .filter(([name]) => stylesApiPropKeys.some((key) => key.toLowerCase() === name.toLowerCase()))
+      .map(([name]) => `<${tag}> ${name}`),
+  );
+}
+
+export function render(name: string, props: ConsumerProps = {}): string {
+  if (!isComponentName(name)) {
+    throw new Error(`packages/core/tests/fixtures.ts: add a fixture for ${name}.`);
+  }
+  const html = renderBuilt(name, { ...fixtures[name].props, ...props });
+  expect(stylesApiPropsOn(html), "classes, styles and unstyled reach no element").toEqual([]);
+  return html;
+}

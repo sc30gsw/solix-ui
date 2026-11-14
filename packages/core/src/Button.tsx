@@ -1,7 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
-import { createParts, type PartProps } from "./parts";
-import type { PolymorphicProps } from "./style-props";
+import { createParts, type PolymorphicProps } from "./parts";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -17,10 +16,7 @@ const styles = stylex.create({
   },
 });
 
-export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<
-  T,
-  PartProps<typeof styles>
->;
+export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<T, typeof styles>;
 
 export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>): JSX.Element;
 export function Button(props: ButtonProps): JSX.Element;

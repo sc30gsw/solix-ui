@@ -1,66 +1,19 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Browser, BrowserContext, Locator, Page } from "playwright";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  test,
-  vi,
-} from "vite-plus/test";
-import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
-import { expectedValues, lookOf } from "../../../scripts/expected-values";
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
-import { breakpointWidths } from "../../../packages/core/src/style-prop-table";
-import { builtComponents } from "../../../packages/core/tests/built-components";
+import { builtComponents, rootPart, stableClass } from "../../../packages/core/tests/built-library";
+import {
+  appDirectory,
+  computed,
+  inEveryEngine,
+  openPage,
+  type OpenPage,
+  servePlayground,
+} from "./support/playground";
 
-const appDirectory = join(import.meta.dirname, "..");
 const port = 4319;
-const url = `http://127.0.0.1:${port}/`;
-const pixelsPerMediaQueryEm = 16;
-const mdBreakpointInPixels = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
-const viewportHeight = 800;
-const boxViewports: [label: string, width: number, fromMd: boolean][] = [
-  ["one pixel below the md breakpoint", mdBreakpointInPixels - 1, false],
-  ["at the md breakpoint", mdBreakpointInPixels, true],
-];
-const scriptModes: [label: string, javaScriptEnabled: boolean][] = [
-  ["on", true],
-  ["off", false],
-];
-
-let server: ChildProcess;
-
-type Expected = Awaited<ReturnType<typeof expectedValues>>;
-
-function computed(element: Locator, property: string): Promise<string> {
-  return element.evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
-}
-
-async function serverAnswers(): Promise<boolean> {
-  try {
-    return (await fetch(url)).ok;
-  } catch {
-    return false;
-  }
-}
-
-beforeAll(async () => {
-  server = spawn("node", ["dist/server/node.js"], {
-    cwd: appDirectory,
-    env: { ...process.env, PORT: String(port), HOST: "127.0.0.1" },
-    stdio: "ignore",
-  });
-  await vi.waitUntil(serverAnswers, { timeout: 10_000 });
-});
-
-afterAll(() => {
-  server.kill();
-});
+const url = servePlayground(port);
 
 describe("a consumer with no StyleX build setup", () => {
   test("depends on no StyleX build plugin", () => {
@@ -76,15 +29,18 @@ describe("a consumer with no StyleX build setup", () => {
     expect(stylexPackages).toEqual(["@stylexjs/stylex"]);
   });
 
-  test("gets server-rendered markup that carries the library's classes", async () => {
+  test("gets server-rendered markup whose parts carry their stable classes, and a closed dialog", async () => {
     const html = await (await fetch(url)).text();
 
-    for (const name of builtComponents) {
-      expect(html, `apps/playground/src/App.tsx: render <${name}>`).toContain(`solix-${name}-root`);
-    }
-    expect(html).toMatch(/<summary[^>]*class="[^"]*solix-Disclosure-summary/);
-    expect(html).toMatch(/<div[^>]*class="[^"]*solix-Disclosure-content/);
-    expect(html).toMatch(/<dialog(?![^>]*\sopen)[^>]*class="[^"]*solix-Modal-root/);
+    expect(html).toMatch(
+      new RegExp(`<summary[^>]*class="[^"]*${stableClass("Disclosure", "summary")}`),
+    );
+    expect(html).toMatch(
+      new RegExp(`<div[^>]*class="[^"]*${stableClass("Disclosure", "content")}`),
+    );
+    expect(html).toMatch(
+      new RegExp(`<dialog(?![^>]*\\sopen)[^>]*class="[^"]*${stableClass("Modal", rootPart)}`),
+    );
   });
 
   test("gets its own stylesheet before the library layer in the bundle", () => {
@@ -101,70 +57,34 @@ describe("a consumer with no StyleX build setup", () => {
   });
 });
 
-describe.each(enginesToVerify())("in %s", (engine) => {
-  let browser: Browser;
-
-  beforeAll(async () => {
-    browser = await browserType(engine).launch();
-  });
-
-  afterAll(async () => {
-    await browser.close();
-  });
-
+inEveryEngine((browser) => {
   test("a consumer with no StyleX build setup sees styled markup before any script runs", async () => {
-    const scriptless = await browser.newContext({ javaScriptEnabled: false });
-    const page = await scriptless.newPage();
-    await page.goto(url);
-    const expected = await expectedValues(page, { sentinels: true });
+    const { page, expected, close } = await openPage(browser(), url, { javaScriptEnabled: false });
 
     expect(await computed(page.getByTestId("default"), "background-color")).toBe(
       expected("--solix-color-primary"),
     );
 
-    await scriptless.close();
+    await close();
   });
 
   describe("in the hydrated page", () => {
-    let page: Page;
-    let expected: Expected;
-    const consoleProblems: string[] = [];
+    let opened: OpenPage;
 
     beforeAll(async () => {
-      page = await browser.newPage();
-      page.on("console", (message) => {
-        if (message.type() === "error" || message.type() === "warning") {
-          consoleProblems.push(message.text());
-        }
-      });
-      page.on("pageerror", (error) => consoleProblems.push(String(error)));
-      await page.goto(url, { waitUntil: "networkidle" });
-      expected = await expectedValues(page, { sentinels: true });
+      opened = await openPage(browser(), url);
+    });
+
+    afterAll(async () => {
+      await opened.close();
     });
 
     test("hydration reports no console errors or warnings", () => {
-      expect(consoleProblems).toEqual([]);
-    });
-
-    test("a consumer's plain class beats the library default it targets, and nothing else", async () => {
-      expect(await computed(page.getByTestId("default"), "background-color")).toBe(
-        expected("--solix-color-primary"),
-      );
-      expect(await computed(page.getByTestId("overridden"), "background-color")).toBe(
-        expected("danger"),
-      );
-      expect(await computed(page.getByTestId("overridden"), "color")).toBe(
-        expected("--solix-color-on-primary"),
-      );
-      expect(await computed(page.getByTestId("overridden"), "height")).toBe(
-        expected("--solix-control-height-md"),
-      );
-      expect(await computed(page.getByTestId("overridden"), "border-top-left-radius")).toBe(
-        expected("--solix-radius-md"),
-      );
+      expect(opened.consoleProblems).toEqual([]);
     });
 
     test("a class and an attribute that change after the first render reach each component's root, and a class that classes names reaches its part", async () => {
+      const { page, expected } = opened;
       const emphasise = page.getByRole("button", { name: "Emphasise" });
       const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
       const followerSummary = follower.locator("summary");
@@ -197,7 +117,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     });
 
     test("a consumer's ref receives the root element of every component", async () => {
-      const received = await page.evaluate(() =>
+      const received = await opened.page.evaluate(() =>
         [...document.querySelectorAll("[data-ref]")].map((node) => ({
           component: node.getAttribute("data-ref"),
           classes: [...node.classList],
@@ -205,374 +125,20 @@ describe.each(enginesToVerify())("in %s", (engine) => {
       );
 
       for (const name of builtComponents) {
+        const rootClass = stableClass(name, rootPart);
         expect(
           received
             .filter(({ component }) => component === name)
-            .map(({ classes }) => classes.includes(`solix-${name}-root`)),
-          `${name}: give the consumer's ref the element that carries solix-${name}-root, once, next to any ref of its own. apps/playground/src/App.tsx passes ref={refOf("${name}")} to one <${name}>, which marks the node it receives with data-ref.`,
+            .map(({ classes }) => classes.includes(rootClass)),
+          `${name}: render it in the app, and give the consumer's ref the element that carries ${rootClass}, once, next to any ref of its own. apps/playground/src/sections pass ref={refOf("${name}")} to one <${name}>, which marks the node it receives with data-ref.`,
         ).toEqual([true]);
       }
     });
 
     test("a consumer rethemes a subtree by overriding a public token", async () => {
-      expect(await computed(page.getByTestId("themed"), "background-color")).toBe(
-        expected("brandGreen"),
+      expect(await computed(opened.page.getByTestId("themed"), "background-color")).toBe(
+        opened.expected("brandGreen"),
       );
     });
-  });
-
-  describe("a disclosure in a freshly hydrated page", () => {
-    let page: Page;
-    let expected: Expected;
-    let summary: Locator;
-    let content: Locator;
-
-    function detailsIsOpen(): Promise<boolean> {
-      return page
-        .locator("details")
-        .filter({ has: summary })
-        .evaluate((details: HTMLDetailsElement) => details.open);
-    }
-
-    async function expectClosed(): Promise<void> {
-      await expect.poll(detailsIsOpen).toBe(false);
-      expect(await computed(summary, "background-color")).toBe(expected("--solix-color-surface"));
-      expect(await content.isVisible()).toBe(false);
-    }
-
-    async function expectOpen(): Promise<void> {
-      await expect.poll(detailsIsOpen).toBe(true);
-      expect(await computed(summary, "background-color")).toBe(expected("--solix-color-primary"));
-      expect(await computed(summary, "color")).toBe(expected("--solix-color-on-primary"));
-      expect(await content.isVisible()).toBe(true);
-      expect(await computed(content, "border-left-color")).toBe(expected("--solix-color-primary"));
-    }
-
-    beforeEach(async () => {
-      page = await browser.newPage();
-      summary = page.locator("summary").filter({ hasText: "Toggle" });
-      content = page.getByText("Hidden content");
-      await page.goto(url, { waitUntil: "networkidle" });
-      expected = await expectedValues(page, { sentinels: true });
-    });
-
-    afterEach(async () => {
-      await page.close();
-    });
-
-    test("starts closed, opens on a click of its summary and closes on the next click", async () => {
-      await expectClosed();
-
-      await summary.click();
-      await expectOpen();
-
-      await summary.click();
-      await expectClosed();
-    });
-
-    test("opens on Enter and closes on Space while its summary has focus", async () => {
-      await expectClosed();
-
-      await summary.focus();
-      await page.keyboard.press("Enter");
-      await expectOpen();
-
-      await page.keyboard.press("Space");
-      await expectClosed();
-    });
-
-    test("keeps a closed disclosure inside an open one looking closed", async () => {
-      const innerSummary = page.locator("summary").filter({ hasText: "Inner" });
-
-      await summary.click();
-      await expectOpen();
-      expect(await computed(innerSummary, "background-color")).toBe(
-        expected("--solix-color-surface"),
-      );
-      expect(await computed(innerSummary, "color")).toBe(expected("--solix-color-text"));
-
-      await innerSummary.click();
-      await expect
-        .poll(() => computed(innerSummary, "background-color"))
-        .toBe(expected("--solix-color-primary"));
-      expect(await computed(summary, "background-color")).toBe(expected("--solix-color-primary"));
-    });
-  });
-
-  test("a disclosure opens with scripts turned off", async () => {
-    const scriptless = await browser.newContext({ javaScriptEnabled: false });
-    const page = await scriptless.newPage();
-    await page.goto(url);
-    const expected = await expectedValues(page, { sentinels: true });
-    const summary = page.locator("summary").filter({ hasText: "Toggle" });
-
-    await summary.click();
-
-    await expect.poll(() => page.getByText("Hidden content").isVisible()).toBe(true);
-    expect(await computed(summary, "background-color")).toBe(expected("--solix-color-primary"));
-
-    await scriptless.close();
-  });
-
-  describe("a text input in a freshly hydrated page", () => {
-    let page: Page;
-    let expected: Expected;
-    let email: Locator;
-
-    beforeEach(async () => {
-      page = await browser.newPage();
-      email = page.getByRole("textbox", { name: "Email" });
-      await page.goto(url, { waitUntil: "networkidle" });
-      expected = await expectedValues(page, { sentinels: true });
-    });
-
-    afterEach(async () => {
-      await page.close();
-    });
-
-    test("has the library's border, and a consumer's plain class beats its background", async () => {
-      const overridden = page.getByRole("textbox", { name: "Overridden input" });
-
-      expect(await computed(email, "border-top-color")).toBe(expected("--solix-color-border"));
-      expect(await computed(email, "border-top-left-radius")).toBe(expected("--solix-radius-md"));
-      expect(await computed(email, "background-color")).toBe(expected("--solix-color-body"));
-      expect(await computed(email, "color")).toBe(expected("--solix-color-text"));
-      expect(await computed(overridden, "background-color")).toBe(expected("danger"));
-      expect(await computed(overridden, "height")).toBe(expected("--solix-control-height-md"));
-    });
-
-    test("shows the error border only after the user has committed an invalid value", async () => {
-      await email.fill("not an address");
-      await expect
-        .poll(() => computed(email, "border-top-color"))
-        .not.toBe(expected("--solix-color-error"));
-
-      await page.getByRole("button", { name: "Default" }).focus();
-      await expect
-        .poll(() => computed(email, "border-top-color"))
-        .toBe(expected("--solix-color-error"));
-
-      await email.fill("someone@example.com");
-      await page.getByRole("button", { name: "Default" }).focus();
-      await expect
-        .poll(() => computed(email, "border-top-color"))
-        .toBe(expected("--solix-color-border"));
-    });
-
-    test("takes the primary border while it has keyboard focus", async () => {
-      await email.focus();
-      await page.keyboard.press("ArrowRight");
-
-      await expect
-        .poll(() => computed(email, "border-top-color"))
-        .toBe(expected("--solix-color-primary"));
-    });
-
-    test("looks disabled and cannot be typed in when disabled", async () => {
-      const disabled = page.getByRole("textbox", { name: "Disabled input" });
-
-      expect(await computed(disabled, "opacity")).toBe("0.6");
-      expect(await computed(disabled, "cursor")).toBe("not-allowed");
-      expect(await disabled.isEditable()).toBe(false);
-    });
-  });
-
-  describe("a modal in a freshly hydrated page", () => {
-    let page: Page;
-    let expected: Expected;
-    let dialog: Locator;
-    let opener: Locator;
-    let readout: Locator;
-
-    beforeEach(async () => {
-      page = await browser.newPage();
-      dialog = page.getByRole("dialog", { name: "Settings" });
-      opener = page.getByRole("button", { name: "Open modal" });
-      readout = page.getByText(/^The app records the modal as/);
-      await page.goto(url, { waitUntil: "networkidle" });
-      expected = await expectedValues(page, { sentinels: true });
-    });
-
-    afterEach(async () => {
-      await page.close();
-    });
-
-    test("starts closed and opens as a modal over the page when the app asks", async () => {
-      expect(await dialog.count()).toBe(0);
-
-      await opener.click();
-
-      await dialog.waitFor({ state: "visible" });
-      expect(await dialog.evaluate((node) => node.matches(":modal"))).toBe(true);
-      expect(await dialog.getByRole("heading", { name: "Settings" }).isVisible()).toBe(true);
-      expect(await computed(dialog, "background-color")).toBe(expected("--solix-color-body"));
-      expect(await computed(dialog, "color")).toBe(expected("--solix-color-text"));
-      expect(await computed(dialog, "border-top-color")).toBe(expected("--solix-color-border"));
-      expect(await computed(dialog, "border-top-left-radius")).toBe(expected("--solix-radius-md"));
-      expect(
-        await dialog.evaluate((node) => getComputedStyle(node, "::backdrop").backgroundColor),
-      ).toBe(expected("--solix-color-backdrop"));
-      await expect.poll(() => readout.textContent()).toBe("The app records the modal as opened.");
-    });
-
-    test("tells the app it closed, whichever way the user closed it", async () => {
-      const closers: [string, () => Promise<void>][] = [
-        ["the Escape key", () => page.keyboard.press("Escape")],
-        ["the Close button", () => dialog.getByRole("button", { name: "Close" }).click()],
-        ["a press outside the dialog", () => page.mouse.click(2, 2)],
-      ];
-
-      for (const [, close] of closers) {
-        await opener.click();
-        await dialog.waitFor({ state: "visible" });
-
-        await close();
-
-        await dialog.waitFor({ state: "hidden" });
-        await expect.poll(() => readout.textContent()).toBe("The app records the modal as closed.");
-      }
-    });
-
-    test("stays open when the user presses inside it", async () => {
-      await opener.click();
-      await dialog.waitFor({ state: "visible" });
-
-      await dialog.getByText("Modal content").click();
-      await dialog.getByRole("textbox", { name: "Name" }).click();
-
-      expect(await dialog.isVisible()).toBe(true);
-      await expect.poll(() => readout.textContent()).toBe("The app records the modal as opened.");
-    });
-  });
-
-  describe.each(boxViewports)("a Box %s", (_, width, fromMd) => {
-    test.each(scriptModes)(
-      "with scripts %s, ranks component default < style prop < consumer class < consumer style, lets a longhand beat its shorthand, inherits nothing, and switches at md",
-      async (__, javaScriptEnabled) => {
-        const context = await browser.newContext({
-          javaScriptEnabled,
-          viewport: { width, height: viewportHeight },
-        });
-        const page = await context.newPage();
-        await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
-        const expected = await expectedValues(page, { sentinels: true });
-        const text = (content: string) => page.getByText(content, { exact: true });
-
-        expect(
-          await computed(
-            page.getByRole("button", { name: "Background from a style prop" }),
-            "background-color",
-          ),
-          "the style prop beats the component default",
-        ).toBe(expected("--solix-color-error"));
-        expect(await computed(text("Style prop margin"), "margin-top")).toBe(
-          expected("--solix-spacing-xl"),
-        );
-        expect(
-          await computed(text("Consumer class margin"), "margin-top"),
-          "the consumer's class beats the style prop",
-        ).toBe(expected("roomy"));
-        expect(
-          await computed(text("Consumer style margin"), "margin-top"),
-          "the consumer's style beats the consumer's class and the style prop",
-        ).toBe(expected("pinnedMargin"));
-        expect(
-          await computed(page.getByRole("region", { name: "Style props" }), "padding-top"),
-          "the responsive padding switches from its xs value to its md value at md",
-        ).toBe(expected(fromMd ? "--solix-spacing-lg" : "--solix-spacing-sm"));
-        expect(
-          await computed(text("Longhand padding"), "padding-top"),
-          "the pt longhand beats the p shorthand, at its base and at its md value",
-        ).toBe(expected("zero"));
-        expect(
-          await computed(text("Longhand padding"), "padding-bottom"),
-          "the p shorthand still sets the sides pt leaves alone",
-        ).toBe(expected(fromMd ? "--solix-spacing-lg" : "--solix-spacing-xs"));
-        expect(
-          await computed(text("Unset margin"), "margin-top"),
-          "mt=unset inside a Box with mt=xl does not take the outer Box's margin",
-        ).toBe(expected("zero"));
-        expect(await text("Hidden from md").isVisible(), "hiddenFrom md").toBe(!fromMd);
-        expect(await text("Visible from md").isVisible(), "visibleFrom md").toBe(fromMd);
-
-        await context.close();
-      },
-    );
-  });
-
-  describe.each(scriptModes)("the Styles API with scripts %s", (_, javaScriptEnabled) => {
-    let context: BrowserContext;
-    let page: Page;
-    let expected: Expected;
-
-    beforeAll(async () => {
-      context = await browser.newContext({ javaScriptEnabled });
-      page = await context.newPage();
-      await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
-      expected = await expectedValues(page, { sentinels: true });
-    });
-
-    afterAll(async () => {
-      await context.close();
-    });
-
-    test("a consumer's rule for the class that classes.root names beats the library's style it targets, and nothing else", async () => {
-      const button = page.getByRole("button", { name: "Class from classes.root" });
-
-      expect(await computed(button, "background-color")).toBe(expected("danger"));
-      expect(await computed(button, "color")).toBe(expected("--solix-color-on-primary"));
-      expect(await computed(button, "height")).toBe(expected("--solix-control-height-md"));
-    });
-
-    test("styles on a part beats the library's style and the consumer's class on that part", async () => {
-      const summary = page.locator("summary").filter({ hasText: "Styled parts" });
-
-      expect(
-        await computed(summary, "background-color"),
-        "styles.summary beats both the .danger class that classes.summary names and the library's background",
-      ).toBe(expected("partBackground"));
-      expect(
-        await computed(summary, "color"),
-        "styles.summary beats the library's text colour",
-      ).toBe(expected("partText"));
-      expect(
-        await computed(summary, "outline-style"),
-        "the .outlined class that classes.summary names still applies",
-      ).toBe("solid");
-      expect(await computed(summary, "cursor"), "the library's cursor stays").toBe("pointer");
-    });
-
-    test("unstyled leaves a button that looks like a button the library does not style, and keeps the stable class", async () => {
-      const button = page.getByRole("button", { name: "Unstyled" });
-
-      expect(
-        await lookOf(button),
-        "packages/core/src/parts.ts: with unstyled, leave out the library's classes, so the Unstyled button has the background, colour, border, radius, height and padding of the Plain button the library does not style",
-      ).toEqual(await lookOf(page.getByRole("button", { name: "Plain button" })));
-      expect((await button.getAttribute("class"))?.split(/\s+/)).toContain("solix-Button-root");
-    });
-
-    test("a style prop on Button beats its default", async () => {
-      expect(
-        await computed(
-          page.getByRole("button", { name: "Style prop on a Button" }),
-          "background-color",
-        ),
-      ).toBe(expected("--solix-color-error"));
-    });
-  });
-
-  test("a modal stays closed with scripts turned off", async () => {
-    const scriptless = await browser.newContext({ javaScriptEnabled: false });
-    const page = await scriptless.newPage();
-    await page.goto(url);
-    const expected = await expectedValues(page, { sentinels: true });
-
-    expect(await page.locator("dialog").isVisible()).toBe(false);
-    expect(await computed(page.getByRole("textbox", { name: "Email" }), "border-top-color")).toBe(
-      expected("--solix-color-border"),
-    );
-
-    await scriptless.close();
   });
 });

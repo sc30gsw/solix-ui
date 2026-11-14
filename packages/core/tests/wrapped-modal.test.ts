@@ -4,10 +4,10 @@ import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import { breakpointWidths } from "../src/style-prop-table";
-import { library, renderBuilt } from "./built-library";
-import { fixtures, polymorphicComponents } from "./fixtures";
+import { dist, library } from "./built-library";
+import { fixtures, polymorphicComponents, render } from "./fixtures";
 
-const stylesheet = readFileSync(join(import.meta.dirname, "../dist/styles.css"), "utf8");
+const stylesheet = readFileSync(join(dist, "styles.css"), "utf8");
 const pixelsPerMediaQueryEm = 16;
 const mdWidth = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 const viewportHeight = 800;
@@ -38,7 +38,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     async (name) => {
       const page = await browser.newPage({ viewport: { width: mdWidth, height: viewportHeight } });
       const markup = wrappedModals.map(({ label, props }) =>
-        renderBuilt(name, {
+        render(name, {
           ...fixtures.Modal.props,
           component: library.Modal,
           label,

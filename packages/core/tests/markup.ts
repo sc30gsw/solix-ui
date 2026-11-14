@@ -46,8 +46,3 @@ export function declarationsIn(style: string | true | undefined): [string, strin
       return [declaration.slice(0, colon).trim(), declaration.slice(colon + 1).trim()];
     });
 }
-
-export function partsOn(component: string, element: Element): string[] {
-  const stable = new RegExp(`^solix-${component}-([a-z][A-Za-z0-9]*)$`);
-  return classesOf(element).flatMap((found) => stable.exec(found)?.[1] ?? []);
-}

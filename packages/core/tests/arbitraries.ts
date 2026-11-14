@@ -1,4 +1,3 @@
-import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import { tokenValues } from "../../../scripts/tokens";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
@@ -16,22 +15,22 @@ import {
   visibilityClass,
   visibilityPropNames,
 } from "../src/style-prop-table";
-import type { ConsumerProps } from "./built-library";
+import {
+  classProp,
+  type ConsumerStyle,
+  type Declaration,
+  type DeclaredStyleProp,
+  type DrawnDeclaration,
+  type PartClassToken,
+  type StylePropCase,
+  stylePropClassName,
+} from "./consumer-props";
 
-export type ClassToken = { token: string; applied: boolean; writtenAs: string };
-export type PartClassToken = ClassToken & { target: string };
-export type Declaration = [property: string, value: string];
-export type DrawnDeclaration = [property: string, value: string | null | undefined];
 type Drawn = { value: string | number | null; kept: boolean };
-type Declared = { written: unknown; keptKeys: string[] };
 
-export const classProp = "the class prop";
-export const consumerOverride = "7px";
-export const elsewhere = "/elsewhere";
+const consumerOverride = "7px";
 
-export const own = (suffix: string) => `${LIBRARY_CLASS_PREFIX}-${suffix}`;
-
-export const consumerToken = fc
+const consumerToken = fc
   .stringMatching(/^[a-z][a-z0-9-]{0,8}$/)
   .filter((token) => !token.startsWith(LIBRARY_CLASS_PREFIX) && !token.startsWith("solix"));
 
@@ -41,19 +40,6 @@ export const classTokens = fc.uniqueArray(
   fc.record({ token: consumerToken, applied: fc.boolean(), writtenAs }),
   { maxLength: 6, selector: ({ token }) => token },
 );
-
-export function classValueFrom(tokens: ClassToken[]): JSX.ClassValue {
-  const written = (shape: string) => tokens.filter(({ writtenAs: as }) => as === shape);
-  const asString = written("string")
-    .filter(({ applied }) => applied)
-    .map(({ token }) => token)
-    .join(" ");
-  const asArrayItems = written("array item").map(({ token, applied }) => applied && token);
-  const asObject = Object.fromEntries(
-    written("object key").map(({ token, applied }) => [token, applied]),
-  );
-  return [asString, asArrayItems, asObject];
-}
 
 export const stringAttributes = fc.record(
   {
@@ -77,45 +63,25 @@ export function partClassTokens(parts: string[]): fc.Arbitrary<PartClassToken[]>
   );
 }
 
-export function classesPropsFrom(parts: string[], tokens: PartClassToken[]): ConsumerProps {
-  const of = (target: string) => tokens.filter((token) => token.target === target);
-  return {
-    classes: Object.fromEntries(
-      parts.filter((part) => of(part).length > 0).map((part) => [part, classValueFrom(of(part))]),
-    ),
-    class: classValueFrom(of(classProp)),
-  };
-}
-
-const consumerValues = {
+const valueOfAConsumerDeclaration = {
   color: fc.constantFrom("red", "blue", "green"),
   "margin-top": fc.integer({ min: 1, max: 9 }).map((pixels) => `${pixels}px`),
   "--consumer-gap": fc.integer({ min: 1, max: 9 }).map((pixels) => `${pixels}px`),
 };
 
-function declarationsOf<Value>(
-  valueOf: (value: fc.Arbitrary<string>) => fc.Arbitrary<Value>,
-): fc.Arbitrary<[string, Value][]> {
+function consumerDeclarations(absentValues: boolean): fc.Arbitrary<DrawnDeclaration[]> {
   return fc
     .tuple(
-      ...Object.entries(consumerValues).map(([property, value]) =>
+      ...Object.entries(valueOfAConsumerDeclaration).map(([property, value]) =>
         fc.option(
-          valueOf(value).map((written): [string, Value] => [property, written]),
+          (absentValues ? fc.oneof(value, fc.constantFrom(undefined, null)) : value).map(
+            (written): DrawnDeclaration => [property, written],
+          ),
           { nil: undefined },
         ),
       ),
     )
     .map((declarations) => declarations.filter((found) => found !== undefined));
-}
-
-export const declarationSetWithAbsentValues: fc.Arbitrary<DrawnDeclaration[]> = declarationsOf(
-  (value) => fc.oneof(value, fc.constantFrom(undefined, null)),
-);
-
-export function presentDeclarations(declarations: DrawnDeclaration[]): Declaration[] {
-  return declarations.flatMap(([property, value]): Declaration[] =>
-    value === undefined || value === null ? [] : [[property, value]],
-  );
 }
 
 export function declarationsByPart(
@@ -125,7 +91,7 @@ export function declarationsByPart(
     .tuple(
       ...parts.map((part) =>
         fc.option(
-          declarationSetWithAbsentValues.map((declarations): [string, DrawnDeclaration[]] => [
+          consumerDeclarations(true).map((declarations): [string, DrawnDeclaration[]] => [
             part,
             declarations,
           ]),
@@ -136,50 +102,22 @@ export function declarationsByPart(
     .map((entries) => Object.fromEntries(entries.filter((entry) => entry !== undefined)));
 }
 
-export function styleWritten(declarations: DrawnDeclaration[], as: string): ConsumerProps {
-  if (as === "absent") return {};
-  return {
-    style:
-      as === "string"
-        ? presentDeclarations(declarations)
-            .map(([property, value]) => `${property}: ${value}`)
-            .join("; ")
-        : Object.fromEntries(declarations),
-  };
-}
-
-const displayValue = fc.constantFrom("flex", "grid", "block", "none");
-
-function drawnDisplayProp(name: DisplayPropName): fc.Arbitrary<[DisplayPropName, string, string]> {
-  const visibility = visibilityPropNames.find((found) => found === name);
-  if (visibility !== undefined) {
-    return fc
-      .constantFrom(...breakpoints)
-      .map((breakpoint) => [name, breakpoint, visibilityClass(visibility, breakpoint)]);
-  }
-  const styleProp = stylePropNames.find((found) => found === name) ?? "display";
-  return displayValue.map((value) => [
-    name,
-    value,
-    stylePropClass(canonicalOf(styleProp), baseKey),
-  ]);
-}
-
-export const displayPropCases = fc
-  .subarray([...displayPropNames], { minLength: 1 })
-  .chain((names) => fc.tuple(...names.map(drawnDisplayProp)))
-  .map((drawn) => ({
-    given: Object.fromEntries(drawn.map(([name, value]) => [name, value])),
-    classes: drawn.map(([, , className]) => className),
-  }));
+export const consumerStyles: fc.Arbitrary<ConsumerStyle> = fc.option(
+  fc.oneof(
+    consumerDeclarations(true).map((declarations) => ({
+      declarations,
+      writtenAs: "object" as const,
+    })),
+    consumerDeclarations(false).map((declarations) => ({
+      declarations,
+      writtenAs: "string" as const,
+    })),
+  ),
+  { nil: undefined },
+);
 
 const tokens = tokenValues();
 const passedThrough = ["inherit", "initial", "unset", "revert", "3px"];
-const consumerDeclarations: Declaration[] = [
-  ["color", "red"],
-  ["margin-top", "3px"],
-  ["--consumer-gap", "2px"],
-];
 
 const scaleKeys = [
   ...new Set(Object.values(stylePropTable).flatMap((row) => ("scale" in row ? [row.scale] : []))),
@@ -208,7 +146,7 @@ const drawnValue: fc.Arbitrary<Drawn> = fc.oneof(
   { arbitrary: valueThatEndsADeclaration.map((value) => ({ value, kept: false })), weight: 1 },
 );
 
-const declaredStyleProp: fc.Arbitrary<Declared> = fc.oneof(
+const declaredStyleProp: fc.Arbitrary<DeclaredStyleProp> = fc.oneof(
   drawnValue.map(({ value, kept }) => ({ written: value, keptKeys: kept ? [baseKey] : [] })),
   fc
     .record(Object.fromEntries(responsiveKeys.map((key) => [key, drawnValue])), {
@@ -225,14 +163,17 @@ const declaredStyleProp: fc.Arbitrary<Declared> = fc.oneof(
     }),
 );
 
-export const stylePropCases = fc
+export const stylePropCases: fc.Arbitrary<StylePropCase> = fc
   .record({
     styleProps: fc
       .uniqueArray(fc.constantFrom(...stylePropNames), { maxLength: 8 })
       .chain((names) =>
         fc.tuple(
           ...names.map((name) =>
-            declaredStyleProp.map((declared): [StylePropName, Declared] => [name, declared]),
+            declaredStyleProp.map((declared): [StylePropName, DeclaredStyleProp] => [
+              name,
+              declared,
+            ]),
           ),
         ),
       ),
@@ -244,38 +185,52 @@ export const stylePropCases = fc
       { requiredKeys: [] },
     ),
     classTokens,
-    styleWrittenAs: fc.constantFrom("object", "string", "absent"),
+    consumerStyle: consumerStyles,
     unstyled: fc.boolean(),
   })
   .chain((generated) =>
     fc
-      .subarray([
-        ...consumerDeclarations,
-        ...generated.styleProps.map(([name]): Declaration => [`--${own(name)}`, consumerOverride]),
-      ])
-      .map((consumerStyle) => ({ ...generated, consumerStyle })),
+      .subarray(
+        generated.styleProps.map(([name]): Declaration => [
+          `--${stylePropClassName(name)}`,
+          consumerOverride,
+        ]),
+      )
+      .map((overrides) => ({
+        ...generated,
+        consumerStyle: generated.consumerStyle && {
+          ...generated.consumerStyle,
+          declarations: [...generated.consumerStyle.declarations, ...overrides],
+        },
+      })),
   );
 
-export type StylePropCase = typeof stylePropCases extends fc.Arbitrary<infer Case> ? Case : never;
+export const elementsToRender = fc.option(
+  fc.constantFrom("div", "section", "article", "span", "a"),
+  { nil: undefined },
+);
 
-export const boxCases = fc.record({
-  generated: stylePropCases,
-  component: fc.option(fc.constantFrom("div", "section", "article", "span", "a"), {
-    nil: undefined,
-  }),
-});
+const displayValue = fc.constantFrom("flex", "grid", "block", "none");
 
-export function stylePropPropsOf(generated: StylePropCase): ConsumerProps {
-  const { styleProps, visibility, styleWrittenAs, consumerStyle, unstyled } = generated;
-  const style =
-    styleWrittenAs === "string"
-      ? consumerStyle.map(([name, value]) => `${name}: ${value}`).join("; ")
-      : Object.fromEntries(consumerStyle);
-  return {
-    ...Object.fromEntries(styleProps.map(([name, { written: value }]) => [name, value])),
-    ...visibility,
-    class: classValueFrom(generated.classTokens),
-    ...(styleWrittenAs === "absent" ? {} : { style }),
-    unstyled,
-  };
+function drawnDisplayProp(name: DisplayPropName): fc.Arbitrary<[DisplayPropName, string, string]> {
+  const visibility = visibilityPropNames.find((found) => found === name);
+  if (visibility !== undefined) {
+    return fc
+      .constantFrom(...breakpoints)
+      .map((breakpoint) => [name, breakpoint, visibilityClass(visibility, breakpoint)]);
+  }
+  const styleProp = stylePropNames.find((found) => found === name) ?? "display";
+  return displayValue.map((value) => [
+    name,
+    value,
+    stylePropClass(canonicalOf(styleProp), baseKey),
+  ]);
 }
+
+export const displayPropCases = fc
+  .subarray([...displayPropNames], { minLength: 1 })
+  .chain((names) => fc.tuple(...names.map(drawnDisplayProp)))
+  .map((drawn) => ({
+    given: Object.fromEntries(drawn.map(([name, value]) => [name, value])),
+    classes: drawn.map(([, , className]) => className),
+  }));

@@ -1,6 +1,5 @@
 import * as stylex from "@stylexjs/stylex";
-import { createParts, type PartProps } from "./parts";
-import type { ElementProps } from "./style-props";
+import { createParts, type ElementProps } from "./parts";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -29,7 +28,7 @@ const styles = stylex.create({
   },
 });
 
-export type TextInputProps = ElementProps<"input", PartProps<typeof styles>>;
+export type TextInputProps = ElementProps<"input", typeof styles>;
 
 export function TextInput(props: TextInputProps) {
   const { root } = createParts("TextInput", styles, props);

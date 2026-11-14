@@ -137,6 +137,8 @@ export const displayPropNames = [...stylePropNames.filter(setsDisplay), ...visib
 
 export type DisplayPropName = (typeof displayPropNames)[number];
 
+export const stylePropKeys = [...stylePropNames, ...visibilityPropNames];
+
 function shorthandDepth(name: CanonicalStylePropName): number {
   const row = stylePropTable[name];
   return "within" in row ? 1 + shorthandDepth(row.within) : 0;

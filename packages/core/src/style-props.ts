@@ -1,4 +1,4 @@
-import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
+import type { JSX } from "@solidjs/web";
 import {
   baseKey,
   type Breakpoint,
@@ -36,28 +36,6 @@ export type StyleProp<V> = V | Absent | { [Key in ResponsiveKey]?: V | Absent };
 export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
 } & { [Name in VisibilityPropName]?: Breakpoint | Absent };
-
-export type Styling = { class?: JSX.ClassValue; style?: JSX.CSSProperties | string };
-
-export type ElementProps<T extends ValidComponent, Own extends object = object> = Own &
-  StyleProps &
-  Styling &
-  Omit<ComponentProps<T>, keyof Own | keyof StyleProps | keyof Styling | "component">;
-
-type RefusedBy<T extends ValidComponent> = {
-  [Key in keyof ComponentProps<T> & keyof StyleProps]-?: [
-    NonNullable<ComponentProps<T>[Key]>,
-  ] extends [never]
-    ? Key
-    : never;
-}[keyof ComponentProps<T> & keyof StyleProps];
-
-export type PolymorphicProps<T extends ValidComponent, Own extends object = object> = ElementProps<
-  T,
-  Own & { component?: T } & { [Key in RefusedBy<T>]?: never }
->;
-
-export const stylePropKeys: (keyof StyleProps)[] = [...stylePropNames, ...visibilityPropNames];
 
 type ResolvedStyleProps = {
   classes: string[];

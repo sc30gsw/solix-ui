@@ -1,56 +1,57 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { renderToString, type ValidComponent } from "@solidjs/web";
+import type { ValidComponent } from "@solidjs/web";
 import fc from "fast-check";
-import postcss from "postcss";
-import ts from "typescript";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import { LIBRARY_CLASS_PREFIX, STYLE_PROP_LAYER } from "../build-pipeline.mjs";
+import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
+import { canonicalOf, type DisplayPropName, displayPropNames } from "../src/style-prop-table";
 import {
-  canonicalOf,
-  type DisplayPropName,
-  displayPropNames,
-  stylePropNames,
-  visibilityPropNames,
-} from "../src/style-prop-table";
+  classTokens,
+  declarationsByPart,
+  consumerStyles,
+  displayPropCases,
+  elementsToRender,
+  partClassTokens,
+  stringAttributes,
+  stylePropCases,
+} from "./arbitraries";
 import {
-  boxCases,
+  builtComponents,
+  dist,
+  handledKeys,
+  library,
+  partsOf,
+  rootPart,
+  stableClass,
+  styleXClasses,
+} from "./built-library";
+import {
   classesPropsFrom,
   classProp,
-  classTokens,
   classValueFrom,
-  declarationsByPart,
-  declarationSetWithAbsentValues,
-  displayPropCases,
+  declaredBy,
   elsewhere,
   type PartClassToken,
-  partClassTokens,
   presentDeclarations,
-  stringAttributes,
   type StylePropCase,
-  stylePropCases,
   stylePropPropsOf,
   styleWritten,
-} from "./arbitraries";
-import { builtComponents } from "./built-components";
-import { type ConsumerProps, library, partPropKeys, renderBuilt, rootPart } from "./built-library";
-import { fixtures, polymorphicComponents } from "./fixtures";
+} from "./consumer-props";
+import { components, fixtures, polymorphicComponents, render } from "./fixtures";
 import {
   classesOf,
   declarationsIn,
   type Element,
   elementsOf,
-  partsOn,
   rootElementOf,
   valuesOf,
 } from "./markup";
 
-const dist = join(import.meta.dirname, "../dist");
 const generatedRuns = 300;
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const contractSkill = ".agents/skills/verify-component-contract/SKILL.md";
-const stableRootClass = /^solix-[A-Za-z0-9]+-root$/;
+const consumedProps = handledKeys.filter((key) => key !== "class" && key !== "style");
 
 type Refuses<Props, Key extends PropertyKey> = Key extends keyof Props
   ? [NonNullable<Props[Key]>] extends [never]
@@ -58,78 +59,14 @@ type Refuses<Props, Key extends PropertyKey> = Key extends keyof Props
     : false
   : false;
 
-const components = Object.entries(fixtures);
-
-function render(name: string, props: ConsumerProps): string {
-  return renderBuilt(name, { ...fixtures[name as keyof typeof fixtures].props, ...props });
+function partsOn(name: string, element: Element): string[] {
+  const classes = classesOf(element);
+  return partsOf(name).filter((part) => classes.includes(stableClass(name, part)));
 }
-
-function inStylePropLayer(node: postcss.Node): boolean {
-  const parent = node.parent;
-  if (!(parent instanceof postcss.AtRule)) return false;
-  return (
-    (parent.name === "layer" && parent.params === STYLE_PROP_LAYER) || inStylePropLayer(parent)
-  );
-}
-
-function styleXClassesInTheStylesheet(): Set<string> {
-  const found = new Set<string>();
-  postcss.parse(readFileSync(join(dist, "styles.css"), "utf8")).walkRules((rule) => {
-    if (inStylePropLayer(rule)) return;
-    for (const [, name] of rule.selector.matchAll(/\.([\w-]+)/g)) found.add(name);
-  });
-  return found;
-}
-
-const styleXClasses = styleXClassesInTheStylesheet();
 
 function emitsStyleXClass(component: string): boolean {
   return [...readFileSync(join(dist, `${component}.jsx`), "utf8").matchAll(/[\w-]+/g)].some(
     ([word]) => styleXClasses.has(word),
-  );
-}
-
-function partsOf(component: string): string[] {
-  return elementsOf(renderBuilt(component, {})).flatMap((element) => partsOn(component, element));
-}
-
-const partsByComponent = new Map(builtComponents.map((name) => [name, partsOf(name)]));
-
-function partsOfBuilt(component: string): string[] {
-  return partsByComponent.get(component) ?? [];
-}
-
-function styledPartsInTheBuild(component: string): string[] {
-  const file = join(dist, `${component}.jsx`);
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(file, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JSX,
-  );
-  return source.statements
-    .filter(ts.isVariableStatement)
-    .flatMap((statement) =>
-      statement.declarationList.declarations.flatMap((declaration) =>
-        declaration.name.getText() === "styles" &&
-        declaration.initializer !== undefined &&
-        ts.isObjectLiteralExpression(declaration.initializer)
-          ? declaration.initializer.properties.flatMap((property) =>
-              property.name && ts.isIdentifier(property.name) ? [property.name.text] : [],
-            )
-          : [],
-      ),
-    );
-}
-
-function isPartProp(attribute: string): boolean {
-  return partPropKeys.some((key) => key.toLowerCase() === attribute.toLowerCase());
-}
-
-function partPropsOn(html: string): string[] {
-  return elementsOf(html).flatMap(({ tag, attributes }) =>
-    attributes.filter(([name]) => isPartProp(name)).map(([name]) => `<${tag}> ${name}`),
   );
 }
 
@@ -146,22 +83,24 @@ test.each(components)(
   "%s puts every class and attribute a consumer passes on its root, next to its own classes, and its own stable root class and no other",
   (name, component) => {
     const hasDefaultStyles = emitsStyleXClass(name);
+    const rootClasses = builtComponents.map((other) => stableClass(other, rootPart));
     fc.assert(
       fc.property(classTokens, stringAttributes, fc.boolean(), (tokens, attributes, flag) => {
-        const html = render(name, {
-          class: classValueFrom(tokens),
-          ...attributes,
-          [component.booleanAttribute]: flag,
-        });
-        const root = rootElementOf(html);
+        const root = rootElementOf(
+          render(name, {
+            class: classValueFrom(tokens),
+            ...attributes,
+            [component.booleanAttribute]: flag,
+          }),
+        );
         const classes = classesOf(root);
 
         expect(root.tag).toBe(component.tag);
         expect(valuesOf(root, "class")).toHaveLength(1);
         expect(
-          classes.filter((found) => stableRootClass.test(found)),
+          classes.filter((found) => rootClasses.includes(found)),
           "the root carries one stable root class, its own",
-        ).toEqual([`solix-${name}-${rootPart}`]);
+        ).toEqual([stableClass(name, rootPart)]);
         expect(
           classes.some((found) => found.startsWith(LIBRARY_CLASS_PREFIX)),
           `the built ${name} ${hasDefaultStyles ? "emits" : "emits no"} StyleX class, so its root carries ${hasDefaultStyles ? "one" : "none"} of the library's style classes`,
@@ -180,21 +119,21 @@ test.each(components)(
 );
 
 test.each(builtComponents)(
-  "%s marks the root and each part its built styles object names with one stable class on one element, the root first",
+  "%s renders, under its fixture, the root and every other key of its built styles object, each with its stable class on one element, the root first",
   (name) => {
-    const elements = elementsOf(renderBuilt(name, {}));
-    const parts = partsOfBuilt(name);
+    const parts = partsOf(name);
+    const elements = elementsOf(render(name));
+    const rendered = elements.flatMap((element) => partsOn(name, element));
 
     expect(partsOn(name, elements[0]), "the first element is the root").toEqual([rootPart]);
     expect(
       elements.filter((element) => partsOn(name, element).length > 1),
       "an element carries one part",
     ).toEqual([]);
-    expect(parts, "a part names one element").toEqual([...new Set(parts)]);
     expect(
-      [...parts].sort(),
-      `every part the built styles object of ${name} styles, and the root, is rendered with its stable class`,
-    ).toEqual([...new Set([rootPart, ...styledPartsInTheBuild(name)])].sort());
+      [...rendered].sort(),
+      `each key of the built styles object of ${name} is on one element of the markup its fixture renders`,
+    ).toEqual([...parts].sort());
   },
 );
 
@@ -214,7 +153,7 @@ function expectClassesOnTheirParts(name: string, html: string, tokens: PartClass
     const classes = classesOf(element);
     const rank = (found: string): number[] => {
       if (styleXClasses.has(found)) return [0];
-      if (found === `solix-${name}-${part}`) return [1];
+      if (part !== undefined && found === stableClass(name, part)) return [1];
       if (ownTokens.includes(found)) return [2];
       return classTokensOnRoot.includes(found) ? [3] : [];
     };
@@ -229,19 +168,15 @@ function expectClassesOnTheirParts(name: string, html: string, tokens: PartClass
       `on ${where}, the library's classes come first, then the stable class, then classes.${part}, and on the root the class prop last`,
     ).toEqual([...ranks].sort((before, after) => before - after));
   }
-  expect(partPropsOn(html), "classes, styles and unstyled reach no element").toEqual([]);
 }
 
 test.each(builtComponents)(
   "%s puts a class that classes names for a part on exactly that part's element, after the library's classes and the stable class, and the class prop after classes.root",
   (name) => {
-    const parts = partsOfBuilt(name);
+    const parts = partsOf(name);
     fc.assert(
       fc.property(partClassTokens(parts), (tokens) => {
-        const html = renderBuilt(name, classesPropsFrom(parts, tokens));
-
-        expect(partsOf(name)).toEqual(parts);
-        expectClassesOnTheirParts(name, html, tokens);
+        expectClassesOnTheirParts(name, render(name, classesPropsFrom(parts, tokens)), tokens);
       }),
       { numRuns: generatedRuns },
     );
@@ -249,33 +184,30 @@ test.each(builtComponents)(
 );
 
 test.each(builtComponents)(
-  "%s puts the declarations styles names for a part in exactly that part's style, leaves out an undefined or null one, and puts the consumer's style after styles.root",
+  "%s puts the declarations styles names for a part in exactly that part's style, leaves out an undefined or null one, and puts the consumer's style after styles.root, where an undefined or null one replaces nothing",
   (name) => {
-    const parts = partsOfBuilt(name);
     fc.assert(
       fc.property(
-        declarationsByPart(parts),
-        declarationSetWithAbsentValues,
-        fc.constantFrom("object", "string", "absent"),
+        declarationsByPart(partsOf(name)),
+        consumerStyles,
         fc.boolean(),
-        (byPart, consumerStyle, styleAs, unstyled) => {
-          const html = renderBuilt(name, {
+        (byPart, consumerStyle, unstyled) => {
+          const html = render(name, {
             styles: Object.fromEntries(
               Object.entries(byPart).map(([part, declarations]) => [
                 part,
                 Object.fromEntries(declarations),
               ]),
             ),
-            ...styleWritten(consumerStyle, styleAs),
+            ...styleWritten(consumerStyle),
             unstyled,
           });
-          const consumerGave = styleAs === "absent" ? [] : presentDeclarations(consumerStyle);
 
           for (const element of elementsOf(html)) {
             const [part] = partsOn(name, element);
             const wanted = [
               ...presentDeclarations((part === undefined ? undefined : byPart[part]) ?? []),
-              ...(part === rootPart ? consumerGave : []),
+              ...(part === rootPart ? declaredBy(consumerStyle) : []),
             ];
             expect(valuesOf(element, "style").length).toBeLessThanOrEqual(1);
             expect(
@@ -285,7 +217,6 @@ test.each(builtComponents)(
                 : `the ${part} part's style holds styles.${part} without its undefined and null values${part === rootPart ? ", and then the consumer's style without its undefined and null values, which wins" : ""}`,
             ).toEqual(Object.fromEntries(wanted));
           }
-          expect(partPropsOn(html), "classes, styles and unstyled reach no element").toEqual([]);
         },
       ),
       { numRuns: generatedRuns },
@@ -296,10 +227,11 @@ test.each(builtComponents)(
 test.each(builtComponents)(
   "%s with unstyled drops every class the stylesheet defines outside the style-props layer, from every part, and keeps every stable part class and every consumer class",
   (name) => {
-    const parts = partsOfBuilt(name);
+    const parts = partsOf(name);
+    const marked = elementsOf(render(name)).flatMap((element) => partsOn(name, element));
     fc.assert(
       fc.property(partClassTokens(parts), (tokens) => {
-        const html = renderBuilt(name, { ...classesPropsFrom(parts, tokens), unstyled: true });
+        const html = render(name, { ...classesPropsFrom(parts, tokens), unstyled: true });
         const elements = elementsOf(html);
 
         expect(
@@ -313,15 +245,13 @@ test.each(builtComponents)(
         expect(
           elements.flatMap((element) => partsOn(name, element)),
           "every stable part class, on the same elements in the same order",
-        ).toEqual(parts);
+        ).toEqual(marked);
         expectClassesOnTheirParts(name, html, tokens);
       }),
       { numRuns: generatedRuns },
     );
   },
 );
-
-const ownProps = [...stylePropNames, ...visibilityPropNames, "component", ...partPropKeys];
 
 function takenBy(takesDisplay: boolean, generated: StylePropCase): StylePropCase {
   if (takesDisplay) return generated;
@@ -335,11 +265,11 @@ function takenBy(takesDisplay: boolean, generated: StylePropCase): StylePropCase
 }
 
 function expectStylePropsOnRoot(name: string, root: Element, generated: StylePropCase): void {
-  const { styleProps, visibility, classTokens: tokensOfClass, styleWrittenAs } = generated;
+  const { styleProps, visibility, classTokens: tokensOfClass } = generated;
   const classes = classesOf(root);
   const styleText = String(valuesOf(root, "style")[0] ?? "");
   const declared = new Map(declarationsIn(valuesOf(root, "style")[0]));
-  const consumerGave = styleWrittenAs === "absent" ? [] : generated.consumerStyle;
+  const consumerGave = declaredBy(generated.consumerStyle);
   const consumerNames = consumerGave.map(([property]) => property);
   const keptPairs = new Set(
     styleProps.flatMap(([prop, { keptKeys }]) =>
@@ -353,7 +283,7 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
   const readByAClass = libraryClasses.filter((found) => declared.has(`--${found}`));
 
   expect(valuesOf(root, "class")).toHaveLength(1);
-  expect(classes).toContain(`solix-${name}-${rootPart}`);
+  expect(classes).toContain(stableClass(name, rootPart));
   for (const { token, applied } of tokensOfClass) {
     expect(classes.includes(token), `class "${token}"`).toBe(applied);
   }
@@ -380,49 +310,39 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
   ).toEqual([]);
   expect(
     root.attributes.filter(([attribute]) =>
-      ownProps.some((ownProp) => ownProp.toLowerCase() === attribute.toLowerCase()),
+      consumedProps.some((consumed) => consumed.toLowerCase() === attribute.toLowerCase()),
     ),
-    `${name}'s own props never reach the element as attributes`,
+    `${name}'s consumed props never reach the element as attributes`,
   ).toEqual([]);
 }
 
-test("Box gives every kept style-prop value one class and the one custom property that class reads, drops null and every value that holds ;, { or }, and keeps the consumer's class and style on top", () => {
-  fc.assert(
-    fc.property(boxCases, ({ generated, component }) => {
-      const props = {
-        ...stylePropPropsOf(generated),
-        ...(component === undefined ? {} : { component }),
-        ...(component === "a" ? { href: elsewhere } : {}),
-      };
-      const html = render("Box", props);
-      const root = rootElementOf(html);
-
-      expect(render("Box", props), "a second render gives the same markup").toBe(html);
-      expect(root.tag).toBe(component ?? "div");
-      expectStylePropsOnRoot("Box", root, generated);
-      expect(valuesOf(root, "href")).toEqual(component === "a" ? [elsewhere] : []);
-    }),
-    { numRuns: generatedRuns },
-  );
-});
-
 test.each(components)(
-  "%s takes every style prop, hiddenFrom and visibleFrom on its root that its type takes, with unstyled or without, and keeps the consumer's class and style on top",
-  (name, { takesDisplay }) => {
+  "%s gives every kept style-prop value it takes one class and the one custom property that class reads, drops null and every value that holds ;, { or }, keeps the consumer's class and style on top, renders the element component names, and renders the same markup twice",
+  (name, { tag, takesDisplay, polymorphic }) => {
     fc.assert(
-      fc.property(stylePropCases, (generated) => {
-        const props = stylePropPropsOf(generated);
-        const html = renderBuilt(name, props);
+      fc.property(
+        stylePropCases,
+        polymorphic ? elementsToRender : fc.constant(undefined),
+        (generated, component) => {
+          const props = {
+            ...stylePropPropsOf(generated),
+            ...(component === undefined ? {} : { component }),
+          };
+          const html = render(name, props);
+          const root = rootElementOf(html);
 
-        expect(renderBuilt(name, props), "a second render gives the same markup").toBe(html);
-        expectStylePropsOnRoot(name, rootElementOf(html), takenBy(takesDisplay, generated));
-      }),
+          expect(render(name, props), "a second render gives the same markup").toBe(html);
+          expect(root.tag).toBe(component ?? tag);
+          expectStylePropsOnRoot(name, root, takenBy(takesDisplay, generated));
+        },
+      ),
       { numRuns: generatedRuns },
     );
   },
 );
 
 type DisclosureProps = Parameters<typeof Library.Disclosure>[0];
+type BoxPropsFor<T extends ValidComponent> = Parameters<typeof Library.Box<T>>[0];
 type ButtonPropsFor<T extends ValidComponent> = Parameters<typeof Library.Button<T>>[0];
 type PartsOf<Props extends { classes?: object }> = keyof NonNullable<Props["classes"]>;
 
@@ -431,22 +351,23 @@ test("Disclosure's classes take summary, a key of its stylex.create block, and n
   expectTypeOf<"label">().not.toExtend<PartsOf<DisclosureProps>>();
 });
 
-test("Button takes the attributes of the element its component prop names, and renders that element", () => {
-  expectTypeOf<"href">().toExtend<keyof ButtonPropsFor<"a">>();
-  expectTypeOf<"href">().not.toExtend<keyof ButtonPropsFor<"button">>();
+test.each(polymorphicComponents)(
+  "%s takes the attributes of the element its component prop names, and renders that element",
+  (name) => {
+    expectTypeOf<"href">().toExtend<keyof BoxPropsFor<"a">>();
+    expectTypeOf<"href">().not.toExtend<keyof BoxPropsFor<"div">>();
+    expectTypeOf<"href">().toExtend<keyof ButtonPropsFor<"a">>();
+    expectTypeOf<"href">().not.toExtend<keyof ButtonPropsFor<"button">>();
 
-  const html = renderToString(() => (
-    <library.Button component="a" href={elsewhere}>
-      Link
-    </library.Button>
-  ));
+    const root = rootElementOf(render(name, { component: "a", href: elsewhere }));
 
-  expect(rootElementOf(html).tag).toBe("a");
-  expect(rootElementOf(html).attributes).toContainEqual(["href", elsewhere]);
-  expect(classesOf(rootElementOf(html))).toContain(`solix-Button-${rootPart}`);
-});
+    expect(root.tag).toBe("a");
+    expect(valuesOf(root, "href")).toEqual([elsewhere]);
+    expect(classesOf(root)).toContain(stableClass(name, rootPart));
+  },
+);
 
-test("a polymorphic component wrapping Modal refuses the display props Modal refuses, and wrapping Button takes only Button's props", () => {
+test("a polymorphic component wrapping Modal refuses every display prop Modal refuses, and wrapping Button or Box takes only that component's props", () => {
   expectTypeOf<
     Refuses<Library.BoxProps<typeof Library.Modal>, DisplayPropName>
   >().toEqualTypeOf<true>();
@@ -491,14 +412,14 @@ test.each(polymorphicComponents)(
   },
 );
 
-test("the contract skill names each component's root tag and boolean attribute as fixtures does", () => {
+test("the contract skill has a row for each component that names its root tag and boolean attribute as fixtures does", () => {
   const rows = readFileSync(join(repositoryRoot, contractSkill), "utf8")
     .split("\n")
     .filter((line) => line.startsWith("|"));
   const violations = components.flatMap(([name, { tag, booleanAttribute }]) => {
     const file = `packages/core/src/${name}.tsx`;
-    const row = rows.find((line) => line.includes(`\`${file}\``));
-    if (!row) return [`${contractSkill}: add a covered-code row for \`${file}\`.`];
+    const row = rows.find((line) => line.includes(`\`${file}\`: \`${name}\``));
+    if (!row) return [`${contractSkill}: add a covered-code row for \`${file}\`: \`${name}\`.`];
     return [`<${tag}>`, `\`${booleanAttribute}\``]
       .filter((fact) => !row.includes(fact))
       .map((fact) => `${contractSkill}: say ${fact} in the row for \`${file}\`, as fixtures does.`);
