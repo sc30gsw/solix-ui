@@ -16,6 +16,7 @@ export { createHotkeys } from "./create-hotkeys";
 export { createInputState, type InputChange } from "./create-input-state";
 export { createListState, type ListMove, type ListStateHandlers } from "./create-list-state";
 export { createMap } from "./create-map";
+export { createMediaQuery } from "./create-media-query";
 export { createPrevious } from "./create-previous";
 export { createQueue, type QueueOptions, type QueueReturn } from "./create-queue";
 export { createSetState, type SetStatePatch } from "./create-set-state";

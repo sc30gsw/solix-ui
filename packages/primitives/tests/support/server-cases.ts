@@ -107,6 +107,14 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
       map().set("other", 2);
     },
   }),
+  createMediaQuery: serverCase({
+    create: (createMediaQuery) => [
+      createMediaQuery("(min-width: 1px)"),
+      createMediaQuery(() => "(min-width: 1px)", true),
+    ],
+    read: ([withoutInitial, withInitial]) => [withoutInitial(), withInitial()],
+    expected: [false, true],
+  }),
   createPrevious: serverCase({
     create: (createPrevious) => createPrevious(() => "now"),
     read: (previous) => previous(),

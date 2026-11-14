@@ -9,7 +9,9 @@ const engineWait = { timeout: 5_000 };
 
 type Revealed = { expected: string; restore: () => Promise<unknown> };
 
-const reveal: { [K in BrowserValuePrimitive]: (page: Page) => Promise<Revealed> } = {};
+const reveal: { [K in BrowserValuePrimitive]: (page: Page) => Promise<Revealed> } = {
+  createMediaQuery: async () => ({ expected: "[true,true]", restore: async () => undefined }),
+};
 
 function line(page: Page, start: string): Promise<string | null> {
   return page.getByText(new RegExp(`^${start}: `)).textContent();

@@ -2,6 +2,7 @@ import { createEffect, createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createLeakyListener } from "./fixtures/leaky-listener";
 import { createLeakyObserver } from "./fixtures/leaky-observer";
+import { createLeakySubscription } from "./fixtures/leaky-subscription";
 import { createLeakyTimer } from "./fixtures/leaky-timer";
 import { createCleanupInCommand } from "./fixtures/raises-diagnostic";
 import { flush, mount, reportAfterDispose } from "./support/browser-harness";
@@ -28,6 +29,12 @@ test("it reports an observation that an effect started and never disconnected", 
   mount(() => createLeakyObserver(target));
 
   expect(reportAfterDispose()).toEqual(["an observation by a ResizeObserver"]);
+});
+
+test("it reports a listener that a browser value's subscription added and its teardown left", () => {
+  mount(() => createLeakySubscription());
+
+  expect(reportAfterDispose()).toEqual(["a change listener on MediaQueryList"]);
 });
 
 test("it reports a Solid development diagnostic", () => {

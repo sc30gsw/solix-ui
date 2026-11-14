@@ -1,9 +1,13 @@
 import { argumentReadsRule, readOnceArgumentsRule } from "./arguments";
 import { barrelOrderRule } from "./barrel-order";
+import { browserGlobalReadsRule } from "./browser-global-reads";
 import { browserTestWaitsRule } from "./browser-test-waits";
 import { browserTestsUseTheHarnessRule } from "./browser-tests-use-the-harness";
+import { browserValuesRule } from "./browser-values";
+import { caughtErrorsRule } from "./caught-errors";
 import { elementAttachmentsRule } from "./element-attachments";
 import { accessibilityTestsRule, focusMovesRule } from "./focus";
+import { hydrationPolicyRule } from "./hydration-policy";
 import { instanceofChecksRule } from "./instanceof-checks";
 import { type Library, type PrimitiveRule, publicModules } from "./library";
 import { listenerRolesRule } from "./listener-roles";
@@ -31,8 +35,12 @@ export const primitiveRules = {
   argumentReads: argumentReadsRule,
   styleAndClassWrites: styleAndClassWritesRule,
   elementAttachments: elementAttachmentsRule,
+  browserValues: browserValuesRule,
+  hydrationPolicy: hydrationPolicyRule,
+  browserGlobalReads: browserGlobalReadsRule,
   liveOptions: liveOptionsRule,
   listenerRoles: listenerRolesRule,
+  caughtErrors: caughtErrorsRule,
   instanceofChecks: instanceofChecksRule,
   focusMoves: focusMovesRule,
   testsNamedForModules: testsNamedForModulesRule,
