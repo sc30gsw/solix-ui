@@ -4,7 +4,6 @@ import { sameKeys } from "./internal-equal";
 import { createValue } from "./internal-value";
 import type { ReadOnce } from "./types";
 
-/** The state of `createValidatedState`. */
 export type ValidatedState<T> = {
   /** The last value set, valid or not. */
   readonly value: Accessor<T>;

@@ -4,7 +4,6 @@ import { sameItems } from "./internal-equal";
 import { createValue } from "./internal-value";
 import type { ReadOnce } from "./types";
 
-/** The commands of `createStateHistory`. */
 export type StateHistoryHandlers<T> = {
   /** Drops every entry after the current one, then appends the value and makes it current. */
   readonly set: (value: T) => void;
@@ -16,7 +15,6 @@ export type StateHistoryHandlers<T> = {
   readonly reset: () => void;
 };
 
-/** The whole history behind `createStateHistory`. */
 export type StateHistory<T> = {
   readonly history: Accessor<T[]>;
   /** The index of the current entry in `history`. */

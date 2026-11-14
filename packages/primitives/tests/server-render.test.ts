@@ -135,11 +135,11 @@ test("a primitive that returns nothing, or only functions, passes; one that retu
 });
 
 test.each(primitives)(
-  "%s renders on the server without a browser global, gives its server value, and returns only functions",
+  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, and returns nothing or only functions",
   (name) => {
     const { returned, value, touched } = renderOnTheServer(name);
 
-    expect(touched, `${name} reads these browser globals on the server`).toEqual([]);
+    expect(touched, `${name} reads these browser resources on the server`).toEqual([]);
     expect(value, `${name}: its server value`).toEqual(serverCases[name].expected);
     expect(
       plainValuesIn(returned, name),

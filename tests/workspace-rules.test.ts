@@ -4,6 +4,7 @@ import semver from "semver";
 import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import {
+  catalogVersions,
   type Manifest,
   libraryNames,
   libraryPackages,
@@ -15,6 +16,7 @@ import {
   rootManifest,
   scriptFiles,
   workflowFiles,
+  workspaceFile,
 } from "./support/workspace";
 
 const vitePlusCommandFor: Record<string, string> = {
@@ -39,26 +41,11 @@ const ownLibraryLink = "workspace:*";
 const webStandardsOnly =
   "A library is built on web standards and has no runtime dependency: it names Solid, StyleX and the primitives package as peers. Use a platform feature or a fallback written in this repository.";
 
-const workspaceFile = "pnpm-workspace.yaml";
-const catalogBlock = /^catalog:\n((?:[ \t]+.*\n?)+)/m;
-const catalogEntry = /^\s+("?)([^":\s]+)\1:\s*"?([^"\s]+)"?\s*$/;
-
 const nodeVersionHome = "package.json";
 const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
 const namesNodeVersion = /node-version["']?\s*:/;
 const namesNodeVersionFile = /node-version-file["']?\s*:\s*(.*?)\s*$/;
 const namesRunner = /runs-on["']?\s*:/;
-
-function catalogVersions(): Record<string, string> {
-  const block = catalogBlock.exec(readFileSync(join(repositoryRoot, workspaceFile), "utf8"))?.[1];
-  const entries = (block ?? "")
-    .split("\n")
-    .map((line) => catalogEntry.exec(line))
-    .filter((match): match is RegExpExecArray => match !== null)
-    .map(([, , name, version]): [string, string] => [name, version]);
-  if (entries.length === 0) throw new Error(`${workspaceFile}: no catalog entries were found.`);
-  return Object.fromEntries(entries);
-}
 
 function installedDependencies(manifest: Manifest): [string, string][] {
   return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });

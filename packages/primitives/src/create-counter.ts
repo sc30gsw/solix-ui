@@ -3,7 +3,7 @@ import { accessUntracked } from "./internal-access";
 import { createValue } from "./internal-value";
 import type { MaybeAccessor, ReadOnce } from "./types";
 
-/** The options of `createCounter`. Each is read when a handler runs. */
+/** Each option is read when a handler runs. */
 export type CounterOptions = {
   /** The lowest count. Default `-Infinity`. */
   min?: MaybeAccessor<number>;
@@ -13,7 +13,6 @@ export type CounterOptions = {
   step?: MaybeAccessor<number>;
 };
 
-/** The commands of `createCounter`. */
 export type CounterHandlers = {
   readonly increment: () => void;
   readonly decrement: () => void;

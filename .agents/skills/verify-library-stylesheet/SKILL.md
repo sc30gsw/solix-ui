@@ -31,8 +31,8 @@ It does if it edits any of these:
 | `apps/playground/tests/consumer.test.ts` and `apps/playground/tests/box.test.ts` | `consumer.test.ts` checks that the app's own rule comes before the library layer in the bundle, and `box.test.ts` checks the cascade in each installed engine. |
 | `scripts/browser-engines.mjs` | It lists the engines the browser tests run on. |
 | `vite.config.ts` | It sets the test include globs and the global setup. |
-| `@stylexjs/babel-plugin` and `@stylexjs/stylex` in the catalog in `pnpm-workspace.yaml` | Version 0.19.2. |
-| `@babel/core`, `@babel/preset-typescript` and `postcss` in the catalog in `pnpm-workspace.yaml` | `@babel/core` ^7.26.8 and `@babel/preset-typescript` ^7.26.0 run the build pipeline. `postcss` 8.5.33 parses the stylesheet in the tests. |
+| `@stylexjs/babel-plugin` and `@stylexjs/stylex` in the catalog in `pnpm-workspace.yaml` | Both at the version the catalog pins. |
+| `@babel/core`, `@babel/preset-typescript` and `postcss` in the catalog in `pnpm-workspace.yaml` | `@babel/core` and `@babel/preset-typescript` run the build pipeline, and `postcss` parses the stylesheet in the tests, at the versions the catalog pins. |
 
 Last confirmed against commit `e7aea22`. Run `git diff e7aea22 -- packages/core apps/playground/tests tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
@@ -74,5 +74,5 @@ No verifier runs on a JavaScript build script, so this is not a proof. `styleshe
 - Adding a second top-level layer, or emitting rules outside the layer on purpose: this changes the contract in `AGENTS.md`. Change that rule first, then the assertion on the stylesheet's top-level nodes.
 - Changing a breakpoint: the owner fixed them. Change the table in `packages/core/src/style-prop-table.ts` and `ownerBreakpoints` in `build-output.test.ts` together. `apps/playground/tests/box.test.ts` and `drive.mjs` read the widths from the table.
 - A new shorthand style prop: give each of its longhand rows `within` naming it. If its CSS property is not one `longhandsSetBy` knows, add the longhands it sets there, from the CSS specification.
-- Upgrading StyleX: run the check, then update the version in the table above.
+- Upgrading StyleX: change the version in the catalog in `pnpm-workspace.yaml`, then run the check.
 - Using a StyleX feature listed under "does not cover": add it to the generator first.

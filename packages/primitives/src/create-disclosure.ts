@@ -3,7 +3,7 @@ import { accessUntracked } from "./internal-access";
 import { createValue } from "./internal-value";
 import type { ReadOnce } from "./types";
 
-/** The callbacks of `createDisclosure`, each read when it runs. */
+/** Each callback is read when it runs. */
 export type DisclosureOptions = {
   /** Runs after `open` or `toggle` changes the state from closed to open. */
   onOpen?: () => void;
@@ -11,7 +11,6 @@ export type DisclosureOptions = {
   onClose?: () => void;
 };
 
-/** The commands of `createDisclosure`. */
 export type DisclosureHandlers = {
   readonly open: () => void;
   readonly close: () => void;

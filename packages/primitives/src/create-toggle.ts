@@ -6,7 +6,6 @@ import type { ReadOnce } from "./types";
 /** What `toggle` takes: nothing to move to the next option, an option, or an updater that returns one. */
 export type ToggleRequest<T> = T | ((current: T) => T);
 
-/** `[value, toggle]`. */
 export type ToggleReturn<T> = [value: Accessor<T>, toggle: (next?: ToggleRequest<T>) => void];
 
 /**

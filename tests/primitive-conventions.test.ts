@@ -22,7 +22,12 @@ const readOnceName = /^(?:initial|default|final)(?:[A-Z]|$)/;
 const readOnceType = "ReadOnce";
 const readOnceAccess = "accessUntracked";
 const callsAllowedAtModuleLevel = ["Symbol", "Object.freeze"];
-const effectsThatRunOnTheServer = ["createRenderEffect", "createTrackedEffect"];
+const effectsAPrimitiveAvoids: Record<string, string> = {
+  createRenderEffect:
+    "runs its effect function on the server too, during the render, so a primitive would touch the DOM there",
+  createTrackedEffect:
+    "is deprecated: it tracks and runs its side effect in one scope, which may run more than once for one change",
+};
 const styleAndClassMembers = ["style", "className", "classList", "attributeStyleMap"];
 const writersOf: Record<string, string[]> = {
   classList: ["add", "remove", "toggle", "replace"],
@@ -315,16 +320,20 @@ const serverEffects: Rule = (library) =>
     descendants(module.source)
       .filter(
         (node) =>
-          (ts.isIdentifier(node) && effectsThatRunOnTheServer.includes(node.text)) ||
+          (ts.isIdentifier(node) && Object.hasOwn(effectsAPrimitiveAvoids, node.text)) ||
           (ts.isElementAccessExpression(node) &&
             stringsIn(library, node.argumentExpression).some((name) =>
-              effectsThatRunOnTheServer.includes(name),
+              Object.hasOwn(effectsAPrimitiveAvoids, name),
             )),
       )
-      .map(
-        (node) =>
-          `${at(module, node)}: ${node.getText()} runs on the server or not at all there, so a primitive would touch the DOM during server rendering or create different reactive nodes on each side. Attach in the apply of a createEffect, which the server never runs.`,
-      ),
+      .map((node) => {
+        const name = ts.isElementAccessExpression(node)
+          ? (stringsIn(library, node.argumentExpression).find((found) =>
+              Object.hasOwn(effectsAPrimitiveAvoids, found),
+            ) ?? "")
+          : node.getText();
+        return `${at(module, node)}: ${node.getText()}: ${name} ${effectsAPrimitiveAvoids[name]}. Put a primitive's side effect in the apply of a createEffect, which runs only in the browser.`;
+      }),
   );
 
 function stateIn(library: Library, initializer: ts.Expression): ts.Node[] {
@@ -588,7 +597,7 @@ test("the barrel re-exports every public module with its types, then the shared 
   expect(barrelOrder(library)).toEqual([]);
 });
 
-test("no primitive calls an effect that runs on the server", () => {
+test("no primitive names createRenderEffect or createTrackedEffect", () => {
   expect(serverEffects(library)).toEqual([]);
 });
 

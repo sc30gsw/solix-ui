@@ -4,7 +4,6 @@ import { createRequest } from "./internal-request";
 import { createValue } from "./internal-value";
 import type { ReadOnce } from "./types";
 
-/** The options of `createUncontrolled`. */
 export type UncontrolledOptions<T, P extends unknown[] = []> = {
   /** While it reads anything but `undefined`, the state is controlled and this is its value. */
   value?: Accessor<T | undefined>;
@@ -16,7 +15,6 @@ export type UncontrolledOptions<T, P extends unknown[] = []> = {
   onChange?: (value: T, ...payload: P) => void;
 };
 
-/** `[value, setValue, controlled]`. */
 export type UncontrolledReturn<T, P extends unknown[] = [], V extends T | undefined = T> = [
   value: Accessor<V>,
   setValue: (value: T, ...payload: P) => void,

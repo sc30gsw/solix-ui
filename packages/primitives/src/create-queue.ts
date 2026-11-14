@@ -4,7 +4,6 @@ import { sameItems } from "./internal-equal";
 import { createValue } from "./internal-value";
 import type { MaybeAccessor, ReadOnce } from "./types";
 
-/** The options of `createQueue`. */
 export type QueueOptions<T> = {
   /** The items it starts with, split by `limit`. */
   initialValues?: ReadOnce<readonly T[]>;
@@ -12,7 +11,6 @@ export type QueueOptions<T> = {
   limit: MaybeAccessor<number>;
 };
 
-/** What `createQueue` returns. */
 export type QueueReturn<T> = {
   /** The first `limit` items. */
   readonly state: Accessor<T[]>;
