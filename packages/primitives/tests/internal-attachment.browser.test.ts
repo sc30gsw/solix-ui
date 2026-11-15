@@ -3,7 +3,7 @@ import { expect, test } from "vite-plus/test";
 import {
   createAttachment,
   createElementAttachment,
-  createElementValue,
+  createElementAttachmentWhen,
 } from "../src/internal-attachment";
 import { flush, mount, unmount } from "./support/browser-harness";
 import { box } from "./support/dom";
@@ -42,16 +42,16 @@ test("createAttachment without a config attaches once the owner's effects run an
   expect(seen).toEqual(["attach", "mounted", "detach"]);
 });
 
-test("createElementAttachment hands the config the element its ref received, and attaches nothing once the owner is disposed", () => {
+test("createElementAttachmentWhen hands the config the element its ref received, and attaches nothing once the owner is disposed", () => {
   const seen: string[] = [];
   const first = box("first");
   const ref = mount(() =>
-    createElementAttachment<HTMLElement, string>(
-      (element) => element?.textContent ?? undefined,
+    createElementAttachmentWhen<HTMLElement, string>(
       (current) => {
         seen.push(`attach ${current}`);
         return () => seen.push(`detach ${current}`);
       },
+      (element) => element?.textContent ?? undefined,
     ),
   );
 
@@ -64,28 +64,44 @@ test("createElementAttachment hands the config the element its ref received, and
   expect(seen).toEqual(["attach first", "detach first"]);
 });
 
-test("createElementValue starts at its initial value, takes what the attachment delivers, and goes back to it when an attachment ends", () => {
-  const first = box("first");
-  const second = box("second");
-  const [ref, label] = mount(() =>
-    createElementValue<HTMLElement, string, string>(
-      "none",
-      (element, suffix, deliver) => {
-        deliver(`${element.textContent} ${suffix}`);
-        return () => undefined;
-      },
-      () => "seen",
-    ),
+test("createElementAttachment attaches to each element its ref receives, again when its config changes to a different value, and not for one equal by value", () => {
+  const seen: string[] = [];
+  const [config, setConfig] = createSignal({ name: "a" });
+  const ref = mount(() =>
+    createElementAttachment<HTMLElement, { name: string }>((element, current) => {
+      seen.push(`attach ${element.textContent} ${current.name}`);
+      return () => seen.push(`detach ${element.textContent} ${current.name}`);
+    }, config),
   );
-  const seen = [label()];
 
-  ref(first);
+  ref(box("first"));
   flush();
-  seen.push(label());
-  ref(second);
+  setConfig({ name: "a" });
   flush();
-  seen.push(label());
+  setConfig({ name: "b" });
+  flush();
+  ref(box("second"));
+  flush();
+  expect(seen).toEqual([
+    "attach first a",
+    "detach first a",
+    "attach first b",
+    "detach first b",
+    "attach second b",
+  ]);
+});
+
+test("createElementAttachment without a config attaches to the element alone", () => {
+  const seen: string[] = [];
+  const ref = mount(() =>
+    createElementAttachment<HTMLElement>((element) => {
+      seen.push(`attach ${element.textContent}`);
+      return () => seen.push(`detach ${element.textContent}`);
+    }),
+  );
+
+  ref(box("first"));
+  flush();
   unmount();
-  seen.push(label());
-  expect(seen).toEqual(["none", "first seen", "second seen", "none"]);
+  expect(seen).toEqual(["attach first", "detach first"]);
 });

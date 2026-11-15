@@ -9,7 +9,7 @@ import {
   type Rule,
 } from "./library";
 
-const attachmentHelper = { file: "internal-attachment.ts", name: "createElementAttachment" };
+const attachmentHelper = { file: "internal-attachment.ts", name: "createElementAttachmentWhen" };
 const refSetterType = "RefSetter";
 const reactiveNodesTheHelperOwns = ["createEffect", "createMemo", "createSignal"];
 
@@ -42,6 +42,6 @@ const elementAttachments: Rule = (library) =>
 
 export const elementAttachmentsRule: PrimitiveRule = {
   description:
-    "every public primitive that returns a RefSetter, alone or in a tuple or object, reaches createElementAttachment and refers to no Solid createEffect, createMemo or createSignal",
+    "every public primitive that returns a RefSetter, alone or in a tuple or object, reaches createElementAttachmentWhen and refers to no Solid createEffect, createMemo or createSignal",
   rule: elementAttachments,
 };

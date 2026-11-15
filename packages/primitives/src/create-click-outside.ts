@@ -1,5 +1,5 @@
 import { access } from "./internal-access";
-import { createElementAttachment } from "./internal-attachment";
+import { createElementAttachmentWhen } from "./internal-attachment";
 import { disposeAll, listenAsAsked, listenerSettings, watchEvents } from "./internal-listener";
 import { isNode } from "./internal-node";
 import type { MaybeAccessor, RefSetter } from "./types";
@@ -139,7 +139,11 @@ export function createClickOutside<K extends PressEventName = "pointerup">(
   capture?: MaybeAccessor<boolean>,
 ): RefSetter<Element> {
   const call = (event: Event) => handler(event as DocumentEventMap[K]);
-  return createElementAttachment<Element, Listening>(
+  return createElementAttachmentWhen<Element, Listening>(
+    (current) =>
+      current.events === null
+        ? listenToPresses(current, call)
+        : listenToEvents(current, current.events, call),
     (element) => {
       if (!access(enabled ?? true)) return undefined;
       const listed = access(nodes ?? null) ?? [element];
@@ -150,9 +154,5 @@ export function createClickOutside<K extends PressEventName = "pointerup">(
         inside: listed,
       };
     },
-    (current) =>
-      current.events === null
-        ? listenToPresses(current, call)
-        : listenToEvents(current, current.events, call),
   );
 }

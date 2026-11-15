@@ -1,5 +1,5 @@
 import { access } from "./internal-access";
-import { createElementAttachment } from "./internal-attachment";
+import { createElementAttachmentWhen } from "./internal-attachment";
 import { activeElementOf, containsComposed, deepActiveElement } from "./internal-active";
 import { focusFirst, moveFocus } from "./internal-focus";
 import { disposeAll, watchEvents } from "./internal-listener";
@@ -146,8 +146,8 @@ function trap(container: HTMLElement): () => void {
  * ```
  */
 export function createFocusTrap(active?: MaybeAccessor<boolean>): RefSetter<HTMLElement> {
-  return createElementAttachment<HTMLElement, HTMLElement>(
-    (element) => (access(active ?? true) ? element : undefined),
+  return createElementAttachmentWhen<HTMLElement, HTMLElement>(
     (container) => trap(container),
+    (element) => (access(active ?? true) ? element : undefined),
   );
 }

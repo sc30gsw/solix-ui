@@ -1,9 +1,11 @@
 import { descendants, parameterAliases, ts } from "../syntax";
 import {
   at,
+  browserOnlyRoles,
   callsTo,
   comparedByValueRoles,
   hasRole,
+  type Library,
   type PrimitiveRule,
   publicModules,
   type Rule,
@@ -11,6 +13,19 @@ import {
 
 const optionReader = { file: "internal-access.ts", name: "access" };
 const configRole = "LiveConfig";
+
+function isReadLive(library: Library, read: ts.Node): boolean {
+  const enclosing = ts.findAncestor(read.parent, ts.isFunctionLike);
+  return (
+    ts.findAncestor(read.parent, (ancestor) => hasRole(library, ancestor, comparedByValueRoles)) !==
+      undefined ||
+    (enclosing !== undefined &&
+      !hasRole(library, enclosing, browserOnlyRoles) &&
+      ts.findAncestor(enclosing.parent, (ancestor) =>
+        hasRole(library, ancestor, browserOnlyRoles),
+      ) !== undefined)
+  );
+}
 
 const liveOptions: Rule = (library) =>
   publicModules(library).flatMap((module) => {
@@ -22,20 +37,14 @@ const liveOptions: Rule = (library) =>
     );
     if (!callsAHelper) return [];
     return nodes
-      .filter((node) => callsTo(library, node, optionReader))
-      .filter(
-        (node) =>
-          !ts.findAncestor(node.parent, (ancestor) =>
-            hasRole(library, ancestor, comparedByValueRoles),
-          ),
-      )
+      .filter((node) => callsTo(library, node, optionReader) && !isReadLive(library, node))
       .map(
         (node) =>
-          `${at(module, node)}: ${node.getText()}: this module gives a helper a ${configRole}, so read a live option only inside an argument typed ${comparedByValueRoles.join(" or ")}, which the helper compares with sameValue, so an option that recomputes to an equal value keeps what is built on it.`,
+          `${at(module, node)}: ${node.getText()}: this module calls a helper that takes a ${configRole}, so read a live option inside an argument typed ${comparedByValueRoles.join(" or ")}, which the helper compares with sameValue, or inside a function that a browser-only function calls later, such as an event listener. Read once where it attaches, the option would be frozen.`,
       );
   });
 
 export const liveOptionsRule: PrimitiveRule = {
-  description: `a public primitive that calls a helper taking a ${configRole} reads its live options only inside an argument typed ${comparedByValueRoles.join(" or ")}`,
+  description: `a public primitive that calls a helper taking a ${configRole} reads its live options only inside an argument typed ${comparedByValueRoles.join(" or ")}, or inside a function a browser-only function calls later`,
   rule: liveOptions,
 };

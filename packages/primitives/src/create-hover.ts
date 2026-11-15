@@ -1,4 +1,4 @@
-import { createElementValue } from "./internal-attachment";
+import { createElementValue } from "./internal-browser-value";
 import { disposeAll, watchEvents } from "./internal-listener";
 import type { BrowserValue, RefSetter } from "./types";
 
@@ -17,12 +17,14 @@ export type HoverReturn<E extends Element> = { ref: RefSetter<E>; hovered: Brows
  * ```
  */
 export function createHover<E extends Element = Element>(): HoverReturn<E> {
-  const [ref, hovered] = createElementValue<E, boolean>(false, (element, _config, deliver) => {
-    deliver(element.matches(":hover"));
-    return disposeAll([
-      watchEvents(element, ["mouseenter"], () => deliver(true)),
-      watchEvents(element, ["mouseleave"], () => deliver(false)),
-    ]);
-  });
+  const [ref, hovered] = createElementValue<E, boolean>(
+    false,
+    (element) => element.matches(":hover"),
+    (element, deliver) =>
+      disposeAll([
+        watchEvents(element, ["mouseenter"], () => deliver(true)),
+        watchEvents(element, ["mouseleave"], () => deliver(false)),
+      ]),
+  );
   return { ref, hovered };
 }

@@ -1,5 +1,5 @@
 import { access } from "./internal-access";
-import { createElementValue } from "./internal-attachment";
+import { createElementValue } from "./internal-browser-value";
 import { lookUp } from "./internal-browser-api";
 import { observe } from "./internal-dom-observer";
 import { viewOf } from "./internal-node";
@@ -121,7 +121,8 @@ export function createResizeObserver<E extends Element = Element>(
 ): ResizeObserverReturn<E> {
   return createElementValue<E, ObserverRect, ResizeObserverBoxOptions | undefined>(
     emptyRect,
-    (element, box, deliver) => watchSize(element, box, deliver),
+    () => emptyRect,
+    (element, deliver, box) => watchSize(element, box, deliver),
     () => access(options)?.box,
   );
 }

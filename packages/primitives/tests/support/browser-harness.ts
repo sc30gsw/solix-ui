@@ -21,7 +21,7 @@ type Schedule = (callback: unknown, ...rest: unknown[]) => unknown;
 type Cancel = (id: unknown) => void;
 type Observe = (this: object, target: Node, ...rest: unknown[]) => void;
 type Unobserve = (this: object, target?: Node) => void;
-export type Attachments = { added: string[]; removed: string[] };
+export type Attachments = { listened: string[]; observed: string[]; removed: string[] };
 type ObserverClass = new (callback: (...args: unknown[]) => void, ...rest: unknown[]) => object;
 
 const browserGlobals = globalThis as unknown as Record<string, unknown>;
@@ -122,7 +122,7 @@ function recordListeners(holder: Record<string, unknown>): void {
       }),
     };
     liveListeners.add(registration);
-    for (const journal of journals) journal.added.push(type);
+    for (const journal of journals) journal.listened.push(type);
     add.call(this, type, registration.registered, options);
     if (typeof options === "object" && options.signal) {
       addListener.call(options.signal, "abort", () => liveListeners.delete(registration), {
@@ -193,7 +193,7 @@ for (const name of observers) {
   prototype.observe = function (this: object, target: Node, ...rest: unknown[]) {
     observe.call(this, target, ...rest);
     if (!inScope()) return;
-    for (const journal of journals) journal.added.push(name);
+    for (const journal of journals) journal.observed.push(name);
     liveObservations.set(this, (liveObservations.get(this) ?? new Set<Node>()).add(target));
   };
   if (unobserve) {
@@ -319,12 +319,14 @@ export function record<T extends EventTarget, K extends string>(
   return seen;
 }
 
-export async function attachmentsDuring(run: () => void | Promise<void>): Promise<Attachments> {
-  const journal: Attachments = { added: [], removed: [] };
+export async function attachmentsDuring<T>(
+  run: () => T | Promise<T>,
+): Promise<Attachments & { result: T }> {
+  const journal: Attachments = { listened: [], observed: [], removed: [] };
   journals.add(journal);
   try {
-    await run();
-    return journal;
+    const result = await run();
+    return { ...journal, result };
   } finally {
     journals.delete(journal);
   }

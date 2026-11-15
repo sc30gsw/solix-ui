@@ -1,16 +1,19 @@
 import { type Accessor, createSignal } from "solid-js";
-import { describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 import * as primitives from "../src/index";
-import { flush, mount, record, unmount } from "./support/browser-harness";
-import { observers } from "./support/browser-resources";
+import { attachmentsDuring, flush, mount, record, unmount } from "./support/browser-harness";
 import { box, button, nextTask, press, settled, witnessed } from "./support/dom";
 import type { ElementPrimitive } from "./support/primitive-kinds";
 
 type Contracted = {
   ref: primitives.RefSetter<HTMLElement>;
   actsOn: (element: HTMLElement) => Promise<boolean>;
-  value?: { read: () => unknown; initial: unknown };
+  value?: {
+    read: () => unknown;
+    initial: unknown;
+    alreadyOn?: (element: HTMLElement) => Promise<unknown>;
+  };
 };
 
 type Contract = (tick: Accessor<number>) => Contracted;
@@ -143,7 +146,14 @@ const contracts: { [K in ElementPrimitive]: () => Contract } = {
         outside.remove();
         return acted;
       },
-      value: { read: within.focused, initial: false },
+      value: {
+        read: within.focused,
+        initial: false,
+        alreadyOn: async (element) => {
+          element.querySelector("button")?.focus();
+          return true;
+        },
+      },
     };
   },
   createHover: () => () => {
@@ -161,7 +171,14 @@ const contracts: { [K in ElementPrimitive]: () => Contract } = {
         away.remove();
         return acted;
       },
-      value: { read: hover.hovered, initial: false },
+      value: {
+        read: hover.hovered,
+        initial: false,
+        alreadyOn: async (element) => {
+          await userEvent.hover(element);
+          return true;
+        },
+      },
     };
   },
   createInViewport: () => () => {
@@ -226,41 +243,6 @@ function element(label: string): HTMLElement {
   return region;
 }
 
-type Observable = { observe(...target: never[]): void; disconnect(): void };
-
-function observerPrototypes(): Observable[] {
-  return observers.map((name) => {
-    const observer: { prototype: Observable } = Reflect.get(globalThis, name);
-    return observer.prototype;
-  });
-}
-
-function attachmentsDuring<T>(run: () => T): {
-  result: T;
-  added: number;
-  removed: number;
-  types: string[];
-} {
-  const listened = vi.spyOn(EventTarget.prototype, "addEventListener");
-  const added = [
-    listened,
-    ...observerPrototypes().map((prototype) => vi.spyOn(prototype, "observe")),
-  ];
-  const removed = [
-    vi.spyOn(EventTarget.prototype, "removeEventListener"),
-    ...observerPrototypes().map((prototype) => vi.spyOn(prototype, "disconnect")),
-  ];
-  const calls = (spies: { mock: { calls: unknown[] } }[]) =>
-    spies.reduce((total, spy) => total + spy.mock.calls.length, 0);
-  try {
-    const result = run();
-    const types = listened.mock.calls.map(([type]) => type);
-    return { result, added: calls(added), removed: calls(removed), types };
-  } finally {
-    for (const spy of [...added, ...removed]) spy.mockRestore();
-  }
-}
-
 describe.each(Object.entries(contracts))("%s", (_name, contract) => {
   function mounted() {
     const create = contract();
@@ -270,9 +252,9 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
   }
 
   test("nothing is attached before the ref receives an element", async () => {
-    const { result, added } = attachmentsDuring(mounted);
+    const { result, listened, observed } = await attachmentsDuring(mounted);
 
-    expect(added).toBe(0);
+    expect([listened, observed]).toEqual([[], []]);
     expect(await result.actsOn(element("first"))).toBe(false);
   });
 
@@ -290,6 +272,19 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
     expect([onFirst, await actsOn(first), await actsOn(second)]).toEqual([true, false, true]);
     expect(afterTheMove).toEqual(value?.initial);
   });
+
+  test.runIf(contract()(() => 0).value?.alreadyOn)(
+    "a ref put on an element already in the state it reports reads it at once",
+    async () => {
+      const { ref, value } = mounted();
+      const first = element("first");
+      const expected = await value?.alreadyOn?.(first);
+
+      ref(first);
+      flush();
+      expect(value?.read()).toEqual(expected);
+    },
+  );
 
   test("the attachment is removed when the owner is disposed", async () => {
     const { ref, actsOn } = mounted();
@@ -317,7 +312,7 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
     ref(first);
     flush();
 
-    const { added, removed } = attachmentsDuring(() => {
+    const { listened, observed, removed } = await attachmentsDuring(() => {
       setTick(1);
       flush();
       ref(first);
@@ -325,20 +320,20 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
       setTick(2);
       flush();
     });
-    expect([added, removed]).toEqual([0, 0]);
+    expect([listened, observed, removed]).toEqual([[], [], []]);
     expect(await actsOn(first)).toBe(true);
   });
 
   test("a child that stops the propagation of every event type the primitive listens to changes nothing it reads", async () => {
     const first = element("first");
-    const { result, types } = attachmentsDuring(() => {
+    const { result, listened } = await attachmentsDuring(() => {
       const contracted = mounted();
       contracted.ref(first);
       flush();
       return contracted;
     });
     const child = first.querySelector("button");
-    for (const type of new Set(types)) {
+    for (const type of new Set(listened)) {
       child?.addEventListener(type, (event) => event.stopPropagation());
     }
 

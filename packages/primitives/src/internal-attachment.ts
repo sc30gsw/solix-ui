@@ -1,7 +1,6 @@
 import { createEffect, createMemo, createSignal } from "solid-js";
-import { createBrowserSignal } from "./internal-browser-value";
 import { type LiveConfig, sameValue } from "./internal-equal";
-import type { BrowserValue, RefSetter } from "./types";
+import type { RefSetter } from "./types";
 
 export type Attach<Args extends unknown[]> = (...args: Args) => () => void;
 
@@ -24,9 +23,9 @@ export function createAttachment<C>(
   createEffect(current, (value) => (value === undefined ? undefined : args[0](value)));
 }
 
-export function createElementAttachment<E extends Element, C>(
+export function createElementAttachmentWhen<E extends Element, C>(
+  attach: Attach<[config: C]>,
   config: LiveConfig<C | undefined, [element: E | undefined]>,
-  attach: Attach<[current: C]>,
 ): RefSetter<E> {
   const [element, setElement] = createSignal<E | undefined>(undefined);
   createAttachment(attach, () => config(element()));
@@ -35,21 +34,26 @@ export function createElementAttachment<E extends Element, C>(
   };
 }
 
-export function createElementValue<E extends Element, T, C = undefined>(
-  initial: T,
-  attach: Attach<[element: E, config: C, deliver: (value: T) => void]>,
-  config?: LiveConfig<C>,
-): [ref: RefSetter<E>, value: BrowserValue<T>] {
-  const [value, deliver] = createBrowserSignal(initial);
-  const ref = createElementAttachment<E, { element: E; config: C | undefined }>(
-    (element) => element && { element, config: config?.() },
-    (current) => {
-      const detach = attach(current.element, current.config as C, deliver);
-      return () => {
-        detach();
-        deliver(initial);
-      };
-    },
+export function createElementAttachment<E extends Element>(
+  attach: Attach<[element: E]>,
+): RefSetter<E>;
+export function createElementAttachment<E extends Element, C>(
+  attach: Attach<[element: E, config: C]>,
+  config: LiveConfig<C>,
+): RefSetter<E>;
+export function createElementAttachment<E extends Element, C>(
+  ...args:
+    | [attach: Attach<[element: E]>]
+    | [attach: Attach<[element: E, config: C]>, config: LiveConfig<C>]
+): RefSetter<E> {
+  if (args.length === 1) {
+    return createElementAttachmentWhen<E, E>(
+      (element) => args[0](element),
+      (element) => element,
+    );
+  }
+  return createElementAttachmentWhen<E, { element: E; config: C }>(
+    (current) => args[0](current.element, current.config),
+    (element) => element && { element, config: args[1]() },
   );
-  return [ref, value];
 }

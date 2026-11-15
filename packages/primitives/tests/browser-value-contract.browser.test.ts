@@ -81,8 +81,8 @@ const missingApis: { [K in PageValuePrimitive]: () => () => void } = {
 };
 
 async function registrationsDuring(run: () => void | Promise<void>): Promise<number> {
-  const { added, removed } = await attachmentsDuring(run);
-  return added.length + removed.length;
+  const { listened, observed, removed } = await attachmentsDuring(run);
+  return listened.length + observed.length + removed.length;
 }
 
 describe.each(Object.keys(contracts) as PageValuePrimitive[])("%s", (name) => {

@@ -21,11 +21,11 @@ export function createMutationObserver<E extends Element = Element>(
   callback: MutationCallback,
   options: MaybeAccessor<MutationObserverInit>,
 ): RefSetter<E> {
-  return createElementAttachment<E, { element: E; init: MutationObserverInit }>(
-    (element) => element && { element, init: { ...access(options) } },
-    (current) =>
-      observe("MutationObserver", current.element, current.init, (records, observer) =>
+  return createElementAttachment<E, MutationObserverInit>(
+    (element, init) =>
+      observe("MutationObserver", element, init, (records, observer) =>
         callback(records, observer as MutationObserver),
       ),
+    () => ({ ...access(options) }),
   );
 }

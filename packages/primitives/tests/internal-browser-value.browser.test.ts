@@ -4,6 +4,7 @@ import {
   type BrowserValueOptions,
   createBrowserValue,
   createBrowserMemo,
+  createElementValue,
   readOn,
   type Subscription,
 } from "../src/internal-browser-value";
@@ -32,8 +33,8 @@ function counter(start: number): Subscription<number, EventTarget> {
 }
 
 test("the loading value is required, so leaving it out is a type error", () => {
-  expectTypeOf<{ equals: false }>().not.toExtend<BrowserValueOptions<number, undefined>>();
-  expectTypeOf<{ loadingValue: number }>().toExtend<BrowserValueOptions<number, undefined>>();
+  expectTypeOf<{ equals: false }>().not.toExtend<BrowserValueOptions<number>>();
+  expectTypeOf<{ loadingValue: number }>().toExtend<BrowserValueOptions<number>>();
 });
 
 test("in a page the browser renders alone, it reads the value the subscription delivers at once, then each value it delivers", async () => {
@@ -205,4 +206,35 @@ test("createBrowserMemo computes in the browser at once, outside hydration", () 
   const value = mount(() => createBrowserMemo(() => "browser", "loading"));
 
   expect(value()).toBe("browser");
+});
+
+test("createElementValue starts at its initial value, reads the element when it attaches, takes what the watcher delivers, and goes back to its initial value when an attachment ends", () => {
+  const first = box("first");
+  const second = box("second");
+  const watched: { deliver: (value: string) => void } = { deliver: () => undefined };
+  const [ref, label] = mount(() =>
+    createElementValue<HTMLElement, string, string>(
+      "none",
+      (element, suffix) => `${element.textContent} ${suffix}`,
+      (_element, deliver) => {
+        watched.deliver = deliver;
+        return () => undefined;
+      },
+      () => "read",
+    ),
+  );
+  const seen = [label()];
+
+  ref(first);
+  flush();
+  seen.push(label());
+  watched.deliver("delivered");
+  flush();
+  seen.push(label());
+  ref(second);
+  flush();
+  seen.push(label());
+  unmount();
+  seen.push(label());
+  expect(seen).toEqual(["none", "first read", "delivered", "second read", "none"]);
 });

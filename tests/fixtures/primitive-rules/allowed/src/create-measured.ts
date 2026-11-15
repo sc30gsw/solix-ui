@@ -4,9 +4,8 @@ import type { RefSetter } from "../../../../../packages/primitives/src/types";
 
 export function createMeasured(): [ref: RefSetter<HTMLElement>, width: () => number] {
   return [
-    createElementAttachment<HTMLElement, HTMLElement>(
-      (element) => element,
-      (element) => watchEvents(element, ["resize"], () => undefined),
+    createElementAttachment<HTMLElement>((element) =>
+      watchEvents(element, ["resize"], () => undefined),
     ),
     () => 0,
   ];

@@ -322,19 +322,21 @@ export function contextualAliases(compiled: Compiled, node: ts.Node): Alias[] {
   return ts.isExpression(node) ? aliasesOf(compiled.checker.getContextualType(node)) : [];
 }
 
-export function parameterAliases(compiled: Compiled, call: ts.CallLikeExpression): Alias[] {
-  const signature = compiled.checker.getResolvedSignature(call);
-  return (signature?.getParameters() ?? []).flatMap((parameter) => {
-    const type = compiled.checker.getTypeOfSymbol(parameter);
-    const members = (type.isUnion() ? type.types : [type]).flatMap((part) =>
-      part.flags & ts.TypeFlags.Object && part.getCallSignatures().length === 0
-        ? compiled.checker
-            .getPropertiesOfType(part)
-            .map((member) => compiled.checker.getTypeOfSymbol(member))
-        : [],
-    );
-    return [type, ...members].flatMap(aliasesOf);
-  });
+export function parameterAliases(compiled: Compiled, call: ts.CallExpression): Alias[] {
+  const overloads = compiled.checker.getTypeAtLocation(call.expression).getCallSignatures();
+  return overloads
+    .flatMap((signature) => signature.getParameters())
+    .flatMap((parameter) => {
+      const type = compiled.checker.getTypeOfSymbol(parameter);
+      const members = (type.isUnionOrIntersection() ? type.types : [type]).flatMap((part) =>
+        part.flags & ts.TypeFlags.Object && part.getCallSignatures().length === 0
+          ? compiled.checker
+              .getPropertiesOfType(part)
+              .map((member) => compiled.checker.getTypeOfSymbol(member))
+          : [],
+      );
+      return [type, ...members].flatMap(aliasesOf);
+    });
 }
 
 export function returnsAlias(compiled: Compiled, fn: ts.Node, alias: string): boolean {

@@ -1,5 +1,5 @@
 import { access } from "./internal-access";
-import { createElementValue } from "./internal-attachment";
+import { createElementValue } from "./internal-browser-value";
 import { observe } from "./internal-dom-observer";
 import type { BrowserValue, MaybeAccessor, RefSetter } from "./types";
 
@@ -33,7 +33,8 @@ export function createIntersection<E extends Element = Element>(
     IntersectionObserverInit
   >(
     null,
-    (element, init, deliver) =>
+    () => null,
+    (element, deliver, init) =>
       observe("IntersectionObserver", element, init, (entries) => {
         const last = entries.at(-1);
         if (last) deliver(last);

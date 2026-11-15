@@ -23,7 +23,7 @@ function withCalls(options: FocusWithinOptions = {}) {
   const within = mount(() =>
     createFocusWithin<HTMLElement>({
       onFocus: (event) => calls.push(`focus ${event.type}`),
-      onBlur: (event) => calls.push(`blur ${event.type}`),
+      onBlur: (event) => calls.push(`blur ${event?.type ?? "without an event"}`),
       ...options,
     }),
   );
@@ -86,37 +86,96 @@ test("each callback is read when it is called, so the latest one runs", async ()
   expect(seen).toEqual(["second"]);
 });
 
-test("removing the focused element from inside makes it false and calls onBlur once, in an engine that sends no focusout too", async () => {
-  const { element, first } = region();
-  const { within, calls } = withCalls();
-  within.ref(element);
-  flush();
-  first.focus();
-  await nextTask();
-
-  first.remove();
-  await reported(() => !within.focused(), "focus leaving the removed element");
-  await nextTask();
-  expect(calls).toEqual(["focus focusin", "blur focusout"]);
-});
-
-test("removing the focused element makes it false and calls onBlur once where the engine sends no focusout for the removal", async () => {
-  const { element, first } = region();
-  const { within, calls } = withCalls();
-  within.ref(element);
-  flush();
-  first.focus();
-  await nextTask();
+function silencingFocusout<T>(run: () => T): T {
   const silence = (event: Event) => event.stopImmediatePropagation();
   window.addEventListener("focusout", silence, true);
   try {
-    first.remove();
-    await reported(() => !within.focused(), "focus leaving the removed element");
-    await nextTask();
+    return run();
   } finally {
     window.removeEventListener("focusout", silence, true);
   }
-  expect(calls).toEqual(["focus focusin", "blur focusout"]);
+}
+
+const removals = [
+  { engine: "an engine that sends a focusout for the removal", remove: (run: () => void) => run() },
+  { engine: "an engine that sends none", remove: silencingFocusout },
+];
+
+test.each(removals)(
+  "removing the focused element from inside makes it false and calls onBlur once, in $engine",
+  async ({ remove }) => {
+    const { element, first } = region();
+    const { within, calls } = withCalls();
+    within.ref(element);
+    flush();
+    first.focus();
+    await nextTask();
+    calls.length = 0;
+
+    remove(() => first.remove());
+    await reported(() => !within.focused(), "focus leaving the removed element");
+    await nextTask();
+    expect(calls.map((call) => call.split(" ")[0])).toEqual(["blur"]);
+  },
+);
+
+test.each(removals)(
+  "removing the element its ref is on while focus is inside makes it false and calls onBlur once, in $engine",
+  async ({ remove }) => {
+    const { element, first } = region();
+    const { within, calls } = withCalls();
+    within.ref(element);
+    flush();
+    first.focus();
+    await nextTask();
+    calls.length = 0;
+
+    remove(() => element.remove());
+    await reported(() => !within.focused(), "focus leaving the removed region");
+    await nextTask();
+    expect(calls.map((call) => call.split(" ")[0])).toEqual(["blur"]);
+  },
+);
+
+test.each(removals)(
+  "removing the focused element and focusing another inside in the same task calls nothing, in $engine",
+  async ({ remove }) => {
+    const { element, first, second } = region();
+    const { within, calls } = withCalls();
+    within.ref(element);
+    flush();
+    first.focus();
+    await nextTask();
+    calls.length = 0;
+
+    remove(() => first.remove());
+    second.focus();
+    await nextTask();
+    await nextTask();
+    expect({ calls, focused: within.focused() }).toEqual({ calls: [], focused: true });
+  },
+);
+
+test("onBlur gets the browser's focusout where it sent one, and no event where the element lost focus without one", async () => {
+  const { element, first } = region();
+  const outside = button("outside");
+  const { within, calls } = withCalls();
+  within.ref(element);
+  flush();
+
+  first.focus();
+  outside.focus();
+  await nextTask();
+  first.focus();
+  await nextTask();
+  silencingFocusout(() => first.remove());
+  await reported(() => !within.focused(), "focus leaving the removed element");
+  expect(calls).toEqual([
+    "focus focusin",
+    "blur focusout",
+    "focus focusin",
+    "blur without an event",
+  ]);
 });
 
 test("a widget inside that stops focusin and focusout from propagating hides nothing from it", async () => {
