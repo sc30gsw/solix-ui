@@ -2,25 +2,23 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   existsSync,
-  globSync,
   lstatSync,
   readdirSync,
   readFileSync,
   readlinkSync,
   realpathSync,
-  statSync,
 } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, relative, sep } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "../scripts/browser-engines.mjs";
 import {
   catalogVersions,
   repositoryRoot,
   rootManifest,
-  skillApprovals,
   workflowFiles,
   workspaceFile,
 } from "./support/workspace";
+import { pnpmSettings } from "../scripts/pnpm-settings";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -42,11 +40,14 @@ const versionPrefix = /^[\^~]/;
 const reviewedSkillsFile = "scripts/reviewed-skills.json";
 const packageSkillIgnoreFile = ".gitignore";
 const skillDirectories = [".agents/skills", ".claude/skills"];
+const skillFolders = skillDirectories.join(" and ");
 const installed = existsSync(join(repositoryRoot, "node_modules/.modules.yaml"));
-const approvals = skillApprovals();
-const approvedSkills = Object.entries(approvals).flatMap(([pack, approval]) =>
-  Array.isArray(approval) ? approval.map((name) => ({ pack, name })) : [],
+const approvedSkills = Object.entries(pnpmSettings().approvedSkills).flatMap(([pack, names]) =>
+  names.map((name) => ({ pack, name })),
 );
+const reviewedHashes = JSON.parse(
+  readFileSync(join(repositoryRoot, reviewedSkillsFile), "utf8"),
+) as Record<string, Record<string, string>>;
 const packageSkillEntries = [packageSkillIgnoreFile, ...approvedSkills.map(({ name }) => name)];
 
 const skillNames = readdirSync(skillsDirectory)
@@ -118,34 +119,34 @@ function isIgnored(path: string): boolean {
   return spawnSync("git", ["check-ignore", "-q", path], { cwd: repositoryRoot }).status === 0;
 }
 
-function skillFolderHash(directory: string): string {
+function skillFolderContent(directory: string): { hash: string; symbolicLinks: string[] } {
   const root = realpathSync(directory);
   const hash = createHash("sha256");
-  const files = globSync("**/*", { cwd: root })
-    .filter((path) => statSync(join(root, path)).isFile())
-    .map((path) => path.split("\\").join("/"))
+  const entries = readdirSync(root, { recursive: true, withFileTypes: true }).map((entry) => ({
+    entry,
+    path: relative(root, join(entry.parentPath, entry.name)).split(sep).join("/"),
+  }));
+  const files = entries
+    .filter(({ entry }) => entry.isFile())
+    .map(({ path }) => path)
     .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
   for (const path of files) {
     hash.update(`${path}\0`);
     hash.update(readFileSync(join(root, path)));
     hash.update("\0");
   }
-  return hash.digest("hex");
+  return {
+    hash: hash.digest("hex"),
+    symbolicLinks: entries.filter(({ entry }) => entry.isSymbolicLink()).map(({ path }) => path),
+  };
 }
 
-test(`${workspaceFile} approves package skills by name, and ${reviewedSkillsFile} records a reviewed hash for exactly those`, () => {
-  const reviewed = JSON.parse(read(reviewedSkillsFile)) as Record<string, Record<string, string>>;
-  const recorded = Object.entries(reviewed).flatMap(([pack, skills]) =>
+test(`${reviewedSkillsFile} records a reviewed hash for exactly the package skills ${workspaceFile} approves`, () => {
+  const recorded = Object.entries(reviewedHashes).flatMap(([pack, skills]) =>
     Object.keys(skills).map((name) => `${pack} ${name}`),
   );
   const approved = approvedSkills.map(({ pack, name }) => `${pack} ${name}`);
   const violations = [
-    ...Object.entries(approvals)
-      .filter(([, approval]) => approval === true)
-      .map(
-        ([pack]) =>
-          `${workspaceFile}: name the skills of ${pack} you approve, after reading each one, instead of skills: true, which would also admit a skill a later release adds.`,
-      ),
     ...approved
       .filter((entry) => !recorded.includes(entry))
       .map(
@@ -163,28 +164,32 @@ test(`${workspaceFile} approves package skills by name, and ${reviewedSkillsFile
   expect(violations).toEqual([]);
 });
 
-test("in .agents/skills and .claude/skills, git ignores the approved package skills, and tracks every other entry", () => {
+test(`in ${skillFolders}, git ignores the approved package skills and tracks every other entry`, () => {
   const violations = skillDirectories.flatMap((directory) => {
     const tracked = trackedFiles(directory);
+    const isTracked = (entry: string) =>
+      tracked.some(
+        (file) => file === `${directory}/${entry}` || file.startsWith(`${directory}/${entry}/`),
+      );
     const entries = existsSync(join(repositoryRoot, directory))
       ? readdirSync(join(repositoryRoot, directory))
       : [];
     return [
       ...approvedSkills
-        .filter(({ name }) => !isIgnored(`${directory}/${name}`))
+        .filter(({ name }) => isTracked(name))
+        .map(
+          ({ pack, name }) =>
+            `${directory}/${name}: a project skill has the name of the skill ${pack} ships and ${workspaceFile} approves. Rename one of them.`,
+        ),
+      ...approvedSkills
+        .filter(({ name }) => !isTracked(name) && !isIgnored(`${directory}/${name}`))
         .map(
           ({ name }) =>
             `${directory}/${name}: let pnpm's ${packageSkillIgnoreFile} there ignore it; run vp install and commit that file.`,
         ),
       ...entries
         .filter((entry) => !approvedSkills.some(({ name }) => name === entry))
-        .filter(
-          (entry) =>
-            !tracked.some(
-              (file) =>
-                file === `${directory}/${entry}` || file.startsWith(`${directory}/${entry}/`),
-            ),
-        )
+        .filter((entry) => !isTracked(entry))
         .map(
           (entry) =>
             `${directory}/${entry}: it is neither tracked nor a package skill ${workspaceFile} approves. Commit it, approve it there, or remove it.`,
@@ -196,9 +201,8 @@ test("in .agents/skills and .claude/skills, git ignores the approved package ski
 });
 
 test.skipIf(!installed)(
-  "pnpm links exactly the approved package skills into .agents/skills and .claude/skills, each to its package, holding the text that was reviewed",
+  `pnpm links exactly the approved package skills into ${skillFolders}, each to its package, holding the files whose hash ${reviewedSkillsFile} records`,
   () => {
-    const reviewed = JSON.parse(read(reviewedSkillsFile)) as Record<string, Record<string, string>>;
     const violations = skillDirectories.flatMap((directory) => {
       const linkedToPackages = readdirSync(join(repositoryRoot, directory)).filter((entry) => {
         const path = join(repositoryRoot, directory, entry);
@@ -220,15 +224,20 @@ test.skipIf(!installed)(
             ];
           }
           const front = frontMatterOf(readFileSync(join(link, "SKILL.md"), "utf8"));
-          const hash = skillFolderHash(link);
+          const { hash, symbolicLinks } = skillFolderContent(link);
+          const reviewed = reviewedHashes[pack]?.[name];
           return [
             ...(front.name === name
               ? []
               : [`${directory}/${name}/SKILL.md: ${pack} names this skill "${front.name}".`]),
-            ...(hash === reviewed[pack]?.[name]
+            ...symbolicLinks.map(
+              (path) =>
+                `${directory}/${name}/${path}: ${pack} ships a symbolic link inside this skill, whose text a hash cannot hold. Do not approve the skill until it ships files only.`,
+            ),
+            ...(hash === reviewed
               ? []
               : [
-                  `${directory}/${name}: ${pack} ${reviewed[pack]?.[name] === undefined ? "ships this skill with no reviewed hash" : "changed the text of this skill"}. Read every file of its text as data, then record its hash, ${hash}, in ${reviewedSkillsFile}.`,
+                  `${directory}/${name}: ${pack} ${reviewed === undefined ? "ships this skill with no reviewed hash" : "changed the files of this skill"}. Read every file of it, hidden ones included, as data, then record its hash, ${hash}, in ${reviewedSkillsFile}.`,
                 ]),
           ];
         }),
