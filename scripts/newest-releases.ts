@@ -1,106 +1,178 @@
 import semver from "semver";
 
+export const heldBackFile = "scripts/held-back-releases.json";
+export const packageManagerPinName = "packageManager";
+export const nodePinName = "engines.node";
+
 export type RegistryDocument = {
-  "dist-tags"?: Record<string, string>;
+  versions?: Record<string, { peerDependencies?: Record<string, string> }>;
   time?: Record<string, string>;
 };
 
 export type NodeRelease = { version: string; lts: string | false };
 
-export type Pin = { name: string; registryName: string | undefined; pinned: string | undefined };
+export type Pin =
+  | { source: "registry"; name: string; registryName: string; pinned: string }
+  | { source: "node"; name: typeof nodePinName; pinned: string };
 
-export type HeldBack = { name: string; reason: string; lift: string };
+export type HeldBack = { name: string; reason: string; liftWhen: string };
 
-export type Status = "current" | "behind" | "not yet eligible" | "held back" | "unknown";
-
-export type Row = Pin & {
-  newest: string | undefined;
-  eligible: string | undefined;
-  eligibleAt: string | undefined;
-  channel: string;
-  status: Status;
-  held: HeldBack | undefined;
-};
-
-type Context = {
-  documents: Record<string, RegistryDocument>;
+export type ReleasePolicy = {
   minimumReleaseAgeMinutes: number;
   excluded: readonly string[];
   now: number;
-  nodeLtsMajor: number;
 };
+
+type Compared = { pin: Pin; channel: string; newest: string };
+
+export type PinComparison =
+  | (Compared & { status: "current" })
+  | (Compared & { status: "behind"; eligible: string })
+  | (Compared & { status: "held back"; eligible: string; held: HeldBack })
+  | (Compared & { status: "not yet eligible"; eligibleAt: string })
+  | { pin: Pin; channel: string; status: "no release" };
+
+export type Report = { comparisons: PinComparison[]; problems: string[] };
 
 type Channel = {
   describe: string;
-  candidates: (document: RegistryDocument, context: Context) => string[];
+  versions: (published: string[], pin: Pin, nodeLtsMajor: number) => string[];
 };
 
-type Found = Pick<Row, "newest" | "eligible" | "eligibleAt" | "channel">;
-
 const minute = 60_000;
+const solidMajor = 2;
 const aliasedPackage = /^npm:((?:@[^/@]+\/)?[^@]+)@(.+)$/;
-const packageManagerPin = /^((?:@[^/@]+\/)?[^@]+)@(.+)$/;
+const packageAndVersion = /^((?:@[^/@]+\/)?[^@]+)@(.+)$/;
+const packageName = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/;
 
-export const packageManagerName = "packageManager";
-export const nodeName = "engines.node";
-
-function versionsIn(document: RegistryDocument): string[] {
-  return Object.keys(document.time ?? {}).filter((version) => semver.valid(version) !== null);
-}
-
-function tagged(tag: string): Channel["candidates"] {
-  return (document) => {
-    const target = document["dist-tags"]?.[tag];
-    if (!target) return [];
-    const prerelease = semver.prerelease(target) !== null;
-    return versionsIn(document).filter(
-      (version) =>
-        semver.major(version) === semver.major(target) &&
-        (semver.prerelease(version) !== null) === prerelease &&
-        semver.lte(version, target),
-    );
-  };
-}
-
-const latestChannel: Channel = { describe: "the latest tag", candidates: tagged("latest") };
-const nodeChannel = "Node's newest LTS";
-
-export const channels: Record<string, Channel> = {
-  "solid-js": { describe: "the next tag", candidates: tagged("next") },
-  "@solidjs/web": { describe: "the next tag", candidates: tagged("next") },
-  "@solidjs/vite-plugin": { describe: "its newest prerelease", candidates: versionsIn },
-  "@types/node": {
-    describe: "the major of Node's newest LTS",
-    candidates: (document, { nodeLtsMajor }) =>
-      versionsIn(document).filter(
-        (version) => semver.prerelease(version) === null && semver.major(version) === nodeLtsMajor,
-      ),
+const stableChannel: Channel = {
+  describe: "its newest stable release",
+  versions: (published) => published.filter((version) => semver.prerelease(version) === null),
+};
+const solidChannel: Channel = {
+  describe: `the newest Solid ${solidMajor} release, stable once a stable ${solidMajor}.x exists`,
+  versions: (published) => {
+    const line = published.filter((version) => semver.major(version) === solidMajor);
+    const stable = line.filter((version) => semver.prerelease(version) === null);
+    return stable.length > 0 ? stable : line;
   },
 };
 
-function lowestVersionOf(specifier: string | undefined): string | undefined {
-  return specifier === undefined ? undefined : semver.minVersion(specifier)?.version;
+export const channels: Record<string, Channel> = {
+  "solid-js": solidChannel,
+  "@solidjs/web": solidChannel,
+  "@solidjs/vite-plugin": {
+    describe: "its newest release on the major it pins, tagged or not",
+    versions: (published, pin) =>
+      published.filter((version) => semver.major(version) === semver.major(pin.pinned)),
+  },
+  "@types/node": {
+    describe: "its newest stable release on the major of Node's newest LTS",
+    versions: (published, pin, nodeLtsMajor) =>
+      stableChannel
+        .versions(published, pin, nodeLtsMajor)
+        .filter((version) => semver.major(version) === nodeLtsMajor),
+  },
+};
+const nodeChannel = "Node's newest LTS";
+
+export const solidPackages = Object.keys(channels).filter(
+  (name) => channels[name] === solidChannel,
+);
+
+function channelOf(name: string): Channel {
+  return channels[name] ?? stableChannel;
 }
 
-export function pinsOf(pinned: {
-  catalog: Record<string, string>;
-  packageManager: string;
-  nodeRange: string;
-}): Pin[] {
-  const fromCatalog = Object.entries(pinned.catalog).map(([name, specifier]): Pin => {
+function publishedVersions(document: RegistryDocument): string[] {
+  return Object.keys(document.versions ?? {}).filter((version) => semver.valid(version) !== null);
+}
+
+function lowestVersion(where: string, specifier: string | undefined): string {
+  const version = specifier === undefined ? undefined : semver.minVersion(specifier)?.version;
+  if (version === undefined) throw new Error(`${where}: "${specifier}" names no version.`);
+  return version;
+}
+
+export function pinsOf(
+  manifest: { packageManager?: string; engines?: { node?: string } },
+  catalog: Record<string, string>,
+): Pin[] {
+  const fromCatalog = Object.entries(catalog).map(([name, specifier]): Pin => {
     const alias = aliasedPackage.exec(specifier);
     return {
+      source: "registry",
       name,
       registryName: alias ? alias[1] : name,
-      pinned: lowestVersionOf(alias ? alias[2] : specifier),
+      pinned: lowestVersion(`catalog entry ${name}`, alias ? alias[2] : specifier),
     };
   });
-  const [, manager, managerVersion] = packageManagerPin.exec(pinned.packageManager) ?? [];
+  const [, manager, managerVersion] = packageAndVersion.exec(manifest.packageManager ?? "") ?? [];
+  if (manager === undefined) {
+    throw new Error(`package.json: set packageManager to <name>@<version>.`);
+  }
   return [
     ...fromCatalog,
-    { name: packageManagerName, registryName: manager, pinned: lowestVersionOf(managerVersion) },
-    { name: nodeName, registryName: undefined, pinned: lowestVersionOf(pinned.nodeRange) },
+    {
+      source: "registry",
+      name: packageManagerPinName,
+      registryName: manager,
+      pinned: lowestVersion(packageManagerPinName, managerVersion),
+    },
+    {
+      source: "node",
+      name: nodePinName,
+      pinned: lowestVersion(nodePinName, manifest.engines?.node),
+    },
   ];
+}
+
+export function isExcluded(
+  registryName: string,
+  version: string,
+  excluded: readonly string[],
+): boolean {
+  return excluded.some((entry) => {
+    const [, name, exact] = packageAndVersion.exec(entry) ?? [undefined, entry, undefined];
+    if (!packageName.test(name ?? "") || (exact !== undefined && semver.valid(exact) === null)) {
+      throw new Error(
+        `minimumReleaseAgeExclude: "${entry}" is not a package name or <name>@<exact version>, the only entries this check reads.`,
+      );
+    }
+    return name === registryName && (exact === undefined || exact === version);
+  });
+}
+
+function eligibleAt(document: RegistryDocument, version: string, policy: ReleasePolicy): number {
+  return Date.parse(document.time?.[version] ?? "") + policy.minimumReleaseAgeMinutes * minute;
+}
+
+function isEligible(
+  registryName: string,
+  document: RegistryDocument,
+  version: string,
+  policy: ReleasePolicy,
+): boolean {
+  return (
+    isExcluded(registryName, version, policy.excluded) ||
+    eligibleAt(document, version, policy) <= policy.now
+  );
+}
+
+export function eligibleOnChannel(
+  name: string,
+  document: RegistryDocument,
+  policy: ReleasePolicy,
+  pin: Pin = { source: "registry", name, registryName: name, pinned: "0.0.0" },
+  nodeLtsMajor = 0,
+): { newest: string | undefined; eligible: string[] } {
+  const candidates = channelOf(name)
+    .versions(publishedVersions(document), pin, nodeLtsMajor)
+    .sort(semver.rcompare);
+  return {
+    newest: candidates[0],
+    eligible: candidates.filter((version) => isEligible(name, document, version, policy)),
+  };
 }
 
 function newestNodeLts(nodeReleases: readonly NodeRelease[]): string | undefined {
@@ -110,109 +182,153 @@ function newestNodeLts(nodeReleases: readonly NodeRelease[]): string | undefined
     .sort(semver.rcompare)[0];
 }
 
-function nodeFound(nodeReleases: readonly NodeRelease[]): Found {
-  const newest = newestNodeLts(nodeReleases);
-  return { newest, eligible: newest, eligibleAt: undefined, channel: nodeChannel };
-}
-
-function packageFound(pin: Pin, context: Context): Found {
-  const document = context.documents[pin.registryName ?? ""] ?? {};
-  const channel = channels[pin.name] ?? latestChannel;
-  const candidates = channel
-    .candidates(document, context)
-    .sort(semver.rcompare)
-    .map((version) => {
-      const eligibleAt =
-        Date.parse(document.time?.[version] ?? "") + context.minimumReleaseAgeMinutes * minute;
-      const excluded =
-        context.excluded.includes(pin.registryName ?? "") ||
-        context.excluded.includes(`${pin.registryName}@${version}`);
-      return { version, eligibleAt, eligible: excluded || eligibleAt <= context.now };
-    });
-  const [newest] = candidates;
+function compared(
+  pin: Pin,
+  channel: string,
+  newest: string | undefined,
+  eligible: string | undefined,
+  notYetEligibleAt: number | undefined,
+  held: HeldBack | undefined,
+): PinComparison {
+  if (newest === undefined) return { pin, channel, status: "no release" };
+  if (semver.lte(newest, pin.pinned)) return { pin, channel, newest, status: "current" };
+  if (eligible !== undefined && semver.gt(eligible, pin.pinned)) {
+    return held
+      ? { pin, channel, newest, status: "held back", eligible, held }
+      : { pin, channel, newest, status: "behind", eligible };
+  }
   return {
-    newest: newest?.version,
-    eligible: candidates.find(({ eligible }) => eligible)?.version,
-    eligibleAt: newest && !newest.eligible ? new Date(newest.eligibleAt).toISOString() : undefined,
-    channel: channel.describe,
+    pin,
+    channel,
+    newest,
+    status: "not yet eligible",
+    eligibleAt: new Date(notYetEligibleAt ?? 0).toISOString(),
   };
 }
 
-export type ReleasePolicy = {
-  minimumReleaseAgeMinutes: number;
-  excluded?: readonly string[];
-  now: number;
-};
-
-export function newestEligibleRelease(
-  name: string,
-  document: RegistryDocument,
-  policy: ReleasePolicy,
-): string | undefined {
-  return packageFound(
-    { name, registryName: name, pinned: undefined },
-    {
-      documents: { [name]: document },
-      minimumReleaseAgeMinutes: policy.minimumReleaseAgeMinutes,
-      excluded: policy.excluded ?? [],
-      now: policy.now,
-      nodeLtsMajor: 0,
-    },
-  ).eligible;
+export function heldBackProblems(
+  heldBack: readonly HeldBack[],
+  comparisons: readonly PinComparison[],
+): string[] {
+  return [
+    ...heldBack
+      .filter(
+        ({ name }) =>
+          !comparisons.some(({ pin, status }) => pin.name === name && status === "held back"),
+      )
+      .map(
+        ({ name }) =>
+          `${name}: the held-back list holds it, but it is not behind; remove the entry.`,
+      ),
+    ...heldBack
+      .filter(({ reason, liftWhen }) => !reason?.trim() || !liftWhen?.trim())
+      .map(({ name }) => `${name}: give the entry in ${heldBackFile} a reason and a liftWhen.`),
+  ];
 }
 
-function statusOf(pin: Pin, found: Found, held: HeldBack | undefined): Status {
-  if (!found.newest || !pin.pinned) return "unknown";
-  if (semver.lte(found.newest, pin.pinned)) return "current";
-  if (found.eligible && semver.gt(found.eligible, pin.pinned)) return held ? "held back" : "behind";
-  return "not yet eligible";
-}
-
-export function newestReleases(input: {
+export function compareWithNewest(input: {
   pins: readonly Pin[];
   documents: Record<string, RegistryDocument>;
   nodeReleases: readonly NodeRelease[];
-  minimumReleaseAgeMinutes: number;
-  excluded?: readonly string[];
-  heldBack?: readonly HeldBack[];
-  now: number;
-}): { rows: Row[]; problems: string[] } {
-  const heldBack = input.heldBack ?? [];
-  const context: Context = {
-    documents: input.documents,
-    minimumReleaseAgeMinutes: input.minimumReleaseAgeMinutes,
-    excluded: input.excluded ?? [],
-    now: input.now,
-    nodeLtsMajor: semver.major(newestNodeLts(input.nodeReleases) ?? "0.0.0"),
-  };
-  const rows = input.pins.map((pin): Row => {
-    const held = heldBack.find(({ name }) => name === pin.name);
-    const found =
-      pin.name === nodeName ? nodeFound(input.nodeReleases) : packageFound(pin, context);
-    return { ...pin, ...found, status: statusOf(pin, found, held), held };
+  policy: ReleasePolicy;
+  heldBack: readonly HeldBack[];
+}): Report {
+  const nodeLts = newestNodeLts(input.nodeReleases);
+  const nodeLtsMajor = semver.major(nodeLts ?? "0.0.0");
+  const comparisons = input.pins.map((pin): PinComparison => {
+    const held = input.heldBack.find(({ name }) => name === pin.name);
+    if (pin.source === "node") return compared(pin, nodeChannel, nodeLts, nodeLts, undefined, held);
+    const document = input.documents[pin.registryName] ?? {};
+    const { newest, eligible } = eligibleOnChannel(
+      pin.registryName,
+      document,
+      input.policy,
+      pin,
+      nodeLtsMajor,
+    );
+    return compared(
+      pin,
+      channelOf(pin.registryName).describe,
+      newest,
+      eligible[0],
+      newest === undefined ? undefined : eligibleAt(document, newest, input.policy),
+      held,
+    );
   });
   const problems = [
-    ...rows
-      .filter(({ status }) => status === "behind")
-      .map(
-        ({ name, pinned, eligible, channel }) =>
-          `${name}: ${pinned} is behind ${eligible}, the newest release on ${channel} that is old enough to install. Move to it, or hold it back with a reason and a lifting condition.`,
-      ),
-    ...rows
-      .filter(({ status }) => status === "unknown")
-      .map(
-        ({ name, channel }) =>
-          `${name}: the registry gave no release on ${channel} to compare with; check the name and the channel.`,
-      ),
-    ...heldBack
-      .filter(({ name }) => !rows.some((row) => row.name === name && row.status === "held back"))
-      .map(
-        ({ name }) =>
-          `${name}: the held-back list holds it, but it is not behind; remove the entry, since its lifting condition has come.`,
-      ),
-    ...heldBack
-      .filter(({ reason, lift }) => !reason?.trim() || !lift?.trim())
-      .map(({ name }) => `${name}: give the held-back entry a reason and a lifting condition.`),
+    ...comparisons.flatMap((comparison) =>
+      comparison.status === "behind"
+        ? [
+            `${comparison.pin.name}: ${comparison.pin.pinned} is behind ${comparison.eligible}, ${comparison.channel} that is old enough to install. Move to it, or hold it back in ${heldBackFile} with a reason and a liftWhen.`,
+          ]
+        : comparison.status === "no release"
+          ? [
+              `${comparison.pin.name}: the registry lists no release for ${comparison.channel}; check the name and the channel.`,
+            ]
+          : [],
+    ),
+    ...heldBackProblems(input.heldBack, comparisons),
   ];
-  return { rows, problems };
+  return { comparisons, problems };
+}
+
+export function reportTable(comparisons: readonly PinComparison[]): string {
+  const rows = comparisons.map((comparison) => {
+    const newest = comparison.status === "no release" ? "?" : comparison.newest;
+    const status =
+      comparison.status === "not yet eligible"
+        ? `not yet eligible, until ${comparison.eligibleAt}`
+        : comparison.status === "held back"
+          ? `held back: ${comparison.held.reason} Lift when ${comparison.held.liftWhen}`
+          : comparison.status;
+    return `| ${comparison.pin.name} | ${comparison.pin.pinned} | ${newest} | ${comparison.channel} | ${status} |`;
+  });
+  return [
+    "| Pin | Pinned | Newest | Channel | Status |",
+    "| --- | --- | --- | --- | --- |",
+    ...rows,
+  ].join("\n");
+}
+
+export function newestSolidRelease(
+  documents: Record<string, RegistryDocument>,
+  policy: ReleasePolicy,
+): string {
+  const eligibleSets = solidPackages.map(
+    (name) => eligibleOnChannel(name, documents[name] ?? {}, policy).eligible,
+  );
+  const together = (eligibleSets[0] ?? []).filter((version) =>
+    eligibleSets.every((eligible) => eligible.includes(version)),
+  );
+  const peersAgree = (version: string) =>
+    solidPackages.every((name) =>
+      Object.entries(documents[name]?.versions?.[version]?.peerDependencies ?? {})
+        .filter(([peer]) => solidPackages.includes(peer))
+        .every(([, range]) => semver.satisfies(version, range, { includePrerelease: true })),
+    );
+  const version = together.find(peersAgree);
+  if (version === undefined) {
+    throw new Error(
+      `No release of ${solidPackages.join(" and ")} is ${solidChannel.describe}, published for each of them, old enough to install and accepted by their peer ranges.`,
+    );
+  }
+  return version;
+}
+
+export function withCatalogVersions(
+  workspace: string,
+  catalog: Record<string, string>,
+  versions: Record<string, string>,
+): string {
+  const lines = workspace.split("\n");
+  for (const [name, version] of Object.entries(versions)) {
+    const current = catalog[name];
+    const written = [`  ${name}: ${current}`, `  "${name}": ${current}`];
+    const matches = lines.flatMap((line, index) => (written.includes(line) ? [index] : []));
+    if (current === undefined || matches.length !== 1) {
+      throw new Error(`${name}: the catalog does not hold it as one line ${written[0]}.`);
+    }
+    lines[matches[0]] = lines[matches[0]].replace(`: ${current}`, `: ${version}`);
+  }
+  return lines.join("\n");
 }

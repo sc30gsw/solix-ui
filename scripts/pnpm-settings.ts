@@ -12,7 +12,7 @@ export type PnpmSettings = {
   approvedSkills: Record<string, string[]>;
 };
 
-type RawSettings = {
+export type RawSettings = {
   catalog?: Record<string, string>;
   minimumReleaseAge?: number;
   minimumReleaseAgeStrict?: boolean;
@@ -37,23 +37,35 @@ function approvedSkillsIn(permissions: RawSettings["permissions"]): Record<strin
   );
 }
 
-export function pnpmSettings(): PnpmSettings {
-  if (read) return read;
-  const raw = JSON.parse(
-    execFileSync(existsSync(installedVp) ? installedVp : "vp", ["pm", "config", "list", "--json"], {
-      cwd: repositoryRoot,
-      encoding: "utf8",
-    }),
-  ) as RawSettings;
+export function settingsFrom(raw: RawSettings): PnpmSettings {
   if (!raw.catalog || Object.keys(raw.catalog).length === 0) {
     throw new Error(`${workspaceFile}: pnpm reports no catalog entries; check the catalog.`);
   }
-  read = {
+  return {
     catalog: raw.catalog,
     minimumReleaseAge: raw.minimumReleaseAge,
     minimumReleaseAgeStrict: raw.minimumReleaseAgeStrict ?? false,
     minimumReleaseAgeExclude: raw.minimumReleaseAgeExclude ?? [],
     approvedSkills: approvedSkillsIn(raw.permissions),
   };
+}
+
+export function readPnpmSettings(): PnpmSettings {
+  return settingsFrom(
+    JSON.parse(
+      execFileSync(
+        existsSync(installedVp) ? installedVp : "vp",
+        ["pm", "config", "list", "--json"],
+        {
+          cwd: repositoryRoot,
+          encoding: "utf8",
+        },
+      ),
+    ) as RawSettings,
+  );
+}
+
+export function pnpmSettings(): PnpmSettings {
+  read ??= readPnpmSettings();
   return read;
 }

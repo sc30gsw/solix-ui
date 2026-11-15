@@ -1,31 +1,35 @@
-import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { NodeRelease, RegistryDocument, ReleasePolicy } from "./newest-releases.ts";
+import {
+  type HeldBack,
+  heldBackFile,
+  type NodeRelease,
+  type RegistryDocument,
+  type ReleasePolicy,
+} from "./newest-releases.ts";
+import { type PnpmSettings, workspaceFile } from "./pnpm-settings.ts";
 
 const repositoryRoot = join(import.meta.dirname, "..");
 const registry = "https://registry.npmjs.org";
 const nodeIndex = "https://nodejs.org/dist/index.json";
 
-export function pnpmSetting(name: string): unknown {
-  const output = execFileSync("vp", ["pm", "config", "get", name, "--json"], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-  }).trim();
-  return output === "" || output === "undefined" ? undefined : JSON.parse(output);
-}
-
-export function releasePolicy(): ReleasePolicy {
-  const minimumReleaseAgeMinutes = pnpmSetting("minimumReleaseAge");
-  if (typeof minimumReleaseAgeMinutes !== "number") {
-    throw new Error(
-      "pnpm-workspace.yaml: set minimumReleaseAge, so pnpm and the release checks read one release age.",
-    );
+export function releasePolicy(settings: PnpmSettings): ReleasePolicy {
+  if (settings.minimumReleaseAge === undefined) {
+    throw new Error(`${workspaceFile}: set minimumReleaseAge.`);
   }
   return {
-    minimumReleaseAgeMinutes,
-    excluded: (pnpmSetting("minimumReleaseAgeExclude") ?? []) as string[],
+    minimumReleaseAgeMinutes: settings.minimumReleaseAge,
+    excluded: settings.minimumReleaseAgeExclude,
     now: Date.now(),
   };
+}
+
+export function rootManifest(): { packageManager?: string; engines?: { node?: string } } {
+  return JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8"));
+}
+
+export function heldBackEntries(): HeldBack[] {
+  return JSON.parse(readFileSync(join(repositoryRoot, heldBackFile), "utf8"));
 }
 
 async function fetched(url: string): Promise<unknown> {
@@ -34,8 +38,17 @@ async function fetched(url: string): Promise<unknown> {
   return response.json();
 }
 
-export async function registryDocument(name: string): Promise<RegistryDocument> {
-  return (await fetched(`${registry}/${name.replace("/", "%2f")}`)) as RegistryDocument;
+export async function registryDocuments(
+  names: readonly string[],
+): Promise<Record<string, RegistryDocument>> {
+  return Object.fromEntries(
+    await Promise.all(
+      [...new Set(names)].map(async (name) => [
+        name,
+        (await fetched(`${registry}/${name.replace("/", "%2f")}`)) as RegistryDocument,
+      ]),
+    ),
+  );
 }
 
 export async function nodeReleases(): Promise<NodeRelease[]> {
