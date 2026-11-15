@@ -1,7 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import {
   compareWithNewest,
-  eligibleOnChannel,
   type HeldBack,
   heldBackFile,
   heldBackProblems,
@@ -13,6 +12,7 @@ import {
   pinsOf,
   type RegistryDocument,
   type ReleasePolicy,
+  solidReleases,
   withCatalogVersions,
 } from "../scripts/newest-releases";
 import { pnpmSettings, settingsFrom, workspaceFile } from "../scripts/pnpm-settings";
@@ -175,14 +175,14 @@ test("the Solid 2 line takes a stable 2.x once one exists, and never a Solid 3 r
     ["3.0.0-alpha.1", 5],
   ]);
 
-  expect(eligibleOnChannel("solid-js", afterStable, policy).eligible[0]).toBe("2.0.1");
-  expect(eligibleOnChannel("solid-js", beforeStable, policy).eligible[0]).toBe("2.0.0-rc.22");
+  expect(solidReleases("solid-js", afterStable, policy).eligible[0]).toBe("2.0.1");
+  expect(solidReleases("solid-js", beforeStable, policy).eligible[0]).toBe("2.0.0-rc.22");
 });
 
 test("a version the registry lists only in time, unpublished, is no release", () => {
-  expect(eligibleOnChannel("vite", documents["@voidzero-dev/vite-plus-core"], policy).newest).toBe(
-    "1.6.0",
-  );
+  const vite = check().comparisons.find(({ pin }) => pin.name === "vite");
+
+  expect(vite).toMatchObject({ status: "current", newest: "1.6.0" });
 });
 
 test("the Solid 2 canary takes one release for every Solid package, old enough for each and accepted by their peer ranges", () => {
@@ -205,7 +205,13 @@ test("the Solid 2 canary takes one release for every Solid package, old enough f
     ],
   );
 
+  const webTooYoung = {
+    "solid-js": lockstep["@solidjs/web"],
+    "@solidjs/web": lockstep["solid-js"],
+  };
+
   expect(newestSolidRelease(lockstep, policy)).toBe("2.0.0-rc.21");
+  expect(newestSolidRelease(webTooYoung, policy)).toBe("2.0.0-rc.21");
   expect(newestSolidRelease(peerTooNew, policy)).toBe("2.0.0-rc.21");
   expect(newestSolidRelease(lockstep, { ...policy, excluded: ["solid-js@2.0.0-rc.22"] })).toBe(
     "2.0.0-rc.22",

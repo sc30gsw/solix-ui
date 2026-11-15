@@ -36,8 +36,10 @@ export type Report = { comparisons: PinComparison[]; problems: string[] };
 
 type Channel = {
   describe: string;
-  versions: (published: string[], pin: Pin, nodeLtsMajor: number) => string[];
+  versions: (published: string[], majors: { pinned: number; nodeLts: number }) => string[];
 };
+
+type Releases = { newest: string | undefined; eligible: string[] };
 
 const minute = 60_000;
 const solidMajor = 2;
@@ -49,13 +51,15 @@ const stableChannel: Channel = {
   describe: "its newest stable release",
   versions: (published) => published.filter((version) => semver.prerelease(version) === null),
 };
+function solidLine(published: string[]): string[] {
+  const line = published.filter((version) => semver.major(version) === solidMajor);
+  const stable = line.filter((version) => semver.prerelease(version) === null);
+  return stable.length > 0 ? stable : line;
+}
+
 const solidChannel: Channel = {
   describe: `the newest Solid ${solidMajor} release, stable once a stable ${solidMajor}.x exists`,
-  versions: (published) => {
-    const line = published.filter((version) => semver.major(version) === solidMajor);
-    const stable = line.filter((version) => semver.prerelease(version) === null);
-    return stable.length > 0 ? stable : line;
-  },
+  versions: solidLine,
 };
 
 export const channels: Record<string, Channel> = {
@@ -63,15 +67,15 @@ export const channels: Record<string, Channel> = {
   "@solidjs/web": solidChannel,
   "@solidjs/vite-plugin": {
     describe: "its newest release on the major it pins, tagged or not",
-    versions: (published, pin) =>
-      published.filter((version) => semver.major(version) === semver.major(pin.pinned)),
+    versions: (published, majors) =>
+      published.filter((version) => semver.major(version) === majors.pinned),
   },
   "@types/node": {
     describe: "its newest stable release on the major of Node's newest LTS",
-    versions: (published, pin, nodeLtsMajor) =>
+    versions: (published, majors) =>
       stableChannel
-        .versions(published, pin, nodeLtsMajor)
-        .filter((version) => semver.major(version) === nodeLtsMajor),
+        .versions(published, majors)
+        .filter((version) => semver.major(version) === majors.nodeLts),
   },
 };
 const nodeChannel = "Node's newest LTS";
@@ -107,7 +111,10 @@ export function pinsOf(
       pinned: lowestVersion(`catalog entry ${name}`, alias ? alias[2] : specifier),
     };
   });
-  const [, manager, managerVersion] = packageAndVersion.exec(manifest.packageManager ?? "") ?? [];
+  const [, manager, managerVersion] =
+    manifest.packageManager === undefined
+      ? []
+      : (packageAndVersion.exec(manifest.packageManager) ?? []);
   if (manager === undefined) {
     throw new Error(`package.json: set packageManager to <name>@<version>.`);
   }
@@ -159,20 +166,25 @@ function isEligible(
   );
 }
 
-export function eligibleOnChannel(
+function releasesAmong(
+  registryName: string,
+  document: RegistryDocument,
+  candidates: string[],
+  policy: ReleasePolicy,
+): Releases {
+  const newestFirst = [...candidates].sort(semver.rcompare);
+  return {
+    newest: newestFirst[0],
+    eligible: newestFirst.filter((version) => isEligible(registryName, document, version, policy)),
+  };
+}
+
+export function solidReleases(
   name: string,
   document: RegistryDocument,
   policy: ReleasePolicy,
-  pin: Pin = { source: "registry", name, registryName: name, pinned: "0.0.0" },
-  nodeLtsMajor = 0,
-): { newest: string | undefined; eligible: string[] } {
-  const candidates = channelOf(name)
-    .versions(publishedVersions(document), pin, nodeLtsMajor)
-    .sort(semver.rcompare);
-  return {
-    newest: candidates[0],
-    eligible: candidates.filter((version) => isEligible(name, document, version, policy)),
-  };
+): Releases {
+  return releasesAmong(name, document, solidLine(publishedVersions(document)), policy);
 }
 
 function newestNodeLts(nodeReleases: readonly NodeRelease[]): string | undefined {
@@ -239,12 +251,14 @@ export function compareWithNewest(input: {
     const held = input.heldBack.find(({ name }) => name === pin.name);
     if (pin.source === "node") return compared(pin, nodeChannel, nodeLts, nodeLts, undefined, held);
     const document = input.documents[pin.registryName] ?? {};
-    const { newest, eligible } = eligibleOnChannel(
+    const { newest, eligible } = releasesAmong(
       pin.registryName,
       document,
+      channelOf(pin.registryName).versions(publishedVersions(document), {
+        pinned: semver.major(pin.pinned),
+        nodeLts: nodeLtsMajor,
+      }),
       input.policy,
-      pin,
-      nodeLtsMajor,
     );
     return compared(
       pin,
@@ -295,7 +309,7 @@ export function newestSolidRelease(
   policy: ReleasePolicy,
 ): string {
   const eligibleSets = solidPackages.map(
-    (name) => eligibleOnChannel(name, documents[name] ?? {}, policy).eligible,
+    (name) => solidReleases(name, documents[name] ?? {}, policy).eligible,
   );
   const together = (eligibleSets[0] ?? []).filter((version) =>
     eligibleSets.every((eligible) => eligible.includes(version)),
