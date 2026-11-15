@@ -50,6 +50,8 @@ const typeScriptApi = /^typescript(?:\/|$)/;
 const typeScriptApiHome = "scripts/syntax/";
 const typeScriptApiEntry = "scripts/syntax.ts";
 const typeScriptApiList = "scripts/syntax/ast.ts";
+const pnpmSettingsReader = "scripts/pnpm-settings.ts";
+const workspaceFileEditor = "scripts/solid-2-canary.ts";
 const syntaxModuleImport = /(?:^|\/)syntax(?:\.ts)?$/;
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
@@ -304,11 +306,19 @@ function tsMembersNamedIn(source: ts.SourceFile): { member: string; position: nu
   });
 }
 
-test(`no file outside ${typeScriptApiHome} names a member of ts that ${typeScriptApiList} does not list`, () => {
+test(`${typeScriptApiList} lists exactly the members of ts the repository names: none missing for a file outside ${typeScriptApiHome}, none unused`, () => {
   const listed = typeScriptApiNames();
+  const everySource = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
+  const named = new Set(everySource.flatMap(tsMembersNamedIn).map(({ member }) => member));
+  const unused = listed
+    .filter((name) => !named.has(name))
+    .map(
+      (name) =>
+        `${typeScriptApiList}: no file names ts.${name}; remove it from the list, so the list stays what a TypeScript upgrade has to keep working.`,
+    );
   const files = scriptFiles.filter((file) => !file.startsWith(typeScriptApiHome));
   const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
-  const violations = files.flatMap((file, index) =>
+  const missing = files.flatMap((file, index) =>
     importsTsFromTheSyntaxModule(sources[index])
       ? tsMembersNamedIn(sources[index])
           .filter(({ member }) => !listed.includes(member))
@@ -320,7 +330,51 @@ test(`no file outside ${typeScriptApiHome} names a member of ts that ${typeScrip
   );
 
   expect(listed.length).toBeGreaterThan(10);
+  expect([...missing, ...unused]).toEqual([]);
+});
+
+function readsOfTheWorkspaceFile(file: string, source: ts.SourceFile): string[] {
+  return descendants(source).flatMap((node) => {
+    const writesItsName =
+      ts.isStringLiteralLikeNode(node) &&
+      (node.text === workspaceFile || node.text.endsWith(`/${workspaceFile}`));
+    const readsIt =
+      ts.isCallExpression(node) &&
+      /readFile/.test(node.expression.getText()) &&
+      node.arguments.some((argument) => argument.getText().includes("workspaceFile"));
+    if (writesItsName && file !== pnpmSettingsReader) {
+      return [
+        `${file}:${lineOf(source, node.getStart())}: take the name of ${workspaceFile} from ${pnpmSettingsReader}, the one module that names it.`,
+      ];
+    }
+    if (readsIt && file !== workspaceFileEditor) {
+      return [
+        `${file}:${lineOf(source, node.getStart())}: ${node.getText().split("\n")[0]} reads ${workspaceFile} itself. Take its settings from pnpmSettings() in ${pnpmSettingsReader}, which asks pnpm, so no second parser can disagree with pnpm.`,
+      ];
+    }
+    return [];
+  });
+}
+
+test(`only ${pnpmSettingsReader} names ${workspaceFile}, and only ${workspaceFileEditor} reads the file itself, to edit it`, () => {
+  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
+  const violations = scriptFiles.flatMap((file, index) =>
+    readsOfTheWorkspaceFile(file, sources[index]),
+  );
+  const flagged = readsOfTheWorkspaceFile(
+    "tests/a-second-parser.ts",
+    parseText(
+      [
+        'const file = "../pnpm-workspace.yaml";',
+        'const text = readFileSync(join(repositoryRoot, workspaceFile), "utf8");',
+        'const message = "set minimumReleaseAge in pnpm-workspace.yaml";',
+      ].join("\n"),
+      ".ts",
+    ),
+  ).map((violation) => /^[^:]+:(\d+):/.exec(violation)?.[1]);
+
   expect(violations).toEqual([]);
+  expect(flagged).toEqual(["1", "2"]);
 });
 
 test("commentsIn finds each comment, and nothing inside a regular expression, a template, a string or JSX text", () => {
