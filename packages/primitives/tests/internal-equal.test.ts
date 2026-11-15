@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { sameConfig, sameItems, sameKeys } from "../src/internal-equal";
+import { sameValue, sameItems, sameKeys } from "../src/internal-equal";
 
 test("sameItems compares two lists item by item with Object.is", () => {
   const shared = {};
@@ -21,19 +21,19 @@ test("sameKeys compares two objects key by key with Object.is, an absent key aga
   expect(sameKeys({ value: {} }, { value: {} })).toBe(false);
 });
 
-test("sameConfig compares plain objects and arrays by value, symbol keys included, and anything else by identity", () => {
+test("sameValue compares plain objects and arrays by value, symbol keys included, and anything else by identity", () => {
   const key = Symbol("key");
   const element = {};
   const signal = new AbortController().signal;
 
-  expect(sameConfig({ box: "border-box" }, { box: "border-box" })).toBe(true);
-  expect(sameConfig({ threshold: [0, 1], [key]: 1 }, { threshold: [0, 1], [key]: 1 })).toBe(true);
-  expect(sameConfig({ [key]: 1 }, { [key]: 2 })).toBe(false);
-  expect(sameConfig({ signal }, { signal })).toBe(true);
-  expect(sameConfig({ signal }, { signal: new AbortController().signal })).toBe(false);
-  expect(sameConfig({ root: element }, { root: element })).toBe(true);
-  expect(sameConfig(new Map(), new Map())).toBe(false);
-  expect(sameConfig({ once: undefined }, {})).toBe(false);
-  expect(sameConfig([0, [1]], [0, [1]])).toBe(true);
-  expect(sameConfig(Number.NaN, Number.NaN)).toBe(true);
+  expect(sameValue({ box: "border-box" }, { box: "border-box" })).toBe(true);
+  expect(sameValue({ threshold: [0, 1], [key]: 1 }, { threshold: [0, 1], [key]: 1 })).toBe(true);
+  expect(sameValue({ [key]: 1 }, { [key]: 2 })).toBe(false);
+  expect(sameValue({ signal }, { signal })).toBe(true);
+  expect(sameValue({ signal }, { signal: new AbortController().signal })).toBe(false);
+  expect(sameValue({ root: element }, { root: element })).toBe(true);
+  expect(sameValue(new Map(), new Map())).toBe(false);
+  expect(sameValue({ once: undefined }, {})).toBe(false);
+  expect(sameValue([0, [1]], [0, [1]])).toBe(true);
+  expect(sameValue(Number.NaN, Number.NaN)).toBe(true);
 });

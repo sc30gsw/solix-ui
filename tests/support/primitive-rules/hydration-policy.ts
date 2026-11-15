@@ -16,7 +16,7 @@ const hydrationPolicy: Rule = (library) =>
         )
         .map(
           (node) =>
-            `${at(module, node)}: ${ssrSource}: only ${policyModule} decides what the server and hydration read. Build the value on createBrowserValue, or a client-only memo on createClientMemo.`,
+            `${at(module, node)}: ${ssrSource}: only ${policyModule} decides what the server and hydration read. Build the value on createBrowserValue, or a client-only memo on createBrowserMemo.`,
         ),
       ...importsOf(module.source)
         .filter(({ specifier }) => specifier === solidModule)

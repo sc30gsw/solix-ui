@@ -17,7 +17,7 @@ export function createMisbehaving(options: { size: MaybeSize }, element: Element
     },
   );
   const observer = new ResizeObserver(() => undefined);
-  const Observer = browserApi(window, "MutationObserver");
+  const Observer = lookUp(window, "MutationObserver");
   const known = "document" in globalThis && globalThis.window !== undefined;
   const server = import.meta.env.SSR;
   try {
@@ -31,6 +31,6 @@ export function createMisbehaving(options: { size: MaybeSize }, element: Element
 
 type MaybeSize = number | (() => number);
 
-function browserApi<O extends object, K extends keyof O>(owner: O, name: K): O[K] {
+function lookUp<O extends object, K extends keyof O>(owner: O, name: K): O[K] {
   return owner[name];
 }

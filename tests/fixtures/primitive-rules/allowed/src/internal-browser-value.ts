@@ -1,7 +1,7 @@
 import { createMemo, from } from "solid-js";
 import type { BrowserValue } from "./types";
 
-export function createClientMemo<T>(compute: () => T, loadingValue: T): () => T {
+export function createBrowserMemo<T>(compute: () => T, loadingValue: T): () => T {
   return createMemo(compute, { ssrSource: "client", loadingValue });
 }
 

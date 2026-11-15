@@ -8,7 +8,7 @@ const configArgument: Record<string, number> = {
   createElementAttachment: 0,
   createElementValue: 2,
   createTargetListener: 1,
-  createClientMemo: 0,
+  createBrowserMemo: 0,
 };
 const configProperty: Record<string, number> = { createBrowserValue: 1, createScrollFold: 2 };
 const configName = "config";
@@ -42,7 +42,7 @@ const liveOptions: Rule = (library) =>
       .filter((node) => !ts.findAncestor(node, (ancestor) => configs.includes(ancestor)))
       .map(
         (node) =>
-          `${at(module, node)}: ${node.getText()}: read a live option only in the config the helper compares with sameConfig, so an option that recomputes to an equal value keeps what is built on it.`,
+          `${at(module, node)}: ${node.getText()}: read a live option only in the config the helper compares with sameValue, so an option that recomputes to an equal value keeps what is built on it.`,
       );
   });
 

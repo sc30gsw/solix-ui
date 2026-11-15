@@ -24,7 +24,7 @@ const browserOnlyArguments: Record<string, number[]> = {
   createTargetListener: [0, 2],
   createWindowHandler: [1],
   createBrowserCommand: [0],
-  createClientMemo: [0],
+  createBrowserMemo: [0],
   createEffect: [1],
 };
 

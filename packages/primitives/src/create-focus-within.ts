@@ -1,5 +1,5 @@
 import { createElementValue } from "./internal-attachment";
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { observe } from "./internal-dom-observer";
 import { disposeAll, watchEvents } from "./internal-listener";
 import { viewOf } from "./internal-node";
@@ -17,8 +17,8 @@ export type FocusWithinReturn<E extends Element> = {
   focused: BrowserValue<boolean>;
 };
 
-function leftBy(element: Element): FocusEvent | undefined {
-  const FocusEventClass = browserApi(viewOf(element), "FocusEvent");
+function syntheticFocusOut(element: Element): FocusEvent | undefined {
+  const FocusEventClass = lookUp(viewOf(element), "FocusEvent");
   return FocusEventClass && new FocusEventClass("focusout", { relatedTarget: null });
 }
 
@@ -51,7 +51,7 @@ export function createFocusWithin<E extends Element = Element>(
     };
     const watchRemovals = () =>
       observe("MutationObserver", element, { childList: true, subtree: true }, () => {
-        if (inside.now && !element.matches(":focus-within")) leave(leftBy(element));
+        if (inside.now && !element.matches(":focus-within")) leave(syntheticFocusOut(element));
       });
     if (inside.now) inside.stopWatching = watchRemovals();
     deliver(inside.now);

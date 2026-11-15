@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal } from "solid-js";
 import { createBrowserSignal } from "./internal-browser-value";
-import { sameConfig } from "./internal-equal";
+import { sameValue } from "./internal-equal";
 import { type EventOf, handleEvent, listen, type ListenerSettings } from "./internal-listener";
 import type { BrowserValue, RefSetter } from "./types";
 
@@ -8,7 +8,7 @@ export function createAttachment<C>(
   config: () => C | undefined,
   attach: (current: C) => () => void,
 ): void {
-  const current = createMemo<C | undefined>(config, { equals: sameConfig });
+  const current = createMemo<C | undefined>(config, { equals: sameValue });
   createEffect(current, (value) => (value === undefined ? undefined : attach(value)));
 }
 

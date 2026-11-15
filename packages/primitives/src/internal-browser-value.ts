@@ -1,6 +1,6 @@
 import { type Accessor, createMemo, createSignal, from, untrack } from "solid-js";
 import { whereAllowed } from "./internal-browser-api";
-import { sameConfig } from "./internal-equal";
+import { sameValue } from "./internal-equal";
 import { watchEvents } from "./internal-listener";
 import type { BrowserValue } from "./types";
 
@@ -25,7 +25,7 @@ export function createBrowserSignal<T>(
 ): [value: BrowserValue<T>, deliver: (value: T) => void] {
   const [box, setBox] = createSignal<{ value: T }>(
     { value: initial },
-    { equals: (left, right) => sameConfig(left.value, right.value) },
+    { equals: (left, right) => sameValue(left.value, right.value) },
   );
   return [
     branded(() => box().value),
@@ -42,7 +42,7 @@ export function mapBrowserValue<S, T>(
   return branded(() => project(source()));
 }
 
-export function createClientMemo<T>(compute: () => T, loadingValue: T): Accessor<T> {
+export function createBrowserMemo<T>(compute: () => T, loadingValue: T): Accessor<T> {
   return createMemo<T>(compute, { ssrSource: "client", loadingValue });
 }
 
@@ -50,7 +50,7 @@ export function createBrowserValue<T, C = undefined>(
   subscribe: Subscription<T, C>,
   options: BrowserValueOptions<T, C>,
 ): BrowserValue<T> {
-  const config = createMemo<C | undefined>(() => options.config?.(), { equals: sameConfig });
+  const config = createMemo<C | undefined>(() => options.config?.(), { equals: sameValue });
   const value = createMemo<T>(
     () => {
       const current = config() as C;
@@ -72,7 +72,7 @@ export function createBrowserValue<T, C = undefined>(
     {
       ssrSource: "client",
       loadingValue: options.loadingValue,
-      equals: options.equals ?? sameConfig,
+      equals: options.equals ?? sameValue,
     },
   );
   return branded(value);

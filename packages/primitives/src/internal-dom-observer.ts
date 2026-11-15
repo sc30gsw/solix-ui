@@ -1,4 +1,4 @@
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { viewOf } from "./internal-node";
 
 export const observerNames = Object.freeze([
@@ -31,7 +31,7 @@ export function observe<N extends ObserverName>(
   init: Kinds[N]["init"] | undefined,
   onEntries: (entries: Kinds[N]["entry"][], observer: Observer<N>) => void,
 ): () => void {
-  const Observer = browserApi(viewOf(target), name) as ObserverClass<N> | undefined;
+  const Observer = lookUp(viewOf(target), name) as ObserverClass<N> | undefined;
   if (!Observer) return () => undefined;
   const constructedWith = name === "IntersectionObserver";
   const observer = new Observer(onEntries, constructedWith ? init : undefined);

@@ -3,7 +3,7 @@ import { expect, expectTypeOf, test } from "vite-plus/test";
 import {
   type BrowserValueOptions,
   createBrowserValue,
-  createClientMemo,
+  createBrowserMemo,
   readOn,
   type Subscription,
 } from "../src/internal-browser-value";
@@ -172,8 +172,8 @@ test("readOn delivers what it reads from its target at once and on each listed e
   expect([found(), missing()]).toEqual([2, 0]);
 });
 
-test("createClientMemo computes in the browser at once, outside hydration", () => {
-  const value = mount(() => createClientMemo(() => "browser", "loading"));
+test("createBrowserMemo computes in the browser at once, outside hydration", () => {
+  const value = mount(() => createBrowserMemo(() => "browser", "loading"));
 
   expect(value()).toBe("browser");
 });

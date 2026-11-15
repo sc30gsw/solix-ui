@@ -1,4 +1,4 @@
-export function browserApi<O extends object, K extends keyof O>(
+export function lookUp<O extends object, K extends keyof O>(
   owner: O | null | undefined,
   name: K,
 ): O[K] | undefined {

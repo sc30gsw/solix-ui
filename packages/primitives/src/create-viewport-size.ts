@@ -1,4 +1,4 @@
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { createBrowserValue, mapBrowserValue, readOn } from "./internal-browser-value";
 import type { BrowserValue } from "./types";
 
@@ -21,8 +21,8 @@ export function createViewportSize(): ViewportSize {
       () => window,
       ["resize", "orientationchange"],
       (view) => ({
-        width: browserApi(view, "innerWidth") ?? 0,
-        height: browserApi(view, "innerHeight") ?? 0,
+        width: lookUp(view, "innerWidth") ?? 0,
+        height: lookUp(view, "innerHeight") ?? 0,
       }),
       { passive: true },
     ),

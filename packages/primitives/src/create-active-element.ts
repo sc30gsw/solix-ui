@@ -1,6 +1,6 @@
 import { access } from "./internal-access";
 import { activePath } from "./internal-active";
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { createBrowserValue } from "./internal-browser-value";
 import { observe } from "./internal-dom-observer";
 import { disposeAll, watchEvents } from "./internal-listener";
@@ -20,7 +20,7 @@ export type ActiveElementOptions = {
   triggerOnRemoval?: MaybeAccessor<boolean>;
 };
 
-type Looking = { deep: boolean; watchRemovals: boolean };
+type ActiveElementConfig = { deep: boolean; watchRemovals: boolean };
 
 /**
  * The element that has focus in the document, `document.activeElement`, or the body when nothing
@@ -37,13 +37,13 @@ type Looking = { deep: boolean; watchRemovals: boolean };
  * ```
  */
 export function createActiveElement(options?: ActiveElementOptions): BrowserValue<Element | null> {
-  return createBrowserValue<Element | null, Looking>(
+  return createBrowserValue<Element | null, ActiveElementConfig>(
     (deliver, keep, looking) => {
       const page = document;
       const removals = { stop: (): void => undefined };
       const read = () => {
         const path =
-          browserApi(page, "activeElement") === undefined
+          lookUp(page, "activeElement") === undefined
             ? { element: null, roots: [] }
             : activePath(page, looking.deep);
         deliver(path.element);

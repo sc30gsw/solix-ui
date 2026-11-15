@@ -1,4 +1,4 @@
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { createBrowserValue } from "./internal-browser-value";
 import { watchEvents } from "./internal-listener";
 import type { BrowserValue } from "./types";
@@ -10,7 +10,7 @@ export type ScrollMove = { from: number; to: number };
 export type ScrollFoldOptions<S, C> = { loadingValue: S; config?: () => C };
 
 function verticalScroll(): number {
-  return browserApi(window, "scrollY") || document.documentElement.scrollTop;
+  return lookUp(window, "scrollY") || document.documentElement.scrollTop;
 }
 
 export function createScrollFold<S, C = undefined>(

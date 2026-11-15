@@ -1,6 +1,6 @@
 import { access } from "./internal-access";
 import { createElementValue } from "./internal-attachment";
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { observe } from "./internal-dom-observer";
 import { viewOf } from "./internal-node";
 import type { BrowserValue, MaybeAccessor, ObserverRect, RefSetter } from "./types";
@@ -68,7 +68,7 @@ function rectOf(entry: ResizeObserverEntry, box: ResizeObserverBoxOptions | unde
 
 function watchesBox(element: Element, box: ResizeObserverBoxOptions | undefined): boolean {
   if (box !== devicePixels) return true;
-  const entryClass = browserApi(viewOf(element), "ResizeObserverEntry");
+  const entryClass = lookUp(viewOf(element), "ResizeObserverEntry");
   return entryClass !== undefined && Reflect.has(entryClass.prototype, "devicePixelContentBoxSize");
 }
 

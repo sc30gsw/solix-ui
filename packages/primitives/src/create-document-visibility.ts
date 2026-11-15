@@ -1,4 +1,4 @@
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { createBrowserValue, readOn } from "./internal-browser-value";
 import type { BrowserValue } from "./types";
 
@@ -17,7 +17,7 @@ export function createDocumentVisibility(): BrowserValue<DocumentVisibilityState
     readOn(
       () => document,
       ["visibilitychange"],
-      (page) => browserApi(page, "visibilityState") ?? "visible",
+      (page) => lookUp(page, "visibilityState") ?? "visible",
     ),
     { loadingValue: "visible" },
   );

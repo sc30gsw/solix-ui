@@ -1,4 +1,4 @@
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { createBrowserValue, readOn } from "./internal-browser-value";
 import type { BrowserValue } from "./types";
 
@@ -18,7 +18,7 @@ export function createTextSelection(): BrowserValue<Selection | null> {
     readOn(
       () => document,
       ["selectionchange"],
-      (page) => browserApi(page, "getSelection")?.call(page) ?? null,
+      (page) => lookUp(page, "getSelection")?.call(page) ?? null,
     ),
     { loadingValue: null, equals: false },
   );

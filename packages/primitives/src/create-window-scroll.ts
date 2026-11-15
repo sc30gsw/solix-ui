@@ -1,4 +1,4 @@
-import { browserApi } from "./internal-browser-api";
+import { lookUp } from "./internal-browser-api";
 import { createBrowserValue, readOn } from "./internal-browser-value";
 import { createBrowserCommand } from "./internal-command";
 import type { BrowserValue } from "./types";
@@ -31,7 +31,7 @@ export function createWindowScroll(): WindowScrollReturn {
     readOn(
       () => window,
       ["scroll", "resize"],
-      (view) => ({ x: browserApi(view, "scrollX") ?? 0, y: browserApi(view, "scrollY") ?? 0 }),
+      (view) => ({ x: lookUp(view, "scrollX") ?? 0, y: lookUp(view, "scrollY") ?? 0 }),
       { passive: true },
     ),
     { loadingValue: { x: 0, y: 0 } },

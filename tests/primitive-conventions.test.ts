@@ -106,7 +106,7 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-sized.ts", "import { createSignal }"),
   ],
   browserValues: [
-    forbiddenAt("src/create-unprobed.ts", "export function createUnprobed"),
+    forbiddenAt("src/create-unbranded.ts", "export function createUnbranded"),
     forbiddenAt("src/create-relayed.ts", "export function createRelayed"),
   ],
   browserValueAssertions: [forbiddenAt("src/create-branded.ts", "as BrowserValue<number>")],

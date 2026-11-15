@@ -14,7 +14,7 @@ const observerConstruction: Rule = (library) =>
         .filter(
           (node) =>
             (ts.isNewExpression(node) && names.includes(node.expression.getText())) ||
-            (isCallTo(node, "browserApi") &&
+            (isCallTo(node, "lookUp") &&
               stringsIn(library, node.arguments[1]).some((name) => names.includes(name))),
         )
         .map(

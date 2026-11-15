@@ -4,18 +4,18 @@ function isPlain(value: unknown): value is Record<PropertyKey, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-export function sameConfig(left: unknown, right: unknown): boolean {
+export function sameValue(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true;
   if (Array.isArray(left) && Array.isArray(right)) {
     return (
-      left.length === right.length && left.every((item, index) => sameConfig(item, right[index]))
+      left.length === right.length && left.every((item, index) => sameValue(item, right[index]))
     );
   }
   if (!isPlain(left) || !isPlain(right)) return false;
   const keys = Reflect.ownKeys(left);
   return (
     keys.length === Reflect.ownKeys(right).length &&
-    keys.every((key) => Object.hasOwn(right, key) && sameConfig(left[key], right[key]))
+    keys.every((key) => Object.hasOwn(right, key) && sameValue(left[key], right[key]))
   );
 }
 

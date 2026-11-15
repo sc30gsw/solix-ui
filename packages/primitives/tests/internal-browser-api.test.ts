@@ -1,14 +1,12 @@
 import { expect, test } from "vite-plus/test";
-import { browserApi, whereAllowed } from "../src/internal-browser-api";
+import { lookUp, whereAllowed } from "../src/internal-browser-api";
 
-test("browserApi reads a member of an owner, and nothing where the owner or the member is missing", () => {
+test("lookUp reads a member of an owner, and nothing where the owner or the member is missing", () => {
   const owner = { matchMedia: () => true };
 
-  expect(browserApi(owner, "matchMedia")).toBe(owner.matchMedia);
-  expect(browserApi<{ matchMedia?: () => boolean }, "matchMedia">({}, "matchMedia")).toBe(
-    undefined,
-  );
-  expect(browserApi<{ size: number }, "size">(null, "size")).toBe(undefined);
+  expect(lookUp(owner, "matchMedia")).toBe(owner.matchMedia);
+  expect(lookUp<{ matchMedia?: () => boolean }, "matchMedia">({}, "matchMedia")).toBe(undefined);
+  expect(lookUp<{ size: number }, "size">(null, "size")).toBe(undefined);
 });
 
 test("whereAllowed turns only a SecurityError into what it is given, after the cleanup, and rethrows any other error after it", () => {

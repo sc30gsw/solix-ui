@@ -1,5 +1,5 @@
 import { onCleanup, untrack } from "solid-js";
-import { createClientMemo } from "./internal-browser-value";
+import { createBrowserMemo } from "./internal-browser-value";
 
 type Command<Args extends unknown[], R> = (...args: Args) => R;
 
@@ -26,6 +26,6 @@ export function createBrowserCommand<Args extends unknown[], R>(
   run: Command<Args, R>,
   idle: Command<Args, R>,
 ): Command<Args, R> {
-  const inBrowser = createClientMemo(() => true, false);
-  return whileOwned(() => untrack(inBrowser), run, idle);
+  const hydrated = createBrowserMemo(() => true, false);
+  return whileOwned(() => untrack(hydrated), run, idle);
 }

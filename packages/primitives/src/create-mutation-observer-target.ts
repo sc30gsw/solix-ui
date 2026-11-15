@@ -1,6 +1,6 @@
 import { access } from "./internal-access";
 import { createAttachment } from "./internal-attachment";
-import { createClientMemo } from "./internal-browser-value";
+import { createBrowserMemo } from "./internal-browser-value";
 import { observe } from "./internal-dom-observer";
 import type { MaybeAccessor } from "./types";
 
@@ -23,7 +23,7 @@ export function createMutationObserverTarget(
   options: MaybeAccessor<MutationObserverInit>,
   target?: MaybeAccessor<Node | null | undefined>,
 ): void {
-  const node = createClientMemo<Node | undefined>(() => access(target) ?? undefined, undefined);
+  const node = createBrowserMemo<Node | undefined>(() => access(target) ?? undefined, undefined);
   createAttachment<{ node: Node; init: MutationObserverInit }>(
     () => {
       const current = node();

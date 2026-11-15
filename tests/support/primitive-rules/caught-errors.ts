@@ -15,7 +15,7 @@ const caughtErrors: Rule = (library) =>
       })
       .map(
         (node) =>
-          `${at(module, node)}: catch: nothing in the primitives package catches an error but ${errorBoundary} in ${errorModule}. Find a missing browser API with browserApi, and let any other error reach the caller.`,
+          `${at(module, node)}: catch: nothing in the primitives package catches an error but ${errorBoundary} in ${errorModule}. Find a missing browser API with lookUp, and let any other error reach the caller.`,
       ),
   );
 

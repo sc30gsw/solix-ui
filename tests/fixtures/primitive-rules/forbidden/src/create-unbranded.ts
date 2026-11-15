@@ -1,5 +1,5 @@
 import { createBrowserValue } from "./internal-browser-value";
 
-export function createUnprobed(): () => number {
+export function createUnbranded(): () => number {
   return createBrowserValue(() => undefined, { loadingValue: 0 });
 }
