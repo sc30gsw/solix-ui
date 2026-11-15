@@ -8,7 +8,7 @@ import {
 import { afterEach, beforeEach, expect } from "vite-plus/test";
 import type { EventOf } from "../../src/internal-listener";
 import type { RefSetter } from "../../src/types";
-import { listenerMethods, observers, timers } from "./browser-resources";
+import { eventHandlerProperty, listenerMethods, observers, timers } from "./browser-resources";
 
 type Listener = {
   target: EventTarget;
@@ -21,6 +21,7 @@ type Schedule = (callback: unknown, ...rest: unknown[]) => unknown;
 type Cancel = (id: unknown) => void;
 type Observe = (this: object, target: Node, ...rest: unknown[]) => void;
 type Unobserve = (this: object, target?: Node) => void;
+export type Attachments = { added: string[]; removed: string[] };
 type ObserverClass = new (callback: (...args: unknown[]) => void, ...rest: unknown[]) => object;
 
 const browserGlobals = globalThis as unknown as Record<string, unknown>;
@@ -32,9 +33,11 @@ const returnedFunctionsWrappedToDepth = 2;
 const liveListeners = new Set<Listener>();
 const liveTimers = new Map<string, string>();
 const liveObservations = new Map<object, Set<Node>>();
+const liveHandlers = new Map<EventTarget, Set<string>>();
 const disposers: (() => void)[] = [];
 const recorders: (() => void)[] = [];
 const scope = { depth: 0 };
+const journals = new Set<Attachments>();
 let diagnostics: DiagnosticCapture | undefined;
 
 function inScope(): boolean {
@@ -119,6 +122,7 @@ function recordListeners(holder: Record<string, unknown>): void {
       }),
     };
     liveListeners.add(registration);
+    for (const journal of journals) journal.added.push(type);
     add.call(this, type, registration.registered, options);
     if (typeof options === "object" && options.signal) {
       addListener.call(options.signal, "abort", () => liveListeners.delete(registration), {
@@ -136,6 +140,7 @@ function recordListeners(holder: Record<string, unknown>): void {
       return;
     }
     liveListeners.delete(live);
+    for (const journal of journals) journal.removed.push(type);
     remove.call(this, type, live.registered, options);
   };
 }
@@ -188,6 +193,7 @@ for (const name of observers) {
   prototype.observe = function (this: object, target: Node, ...rest: unknown[]) {
     observe.call(this, target, ...rest);
     if (!inScope()) return;
+    for (const journal of journals) journal.added.push(name);
     liveObservations.set(this, (liveObservations.get(this) ?? new Set<Node>()).add(target));
   };
   if (unobserve) {
@@ -198,8 +204,45 @@ for (const name of observers) {
   }
   prototype.disconnect = function (this: object) {
     disconnect.call(this);
-    liveObservations.delete(this);
+    if (liveObservations.delete(this)) {
+      for (const journal of journals) journal.removed.push(name);
+    }
   };
+}
+
+function recordHandlers(holder: object): void {
+  for (const name of Object.getOwnPropertyNames(holder)) {
+    const descriptor = Object.getOwnPropertyDescriptor(holder, name);
+    const set: unknown = Reflect.get(descriptor ?? {}, "set");
+    if (
+      !eventHandlerProperty.test(name) ||
+      typeof set !== "function" ||
+      !descriptor?.configurable
+    ) {
+      continue;
+    }
+    Object.defineProperty(holder, name, {
+      ...descriptor,
+      set(this: EventTarget, handler: unknown) {
+        Reflect.apply(set, this, [handler]);
+        const names = liveHandlers.get(this) ?? new Set<string>();
+        if (handler === null || handler === undefined) names.delete(name);
+        else if (inScope()) names.add(name);
+        liveHandlers.set(this, names);
+      },
+    });
+  }
+}
+
+for (const holder of [
+  HTMLElement.prototype,
+  SVGElement.prototype,
+  Element.prototype,
+  Document.prototype,
+  Window.prototype,
+  window,
+]) {
+  recordHandlers(holder);
 }
 
 function leftAfterDispose(): string[] {
@@ -212,6 +255,9 @@ function leftAfterDispose(): string[] {
     ...[...liveObservations]
       .filter(([, observed]) => observed.size > 0)
       .map(([observer]) => `an observation by a ${observer.constructor.name}`),
+    ...[...liveHandlers].flatMap(([target, names]) =>
+      [...names].map((name) => `an ${name} handler on ${target.constructor.name}`),
+    ),
   ];
 }
 
@@ -219,6 +265,7 @@ function startRecording(): void {
   liveListeners.clear();
   liveTimers.clear();
   liveObservations.clear();
+  liveHandlers.clear();
   diagnostics = OBSERVE?.diagnostics.capture();
 }
 
@@ -270,6 +317,17 @@ export function record<T extends EventTarget, K extends string>(
   addListener.call(target, type, listener, capture);
   recorders.push(() => removeListener.call(target, type, listener, capture));
   return seen;
+}
+
+export async function attachmentsDuring(run: () => void | Promise<void>): Promise<Attachments> {
+  const journal: Attachments = { added: [], removed: [] };
+  journals.add(journal);
+  try {
+    await run();
+    return journal;
+  } finally {
+    journals.delete(journal);
+  }
 }
 
 export function unmount(): void {

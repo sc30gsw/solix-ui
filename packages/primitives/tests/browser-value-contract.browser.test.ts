@@ -1,8 +1,7 @@
 import { type Accessor, createSignal } from "solid-js";
-import { describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 import * as primitives from "../src/index";
-import { flush, mount } from "./support/browser-harness";
-import { observers } from "./support/browser-resources";
+import { attachmentsDuring, flush, mount } from "./support/browser-harness";
 import type { PageValuePrimitive } from "./support/primitive-kinds";
 import { replaced } from "./support/replace";
 import { serverCases } from "./support/server-cases";
@@ -10,12 +9,14 @@ import { applied, stubbedScroll } from "./support/scroll";
 
 type ValueContract = {
   create: (raw: Accessor<number>) => () => unknown;
+  live?: true;
   before?: () => Promise<void>;
 };
 
 const contracts: { [K in PageValuePrimitive]: () => ValueContract } = {
   createActiveElement: () => ({
-    create: (raw) => primitives.createActiveElement({ deep: () => Math.round(raw()) >= 0 }),
+    create: (raw) => primitives.createActiveElement({ deep: () => Math.round(raw()) < 1 }),
+    live: true,
   }),
   createDocumentVisibility: () => ({ create: () => primitives.createDocumentVisibility() }),
   createHeadroom: () => {
@@ -29,10 +30,12 @@ const contracts: { [K in PageValuePrimitive]: () => ValueContract } = {
         scroll.to(50);
         await applied();
       },
+      live: true,
     };
   },
   createMediaQuery: () => ({
     create: (raw) => primitives.createMediaQuery(() => `(min-width: ${Math.round(raw())}px)`),
+    live: true,
   }),
   createScrollDirection: () => ({ create: () => primitives.createScrollDirection() }),
   createTextSelection: () => ({ create: () => primitives.createTextSelection() }),
@@ -77,22 +80,9 @@ const missingApis: { [K in PageValuePrimitive]: () => () => void } = {
   },
 };
 
-function registrationsDuring(run: () => void): number {
-  const spies = [
-    vi.spyOn(EventTarget.prototype, "addEventListener"),
-    vi.spyOn(EventTarget.prototype, "removeEventListener"),
-    ...observers.flatMap((name) => {
-      const observer: { prototype: { observe(...target: never[]): void; disconnect(): void } } =
-        Reflect.get(globalThis, name);
-      return [vi.spyOn(observer.prototype, "observe"), vi.spyOn(observer.prototype, "disconnect")];
-    }),
-  ];
-  try {
-    run();
-    return spies.reduce((total, spy) => total + spy.mock.calls.length, 0);
-  } finally {
-    for (const spy of spies) spy.mockRestore();
-  }
+async function registrationsDuring(run: () => void | Promise<void>): Promise<number> {
+  const { added, removed } = await attachmentsDuring(run);
+  return added.length + removed.length;
 }
 
 describe.each(Object.keys(contracts) as PageValuePrimitive[])("%s", (name) => {
@@ -103,12 +93,26 @@ describe.each(Object.keys(contracts) as PageValuePrimitive[])("%s", (name) => {
     await before?.();
     const value = read();
 
-    const registered = registrationsDuring(() => {
+    const registered = await registrationsDuring(() => {
       setRaw(0.2);
       flush();
     });
     expect(registered).toBe(0);
     expect(read()).toEqual(value);
+  });
+
+  test("an option that changes to a different value subscribes again, and a primitive with no live option never does", async () => {
+    const { create, before, live } = contracts[name]();
+    const [raw, setRaw] = createSignal(0.1);
+    const read = mount(() => create(raw));
+    await before?.();
+
+    const registered = await registrationsDuring(async () => {
+      setRaw(5);
+      await applied();
+      read();
+    });
+    expect(registered > 0).toBe(live === true);
   });
 
   test("where its browser API is missing, it gives its loading value and throws nothing", () => {

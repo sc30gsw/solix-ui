@@ -23,7 +23,9 @@ export const timers: readonly Timer[] = [
 
 export const observers = observerNames;
 
-export const browserOnlyGlobals = [
+export const eventHandlerProperty = /^on[a-z]+$/;
+
+export const trappedOnTheServer = [
   "window",
   "document",
   "navigator",
@@ -38,7 +40,7 @@ export const browserOnlyGlobals = [
 ] as const;
 
 export const everyBrowserResource: readonly string[] = [
-  ...browserOnlyGlobals,
+  ...trappedOnTheServer,
   ...Object.values(listenerMethods),
   ...timers.flatMap(({ schedule, cancel }) => [schedule, cancel]),
   ...observers,

@@ -37,6 +37,20 @@ test("it reports a listener that a browser value's subscription added and its te
   expect(reportAfterDispose()).toEqual(["a change listener on MediaQueryList"]);
 });
 
+test("it reports an on<event> handler that an effect set and never cleared", () => {
+  const target = attached(document.createElement("div"));
+  mount(() =>
+    createEffect(
+      () => target,
+      (element) => {
+        Reflect.set(element, "onfocus", () => undefined);
+      },
+    ),
+  );
+
+  expect(reportAfterDispose()).toEqual(["an onfocus handler on HTMLDivElement"]);
+});
+
 test("it reports a Solid development diagnostic", () => {
   const command = mount(() => createCleanupInCommand());
 
