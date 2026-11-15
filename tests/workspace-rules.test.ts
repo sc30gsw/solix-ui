@@ -51,6 +51,8 @@ const typeScriptApiHome = "scripts/syntax/";
 const typeScriptApiEntry = "scripts/syntax.ts";
 const typeScriptApiList = "scripts/syntax/ast.ts";
 const syntaxModuleImport = /(?:^|\/)syntax(?:\.ts)?$/;
+const jobHeader = /^ {2}[\w-]+:$/;
+const jobTimeout = /^ {4}timeout-minutes: \d+$/;
 
 function installedDependencies(manifest: Manifest): [string, string][] {
   return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });
@@ -352,6 +354,25 @@ test("commentsIn finds each comment, and nothing inside a regular expression, a 
     "/* after break */",
     "// eof",
   ]);
+});
+
+test("every workflow job sets timeout-minutes, so a hung step ends", () => {
+  const violations = workflowFiles.flatMap((file) => {
+    const lines = readFileSync(join(repositoryRoot, file), "utf8").split("\n");
+    const jobsAt = lines.indexOf("jobs:");
+    const starts = lines.flatMap((line, index) =>
+      index > jobsAt && jobHeader.test(line) ? [index] : [],
+    );
+    return starts.flatMap((start, position) => {
+      const block = lines.slice(start + 1, starts[position + 1] ?? lines.length);
+      return block.some((line) => jobTimeout.test(line))
+        ? []
+        : [`${file}: give the job ${lines[start].trim()} a timeout-minutes.`];
+    });
+  });
+
+  expect(workflowFiles.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
 });
 
 test("source code carries no comment except a doc comment on a public API", () => {
