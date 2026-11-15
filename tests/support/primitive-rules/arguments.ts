@@ -1,14 +1,22 @@
-import ts from "typescript";
-import { descendants, isCallTo, outsideClosures, sourcesOf, unwrapped } from "../syntax";
+import {
+  descendants,
+  isCallTo,
+  outsideClosures,
+  sourcesOf,
+  symbolOf,
+  ts,
+  unwrapped,
+} from "../syntax";
 import {
   at,
   type Library,
   type Module,
-  type ModuleLevelFunction,
   type PrimitiveRule,
   publicModules,
   type Rule,
 } from "./library";
+
+type ModuleLevelFunction = ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
 
 const readOnceName = /^(?:initial|default|final)(?:[A-Z]|$)/;
 
@@ -37,14 +45,14 @@ function readsAParameter(
   const parameters = new Set(
     fn.parameters.flatMap((parameter) => {
       const symbol = ts.isIdentifier(parameter.name)
-        ? library.checker.getSymbolAtLocation(parameter.name)
+        ? symbolOf(library.compiled, parameter.name)
         : undefined;
       return symbol ? [symbol] : [];
     }),
   );
   return (expression) =>
     sourcesOf(expression).some((identifier) => {
-      const symbol = library.checker.getSymbolAtLocation(identifier);
+      const symbol = symbolOf(library.compiled, identifier);
       return symbol !== undefined && parameters.has(symbol);
     });
 }

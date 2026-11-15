@@ -10,8 +10,8 @@ import { elementAttachmentsRule } from "./element-attachments";
 import { accessibilityTestsRule, focusMovesRule } from "./focus";
 import { hydrationPolicyRule } from "./hydration-policy";
 import { instanceofChecksRule } from "./instanceof-checks";
-import { type Library, type PrimitiveRule, publicModules } from "./library";
-import { listenerRolesRule } from "./listener-roles";
+import { type PrimitiveRule } from "./library";
+import { eventHandlerPropertiesRule, listenerRolesRule } from "./listener-roles";
 import { liveOptionsRule } from "./live-options";
 import { modelTestsRule } from "./model-tests";
 import { moduleStateRule } from "./module-state";
@@ -24,7 +24,7 @@ import { sourceFileKindsRule } from "./source-file-kinds";
 import { styleAndClassWritesRule } from "./style-and-class-writes";
 import { testsNamedForModulesRule } from "./tests-named-for-modules";
 
-export { loadLibrary } from "./library";
+export { loadLibrary, publicModules } from "./library";
 
 export const primitiveRules = {
   sourceFileKinds: sourceFileKindsRule,
@@ -44,6 +44,7 @@ export const primitiveRules = {
   commandKinds: commandKindsRule,
   liveOptions: liveOptionsRule,
   listenerRoles: listenerRolesRule,
+  eventHandlerProperties: eventHandlerPropertiesRule,
   observerConstruction: observerConstructionRule,
   caughtErrors: caughtErrorsRule,
   instanceofChecks: instanceofChecksRule,
@@ -57,7 +58,3 @@ export const primitiveRules = {
 } satisfies Record<string, PrimitiveRule>;
 
 export type PrimitiveRuleName = keyof typeof primitiveRules;
-
-export function publicModuleCount(library: Library): number {
-  return publicModules(library).length;
-}

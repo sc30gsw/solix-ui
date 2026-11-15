@@ -48,6 +48,10 @@ export function isEvent(value: unknown): value is Event {
   );
 }
 
+export function isWindow(value: unknown): value is Window {
+  return typeof value === "object" && value !== null && Reflect.get(value, "window") === value;
+}
+
 export type BrowserWindow = Window & typeof globalThis;
 
 export function viewOf(node: Node): BrowserWindow | null {

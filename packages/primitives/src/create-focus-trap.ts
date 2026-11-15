@@ -81,21 +81,20 @@ function trap(container: HTMLElement): () => void {
     frameCheck.pending = setTimeout(bringBackFromFrame, 0);
   };
   const removeListeners = disposeAll([
-    watchEvents(container.ownerDocument, activated, (event) => {
+    watchEvents(container.ownerDocument, [activated], (event) => {
       const detail: unknown = Reflect.get(event, "detail");
       if (detail !== token) newer.add(detail);
     }),
-    watchEvents(container.ownerDocument, released, (event) => {
+    watchEvents(container.ownerDocument, [released], (event) => {
       newer.delete(Reflect.get(event, "detail"));
     }),
-    watchEvents(container.ownerDocument, focusin, (event) => {
+    watchEvents(container.ownerDocument, [focusin], (event) => {
       if (isNode(event.target)) bringBack(event.target, event.relatedTarget === null);
     }),
-    watchEvents(container, focusout, (event) => {
+    watchEvents(container, [focusout], (event) => {
       if (event.relatedTarget === null) bringBackFromFrameOnNextTask();
     }),
-    watchEvents(view, blur, (event) => {
-      if (event.target !== view) return;
+    watchEvents(view, [blur], () => {
       bringBackFromFrame();
       bringBackFromFrameOnNextTask();
     }),

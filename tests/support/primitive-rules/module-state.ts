@@ -1,5 +1,4 @@
-import ts from "typescript";
-import { isAsConst, outsideClosures, unwrapped } from "../syntax";
+import { isAsConst, outsideClosures, ts, unwrapped } from "../syntax";
 import { at, type PrimitiveRule, type Rule } from "./library";
 
 const callsAllowedAtModuleLevel = ["Symbol", "Object.freeze"];

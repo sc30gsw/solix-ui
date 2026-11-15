@@ -1,22 +1,27 @@
-import ts from "typescript";
-import { descendants } from "../syntax";
+import { descendants, ts } from "../syntax";
 import {
   at,
   browserTestSuffixes,
-  callsOneOf,
-  importsFrom,
+  type Declared,
+  exportedFunction,
   type Library,
   type Module,
   type PrimitiveRule,
   publicModules,
+  reaches,
   type Rule,
   testNamed,
 } from "./library";
 
-const valueModule = "./internal-value";
-const scrollFold = "createScrollFold";
+const valueHelper = { file: "internal-value.ts", name: "createValue" };
+const scrollFold = { file: "internal-scroll.ts", name: "createScrollFold" };
 const modelRun = "modelRun";
 const asyncModelRun = "asyncModelRun";
+
+function reachesHelper(library: Library, module: Module, helper: Declared): boolean {
+  const fn = exportedFunction(module);
+  return fn !== undefined && reaches(library, fn, helper);
+}
 
 function runsAModel(library: Library, module: Module, runner: string): boolean {
   const browserTest = testNamed(library, module.file, browserTestSuffixes);
@@ -33,18 +38,18 @@ function runsAModel(library: Library, module: Module, runner: string): boolean {
 
 const modelTests: Rule = (library) => [
   ...publicModules(library)
-    .filter((module) => importsFrom(module, valueModule))
+    .filter((module) => reachesHelper(library, module, valueHelper))
     .filter((module) => !runsAModel(library, module, modelRun))
     .map(
       (module) =>
-        `${at(module)}: it keeps its state in ${valueModule}, so its browser test runs generated sequences of its commands against a model with fc.${modelRun}, built on tests/support/model.ts.`,
+        `${at(module)}: it keeps its state in ${valueHelper.name}, so its browser test runs generated sequences of its commands against a model with fc.${modelRun}, built on tests/support/model.ts.`,
     ),
   ...publicModules(library)
-    .filter((module) => callsOneOf(module, [scrollFold]))
+    .filter((module) => reachesHelper(library, module, scrollFold))
     .filter((module) => !runsAModel(library, module, asyncModelRun))
     .map(
       (module) =>
-        `${at(module)}: it folds scroll positions into its state with ${scrollFold}, so its browser test runs generated sequences of scroll positions against a model with fc.${asyncModelRun}.`,
+        `${at(module)}: it folds scroll positions into its state with ${scrollFold.name}, so its browser test runs generated sequences of scroll positions against a model with fc.${asyncModelRun}.`,
     ),
 ];
 

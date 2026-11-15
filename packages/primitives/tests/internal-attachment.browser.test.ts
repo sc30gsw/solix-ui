@@ -4,23 +4,18 @@ import {
   createAttachment,
   createElementAttachment,
   createElementValue,
-  createTargetListener,
-  createWindowHandler,
 } from "../src/internal-attachment";
-import { listenerSettings } from "../src/internal-listener";
 import { flush, mount, unmount } from "./support/browser-harness";
 import { box } from "./support/dom";
-
-const ping = "solix-ping";
 
 test("createAttachment attaches a defined config, keeps one equal by value, detaches when it turns undefined or changes, and detaches on dispose", () => {
   const seen: string[] = [];
   const [config, setConfig] = createSignal<{ name: string } | undefined>({ name: "a" });
   mount(() =>
-    createAttachment(config, (current) => {
+    createAttachment((current) => {
       seen.push(`attach ${current.name}`);
       return () => seen.push(`detach ${current.name}`);
-    }),
+    }, config),
   );
 
   setConfig({ name: "a" });
@@ -31,6 +26,20 @@ test("createAttachment attaches a defined config, keeps one equal by value, deta
   flush();
   unmount();
   expect(seen).toEqual(["attach a", "detach a", "attach b", "detach b"]);
+});
+
+test("createAttachment without a config attaches once the owner's effects run and detaches on dispose", () => {
+  const seen: string[] = [];
+  mount(() =>
+    createAttachment(() => {
+      seen.push("attach");
+      return () => seen.push("detach");
+    }),
+  );
+
+  seen.push("mounted");
+  unmount();
+  expect(seen).toEqual(["attach", "mounted", "detach"]);
 });
 
 test("createElementAttachment hands the config the element its ref received, and attaches nothing once the owner is disposed", () => {
@@ -79,23 +88,4 @@ test("createElementValue starts at its initial value, takes what the attachment 
   unmount();
   seen.push(label());
   expect(seen).toEqual(["none", "first seen", "second seen", "none"]);
-});
-
-test("createTargetListener resolves its target when it attaches, and createWindowHandler skips an event whose default is prevented", () => {
-  const seen: string[] = [];
-  const target = box("target");
-  mount(() => {
-    createTargetListener(
-      () => target,
-      () => listenerSettings(ping),
-      () => seen.push("target"),
-    );
-    createWindowHandler(ping, () => seen.push("window"));
-  });
-  const prevented = new Event(ping, { bubbles: true, cancelable: true });
-  prevented.preventDefault();
-
-  target.dispatchEvent(new Event(ping, { bubbles: true, cancelable: true }));
-  window.dispatchEvent(prevented);
-  expect(seen).toEqual(["target", "window"]);
 });

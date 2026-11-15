@@ -1,5 +1,6 @@
 import { lookUp } from "./internal-browser-api";
-import { createBrowserValue } from "./internal-browser-value";
+import { type BrowserCallback, createBrowserValue } from "./internal-browser-value";
+import type { LiveConfig } from "./internal-equal";
 import { watchEvents } from "./internal-listener";
 import type { BrowserValue } from "./types";
 
@@ -7,15 +8,15 @@ export const resizeSettleMs = 300;
 
 export type ScrollMove = { from: number; to: number };
 
-export type ScrollFoldOptions<S, C> = { loadingValue: S; config?: () => C };
+export type ScrollFoldOptions<S, C> = { loadingValue: S; config?: LiveConfig<C> };
 
 function verticalScroll(): number {
   return lookUp(window, "scrollY") || document.documentElement.scrollTop;
 }
 
 export function createScrollFold<S, C = undefined>(
-  start: (y: number, config: C) => S,
-  step: (state: S, move: ScrollMove, config: C) => S,
+  start: BrowserCallback<[y: number, config: C], S>,
+  step: BrowserCallback<[state: S, move: ScrollMove, config: C], S>,
   options: ScrollFoldOptions<S, C>,
 ): BrowserValue<S> {
   return createBrowserValue<S, C>((deliver, keep, config) => {
@@ -28,9 +29,8 @@ export function createScrollFold<S, C = undefined>(
     keep(
       watchEvents(
         window,
-        "scroll",
-        (event) => {
-          if (event.target !== document && event.target !== window) return;
+        ["scroll"],
+        () => {
           if (fold.settling !== undefined) return;
           const to = verticalScroll();
           if (to === fold.y) return;
@@ -44,7 +44,7 @@ export function createScrollFold<S, C = undefined>(
     keep(
       watchEvents(
         window,
-        "resize",
+        ["resize"],
         () => {
           clearTimeout(fold.settling);
           fold.settling = setTimeout(() => {

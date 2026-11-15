@@ -1,6 +1,5 @@
-import ts from "typescript";
-import { descendants, unwrapped } from "../syntax";
-import { at, type Library, type PrimitiveRule, type Rule, stringsIn } from "./library";
+import { descendants, stringsIn, ts, unwrapped } from "../syntax";
+import { at, type Library, type PrimitiveRule, type Rule } from "./library";
 
 const styleAndClassMembers = ["style", "className", "classList", "attributeStyleMap"];
 
@@ -33,7 +32,7 @@ const objectAssign = "Object.assign";
 function memberName(library: Library, expression: ts.Expression): string | undefined {
   if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
   if (ts.isElementAccessExpression(expression)) {
-    return stringsIn(library, expression.argumentExpression)[0];
+    return stringsIn(library.compiled, expression.argumentExpression)[0];
   }
   return undefined;
 }
@@ -70,7 +69,7 @@ function writesStyleOrClass(library: Library, node: ts.Node): boolean {
   const method = callee.name.text;
   const owner = memberName(library, unwrapped(callee.expression)) ?? "";
   const nameIn = (position: number | undefined) =>
-    position === undefined ? [] : stringsIn(library, node.arguments[position]);
+    position === undefined ? [] : stringsIn(library.compiled, node.arguments[position]);
   return (
     (writersOf[owner]?.includes(method) ?? false) ||
     nameIn(attributeNameAt[method]).some((name) =>

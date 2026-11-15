@@ -1,22 +1,10 @@
-import ts from "typescript";
-import { descendants } from "../syntax";
-import { at, type PrimitiveRule, type Rule } from "./library";
+import { ts } from "../syntax";
+import { forbidOutside } from "./library";
 
-const instanceofChecks: Rule = (library) =>
-  library.modules.flatMap((module) =>
-    descendants(module.source)
-      .filter(
-        (node) =>
-          ts.isBinaryExpression(node) &&
-          node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword,
-      )
-      .map(
-        (node) =>
-          `${at(module, node)}: ${node.getText()}: a class from this window does not match a node or event from a frame's. Tell nodes and events apart with the checks in internal-node.ts.`,
-      ),
-  );
-
-export const instanceofChecksRule: PrimitiveRule = {
+export const instanceofChecksRule = forbidOutside({
   description: "no source uses instanceof",
-  rule: instanceofChecks,
-};
+  find: (_library, node) =>
+    ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword,
+  advice:
+    "a class from this window does not match a node or event from a frame's. Tell nodes and events apart with the checks in internal-node.ts.",
+});

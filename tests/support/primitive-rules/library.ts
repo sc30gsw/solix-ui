@@ -1,7 +1,21 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import ts from "typescript";
-import { descendants, importsOf, isCallTo } from "../syntax";
+import {
+  type Alias,
+  type Compiled,
+  compile,
+  contextualAliases,
+  declarationsOf,
+  descendants,
+  enclosingFunctionName,
+  fileOf,
+  firstLine,
+  importsOf,
+  isPackageFile,
+  nameOf,
+  reachedFrom,
+  ts,
+} from "../syntax";
 import { repositoryRoot } from "../workspace";
 
 export const kebabCaseModule = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts$/;
@@ -12,22 +26,21 @@ export const nodeTestSuffixes = [".test.ts", ".test.tsx"];
 export const solidModule = "solid-js";
 
 const internalModule = /^internal(?:-[a-z0-9]+)+\.ts$/;
-const defaultLibraryFile = /\/typescript\/lib\/lib\.[^/]+\.d\.ts$/;
 const primitivePrefix = "create-";
-const compilerOptions: ts.CompilerOptions = {
-  target: ts.ScriptTarget.ESNext,
-  module: ts.ModuleKind.ESNext,
-  moduleResolution: ts.ModuleResolutionKind.Bundler,
-  lib: ["lib.esnext.d.ts", "lib.dom.d.ts"],
-  types: [],
-  strict: true,
-  noEmit: true,
-  skipLibCheck: true,
-};
+const primitivesSource = join(repositoryRoot, "packages/primitives/src");
+const solidPackage = /[\\/]node_modules[\\/](?:solid-js|@solidjs[\\/][a-z-]+)[\\/]/;
+
+export const browserOnlyRoles = Object.freeze([
+  "Subscription",
+  "Attach",
+  "BrowserCallback",
+  "BrowserCompute",
+  "EffectFunction",
+] as const);
+export const comparedByValueRoles = Object.freeze(["LiveConfig", "BrowserCompute"] as const);
+export const stateCommandRole = "StateCommandBody";
 
 export type Module = { file: string; path: string; source: ts.SourceFile };
-
-export type ModuleLevelFunction = ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
 
 export type Library = {
   source: string;
@@ -35,12 +48,17 @@ export type Library = {
   entries: string[];
   modules: Module[];
   tests: Map<string, ts.SourceFile>;
-  checker: ts.TypeChecker;
+  compiled: Compiled;
+  compiledTests: Compiled;
 };
 
 export type Rule = (library: Library) => string[];
 
 export type PrimitiveRule = { description: string; rule: Rule };
+
+export type Home = { file: string; fn?: string };
+
+export type Declared = { file: string; name: string };
 
 function entriesOf(directory: string): string[] {
   return existsSync(directory) ? readdirSync(directory).sort() : [];
@@ -53,32 +71,33 @@ export function loadLibrary(directory: string): Library {
   const paths = entries
     .filter((entry) => entry.endsWith(".ts"))
     .map((entry) => join(source, entry));
-  const program = ts.createProgram(paths, compilerOptions);
+  const compiled = compile(paths);
+  const testFiles = entriesOf(testDirectory).filter((entry) => /\.tsx?$/.test(entry));
+  const compiledTests = compile(
+    testFiles.map((entry) => join(testDirectory, entry)),
+    { packages: false },
+  );
   const tests = new Map(
-    entriesOf(testDirectory)
-      .filter((entry) => /\.tsx?$/.test(entry))
-      .map((entry): [string, ts.SourceFile] => [
-        entry,
-        ts.createSourceFile(
-          entry,
-          readFileSync(join(testDirectory, entry), "utf8"),
-          ts.ScriptTarget.Latest,
-          true,
-          entry.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-        ),
-      ]),
+    testFiles.flatMap((entry): [string, ts.SourceFile][] => {
+      const parsed = compiledTests.source(join(testDirectory, entry));
+      return parsed ? [[entry, parsed]] : [];
+    }),
   );
   const modules = paths.flatMap((path) => {
-    const parsed = program.getSourceFile(path);
+    const parsed = compiled.source(path);
     return parsed ? [{ file: basename(path), path, source: parsed }] : [];
   });
-  return { source, testDirectory, entries, modules, tests, checker: program.getTypeChecker() };
+  return { source, testDirectory, entries, modules, tests, compiled, compiledTests };
+}
+
+export function located(node: ts.Node): string {
+  const source = node.getSourceFile();
+  const file = relative(repositoryRoot, source.fileName);
+  return `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
 }
 
 export function at(module: Module, node?: ts.Node): string {
-  const file = relative(repositoryRoot, module.path);
-  if (!node) return file;
-  return `${file}:${module.source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+  return node ? located(node) : relative(repositoryRoot, module.path);
 }
 
 export function testAt(
@@ -87,9 +106,7 @@ export function testAt(
   source: ts.SourceFile,
   node?: ts.Node,
 ): string {
-  const path = relative(repositoryRoot, join(library.testDirectory, file));
-  if (!node) return path;
-  return `${path}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+  return node ? located(node) : relative(repositoryRoot, join(library.testDirectory, file));
 }
 
 export function isInternal(file: string): boolean {
@@ -116,6 +133,12 @@ export function publicModules(library: Library): Module[] {
   return library.modules.filter(({ file }) => isPublic(file));
 }
 
+export function browserTests(library: Library): [string, ts.SourceFile][] {
+  return [...library.tests].filter(([file]) =>
+    browserTestSuffixes.some((suffix) => file.endsWith(suffix)),
+  );
+}
+
 export function testNamed(
   library: Library,
   file: string,
@@ -138,66 +161,81 @@ export function exportedFunction(module: Module): ts.FunctionDeclaration | undef
   );
 }
 
-export function callsOneOf(module: Module, names: readonly string[]): boolean {
-  return descendants(module.source).some((node) => names.some((name) => isCallTo(node, name)));
-}
-
-export function declaresFunction(module: Module, name: string): boolean {
-  return module.source.statements.some(
-    (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === name,
-  );
-}
-
-export function reachesThrough(
-  library: Library,
-  module: Module,
-  isLeaf: (found: Module) => boolean,
-  seen: ReadonlySet<string> = new Set(),
-): boolean {
-  if (isLeaf(module)) return true;
-  return importsOf(module.source)
-    .filter(({ typeOnly, specifier }) => !typeOnly && specifier.startsWith("./"))
-    .some(({ specifier }) => {
-      const target = library.modules.find(({ file }) => `./${basename(file, ".ts")}` === specifier);
-      return (
-        target !== undefined &&
-        !seen.has(target.file) &&
-        reachesThrough(library, target, isLeaf, new Set([...seen, module.file]))
-      );
-    });
-}
-
-function isAlias(type: ts.Type, name: string): boolean {
-  return type.aliasSymbol?.getName() === name;
-}
-
-export function returnsAlias(library: Library, fn: ts.FunctionDeclaration, alias: string): boolean {
-  const signature = library.checker.getSignatureFromDeclaration(fn);
-  if (!signature) return false;
-  const returned = library.checker.getReturnTypeOfSignature(signature);
+export function isDeclared(declaration: ts.Node, declared: Declared): boolean {
   return (
-    isAlias(returned, alias) ||
-    library.checker
-      .getPropertiesOfType(returned)
-      .some((member) => isAlias(library.checker.getTypeOfSymbol(member), alias))
+    basename(fileOf(declaration)) === declared.file &&
+    !isPackageFile(fileOf(declaration)) &&
+    nameOf(declaration) === declared.name
   );
 }
 
-export function stringsIn(library: Library, expression: ts.Expression | undefined): string[] {
-  if (!expression) return [];
-  const type = library.checker.getTypeAtLocation(expression);
-  return (type.isUnion() ? type.types : [type]).flatMap((part) =>
-    part.isStringLiteral() ? [part.value] : [],
+export function isFromSolid(declaration: ts.Node, names: readonly string[]): boolean {
+  return solidPackage.test(fileOf(declaration)) && names.includes(nameOf(declaration));
+}
+
+export function refersTo(library: Library, node: ts.Node, declared: Declared): boolean {
+  return declarationsOf(library.compiled, node).some((found) => isDeclared(found, declared));
+}
+
+export function callsTo(library: Library, node: ts.Node, declared: Declared): boolean {
+  return ts.isCallExpression(node) && refersTo(library, calleeName(node.expression), declared);
+}
+
+export function calleeName(expression: ts.Expression): ts.Node {
+  return ts.isPropertyAccessExpression(expression) ? expression.name : expression;
+}
+
+export function reaches(library: Library, root: ts.Node, declared: Declared): boolean {
+  return [...reachedFrom(library.compiled, [root]).functions].some((fn) =>
+    isDeclared(fn, declared),
   );
 }
 
-export function isGlobal(library: Library, identifier: ts.Identifier): boolean {
-  const symbol = library.checker.getSymbolAtLocation(identifier);
-  const declarations = symbol?.getDeclarations() ?? [];
+function isRole(alias: Alias, roles: readonly string[]): boolean {
   return (
-    declarations.length > 0 &&
-    declarations.every((declaration) =>
-      defaultLibraryFile.test(declaration.getSourceFile().fileName),
-    )
+    roles.includes(alias.name) &&
+    (alias.file.startsWith(primitivesSource) || solidPackage.test(alias.file))
   );
+}
+
+function mayTakeARole(node: ts.Node): boolean {
+  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return true;
+  if (!ts.isIdentifier(node)) return false;
+  const parent = node.parent;
+  return (
+    (ts.isCallExpression(parent) && parent.arguments.some((argument) => argument === node)) ||
+    (ts.isPropertyAssignment(parent) && parent.initializer === node)
+  );
+}
+
+export function hasRole(library: Library, node: ts.Node, roles: readonly string[]): boolean {
+  return (
+    mayTakeARole(node) &&
+    contextualAliases(library.compiled, node).some((alias) => isRole(alias, roles))
+  );
+}
+
+export function isInHome(node: ts.Node, home: Home | undefined): boolean {
+  if (!home || basename(fileOf(node)) !== home.file) return false;
+  return home.fn === undefined || enclosingFunctionName(node) === home.fn;
+}
+
+export type Forbidden = {
+  description: string;
+  find: (library: Library, node: ts.Node) => boolean;
+  home?: Home;
+  advice: string;
+  modules?: (library: Library) => Module[];
+};
+
+export function forbidOutside(forbidden: Forbidden): PrimitiveRule {
+  return {
+    description: forbidden.description,
+    rule: (library) =>
+      (forbidden.modules?.(library) ?? library.modules).flatMap((module) =>
+        descendants(module.source)
+          .filter((node) => !isInHome(node, forbidden.home) && forbidden.find(library, node))
+          .map((node) => `${at(module, node)}: ${firstLine(node)}: ${forbidden.advice}`),
+      ),
+  };
 }

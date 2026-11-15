@@ -43,6 +43,18 @@ test("a scroll of an element inside the page is not a scroll of the window", asy
   expect(seen()).toEqual([{ from: 10, to: 30 }]);
 });
 
+test("a resize of an element inside the page, which does not bubble, does not pause the fold, so the next scroll still counts", async () => {
+  const scroll = stubbedScroll(10);
+  const seen = moves();
+  const video = document.createElement("video");
+  document.body.append(video);
+
+  video.dispatchEvent(new Event("resize"));
+  scroll.to(30);
+  await applied();
+  expect(seen()).toEqual([{ from: 10, to: 30 }]);
+});
+
 test("scrolls are ignored from a resize until it settles, one just before that is still ignored, and the position is then read again, so the next move starts there", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   const scroll = stubbedScroll(0);
@@ -51,7 +63,6 @@ test("scrolls are ignored from a resize until it settles, one just before that i
   scroll.resize();
   vi.advanceTimersByTime(resizeSettleMs - 1);
   scroll.to(600);
-  await Promise.resolve();
   vi.advanceTimersByTime(1);
   scroll.to(620);
   vi.useRealTimers();

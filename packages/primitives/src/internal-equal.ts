@@ -1,3 +1,5 @@
+export type LiveConfig<C, Args extends unknown[] = []> = (...args: Args) => C;
+
 function isPlain(value: unknown): value is Record<PropertyKey, unknown> {
   if (typeof value !== "object" || value === null) return false;
   const prototype: unknown = Object.getPrototypeOf(value);

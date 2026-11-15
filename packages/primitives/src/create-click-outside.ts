@@ -1,6 +1,6 @@
 import { access } from "./internal-access";
 import { createElementAttachment } from "./internal-attachment";
-import { disposeAll, listen, listenerSettings, watchEvents } from "./internal-listener";
+import { disposeAll, listenAsAsked, listenerSettings, watchEvents } from "./internal-listener";
 import { isNode } from "./internal-node";
 import type { MaybeAccessor, RefSetter } from "./types";
 
@@ -57,7 +57,7 @@ function listenToEvents(
 ): () => void {
   return disposeAll(
     events.map((type) =>
-      listen(pageOf(current), listenerSettings(type, current.capture), (event) => {
+      listenAsAsked(pageOf(current), listenerSettings(type, current.capture), (event) => {
         if (isOutside(event, current.inside)) handler(event);
       }),
     ),
@@ -66,31 +66,30 @@ function listenToEvents(
 
 function listenToPresses(current: Listening, handler: (event: Event) => void): () => void {
   const page = pageOf(current);
-  const view = page.defaultView ?? window;
   const started = new Map<number, { target: EventTarget | null; outside: boolean }>();
   const endingOutside = new WeakSet<Event>();
   return disposeAll([
-    watchEvents(view, press.start, (event) => {
+    watchEvents(page, [press.start], (event) => {
       started.set(event.pointerId, {
         target: event.target,
         outside: isOutside(event, current.inside),
       });
     }),
     ...current.inside.map((node) =>
-      watchEvents(node, press.start, (event) => {
+      watchEvents(node, [press.start], (event) => {
         const start = started.get(event.pointerId);
         if (start) start.outside = false;
       }),
     ),
-    watchEvents(view, press.end, (event) => {
+    watchEvents(page, [press.end], (event) => {
       const start = started.get(event.pointerId);
       started.delete(event.pointerId);
       if (start?.outside && isOnPage(start.target)) endingOutside.add(event);
     }),
-    watchEvents(view, press.cancel, (event) => {
+    watchEvents(page, [press.cancel], (event) => {
       started.delete(event.pointerId);
     }),
-    listen(page, listenerSettings(press.end, current.capture), (event) => {
+    listenAsAsked(page, listenerSettings(press.end, current.capture), (event) => {
       if (endingOutside.has(event) && isOutside(event, current.inside)) handler(event);
     }),
   ]);

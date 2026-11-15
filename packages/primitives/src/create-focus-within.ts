@@ -56,14 +56,14 @@ export function createFocusWithin<E extends Element = Element>(
     if (inside.now) inside.stopWatching = watchRemovals();
     deliver(inside.now);
     return disposeAll([
-      watchEvents<Element, "focusin">(element, "focusin", (event) => {
+      watchEvents<Element, "focusin">(element, ["focusin"], (event) => {
         if (inside.now) return;
         inside.now = true;
         inside.stopWatching = watchRemovals();
         deliver(true);
         options?.onFocus?.(event);
       }),
-      watchEvents<Element, "focusout">(element, "focusout", (event) => {
+      watchEvents<Element, "focusout">(element, ["focusout"], (event) => {
         const next = event.relatedTarget;
         if (!inside.now || (next !== null && element.contains(next as Node))) return;
         leave(event);

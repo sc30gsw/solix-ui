@@ -1,36 +1,20 @@
-import ts from "typescript";
-import { descendants } from "../syntax";
-import { at, type PrimitiveRule, type Rule, stringsIn } from "./library";
+import { declarationsOf, isInTypePosition, stringsIn, ts } from "../syntax";
+import { forbidOutside, isFromSolid } from "./library";
 
-const effectsAPrimitiveAvoids: Record<string, string> = {
-  createRenderEffect:
-    "runs its effect function on the server too, during the render, so a primitive would touch the DOM there",
-  createTrackedEffect:
-    "is deprecated: it tracks and runs its side effect in one scope, which may run more than once for one change",
-};
+const effectsAPrimitiveAvoids = ["createRenderEffect", "createTrackedEffect"];
 
-const serverEffects: Rule = (library) =>
-  library.modules.flatMap((module) =>
-    descendants(module.source)
-      .filter(
-        (node) =>
-          (ts.isIdentifier(node) && Object.hasOwn(effectsAPrimitiveAvoids, node.text)) ||
-          (ts.isElementAccessExpression(node) &&
-            stringsIn(library, node.argumentExpression).some((name) =>
-              Object.hasOwn(effectsAPrimitiveAvoids, name),
-            )),
-      )
-      .map((node) => {
-        const name = ts.isElementAccessExpression(node)
-          ? (stringsIn(library, node.argumentExpression).find((found) =>
-              Object.hasOwn(effectsAPrimitiveAvoids, found),
-            ) ?? "")
-          : node.getText();
-        return `${at(module, node)}: ${node.getText()}: ${name} ${effectsAPrimitiveAvoids[name]}. Put a primitive's side effect in the apply of a createEffect, which runs only in the browser.`;
-      }),
-  );
-
-export const serverEffectsRule: PrimitiveRule = {
-  description: "no primitive names createRenderEffect or createTrackedEffect",
-  rule: serverEffects,
-};
+export const serverEffectsRule = forbidOutside({
+  description: "no source refers to Solid's createRenderEffect or createTrackedEffect",
+  find: (library, node) =>
+    (ts.isIdentifier(node) &&
+      !isInTypePosition(node) &&
+      declarationsOf(library.compiled, node).some((declaration) =>
+        isFromSolid(declaration, effectsAPrimitiveAvoids),
+      )) ||
+    (ts.isElementAccessExpression(node) &&
+      stringsIn(library.compiled, node.argumentExpression).some((name) =>
+        effectsAPrimitiveAvoids.includes(name),
+      )),
+  advice:
+    "createRenderEffect runs on the server too, during the render, so a primitive would touch the DOM there, and createTrackedEffect may run its side effect more than once for one change. Put a primitive's side effect in the apply of a createEffect, which runs only in the browser.",
+});

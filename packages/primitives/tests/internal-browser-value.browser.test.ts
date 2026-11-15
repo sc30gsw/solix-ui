@@ -8,7 +8,7 @@ import {
   type Subscription,
 } from "../src/internal-browser-value";
 import { flush, mount, reportAfterDispose, unmount, watch } from "./support/browser-harness";
-import { nextTask } from "./support/dom";
+import { box, nextTask } from "./support/dom";
 
 const ping = "solix-ping";
 
@@ -170,6 +170,35 @@ test("readOn delivers what it reads from its target at once and on each listed e
 
   await pinged(target);
   expect([found(), missing()]).toEqual([2, 0]);
+});
+
+test("readOn on the window reads again for the window's own events, not for an event of an element inside that does not bubble or a scroll of an element inside", async () => {
+  const reads = { count: 0 };
+  mount(() =>
+    createBrowserValue(
+      readOn(
+        () => window,
+        ["scroll", "resize"],
+        () => {
+          reads.count += 1;
+          return reads.count;
+        },
+      ),
+      { loadingValue: 0 },
+    ),
+  );
+  const video = document.createElement("video");
+  const inner = box("inner");
+  document.body.append(video);
+
+  video.dispatchEvent(new Event("resize"));
+  inner.dispatchEvent(new Event("scroll"));
+  await nextTask();
+  const afterInner = reads.count;
+  window.dispatchEvent(new Event("resize"));
+  document.dispatchEvent(new Event("scroll"));
+  await nextTask();
+  expect([afterInner, reads.count]).toEqual([1, 3]);
 });
 
 test("createBrowserMemo computes in the browser at once, outside hydration", () => {

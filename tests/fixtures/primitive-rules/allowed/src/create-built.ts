@@ -1,5 +1,5 @@
 import { createMeasured } from "./create-measured";
-import type { RefSetter } from "./types";
+import type { RefSetter } from "../../../../../packages/primitives/src/types";
 
 export function createBuilt(): [ref: RefSetter<HTMLElement>, width: () => number] {
   return createMeasured();

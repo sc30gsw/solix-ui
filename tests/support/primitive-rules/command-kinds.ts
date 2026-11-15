@@ -1,20 +1,23 @@
-import { browserGlobalReadsReachedFrom, stateCommandBodies } from "./browser-global-reads";
-import { at, type PrimitiveRule, type Rule } from "./library";
+import { descendants } from "../syntax";
+import { browserGlobalsReached } from "./browser-global-reads";
+import { at, hasRole, type PrimitiveRule, type Rule, stateCommandRole } from "./library";
 
 const commandKinds: Rule = (library) =>
   library.modules.flatMap((module) =>
-    [...stateCommandBodies(module)].flatMap((body) => {
-      const reads = browserGlobalReadsReachedFrom(library, module, body);
-      return reads.length === 0
-        ? []
-        : [
-            `${at(module, body)}: ${reads.map((read) => read.text).join(", ")}: a command whose body reaches a browser-only global does nothing on the server, so make it with createBrowserCommand, not createStateCommand.`,
-          ];
-    }),
+    descendants(module.source)
+      .filter((node) => hasRole(library, node, [stateCommandRole]))
+      .flatMap((body) => {
+        const reads = browserGlobalsReached(library, [body]);
+        return reads.length === 0
+          ? []
+          : [
+              `${at(module, body)}: ${[...new Set(reads.map((read) => read.text))].join(", ")}: a command whose body reaches a browser-only global must do nothing until an effect has run and never on the server, so make it with createBrowserCommand, not createStateCommand.`,
+            ];
+      }),
   );
 
 export const commandKindsRule: PrimitiveRule = {
   description:
-    "a command whose body reaches a browser-only global is made with createBrowserCommand, not createStateCommand",
+    "no function typed StateCommandBody reaches a global declared only in lib.dom, through any function it calls",
   rule: commandKinds,
 };

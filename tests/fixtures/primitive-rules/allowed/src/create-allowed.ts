@@ -1,7 +1,7 @@
-import { accessUntracked } from "./internal-access";
-import { moveFocus } from "./internal-focus";
-import { createValue } from "./internal-value";
-import type { MaybeAccessor, ReadOnce } from "./types";
+import { accessUntracked } from "../../../../../packages/primitives/src/internal-access";
+import { moveFocus } from "../../../../../packages/primitives/src/internal-focus";
+import { createValue } from "../../../../../packages/primitives/src/internal-value";
+import type { MaybeAccessor, ReadOnce } from "../../../../../packages/primitives/src/types";
 
 const missing = Symbol("missing");
 const empty = Object.freeze([]);
@@ -22,6 +22,5 @@ export function createAllowed(
   const open = () => element.classList.contains("open") || element.style.display !== "none";
   const clamped = () => Math.min(value.get(), accessUntracked(options?.max ?? limits.lowest));
   const focus = () => moveFocus(element);
-  const browser = () => (typeof globalThis === "object" ? element.ownerDocument : undefined);
-  return [value.get, open, clamped, () => [label, missing, empty, items], copy, focus, browser];
+  return [value.get, open, clamped, () => [label, missing, empty, items], copy, focus];
 }

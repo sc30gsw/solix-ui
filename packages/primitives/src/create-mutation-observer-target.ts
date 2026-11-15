@@ -25,13 +25,13 @@ export function createMutationObserverTarget(
 ): void {
   const node = createBrowserMemo<Node | undefined>(() => access(target) ?? undefined, undefined);
   createAttachment<{ node: Node; init: MutationObserverInit }>(
-    () => {
-      const current = node();
-      return current && { node: current, init: { ...access(options) } };
-    },
     (current) =>
       observe("MutationObserver", current.node, current.init, (records, observer) =>
         callback(records, observer as MutationObserver),
       ),
+    () => {
+      const current = node();
+      return current && { node: current, init: { ...access(options) } };
+    },
   );
 }

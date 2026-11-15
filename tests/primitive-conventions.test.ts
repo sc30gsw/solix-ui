@@ -1,14 +1,13 @@
-import { existsSync, globSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
-import ts from "typescript";
+import { globSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
   loadLibrary,
   primitiveRules,
   type PrimitiveRuleName,
-  publicModuleCount,
+  publicModules,
 } from "./support/primitive-rules/index";
-import { importsOf } from "./support/syntax";
+import { compile, importsOf, parse, ts } from "./support/syntax";
 import { primitivesPackage, repositoryRoot } from "./support/workspace";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
@@ -20,7 +19,7 @@ const servedByVitestOrTheSolidPlugin = ["vite-plus/test", "solid-js", "@solidjs/
 const library = loadLibrary(primitivesPackage.directory);
 
 test("the primitives package has public modules to check", () => {
-  expect(publicModuleCount(library)).toBeGreaterThan(0);
+  expect(publicModules(library)).not.toEqual([]);
 });
 
 test.each(Object.values(primitiveRules))("$description", ({ rule }) => {
@@ -55,7 +54,6 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-forbidden.ts", "solid[effectName]"),
   ],
   serverBranches: [
-    forbiddenAt("src/create-forbidden.ts", "import { isServer }"),
     forbiddenAt("src/create-forbidden.ts", "const onServer = isServer"),
     forbiddenAt("src/create-forbidden.ts", "const inBrowser"),
     forbiddenAt("src/create-forbidden.ts", "const inBrowser"),
@@ -99,20 +97,26 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
   ],
   elementAttachments: [
     forbiddenAt("src/create-ref.ts", "export function createRef"),
-    forbiddenAt("src/create-ref.ts", "createEffect,"),
-    forbiddenAt("src/create-ref.ts", "createMemo,"),
+    forbiddenAt("src/create-ref.ts", "const current = createMemo"),
+    forbiddenAt("src/create-ref.ts", "createEffect(current"),
     forbiddenAt("src/create-sized.ts", "export function createSized"),
-    forbiddenAt("src/create-sized.ts", "import { createMemo }"),
-    forbiddenAt("src/create-sized.ts", "import { createSignal }"),
+    forbiddenAt("src/create-sized.ts", "const width = createMemo"),
+    forbiddenAt("src/create-sized.ts", "const [height] = createSignal"),
   ],
   browserValues: [
     forbiddenAt("src/create-unbranded.ts", "export function createUnbranded"),
     forbiddenAt("src/create-relayed.ts", "export function createRelayed"),
+    forbiddenAt("src/create-misbehaving.ts", "export function createMisbehaving"),
   ],
-  browserValueAssertions: [forbiddenAt("src/create-branded.ts", "as BrowserValue<number>")],
+  browserValueAssertions: [
+    forbiddenAt("src/create-branded.ts", "as BrowserValue<number>,"),
+    forbiddenAt("src/create-branded.ts", "as never"),
+    forbiddenAt("src/create-branded.ts", "as Live<number>"),
+    forbiddenAt("src/create-branded.ts", "as unknown as BrowserValue<number>"),
+  ],
   hydrationPolicy: [
-    forbiddenAt("src/create-misbehaving.ts", "import { createMemo, from }"),
     forbiddenAt("src/create-misbehaving.ts", "ssrSource"),
+    forbiddenAt("src/create-misbehaving.ts", "from<number>"),
   ],
   browserGlobalReads: [
     forbiddenAt("src/create-forbidden.ts", "const inBrowser"),
@@ -120,21 +124,33 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-forbidden.ts", "document.adoptedStyleSheets"),
     forbiddenAt("src/create-forbidden.ts", 'document.createElement("style")'),
     forbiddenAt("src/create-misbehaving.ts", "const width = window"),
+    forbiddenAt("src/create-misbehaving.ts", "new ResizeObserver"),
     forbiddenAt("src/create-misbehaving.ts", "const Observer"),
-    forbiddenAt("src/create-misbehaving.ts", "const known"),
+    forbiddenAt("src/create-misbehaving.ts", "const viaWindow"),
+    forbiddenAt("src/create-misbehaving.ts", "instanceof Element"),
+    forbiddenAt("src/create-misbehaving.ts", "const later"),
   ],
   commandKinds: [
     forbiddenAt("src/create-commanded.ts", "createStateCommand(() => window"),
     forbiddenAt("src/create-commanded.ts", "createStateCommand(() => home()"),
+    forbiddenAt("src/create-commanded.ts", "createStateCommand(() => verticalOffset()"),
   ],
-  liveOptions: [forbiddenAt("src/create-misbehaving.ts", "const size = access")],
+  liveOptions: [
+    forbiddenAt("src/create-misbehaving.ts", "const size = access"),
+    forbiddenAt("src/create-misbehaving.ts", "(deliver) => deliver(window.matchMedia"),
+  ],
   listenerRoles: [
-    forbiddenAt("src/create-misbehaving.ts", "import { listen }"),
     forbiddenAt("src/create-misbehaving.ts", "element.addEventListener"),
+    forbiddenAt("src/create-misbehaving.ts", "return listen("),
+  ],
+  eventHandlerProperties: [
+    forbiddenAt("src/create-misbehaving.ts", "element.onfocus"),
+    forbiddenAt("src/create-misbehaving.ts", 'Reflect.set(element, "onblur"'),
   ],
   observerConstruction: [
     forbiddenAt("src/create-misbehaving.ts", "new ResizeObserver"),
     forbiddenAt("src/create-misbehaving.ts", "const Observer"),
+    forbiddenAt("src/create-misbehaving.ts", "const viaWindow"),
   ],
   caughtErrors: [forbiddenAt("src/create-misbehaving.ts", "} catch {")],
   instanceofChecks: [forbiddenAt("src/create-misbehaving.ts", "instanceof Element")],
@@ -150,10 +166,13 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
   modelTests: [forbiddenAt("src/create-modelled.ts"), forbiddenAt("src/create-folded.ts")],
   browserTestWaits: [
     located("forbidden", "tests/create-misbehaving.browser.test.ts", "{ timeout: 2_000 }"),
-    located("forbidden", "tests/create-misbehaving.browser.test.ts", "setTimeout"),
-    located("forbidden", "tests/create-misbehaving.browser.test.ts", "toBeGreaterThan"),
+    located("forbidden", "tests/create-misbehaving.browser.test.ts", "(resolve) => setTimeout"),
+    located("forbidden", "tests/create-misbehaving.browser.test.ts", "toBeGreaterThan(0)"),
+    located("forbidden", "tests/create-misbehaving.browser.test.ts", "window.setTimeout"),
+    located("forbidden", "tests/create-misbehaving.browser.test.ts", "toBeGreaterThanOrEqual"),
+    located("forbidden", "tests/create-misbehaving.browser.test.ts", "seen.length >= 1"),
   ],
-  accessibilityTests: [forbiddenAt("src/create-modelled.ts"), forbiddenAt("src/create-ref.ts")],
+  accessibilityTests: [forbiddenAt("src/create-modelled.ts")],
   browserTestsUseTheHarness: [
     forbiddenAt("tests/create-modelled.browser.test.ts"),
     forbiddenAt("tests/create-modelled.browser.test.ts", 'import { flush } from "solid-js"'),
@@ -189,12 +208,7 @@ test("each rule flags every line of a fixture that breaks it, and nothing else",
 
 function preBundledInConfig(): string[] {
   const path = join(repositoryRoot, viteConfig);
-  const source = ts.createSourceFile(
-    path,
-    readFileSync(path, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const source = parse(path);
   const declaration = source.statements
     .filter(ts.isVariableStatement)
     .flatMap((statement) => [...statement.declarationList.declarations])
@@ -209,33 +223,36 @@ function preBundledInConfig(): string[] {
 }
 
 function bareImportsReachedFrom(entries: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const bare = new Set<string>();
-  const queue = [...entries];
-  while (queue.length > 0) {
-    const file = queue.pop() ?? "";
-    if (seen.has(file)) continue;
-    seen.add(file);
-    const source = ts.createSourceFile(
-      file,
-      readFileSync(file, "utf8"),
-      ts.ScriptTarget.Latest,
-      true,
-      file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-    );
-    for (const { specifier, node } of importsOf(source)) {
-      if (node.importClause?.isTypeOnly) continue;
-      if (!specifier.startsWith(".")) {
-        bare.add(specifier);
-        continue;
-      }
-      const target = resolve(dirname(file), specifier);
-      const found = [`${target}.ts`, `${target}.tsx`].find((candidate) => existsSync(candidate));
-      if (found) queue.push(found);
-    }
-  }
-  return [...bare].sort();
+  const bare = compile(entries, { packages: false }).files.flatMap((source) =>
+    importsOf(source)
+      .filter(({ typeOnly, specifier }) => !typeOnly && !specifier.startsWith("."))
+      .map(({ specifier }) => specifier),
+  );
+  return [...new Set(bare)].sort();
 }
+
+const syntaxModule = "tests/support/syntax.ts";
+const conventionsTest = "tests/primitive-conventions.test.ts";
+const ruleSources = ["tests/support/primitive-rules/*.ts", conventionsTest];
+
+test(`the primitive rules reach the TypeScript API only through ${syntaxModule}`, () => {
+  const sources = globSync(ruleSources, { cwd: repositoryRoot });
+  const found = sources.flatMap((file) => {
+    const source = parse(join(repositoryRoot, file));
+    return [
+      ...importsOf(source)
+        .filter(({ specifier }) => specifier === "typescript")
+        .map(() => `${file}: imports typescript`),
+      ...(file !== conventionsTest &&
+      /\bchecker\b/.test(readFileSync(join(repositoryRoot, file), "utf8"))
+        ? [`${file}: names the checker`]
+        : []),
+    ];
+  });
+
+  expect(sources).not.toEqual([]);
+  expect(found).toEqual([]);
+});
 
 test(`${preBundledName} in ${viteConfig} names every package the browser tests import that Vitest and the Solid plugin do not serve themselves, and nothing else`, () => {
   const entries = globSync(browserTests, { cwd: repositoryRoot }).map((file) =>

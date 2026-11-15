@@ -1,43 +1,47 @@
-import { importsOf } from "../syntax";
+import { declarationsOf, descendants, isInTypePosition, returnsAlias, ts } from "../syntax";
 import {
   at,
-  callsOneOf,
   exportedFunction,
+  isFromSolid,
   type PrimitiveRule,
   publicModules,
-  reachesThrough,
-  returnsAlias,
+  reaches,
   type Rule,
-  solidModule,
 } from "./library";
 
-const attachmentHelpers = ["createElementAttachment", "createElementValue"];
+const attachmentHelper = { file: "internal-attachment.ts", name: "createElementAttachment" };
 const refSetterType = "RefSetter";
 const reactiveNodesTheHelperOwns = ["createEffect", "createMemo", "createSignal"];
 
 const elementAttachments: Rule = (library) =>
   publicModules(library).flatMap((module) => {
     const fn = exportedFunction(module);
-    if (!fn || !returnsAlias(library, fn, refSetterType)) return [];
-    const helper = `${attachmentHelpers.join(" or ")} in internal-attachment.ts`;
-    const missing = reachesThrough(library, module, (found) => callsOneOf(found, attachmentHelpers))
+    if (!fn || !returnsAlias(library.compiled, fn, refSetterType)) return [];
+    const helper = `${attachmentHelper.name} in ${attachmentHelper.file}`;
+    const missing = reaches(library, fn, attachmentHelper)
       ? []
       : [
           `${at(module, fn.name ?? fn)}: ${fn.name?.text ?? "it"} returns a ${refSetterType}, alone or in a tuple or object, so build it on ${helper}, directly or through another primitive.`,
         ];
-    const ownNodes = importsOf(module.source)
-      .filter(({ specifier }) => specifier === solidModule)
-      .flatMap(({ names }) => names)
-      .filter(({ imported }) => reactiveNodesTheHelperOwns.includes(imported))
+    const ownNodes = descendants(module.source)
+      .filter(
+        (node) =>
+          ts.isIdentifier(node) &&
+          !isInTypePosition(node) &&
+          !ts.isImportSpecifier(node.parent) &&
+          declarationsOf(library.compiled, node).some((declaration) =>
+            isFromSolid(declaration, reactiveNodesTheHelperOwns),
+          ),
+      )
       .map(
-        ({ imported, node }) =>
-          `${at(module, node)}: ${imported}: a module that returns a ${refSetterType} leaves its signal, memo and effect to ${helper}, which creates them the same way on the server and in the browser.`,
+        (node) =>
+          `${at(module, node)}: ${node.getText()}: a module that returns a ${refSetterType} leaves its signal, memo and effect to ${helper}, which creates them the same way on the server and in the browser.`,
       );
     return [...missing, ...ownNodes];
   });
 
 export const elementAttachmentsRule: PrimitiveRule = {
   description:
-    "every public module that returns a RefSetter, alone or in a tuple or object, reaches createElementAttachment or createElementValue and imports no createEffect, createMemo or createSignal",
+    "every public primitive that returns a RefSetter, alone or in a tuple or object, reaches createElementAttachment and refers to no Solid createEffect, createMemo or createSignal",
   rule: elementAttachments,
 };

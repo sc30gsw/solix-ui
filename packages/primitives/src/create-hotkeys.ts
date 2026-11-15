@@ -1,5 +1,6 @@
 import { access } from "./internal-access";
-import { createWindowHandler } from "./internal-attachment";
+import { createAttachment } from "./internal-attachment";
+import { handleEvent } from "./internal-listener";
 import { runHotkeys } from "./internal-hotkey";
 import { isElement, isHtmlElement } from "./internal-node";
 import type { HotkeyItem, MaybeAccessor } from "./types";
@@ -46,9 +47,11 @@ export function createHotkeys(
   tagsToIgnore?: MaybeAccessor<readonly string[]>,
   triggerOnContentEditable?: MaybeAccessor<boolean>,
 ): void {
-  createWindowHandler(keydown, (event) => {
-    const ignored = access(tagsToIgnore ?? defaultTagsToIgnore);
-    if (isIgnoredTarget(event, ignored, access(triggerOnContentEditable ?? false))) return;
-    runHotkeys(event, access(hotkeys));
-  });
+  createAttachment(() =>
+    handleEvent(window, keydown, (event) => {
+      const ignored = access(tagsToIgnore ?? defaultTagsToIgnore);
+      if (isIgnoredTarget(event, ignored, access(triggerOnContentEditable ?? false))) return;
+      runHotkeys(event, access(hotkeys));
+    }),
+  );
 }

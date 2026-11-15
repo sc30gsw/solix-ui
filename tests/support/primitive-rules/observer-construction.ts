@@ -1,29 +1,31 @@
-import ts from "typescript";
-import { observerNames } from "../../../packages/primitives/src/internal-dom-observer";
-import { descendants, isCallTo } from "../syntax";
-import { at, type PrimitiveRule, type Rule, stringsIn } from "./library";
+import {
+  type ClassRef,
+  constructedClass,
+  constructorClasses,
+  isDomLibraryFile,
+  isBrowserOnlyGlobal,
+  ts,
+} from "../syntax";
+import { forbidOutside } from "./library";
 
 const observerModule = "internal-dom-observer.ts";
-const names: readonly string[] = observerNames;
+const observerClass = /Observer$/;
 
-const observerConstruction: Rule = (library) =>
-  library.modules
-    .filter(({ file }) => file !== observerModule)
-    .flatMap((module) =>
-      descendants(module.source)
-        .filter(
-          (node) =>
-            (ts.isNewExpression(node) && names.includes(node.expression.getText())) ||
-            (isCallTo(node, "lookUp") &&
-              stringsIn(library, node.arguments[1]).some((name) => names.includes(name))),
-        )
-        .map(
-          (node) =>
-            `${at(module, node)}: ${node.getText().split("\n")[0]}: observe through observe in ${observerModule}, which looks the class up on the target's window and disconnects it.`,
-        ),
-    );
+function isObserver({ name, file }: ClassRef): boolean {
+  return observerClass.test(name) && isDomLibraryFile(file);
+}
 
-export const observerConstructionRule: PrimitiveRule = {
-  description: "only internal-dom-observer.ts constructs or looks up an observer",
-  rule: observerConstruction,
-};
+export const observerConstructionRule = forbidOutside({
+  description: `only ${observerModule} constructs a DOM observer or takes hold of an observer class`,
+  home: { file: observerModule },
+  find: (library, node) =>
+    constructedClass(library.compiled, node).some(isObserver) ||
+    (!(ts.isNewExpression(node.parent) && node.parent.expression === node) &&
+      (ts.isCallExpression(node) ||
+        ts.isPropertyAccessExpression(node) ||
+        ts.isElementAccessExpression(node) ||
+        isBrowserOnlyGlobal(library.compiled, node)) &&
+      !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) &&
+      constructorClasses(library.compiled, node).some(isObserver)),
+  advice: `observe through observe in ${observerModule}, which looks the class up on the target's window and disconnects it.`,
+});

@@ -1,3 +1,4 @@
+import { isWindow } from "./internal-node";
 import type { ListenerOptions } from "./types";
 
 type EventMapOf<T> = T extends Window
@@ -44,12 +45,15 @@ export function listenerSettings<K extends string>(
   };
 }
 
-export function listen<T extends EventTarget, K extends string>(
+function listen<T extends EventTarget, K extends string>(
   target: T,
   settings: ListenerSettings<K>,
   listener: (event: EventOf<T, K>) => void,
+  accepts: (event: Event) => boolean = () => true,
 ): () => void {
-  const handle = (event: Event) => listener(event as EventOf<T, K>);
+  const handle = (event: Event) => {
+    if (accepts(event)) listener(event as EventOf<T, K>);
+  };
   target.addEventListener(settings.type, handle, {
     capture: settings.capture,
     passive: settings.passive,
@@ -65,21 +69,44 @@ export function disposeAll(disposers: readonly (() => void)[]): () => void {
   };
 }
 
+function isAimedAt(event: Event, target: EventTarget): boolean {
+  if (event.target === target) return true;
+  return isWindow(target) && event.target === Reflect.get(target, "document");
+}
+
+export type WatchOptions = { passive?: boolean; ownEventsOnly?: boolean };
+
 export function watchEvents<T extends EventTarget, K extends string>(
+  target: T,
+  types: readonly K[],
+  listener: (event: EventOf<T, K>) => void,
+  options?: WatchOptions,
+): () => void {
+  const aimedOnly = options?.ownEventsOnly === true || isWindow(target);
+  return disposeAll(
+    types.map((type) =>
+      listen<T, K>(
+        target,
+        { ...listenerSettings(type, true), passive: options?.passive },
+        listener,
+        (event) => !aimedOnly || isAimedAt(event, target),
+      ),
+    ),
+  );
+}
+
+export function handleEvent<T extends EventTarget, K extends string>(
   target: T,
   type: K,
   listener: (event: EventOf<T, K>) => void,
-  options?: { passive?: boolean },
 ): () => void {
-  return listen(target, { ...listenerSettings(type, true), passive: options?.passive }, listener);
+  return listen<T, K>(target, listenerSettings(type), listener, (event) => !event.defaultPrevented);
 }
 
-export function handleEvent<K extends string>(
-  view: Window,
-  type: K,
-  listener: (event: EventOf<Window, K>) => void,
+export function listenAsAsked<T extends EventTarget, K extends string>(
+  target: T,
+  settings: ListenerSettings<K>,
+  listener: (event: EventOf<T, K>) => void,
 ): () => void {
-  return listen<Window, K>(view, listenerSettings(type), (event) => {
-    if (!event.defaultPrevented) listener(event);
-  });
+  return listen(target, settings, listener);
 }

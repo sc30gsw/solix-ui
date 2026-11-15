@@ -6,4 +6,3 @@ export { createEventListener } from "./create-event-listener";
 export { createMeasured } from "./create-measured";
 export { createWatched } from "./create-watched";
 export { getHotkeyHandler } from "./get-hotkey-handler";
-export type { BrowserValue, MaybeAccessor, ReadOnce, RefSetter } from "./types";

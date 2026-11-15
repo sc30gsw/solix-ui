@@ -59,10 +59,9 @@ export function createActiveElement(options?: ActiveElementOptions): BrowserValu
       };
       keep(() => removals.stop());
       read();
-      keep(watchEvents(window, "focusin", read));
-      keep(watchEvents(window, "focusout", read));
+      keep(watchEvents(page, ["focusin", "focusout"], read));
       keep(
-        watchEvents(window, "blur", (event) => {
+        watchEvents(window, ["blur"], (event) => {
           if (event.relatedTarget === null) read();
         }),
       );

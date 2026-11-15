@@ -1,5 +1,5 @@
-import { createTargetListener } from "./internal-attachment";
-import { listenerSettings } from "./internal-listener";
+import { createAttachment } from "./internal-attachment";
+import { handleEvent } from "./internal-listener";
 
 /**
  * Calls `onPageLeave` when the pointer leaves the page, on `mouseleave` of the document element,
@@ -11,9 +11,5 @@ import { listenerSettings } from "./internal-listener";
  * ```
  */
 export function createPageLeave(onPageLeave: () => void): void {
-  createTargetListener(
-    () => document.documentElement,
-    () => listenerSettings("mouseleave"),
-    () => onPageLeave(),
-  );
+  createAttachment(() => handleEvent(document.documentElement, "mouseleave", () => onPageLeave()));
 }

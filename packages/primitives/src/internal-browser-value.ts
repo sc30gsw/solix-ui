@@ -1,6 +1,6 @@
 import { type Accessor, createMemo, createSignal, from, untrack } from "solid-js";
 import { whereAllowed } from "./internal-browser-api";
-import { sameValue } from "./internal-equal";
+import { type LiveConfig, sameValue } from "./internal-equal";
 import { watchEvents } from "./internal-listener";
 import type { BrowserValue } from "./types";
 
@@ -8,11 +8,15 @@ export type Deliver<T> = (value: T) => void;
 
 export type Keep = (teardown: () => void) => void;
 
+export type BrowserCallback<Args extends unknown[], R> = (...args: Args) => R;
+
+export type BrowserCompute<T> = () => T;
+
 export type Subscription<T, C> = (deliver: Deliver<T>, keep: Keep, config: C) => void;
 
 export type BrowserValueOptions<T, C> = {
   loadingValue: T;
-  config?: () => C;
+  config?: LiveConfig<C>;
   equals?: false | ((left: T, right: T) => boolean);
 };
 
@@ -42,7 +46,7 @@ export function mapBrowserValue<S, T>(
   return branded(() => project(source()));
 }
 
-export function createBrowserMemo<T>(compute: () => T, loadingValue: T): Accessor<T> {
+export function createBrowserMemo<T>(compute: BrowserCompute<T>, loadingValue: T): Accessor<T> {
   return createMemo<T>(compute, { ssrSource: "client", loadingValue });
 }
 
@@ -79,9 +83,9 @@ export function createBrowserValue<T, C = undefined>(
 }
 
 export function readOn<T, R extends EventTarget, C = undefined>(
-  target: (config: C) => R | null | undefined,
+  target: BrowserCallback<[config: C], R | null | undefined>,
   types: readonly string[],
-  read: (target: R, config: C) => T,
+  read: BrowserCallback<[target: R, config: C], T>,
   options?: { passive?: boolean },
 ): Subscription<T, C> {
   return (deliver, keep, config) => {
@@ -89,6 +93,6 @@ export function readOn<T, R extends EventTarget, C = undefined>(
     if (!resolved) return;
     const deliverRead = () => deliver(read(resolved, config));
     deliverRead();
-    for (const type of types) keep(watchEvents(resolved, type, deliverRead, options));
+    keep(watchEvents(resolved, types, deliverRead, { ...options, ownEventsOnly: true }));
   };
 }

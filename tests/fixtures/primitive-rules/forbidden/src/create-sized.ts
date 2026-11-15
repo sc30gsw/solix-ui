@@ -1,6 +1,6 @@
 import { createMemo } from "solid-js";
 import { createSignal } from "solid-js";
-import type { RefSetter } from "./types";
+import type { RefSetter } from "../../../../../packages/primitives/src/types";
 
 export function createSized(): { ref: RefSetter<HTMLElement>; width: () => number } {
   const width = createMemo(() => 0);

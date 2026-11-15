@@ -1,4 +1,8 @@
-import { createBrowserCommand, createStateCommand } from "./internal-command";
+import { createBrowserCommand, createStateCommand } from "../../../../../packages/primitives/src/internal-command";
+
+function scrollHome(count: number): void {
+  window.scrollTo(0, count);
+}
 
 export function createCommanded(): [() => void, () => void] {
   const state = { count: 0 };
@@ -10,7 +14,7 @@ export function createCommanded(): [() => void, () => void] {
       () => undefined,
     ),
     createBrowserCommand(
-      () => window.scrollTo(0, state.count),
+      () => scrollHome(state.count),
       () => undefined,
     ),
   ];

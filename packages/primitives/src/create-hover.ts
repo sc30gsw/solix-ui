@@ -20,8 +20,8 @@ export function createHover<E extends Element = Element>(): HoverReturn<E> {
   const [ref, hovered] = createElementValue<E, boolean>(false, (element, _config, deliver) => {
     deliver(element.matches(":hover"));
     return disposeAll([
-      watchEvents(element, "mouseenter", () => deliver(true)),
-      watchEvents(element, "mouseleave", () => deliver(false)),
+      watchEvents(element, ["mouseenter"], () => deliver(true)),
+      watchEvents(element, ["mouseleave"], () => deliver(false)),
     ]);
   });
   return { ref, hovered };
