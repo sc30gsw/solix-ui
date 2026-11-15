@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { parse, ts } from "../tests/support/syntax.ts";
+import { parse, ts } from "./syntax.ts";
 
 export const tokensFile = "packages/core/src/tokens.stylex.ts";
 
@@ -30,7 +30,7 @@ export function tokenValues(file: string = tokensFile): Record<string, string> {
     ) {
       definitions.push(...node.arguments[0].properties);
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(source);
 

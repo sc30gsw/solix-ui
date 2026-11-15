@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
-import { parse, ts } from "../../../tests/support/syntax";
+import { parse, ts } from "../../../scripts/syntax";
 
 type Minimum = { ratio: number; criterion: string };
 type Conditional = Map<string, ts.Expression>;
@@ -111,7 +111,7 @@ function stylexBlocks(file: string): Block[] {
         }
       }
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(source);
   return blocks;

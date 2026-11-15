@@ -1,6 +1,6 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { expect, test } from "vite-plus/test";
+import { afterAll, expect, test } from "vite-plus/test";
 import {
   importsOf,
   loadLibrary,
@@ -8,7 +8,7 @@ import {
   type PrimitiveRuleName,
   publicModuleCount,
 } from "./support/primitive-rules";
-import { isTypeOnlyImport, parse, ts } from "./support/syntax";
+import { isTypeOnlyImport, parse, ts } from "../scripts/syntax";
 import { primitivesPackage, repositoryRoot } from "./support/workspace";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
@@ -18,6 +18,7 @@ const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const servedByVitestOrTheSolidPlugin = ["vite-plus/test", "solid-js", "@solidjs/web"];
 
 const library = loadLibrary(primitivesPackage.directory);
+afterAll(library.dispose);
 
 test("the primitives package has public modules to check", () => {
   expect(publicModuleCount(library)).toBeGreaterThan(0);
@@ -122,6 +123,7 @@ test("each rule passes a fixture that holds only what it allows: read-once argum
   const findings = Object.fromEntries(
     Object.entries(primitiveRules).map(([name, { rule }]) => [name, rule(fixture)]),
   );
+  fixture.dispose();
 
   expect(findings).toEqual(
     Object.fromEntries(Object.keys(primitiveRules).map((name) => [name, []])),
@@ -136,6 +138,7 @@ test("each rule flags every line of a fixture that breaks it, and nothing else",
       locationsOf(rule(fixture)).sort(),
     ]),
   );
+  fixture.dispose();
   const expected = Object.fromEntries(
     Object.entries(forbiddenFindings).map(([name, locations]) => [name, [...locations].sort()]),
   );

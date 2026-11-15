@@ -1,19 +1,21 @@
-export * as ts from "./syntax/tree.ts";
+export * as ts from "./syntax/ast.ts";
 export {
   openProgram,
   parse,
   parseAll,
+  parseText,
   stringLiteralTypesOf,
-  type CompilerOptions,
   type Program,
 } from "./syntax/program.ts";
 export {
   commentsIn,
   descendants,
   exportsOf,
+  findAncestor,
   isExported,
   isTypeOnlyImport,
-  nameOf,
+  modifierFlags,
+  staticPropertyName,
   type Comment,
   type Exports,
 } from "./syntax/walk.ts";

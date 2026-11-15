@@ -5,7 +5,7 @@ import type { Component } from "solid-js";
 import type * as Library from "../src/index";
 import type * as Parts from "../src/parts";
 import type * as StableClass from "../src/stable-class";
-import { nameOf, parse, ts } from "../../../tests/support/syntax";
+import { parse, staticPropertyName, ts } from "../../../scripts/syntax";
 
 export type ConsumerProps = Record<string, unknown>;
 
@@ -50,8 +50,8 @@ export function renderBuilt(name: string, props: ConsumerProps): string {
 }
 
 function keyOf(property: ts.ObjectLiteralElementLike, where: string): string {
-  const name = nameOf(property);
-  if (name && (ts.isIdentifier(name) || ts.isStringLiteral(name))) return name.text;
+  const name = staticPropertyName(property);
+  if (name !== undefined) return name;
   throw new Error(`${where}: write every key of the compiled styles as a name or a string.`);
 }
 

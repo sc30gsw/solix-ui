@@ -3,10 +3,13 @@ import { once } from "node:events";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "vite-plus/test";
+import { descendants, parse, ts } from "../scripts/syntax";
 import { repositoryRoot } from "./support/workspace";
 
-const compilerModule = pathToFileURL(join(repositoryRoot, "tests/support/syntax/program.ts")).href;
-const readByPlainNode = pathToFileURL(join(repositoryRoot, "scripts/expected-values.ts")).href;
+const compilerModule = pathToFileURL(join(repositoryRoot, "scripts/syntax/program.ts")).href;
+const driveScript = ".agents/skills/verify-playground/scripts/drive.mjs";
+const moduleLoader = "repositoryModule";
+const plainNodeTimeout = 30_000;
 const parsedSignal = "parsed";
 const parentScript = `
 const { parse } = await import(${JSON.stringify(compilerModule)});
@@ -56,13 +59,30 @@ test.each([
   },
 );
 
-test("Node's own loader imports scripts/expected-values.ts, which reads the tokens through the syntax module, as the playground's drive script does", () => {
-  const result = spawnSync(
-    process.execPath,
-    ["--input-type=module", "-e", `await import(${JSON.stringify(readByPlainNode)});`],
-    { cwd: repositoryRoot, encoding: "utf8" },
+function modulesTheDriveScriptLoads(): string[] {
+  return descendants(parse(join(repositoryRoot, driveScript))).flatMap((node) =>
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === moduleLoader &&
+    node.arguments[0] !== undefined &&
+    ts.isStringLiteral(node.arguments[0])
+      ? [node.arguments[0].text]
+      : [],
   );
+}
 
-  expect(result.stderr).toBe("");
-  expect(result.status).toBe(0);
+test("Node's own loader imports every repository module the playground's drive script loads", () => {
+  const modules = modulesTheDriveScriptLoads();
+  const failures = modules.flatMap((path) => {
+    const url = pathToFileURL(join(repositoryRoot, path)).href;
+    const result = spawnSync(
+      process.execPath,
+      ["--input-type=module", "-e", `await import(${JSON.stringify(url)});`],
+      { cwd: repositoryRoot, encoding: "utf8", timeout: plainNodeTimeout },
+    );
+    return result.status === 0 && result.stderr === "" ? [] : [`${path}: ${result.stderr}`];
+  });
+
+  expect(modules).toContain("scripts/expected-values.ts");
+  expect(failures).toEqual([]);
 });

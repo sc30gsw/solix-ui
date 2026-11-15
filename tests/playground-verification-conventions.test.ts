@@ -1,7 +1,7 @@
 import { globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { nameOf, parse, parseAll, ts } from "./support/syntax";
+import { parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
 import { repositoryRoot } from "./support/workspace";
 
 const skill = ".agents/skills/verify-playground";
@@ -62,10 +62,7 @@ function driveJourneys(): string[] {
   }
   return nonEmpty(
     driveScript,
-    initializer.properties.flatMap((property) => {
-      const name = nameOf(property);
-      return name && (ts.isIdentifier(name) || ts.isStringLiteral(name)) ? [name.text] : [];
-    }),
+    initializer.properties.flatMap((property) => staticPropertyName(property) ?? []),
   );
 }
 
@@ -172,12 +169,11 @@ function holdsAPort(literal: ts.NumericLiteral): boolean {
   return false;
 }
 
-function portsIn(path: string): string[] {
-  const source = parse(join(repositoryRoot, path));
+function portsIn(source: ts.SourceFile): string[] {
   const found = new Set<string>();
   const visit = (node: ts.Node): void => {
     if (ts.isNumericLiteral(node) && holdsAPort(node)) found.add(String(Number(node.text)));
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(source);
   return [...found];
@@ -186,8 +182,10 @@ function portsIn(path: string): string[] {
 test("every test server and the verification instance listen on ports of their own", () => {
   const launchPort = launchDefaultPort.exec(read(launchScript))?.[1];
   const paths = globSync([testConfig, testCode], { cwd: repositoryRoot }).sort();
-  parseAll(paths.map((path) => join(repositoryRoot, path)));
-  const ports = paths.flatMap((path) => portsIn(path).map((port) => ({ path, port })));
+  const sources = parseAll(paths.map((path) => join(repositoryRoot, path)));
+  const ports = paths.flatMap((path, index) =>
+    portsIn(sources[index]).map((port) => ({ path, port })),
+  );
   const violations = ports.flatMap(({ path, port }, index) => [
     ...ports
       .slice(0, index)

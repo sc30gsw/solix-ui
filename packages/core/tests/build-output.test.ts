@@ -13,7 +13,7 @@ import {
   stylePropNames,
 } from "../src/style-prop-table";
 import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
-import { parse, ts } from "../../../tests/support/syntax";
+import { parse, ts } from "../../../scripts/syntax";
 import { enclosingAtRules, inStylePropLayer, nestedLayerOrder } from "./cascade-layers";
 
 const stylesheet = builtStylesheet.trim();
@@ -328,7 +328,7 @@ test("the built style-prop table imports nothing, so build.mjs can load it in pl
         (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
           node.expression.getText(source) === "require"));
     if (loadsAModule) imports.push(node.getText(source));
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(source);
 

@@ -1,6 +1,15 @@
 import { existsSync, readdirSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import { descendants, exportsOf, openProgram, parseAll, stringLiteralTypesOf, ts } from "./syntax";
+import {
+  descendants,
+  exportsOf,
+  findAncestor,
+  modifierFlags,
+  openProgram,
+  parseAll,
+  stringLiteralTypesOf,
+  ts,
+} from "../../scripts/syntax";
 import { repositoryRoot } from "./workspace";
 
 const kebabCaseModule = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts$/;
@@ -63,17 +72,6 @@ const flowsThrough = [
   ts.SyntaxKind.AmpersandAmpersandToken,
   ts.SyntaxKind.CommaToken,
 ];
-const compilerOptions = {
-  target: "esnext",
-  module: "esnext",
-  moduleResolution: "bundler",
-  lib: ["esnext", "dom"],
-  types: [],
-  strict: true,
-  noEmit: true,
-  skipLibCheck: true,
-};
-
 type Module = { file: string; path: string; source: ts.SourceFile };
 type ModuleLevelFunction = ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
 type ImportedName = { imported: string; local: string; node: ts.ImportSpecifier };
@@ -86,6 +84,7 @@ export type Library = {
   modules: Module[];
   tests: Map<string, ts.SourceFile>;
   checker: ts.Checker;
+  dispose: () => void;
 };
 
 export type Rule = (library: Library) => string[];
@@ -101,7 +100,7 @@ export function loadLibrary(directory: string): Library {
   const paths = entries
     .filter((entry) => entry.endsWith(".ts"))
     .map((entry) => join(source, entry));
-  const program = openProgram(paths, compilerOptions);
+  const program = openProgram(paths);
   const testEntries = entriesOf(testDirectory).filter((entry) => /\.tsx?$/.test(entry));
   const testSources = parseAll(testEntries.map((entry) => join(testDirectory, entry)));
   const tests = new Map(testEntries.map((entry, index) => [entry, testSources[index]]));
@@ -109,7 +108,15 @@ export function loadLibrary(directory: string): Library {
     const parsed = program.sourceFile(path);
     return parsed ? [{ file: basename(path), path, source: parsed }] : [];
   });
-  return { source, testDirectory, entries, modules, tests, checker: program.checker };
+  return {
+    source,
+    testDirectory,
+    entries,
+    modules,
+    tests,
+    checker: program.checker,
+    dispose: program.dispose,
+  };
 }
 
 function at(module: Module, node?: ts.Node): string {
@@ -220,7 +227,8 @@ function outsideClosures(root: ts.Node | undefined): ts.Node[] {
   const found: ts.Node[] = [];
   const visit = (node: ts.Node): void => {
     found.push(node);
-    if (!ts.isFunctionLike(node) && !ts.isClassLikeDeclaration(node)) ts.forEachChild(node, visit);
+    if (!ts.isSignatureDeclaration(node) && !ts.isClassLikeDeclaration(node))
+      node.forEachChild(visit);
   };
   if (root) visit(root);
   return found;
@@ -411,9 +419,7 @@ const moduleState: Rule = (library) =>
         for (const member of statement.members) {
           const isStatic =
             ts.isClassStaticBlockDeclaration(member) ||
-            (ts.canHaveModifiers(member) &&
-              (ts.getModifiers(member)?.some(({ kind }) => kind === ts.SyntaxKind.StaticKeyword) ??
-                false));
+            (modifierFlags(member) & ts.ModifierFlags.Static) !== 0;
           if (isStatic && !ts.isMethodDeclaration(member)) {
             found.push([member, "a static class field"]);
           }
@@ -673,7 +679,7 @@ const focusMovesThroughOneFunction: Rule = (library) =>
           node.expression.name.text === focusMethod,
       )
       .filter((call) => {
-        const owner = ts.findAncestor(call, ts.isFunctionDeclaration);
+        const owner = findAncestor(call, ts.isFunctionDeclaration);
         return !(declaresTheFocusMover(module) && owner?.name?.text === focusMover);
       })
       .map(

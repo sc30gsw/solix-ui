@@ -2,7 +2,7 @@ import { existsSync, globSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
-import { commentsIn, descendants, parse, parseAll, ts } from "./support/syntax";
+import { commentsIn, descendants, parseAll, parseText, ts } from "../scripts/syntax";
 import {
   catalogVersions,
   type Manifest,
@@ -47,8 +47,10 @@ const namesNodeVersion = /node-version["']?\s*:/;
 const namesNodeVersionFile = /node-version-file["']?\s*:\s*(.*?)\s*$/;
 const namesRunner = /runs-on["']?\s*:/;
 const typeScriptApi = /^typescript(?:\/|$)/;
-const typeScriptApiHome = "tests/support/syntax/";
-const typeScriptApiEntry = "tests/support/syntax.ts";
+const typeScriptApiHome = "scripts/syntax/";
+const typeScriptApiEntry = "scripts/syntax.ts";
+const typeScriptApiList = "scripts/syntax/ast.ts";
+const syntaxModuleImport = /(?:^|\/)syntax(?:\.ts)?$/;
 
 function installedDependencies(manifest: Manifest): [string, string][] {
   return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });
@@ -224,9 +226,9 @@ function moduleSpecifierOf(node: ts.Node): ts.Node | undefined {
 function typeScriptApiImports(file: string, source: ts.SourceFile): string[] {
   return descendants(source).flatMap((node) => {
     const specifier = moduleSpecifierOf(node);
-    return specifier && ts.isStringLiteralLike(specifier) && typeScriptApi.test(specifier.text)
+    return specifier && ts.isStringLiteralLikeNode(specifier) && typeScriptApi.test(specifier.text)
       ? [
-          `${file}:${lineOf(source, node.getStart())}: ${node.getText().split("\n")[0]} imports the TypeScript API. Import ts, parse and the walk helpers from ${typeScriptApiEntry}, the one module that talks to TypeScript, so the API's next change is an edit in ${typeScriptApiHome} alone.`,
+          `${file}:${lineOf(source, node.getStart())}: ${node.getText().split("\n")[0]} imports the TypeScript API. Import it from ${typeScriptApiEntry}.`,
         ]
       : [];
   });
@@ -250,15 +252,106 @@ test("the TypeScript API rule flags each way a file can load typescript, and an 
     'const later = await import("typescript");',
     'const required = require("typescript");',
     'type Tree = import("typescript/unstable/ast").Node;',
-    'import { parse } from "./support/syntax";',
+    'import { parse } from "../scripts/syntax";',
     'const named = "typescript";',
   ];
-  const source = parse(join(repositoryRoot, file), lines.join("\n"));
+  const source = parseText(lines.join("\n"), ".ts");
   const flagged = typeScriptApiImports(file, source).map(
     (violation) => /^[^:]+:(\d+):/.exec(violation)?.[1],
   );
 
   expect(flagged).toEqual(["1", "2", "3", "4", "5", "6"]);
+});
+
+function typeScriptApiNames(): string[] {
+  const [list] = parseAll([join(repositoryRoot, typeScriptApiList)]);
+  return list.statements.flatMap((statement) =>
+    ts.isExportDeclaration(statement) &&
+    statement.exportClause &&
+    ts.isNamedExports(statement.exportClause)
+      ? statement.exportClause.elements.map((element) => element.name.text)
+      : [],
+  );
+}
+
+function importsTsFromTheSyntaxModule(source: ts.SourceFile): boolean {
+  return source.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      syntaxModuleImport.test(statement.moduleSpecifier.text) &&
+      statement.importClause?.namedBindings !== undefined &&
+      ts.isNamedImports(statement.importClause.namedBindings) &&
+      statement.importClause.namedBindings.elements.some((element) => element.name.text === "ts"),
+  );
+}
+
+function tsMembersNamedIn(source: ts.SourceFile): { member: string; position: number }[] {
+  return descendants(source).flatMap((node) => {
+    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+      return node.expression.text === "ts"
+        ? [{ member: node.name.text, position: node.getStart() }]
+        : [];
+    }
+    if (ts.isQualifiedName(node) && ts.isIdentifier(node.left)) {
+      return node.left.text === "ts"
+        ? [{ member: node.right.text, position: node.getStart() }]
+        : [];
+    }
+    return [];
+  });
+}
+
+test(`no file outside ${typeScriptApiHome} names a member of ts that ${typeScriptApiList} does not list`, () => {
+  const listed = typeScriptApiNames();
+  const files = scriptFiles.filter((file) => !file.startsWith(typeScriptApiHome));
+  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
+  const violations = files.flatMap((file, index) =>
+    importsTsFromTheSyntaxModule(sources[index])
+      ? tsMembersNamedIn(sources[index])
+          .filter(({ member }) => !listed.includes(member))
+          .map(
+            ({ member, position }) =>
+              `${file}:${lineOf(sources[index], position)}: ts.${member} is not in ${typeScriptApiList}. Add it there under its TypeScript 7 name, so the next rename is one alias in that list.`,
+          )
+      : [],
+  );
+
+  expect(listed.length).toBeGreaterThan(10);
+  expect(violations).toEqual([]);
+});
+
+test("commentsIn finds each comment, and nothing inside a regular expression, a template, a string or JSX text", () => {
+  const source = parseText(
+    [
+      "const a = 1 /* in binary */ + 2;",
+      "const re = /\\/\\/not-a-comment/g; // trailing",
+      "const t = `x ${a /* in template */} // not`;",
+      'const s = "// not a comment";',
+      "function f(/* param */ p: number) { return p; }",
+      'const el = <div /* attr */ class="x">{/* jsx */}// jsx text not comment</div>;',
+      "type T = { /* in type */ k: string };",
+      "const o = { k: 1, /* after comma */ };",
+      "const div = a / 2 / 1; // after division",
+      "label: for (;;) { break label; /* after break */ }",
+      "export {}; // eof",
+    ].join("\n"),
+    ".tsx",
+  );
+
+  expect(commentsIn(source).map(({ text }) => text)).toEqual([
+    "/* in binary */",
+    "// trailing",
+    "/* in template */",
+    "/* param */",
+    "/* attr */",
+    "/* jsx */",
+    "/* in type */",
+    "/* after comma */",
+    "// after division",
+    "/* after break */",
+    "// eof",
+  ]);
 });
 
 test("source code carries no comment except a doc comment on a public API", () => {
