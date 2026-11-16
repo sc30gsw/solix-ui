@@ -1,5 +1,6 @@
 import type { BrowserValue, BrowserValue as Live } from "../../../../../packages/primitives/src/types";
 
+/** Holds what the rules forbid. */
 export function createBranded(): BrowserValue<number>[] {
   return [
     (() => 0) as BrowserValue<number>,

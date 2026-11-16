@@ -22,6 +22,7 @@ export type ForbiddenOptions = {
   initialCount: MaybeAccessor<number>;
 };
 
+/** Holds what the rules forbid. */
 export function createForbidden(
   options: ForbiddenOptions,
   element: HTMLElement,

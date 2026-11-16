@@ -3,6 +3,7 @@ import { createElementAttachment } from "../../../../../packages/primitives/src/
 import { listenAsAsked, type ListenerSettings, listenerSettings } from "../../../../../packages/primitives/src/internal-listener";
 import type { ListenerOptions, MaybeAccessor, RefSetter } from "../../../../../packages/primitives/src/types";
 
+/** Holds what the rules allow. */
 export function createEventListener(
   type: MaybeAccessor<string>,
   options?: MaybeAccessor<ListenerOptions | undefined>,

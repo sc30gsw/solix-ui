@@ -10,6 +10,7 @@ function matches(text: string): number {
   return lookUp(window, "matchMedia")?.call(window, text).matches && focused ? scrollY : 0;
 }
 
+/** Holds what the rules allow. */
 export function createWatched(query: MaybeAccessor<string>): { value: BrowserValue<number> } {
   return {
     value: createBrowserValue(

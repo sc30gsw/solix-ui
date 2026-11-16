@@ -13,6 +13,7 @@ function typed<T>(found: unknown): T {
   return found as T;
 }
 
+/** Holds what the rules allow. */
 export function createAllowed(
   initialValue: ReadOnce<number>,
   element: HTMLElement,

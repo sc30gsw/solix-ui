@@ -5,6 +5,7 @@ import { createBrowserValue } from "../../../../../packages/primitives/src/inter
 import { listenAsAsked, listenerSettings } from "../../../../../packages/primitives/src/internal-listener";
 import { listen } from "./internal-listener";
 
+/** Holds what the rules forbid. */
 export function createMisbehaving(options: { size: MaybeSize }, element: HTMLElement): () => number {
   const width = window.innerWidth;
   const read = createMemo(() => width, { ssrSource: "client" });

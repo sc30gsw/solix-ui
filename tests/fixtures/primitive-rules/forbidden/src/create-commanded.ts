@@ -15,6 +15,7 @@ class Page {
   }
 }
 
+/** Holds what the rules forbid. */
 export function createCommanded(): [() => void, () => void, () => number, () => number, () => number] {
   return [
     createStateCommand(() => window.scrollTo(0, 0), () => undefined),

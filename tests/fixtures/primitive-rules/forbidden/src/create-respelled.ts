@@ -1,6 +1,7 @@
 import { createAttachment } from "../../../../../packages/primitives/src/internal-attachment";
 import { browserMethod, lookUp } from "../../../../../packages/primitives/src/internal-browser-api";
 
+/** Holds what the rules forbid. */
 export function createRespelled(element: HTMLElement, listener: () => void): void {
   createAttachment(() => {
     element["focus"]();

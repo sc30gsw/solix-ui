@@ -46,7 +46,10 @@ const forbiddenAt = (file: string, snippet?: string) => located("forbidden", fil
 
 const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
   sourceFileKinds: [forbiddenAt("src/GetThing.ts"), forbiddenAt("src/notes.md")],
-  publicExports: [forbiddenAt("src/get-other.ts")],
+  publicExports: [
+    forbiddenAt("src/get-other.ts"),
+    forbiddenAt("src/create-relayed.ts", "export function createRelayed"),
+  ],
   barrelOrder: [forbiddenAt("src/index.ts")],
   serverEffects: [
     forbiddenAt("src/create-forbidden.ts", "import { createRenderEffect }"),
