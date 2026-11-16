@@ -56,7 +56,7 @@ const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
 const webStandardsOnly =
-  "A library is built on web standards: it names Solid and StyleX as peers, and has a runtime dependency only where the owner decided on one. Use a platform feature or a fallback written in this repository, or record the decision in that list with its reason.";
+  "A library is built on web standards: it names Solid, StyleX and the primitives package as peers, and has a runtime dependency only where the owner decided on one. Use a platform feature or a fallback written in this repository, or record the decision in that list with its reason.";
 
 const nodeVersionHome = "package.json";
 const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
@@ -248,47 +248,38 @@ function runtimeDependencyProblems(
     ),
     ...allowed.flatMap(({ library, dependency, seam, reason }) => {
       const owner = libraries.find(({ manifest }) => manifest.name === library);
-      const depends =
-        owner !== undefined && runtimeDependencies(owner.manifest).includes(dependency);
-      const written = owner && runtimeVersions(owner.manifest)[dependency];
-      const isOwnLibrary = ownLibraries.includes(dependency);
+      if (ownLibraries.includes(dependency)) {
+        return [
+          `${runtimeDependencyList}: remove "${dependency}" of "${library}". It is a library of this repository, which "${library}" names as a "${ownLibraryPeerRange}" peer, so a consumer who uses both gets one copy; this list is for packages from outside the repository.`,
+        ];
+      }
       return [
         ...(reason?.trim()
           ? []
           : [
               `${runtimeDependencyList}: give "${dependency}" of "${library}" a reason, the decision that allows it.`,
             ]),
-        ...(depends
+        ...(owner !== undefined && runtimeDependencies(owner.manifest).includes(dependency)
           ? []
           : [
               `${runtimeDependencyList}: remove "${dependency}" of "${library}", which that package does not depend on.`,
             ]),
-        ...(isOwnLibrary && depends && written !== ownLibraryLink
-          ? [
-              `${library}: write the dependency "${dependency}" as "${ownLibraryLink}", not "${written}", so publishing pins the version this workspace built and verified.`,
-            ]
-          : []),
-        ...(!isOwnLibrary && semver.valid(catalog[dependency] ?? "") === null
+        ...(semver.valid(catalog[dependency] ?? "") === null
           ? [
               `${workspaceFile}: pin "${dependency}" to one exact version in the catalog, not "${catalog[dependency]}": a consumer installs the version this repository verified.`,
             ]
           : []),
-        ...(isOwnLibrary || (seam !== undefined && exists(seam))
+        ...(exists(seam)
           ? []
           : [
               `${runtimeDependencyList}: name the seam of "${dependency}" in "${library}", the one source file that imports it, not "${seam}".`,
             ]),
-        ...(isOwnLibrary && seam !== undefined
-          ? [
-              `${runtimeDependencyList}: remove the seam of "${dependency}", a library of this repository, which any file of "${library}" may import.`,
-            ]
-          : []),
       ];
     }),
   ];
 }
 
-test(`a library has no runtime dependency, in any list that installs with it, but one ${runtimeDependencyList} allows with a reason: a library of this repository written ${ownLibraryLink}, or a package pinned to one exact version with the seam that imports it`, () => {
+test(`a library has no runtime dependency, in any list that installs with it, but a package from outside the repository that ${runtimeDependencyList} allows with a reason, pinned to one exact version, with the seam that imports it`, () => {
   const library = { path: "packages/a/package.json", manifest: { name: "a" } };
   const withB = (list: Partial<Manifest>) => ({ ...library, manifest: { name: "a", ...list } });
   const dependsOnB = withB({ dependencies: { b: "catalog:" } });
@@ -299,7 +290,6 @@ test(`a library has no runtime dependency, in any list that installs with it, bu
     reason: "A decision.",
   };
   const own = { path: "packages/b/package.json", manifest: { name: "b" } };
-  const ownEntry = { library: "a", dependency: "b", reason: "A decision." };
   const present = (file: string) => file === entry.seam;
   const problems = (
     libraries: Parameters<typeof runtimeDependencyProblems>[0],
@@ -332,20 +322,14 @@ test(`a library has no runtime dependency, in any list that installs with it, bu
   expect(problems([dependsOnB], [entry], { b: "^1.0.0" })).toEqual([
     expect.stringContaining('pin "b" to one exact version'),
   ]);
-  expect(problems([dependsOnB], [ownEntry], { b: "1.0.0" })).toEqual([
-    expect.stringContaining('name the seam of "b" in "a"'),
-  ]);
   expect(
     problems([dependsOnB], [{ ...entry, seam: "packages/a/src/gone.ts" }], { b: "1.0.0" }),
   ).toEqual([expect.stringContaining('name the seam of "b" in "a"')]);
-  expect(problems([withB({ dependencies: { b: "workspace:*" } }), own], [ownEntry], {})).toEqual(
-    [],
-  );
-  expect(problems([withB({ dependencies: { b: "workspace:^" } }), own], [ownEntry], {})).toEqual([
-    expect.stringContaining('write the dependency "b" as "workspace:*"'),
+  expect(problems([withB({ dependencies: { b: "workspace:*" } }), own], [], {})).toEqual([
+    unlisted,
   ]);
   expect(problems([withB({ dependencies: { b: "workspace:*" } }), own], [entry], {})).toEqual([
-    expect.stringContaining('remove the seam of "b"'),
+    expect.stringContaining("It is a library of this repository"),
   ]);
 });
 

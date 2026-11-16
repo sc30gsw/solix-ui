@@ -7,7 +7,7 @@ export const runtimeDependencyList = "scripts/runtime-dependencies.json";
 export type AllowedRuntimeDependency = {
   library: string;
   dependency: string;
-  seam?: string;
+  seam: string;
   reason: string;
 };
 

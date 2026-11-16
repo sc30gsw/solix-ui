@@ -33,9 +33,7 @@ const fixtures = join(repositoryRoot, "tests/fixtures/tarball-consumer");
 const builtServerPort = 4323;
 const developmentServerPort = 4324;
 const installAndBuildTimeout = 240_000;
-const fromOutsideTheRepository = allowedRuntimeDependencies().flatMap(({ dependency, seam }) =>
-  seam === undefined ? [] : [dependency],
-);
+const fromOutsideTheRepository = allowedRuntimeDependencies().map(({ dependency }) => dependency);
 const settingsAConsumerWrites = ["plugins"];
 const settingsOfAnAppInThisRepository = join(repositoryRoot, "apps/playground/tsconfig.json");
 const [engine] = enginesToVerify();
@@ -124,7 +122,7 @@ beforeAll(() => {
       packageManager: rootManifest().packageManager,
       dependencies: {
         "@solidjs/web": versionOf("@solidjs/web"),
-        ...Object.fromEntries(tarballs.filter(([name]) => name === libraryName)),
+        ...Object.fromEntries(tarballs),
         "@stylexjs/stylex": versionOf("@stylexjs/stylex"),
         "solid-js": versionOf("solid-js"),
       },
@@ -152,9 +150,6 @@ beforeAll(() => {
     [
       "overrides:",
       `  vite@*: "${versionOf("vite")}"`,
-      ...tarballs
-        .filter(([name]) => name !== libraryName)
-        .map(([name, tarball]) => `  "${name}": "${tarball}"`),
       "peerDependencyRules:",
       "  allowAny:",
       "    - vite",
@@ -171,7 +166,7 @@ afterAll(() => {
   rmSync(app, { recursive: true, force: true });
 });
 
-test("a consumer installed from the packed tarball gets the SDK as a dependency of the library, resolved to the version the catalog pins, and lists none of it itself", () => {
+test("a consumer that names every library by its packed tarball gets one copy of each, the one the component library resolves as its peer, and gets the SDK as a dependency of the component library, at the version the catalog pins, without listing it", () => {
   const besideTheLibrary = join(
     realpathSync(join(app, "node_modules", libraryName)),
     ...libraryName.split("/").map(() => ".."),
@@ -186,6 +181,15 @@ test("a consumer installed from the packed tarball gets the SDK as a dependency 
   };
   const { catalog } = pnpmSettings();
 
+  const settings = readFileSync(join(app, workspaceFile), "utf8");
+  for (const { manifest } of libraryPackages) {
+    const name = manifest.name ?? "";
+    expect(consumer.dependencies[name], `${name} in the consumer's own manifest`).toMatch(/\.tgz$/);
+    expect(settings.includes(name), `${name} in the consumer's ${workspaceFile}`).toBe(false);
+    expect(realpathSync(join(besideTheLibrary, name)), name).toBe(
+      realpathSync(join(app, "node_modules", name)),
+    );
+  }
   expect(fromOutsideTheRepository).not.toEqual([]);
   expect(
     Object.keys({ ...consumer.dependencies, ...consumer.devDependencies }).filter((name) =>

@@ -48,9 +48,7 @@ const builtLibraryFile = "packages/core/tests/built-library.ts";
 const fixturesFile = "packages/core/tests/fixtures.ts";
 const testDirectory = "tests";
 const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
-const importedThroughASeam = allowedRuntimeDependencies().flatMap(({ dependency, seam }) =>
-  seam === undefined ? [] : [{ dependency, seam }],
-);
+const importedThroughASeam = allowedRuntimeDependencies();
 const seams = [...new Set(importedThroughASeam.map(({ seam }) => seam))];
 const behaviourType = "Behaviour";
 const behaviourBinder = "bind";

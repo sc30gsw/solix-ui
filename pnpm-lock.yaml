@@ -363,9 +363,6 @@ importers:
 
   packages/core:
     dependencies:
-      '@solix/primitives':
-        specifier: workspace:*
-        version: link:../primitives
       '@ui-sdk/core':
         specifier: 'catalog:'
         version: 0.1.0-beta.5
@@ -385,6 +382,9 @@ importers:
       '@solidjs/web':
         specifier: 'catalog:'
         version: 2.0.0-rc.21(solid-js@2.0.0-rc.21)
+      '@solix/primitives':
+        specifier: workspace:*
+        version: link:../primitives
       '@stylexjs/babel-plugin':
         specifier: 'catalog:'
         version: 0.19.2

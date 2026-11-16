@@ -2,8 +2,8 @@ import { defineConfig } from "vite-plus";
 import solid from "@solidjs/vite-plugin";
 import { allowedRuntimeDependencies } from "../../scripts/runtime-dependencies.ts";
 
-const dependenciesOfTheLinkedLibrariesViteMustNotPreBundle = allowedRuntimeDependencies().flatMap(
-  ({ dependency, seam }) => (seam === undefined ? [] : [dependency]),
+const dependenciesOfTheLinkedLibrariesViteMustNotPreBundle = allowedRuntimeDependencies().map(
+  ({ dependency }) => dependency,
 );
 
 export default defineConfig({
