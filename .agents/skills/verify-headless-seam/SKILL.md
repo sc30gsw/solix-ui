@@ -7,7 +7,7 @@ description: Checks the merge order of a part bound to a UI SDK slot, for genera
 
 ## The promise
 
-A part bound to a slot is given three sets of props: the consumer's and the styles' (`ours`, what `createParts` returns for the part), the component's own (`own`, from the map given to `bind`), and the SDK's for the slot. `bindSlot` in `packages/core/src/headless.ts` merges them in one order, whatever they hold:
+A part bound to a slot is given three sets of props: the consumer's and the styles' (`styled`, what `createParts` returns for the part), the component's own (`component`, the `own` entry of the map given to `bind`), and the SDK's for the slot. `bindSlot` in `packages/core/src/headless.ts` merges them in one order, whatever they hold:
 
 - The SDK is told only attributes, the consumer's over the component's, and the id that is the consumer's, else the component's. It is told no handler, ref, class or style.
 - An event reaches the consumer's handler, then the component's, then the SDK's, and stops after the first that prevents its default. A handler written as Solid's bound pair `[handler, data]` counts as one.
@@ -19,7 +19,7 @@ A part bound to a slot is given three sets of props: the consumer's and the styl
 
 Bound to the SDK's real tabs slots through `bind`, each part keeps exactly our classes and style, takes the slot's role, takes our id where we gave one and the SDK's where we did not, with the panel labelled by whichever id the tab has, and a click reaches the component's handler and then selects through the SDK unless the component prevented the default or the tab is disabled.
 
-The type of `bind` takes a slot for the root and for each part the styles name, with the props that slot needs. It refuses a part the styles do not name, a slot the behaviour does not have, and a slot given without the props it needs.
+The type of `bind` takes a slot for the root and for each part the styles name, with the props that slot needs. It refuses a part the styles do not name, a slot the behaviour does not have, a slot given without the props it needs, and a component's own props that carry a `class` or a `style`, which the part would drop.
 
 ## The harm when it breaks
 
@@ -29,7 +29,7 @@ A consumer's `onClick` runs after the SDK already selected, or cannot stop it. A
 
 | Covered code | What the checks assume about it |
 | --- | --- |
-| `packages/core/src/headless.ts`: `bindSlot`, `createBehaviour`, `Behaviour`, `partId` | `bindSlot(ours, own, slot)` calls `slot` once with the attributes and merges what it returns. It reads the names of the handlers each time the part's props are read, so a handler added later is merged too. `createBehaviour` wraps the SDK's `usePrimitive`, and its `bind` takes the parts `createParts` returned and calls `bindSlot` once for each part in its map, with the SDK's slot getter. |
+| `packages/core/src/headless.ts`: `bindSlot`, `createBehaviour`, `Behaviour`, `partId` | `bindSlot(styled, component, slot)` calls `slot` once with the attributes and merges what it returns. It reads the names of the handlers each time the part's props are read, so a handler added later is merged too, and returns the same handlers object while the names are unchanged. `createBehaviour` wraps the SDK's `usePrimitive`, and its `bind` takes the parts `createParts` returned and calls `bindSlot` once for each part in its map, with the SDK's slot getter. |
 | `packages/core/src/parts.ts`: `createParts`, `rootPart` | `createParts` returns `{ root, part }` and knows nothing of a behaviour. `bind` takes the root's props from `root` and another part's from `part(name)`. |
 | `packages/core/src/style-props.ts`: `withConsumerStyle` | It puts its first argument's declarations before the second's, as an object or as a string, and leaves out a declaration whose value is `undefined` or `null`. `bindSlot` gives it the SDK's style first and ours second. |
 | `packages/core/tests/headless.test.tsx` | The check. Its first test draws three sets of props and a stand-in slot. Its third binds a probe component to the SDK's tabs slots and renders it with Solid's server renderer from `packages/core/dist`. Its last holds the type of `bind`, which `vp check` evaluates. |
@@ -58,7 +58,7 @@ No model checker or verifier runs on a Solid component or on the SDK, so this is
 - 300 draws per run of the stand-in test. Each of the three sources may give an id, a ref, a class, a style as an object or a string, any of four attributes, and any of `onClick`, `onKeyDown` and `onFocus`, each a plain function or a bound pair, each preventing the default or not.
 - 300 draws per run against the SDK's `root`, `list`, `tab` and `panel` slots: a consumer class and id on the root, a component id on the tab, the tab disabled or not, and a component click handler that prevents the default or not.
 - A symbol key of ours does not break the binding.
-- Seven shapes of the map given to `bind`: three it takes and four it refuses, each given as a type, so the answer is the same for a map written inline and for one held in a constant.
+- Fifteen shapes of what is given to `bind`: eleven maps, four it takes and seven it refuses, and four roots, two it takes and two that still take `children`, which it refuses. Each is given as a type, so the answer is the same for a map written inline and for one held in a constant.
 - In each installed engine, one handler given after the first render and 25 generated sets of tab values.
 
 ## What a pass does not cover
@@ -84,4 +84,4 @@ No model checker or verifier runs on a Solid component or on the SDK, so this is
 - A new source of props in the order, or a new kind of prop: change `bindSlot`, then the sources and the expectations in the first test, from the rule you intend, before you rerun.
 - A new shape of the map given to `bind`, such as a part bound once per item: add it to the type test with the answer you intend.
 - Upgrading the SDK, Solid or fast-check: run both commands.
-- Mutation check after editing covered code: in `packages/core/src/headless.ts` change `const inOrder = [ours, own, behaviour];` to put `behaviour` first and run the first test file, which must fail with a counterexample in which the slot and the consumer or the component handle the same event. Then change the type of `slots` in `Behaviour` to `{ [Part in keyof Slots]: Bound<P> }` and run `vp check`, which must fail in `headless.test.tsx`. Restore both afterwards.
+- Mutation check after editing covered code: in `packages/core/src/headless.ts` change `const inOrder: AnyProps[] = [styled, component, behaviour];` to put `behaviour` first and run the first test file, which must fail with a counterexample in which the slot and the consumer or the component handle the same event. Then change the type of `slots` in `Behaviour` to `{ [Part in keyof Slots]: Bound<P> }` and run `vp check`, which must fail in `headless.test.tsx`. Restore both afterwards.

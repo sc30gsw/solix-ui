@@ -11,6 +11,7 @@ import {
   exportsOf,
   fileOf,
   findAncestor,
+  memberDeclarations,
   openProgram,
   parse,
   parseAll,
@@ -88,23 +89,34 @@ const components: Component[] = libraries.flatMap(({ source }) =>
     })),
 );
 
-function bindsABehaviour(call: ts.CallExpression): boolean {
-  const declared = calledDeclaration(librarySources, call);
-  const member = declared?.parent;
+function isTheBinder(member: ts.Node | undefined): boolean {
   return (
-    declared !== undefined &&
     member !== undefined &&
-    seams.includes(relativePath(fileOf(declared))) &&
+    seams.includes(relativePath(fileOf(member))) &&
     ts.isPropertySignatureDeclaration(member) &&
     member.name.getText() === behaviourBinder &&
     findAncestor(member, ts.isTypeAliasDeclaration)?.name.text === behaviourType
   );
 }
 
+function bindsABehaviour(call: ts.CallExpression): boolean {
+  return isTheBinder(calledDeclaration(librarySources, call)?.parent);
+}
+
 function behaviourBindings(node: ts.Node): ts.CallExpression[] {
   return descendants(node).filter(
     (found): found is ts.CallExpression => ts.isCallExpression(found) && bindsABehaviour(found),
   );
+}
+
+function referencesToTheBinder(node: ts.Node): ts.Node[] {
+  return descendants(node).filter((found) =>
+    memberDeclarations(librarySources, found).some(isTheBinder),
+  );
+}
+
+function lineOf(node: ts.Node): number {
+  return node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
 }
 
 function exportedNames(source: ts.SourceFile): string[] {
@@ -483,9 +495,11 @@ function problemsWith({ name, file, source }: Component): string[] {
     );
     return problems;
   }
-  for (const stray of behaviourBindings(source).filter((found) => found !== binding)) {
+  for (const stray of referencesToTheBinder(source).filter(
+    (found) => found !== binding?.expression,
+  )) {
     report(
-      `give ${stray.expression.getText()} the component's one ${partsHelper} call as its first argument, written there, and bind every part in that one call: line ${source.getLineAndCharacterOfPosition(stray.getStart()).line + 1} binds something else.`,
+      `call ${behaviourBinder} only as the component's one binding, with its ${partsHelper} call as the first argument, written there, and bind every part in that one call: line ${lineOf(stray)} refers to ${behaviourBinder} in ${stray.parent.getText().split("\n")[0]}.`,
     );
   }
 
@@ -519,14 +533,14 @@ test("the library has components to check", () => {
   expect(components.length).toBeGreaterThan(1);
 });
 
-test("every component is written the one way: one function, and its root and every other part from one createParts call, which a behaviour binds only as the first argument of its bind", () => {
+test("every component is written the one way: one function, and its root and every other part from one createParts call, which a behaviour binds only as the first argument of its bind, and every reference to that bind is the callee of a component's one binding", () => {
   const componentFiles = components.map(({ file }) => file);
   const boundElsewhere = librarySourceFiles
-    .filter((file) => !componentFiles.includes(file))
+    .filter((file) => !componentFiles.includes(file) && !seams.includes(relativePath(file)))
     .flatMap((file) =>
-      behaviourBindings(typedSource(file)).map(
-        (call) =>
-          `${relativePath(file)}: ${call.getText().split("\n")[0]} binds a behaviour outside a component. Only a component binds one, to its own ${partsHelper} call.`,
+      referencesToTheBinder(typedSource(file)).map(
+        (reference) =>
+          `${relativePath(file)}:${lineOf(reference)}: ${reference.parent.getText().split("\n")[0]} refers to ${behaviourBinder} outside a component. Only a component binds a behaviour, to its own ${partsHelper} call.`,
       ),
     );
 

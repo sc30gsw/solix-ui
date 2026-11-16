@@ -302,3 +302,12 @@ test("bind takes, in its type, a slot for the root and for each part the styles 
   expectTypeOf<Binds<{ list: { slot: "nonsense" } }>>().toEqualTypeOf<false>();
   expectTypeOf<Binds<{ tab: { slot: "tab" } }>>().toEqualTypeOf<false>();
 });
+
+test("bind refuses, in its type, a component's own props that carry a class or a style, which the bound part would drop", () => {
+  expectTypeOf<Binds<{ list: { slot: "list"; own: { title: string } } }>>().toEqualTypeOf<true>();
+  expectTypeOf<Binds<{ list: { slot: "list"; own: { class: string } } }>>().toEqualTypeOf<false>();
+  expectTypeOf<
+    Binds<{ list: { slot: "list"; own: { style: { color: string } } } }>
+  >().toEqualTypeOf<false>();
+  expectTypeOf<Binds<{ list: { slot: "list"; own: { style: string } } }>>().toEqualTypeOf<false>();
+});

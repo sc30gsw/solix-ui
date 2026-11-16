@@ -14,7 +14,9 @@ import { withConsumerStyle } from "./style-props";
 
 export { tabs } from "@ui-sdk/core/tabs";
 
-export type PartProps = Readonly<Record<string, unknown>>;
+export type AnyProps = Readonly<Record<string, unknown>>;
+
+type ComponentProps = AnyProps & { readonly class?: never; readonly style?: never };
 
 type Style = JSX.CSSProperties | string | undefined;
 
@@ -25,10 +27,6 @@ type Handler =
   | readonly [(data: unknown, event: Handled) => void, unknown];
 
 const handlerProp = /^on[A-Z]/;
-const refProp = "ref";
-const idProp = "id";
-const classProp = "class";
-const styleProp = "style";
 
 function isHandlerProp(name: string): boolean {
   return handlerProp.test(name);
@@ -37,7 +35,7 @@ function isHandlerProp(name: string): boolean {
 function isOursAlone(name: PropertyKey): boolean {
   return (
     typeof name === "string" &&
-    (isHandlerProp(name) || name === refProp || name === classProp || name === styleProp)
+    (isHandlerProp(name) || name === "ref" || name === "class" || name === "style")
   );
 }
 
@@ -56,17 +54,17 @@ export function partId(base: string | undefined, part: string, value: string): s
 }
 
 export function bindSlot(
-  ours: PartProps,
-  own: PartProps,
-  slot: (attributes: PartProps) => PartProps,
-): PartProps {
-  const attributes = merge(omit(own, isOursAlone), omit(ours, isOursAlone), {
-    get [idProp]() {
-      return ours[idProp] ?? own[idProp];
+  styled: AnyProps,
+  component: ComponentProps,
+  slot: (attributes: AnyProps) => AnyProps,
+): AnyProps {
+  const attributes = merge(omit(component, isOursAlone), omit(styled, isOursAlone), {
+    get id() {
+      return styled.id ?? component.id;
     },
   });
   const behaviour = slot(attributes);
-  const inOrder = [ours, own, behaviour];
+  const inOrder: AnyProps[] = [styled, component, behaviour];
   const dispatchers = new Map<string, (event: Handled) => void>();
   const dispatcherOf = (name: string) => {
     const dispatch =
@@ -90,27 +88,27 @@ export function bindSlot(
     return dispatching;
   };
   return merge(behaviour, handlers, {
-    [refProp]: untrack(() => inOrder.flatMap((props) => props[refProp] ?? [])),
-    get [idProp]() {
-      return ours[idProp] ?? own[idProp] ?? behaviour[idProp];
+    ref: untrack(() => inOrder.flatMap((props) => props.ref ?? [])),
+    get id() {
+      return styled.id ?? component.id ?? behaviour.id;
     },
-    get [classProp]() {
-      return ours[classProp];
+    get class() {
+      return styled.class;
     },
-    get [styleProp]() {
-      const theirs = behaviour[styleProp];
-      return withConsumerStyle(isDeclarations(theirs) ? theirs : {}, ours[styleProp] as Style);
+    get style() {
+      const theirs = behaviour.style;
+      return withConsumerStyle(isDeclarations(theirs) ? theirs : {}, styled.style as Style);
     },
   });
 }
 
-type SlotProps<P extends Primitive, Slot extends SlotName<P>> =
+type SlotPropsGetter<P extends Primitive, Slot extends SlotName<P>> =
   object extends PropsOf<P, Slot>
     ? { props?: () => PropsOf<P, Slot> }
     : { props: () => PropsOf<P, Slot> };
 
 type Bound<P extends Primitive> = {
-  [Slot in SlotName<P>]: { slot: Slot; own?: PartProps } & SlotProps<P, Slot>;
+  [Slot in SlotName<P>]: { slot: Slot; own?: ComponentProps } & SlotPropsGetter<P, Slot>;
 }[SlotName<P>];
 
 type StyledParts<Root, Name extends string, Styled> = {
@@ -135,7 +133,7 @@ export type Behaviour<P extends Primitive> = {
   ) => StyledParts<Root, Name, Styled>;
 };
 
-const nothingOfItsOwn: PartProps = {};
+const nothingOfItsOwn: ComponentProps = {};
 
 export function createBehaviour<P extends Primitive>(
   primitive: P,
@@ -143,9 +141,9 @@ export function createBehaviour<P extends Primitive>(
 ): Behaviour<P> {
   const handle = usePrimitive(primitive, options);
   const bind = (
-    parts: StyledParts<PartProps, string, PartProps>,
+    parts: StyledParts<AnyProps, string, AnyProps>,
     slots: Readonly<Record<string, Bound<P>>>,
-  ): StyledParts<PartProps, string, PartProps> => {
+  ): StyledParts<AnyProps, string, AnyProps> => {
     const bound = new Map(
       Object.entries(slots).map(([name, { slot, props, own = nothingOfItsOwn }]) => [
         name,
