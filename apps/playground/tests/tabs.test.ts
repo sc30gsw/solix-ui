@@ -89,6 +89,27 @@ inEveryEngine((browser) => {
       );
     });
 
+    test("the colour of a tab runs its transition when the selection moves to it", async () => {
+      const { page } = opened;
+      const transitions = () =>
+        page.evaluate(
+          () => (window as Window & { transitionsRun?: string[] }).transitionsRun ?? [],
+        );
+      await tabList(page, account).evaluate((node) => {
+        const ran: string[] = [];
+        (window as Window & { transitionsRun?: string[] }).transitionsRun = ran;
+        document.addEventListener("transitionrun", (event) => {
+          if (event.target instanceof Node && node.contains(event.target)) {
+            ran.push(event.propertyName);
+          }
+        });
+      });
+
+      await tabNamed(page, account, "Settings").click();
+
+      await expect.poll(transitions).toContain("color");
+    });
+
     test("a disabled tab is disabled, and a click on it selects nothing", async () => {
       const { page } = opened;
       const billing = tabNamed(page, account, "Billing");

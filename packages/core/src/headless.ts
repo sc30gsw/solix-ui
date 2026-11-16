@@ -79,13 +79,16 @@ export function bindSlot(
     dispatchers.set(name, dispatch);
     return dispatch;
   };
-  const handlers = () =>
-    Object.fromEntries(
-      inOrder
-        .flatMap((props) => Object.keys(props))
-        .filter(isHandlerProp)
-        .map((name) => [name, dispatcherOf(name)]),
-    );
+  let named = "";
+  let dispatching: Record<string, (event: Handled) => void> = {};
+  const handlers = () => {
+    const names = inOrder.flatMap((props) => Object.keys(props)).filter(isHandlerProp);
+    if (names.join() !== named) {
+      named = names.join();
+      dispatching = Object.fromEntries(names.map((name) => [name, dispatcherOf(name)]));
+    }
+    return dispatching;
+  };
   return merge(behaviour, handlers, {
     [refProp]: untrack(() => inOrder.flatMap((props) => props[refProp] ?? [])),
     get [idProp]() {
@@ -115,11 +118,19 @@ type StyledParts<Root, Name extends string, Styled> = {
   part: (name: Name) => Styled;
 };
 
+type PassesChildrenThrough<Root> = "children" extends keyof Root
+  ? [NonNullable<Root["children"]>] extends [never]
+    ? false
+    : true
+  : false;
+
+type RendersItsChildrenItself<Root> = PassesChildrenThrough<Root> extends true ? never : unknown;
+
 export type Behaviour<P extends Primitive> = {
   readonly api: TypesOf<P>["api"];
   present: <Slot extends SlotName<P>>(slot: Slot, props?: () => PropsOf<P, Slot>) => boolean;
   bind: <Root, Name extends string, Styled, Slots>(
-    parts: StyledParts<Root, Name, Styled>,
+    parts: StyledParts<Root, Name, Styled> & RendersItsChildrenItself<Root>,
     slots: { [Part in keyof Slots]: Part extends typeof rootPart | Name ? Bound<P> : never },
   ) => StyledParts<Root, Name, Styled>;
 };

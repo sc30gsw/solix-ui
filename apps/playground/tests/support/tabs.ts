@@ -117,9 +117,10 @@ export function stateOf(page: Page, list: string): Promise<TabsState> {
     const label = (tab: HTMLElement | undefined) =>
       tab?.querySelector('[class*="-label"]')?.textContent ?? null;
     const root = node.parentElement;
+    const { activeElement } = node.getRootNode() as Document | ShadowRoot;
     return {
       selected: label(tabs.find((tab) => tab.getAttribute("aria-selected") === "true")),
-      focused: label(tabs.find((tab) => tab === document.activeElement)),
+      focused: label(tabs.find((tab) => tab === activeElement)),
       tabStops: tabs.filter((tab) => tab.tabIndex === 0).map(label),
       shown: [...(root?.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]') ?? [])]
         .filter((panel) => getComputedStyle(panel).display !== "none")

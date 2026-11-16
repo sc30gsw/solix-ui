@@ -1,3 +1,4 @@
+import { render } from "@solidjs/web";
 import { Box, Button, Tabs, TextInput } from "@solix/core";
 import { createSignal, For, Show } from "solid-js";
 import { refOf } from "../ref-of";
@@ -16,11 +17,37 @@ function tabValuesIn(text: string): string[] | undefined {
   }
 }
 
+function TabsInAShadowRoot() {
+  return (
+    <Tabs defaultValue="near">
+      <Tabs.List aria-label="In a shadow root">
+        <Tabs.Tab value="near">Near</Tabs.Tab>
+        <Tabs.Tab value="middle" disabled>
+          Middle
+        </Tabs.Tab>
+        <Tabs.Tab value="far">Far</Tabs.Tab>
+      </Tabs.List>
+      <Tabs.Panel value="near">Near panel</Tabs.Panel>
+      <Tabs.Panel value="middle">Middle panel</Tabs.Panel>
+      <Tabs.Panel value="far">Far panel</Tabs.Panel>
+    </Tabs>
+  );
+}
+
+function renderInAShadowRootOf(host: Element | null | undefined): void {
+  if (host && host.shadowRoot === null) {
+    render(() => <TabsInAShadowRoot />, host.attachShadow({ mode: "open" }));
+  }
+}
+
 export function TabsSection() {
   const [controlled, setControlled] = createSignal<string | null>("drafts");
   const [refused, setRefused] = createSignal(0);
   const [countsHovers, setCountsHovers] = createSignal(false);
   const [draftsHovers, setDraftsHovers] = createSignal(0);
+  const [countsListHovers, setCountsListHovers] = createSignal(false);
+  const [listHovers, setListHovers] = createSignal(0);
+  const [sectionsCreated, setSectionsCreated] = createSignal(0);
   const [heldRequests, setHeldRequests] = createSignal(0);
   const [generated, setGenerated] = createSignal(["my tab", "100%"]);
   const [panelsMounted, setPanelsMounted] = createSignal(true);
@@ -73,8 +100,18 @@ export function TabsSection() {
       </For>
 
       <Tabs value={controlled()} onChange={(value) => setControlled(value)} ref={refOf("Tabs")}>
-        <Tabs.List aria-label="Controlled" ref={refOf("TabsList")}>
-          <Tabs.Tab value="inbox" leftSection={<span>In</span>} ref={refOf("TabsTab")}>
+        <Tabs.List
+          aria-label="Controlled"
+          ref={refOf("TabsList")}
+          {...(countsListHovers()
+            ? { onPointerEnter: () => setListHovers((count) => count + 1) }
+            : {})}
+        >
+          <Tabs.Tab
+            value="inbox"
+            leftSection={<span ref={() => setSectionsCreated((count) => count + 1)}>In</span>}
+            ref={refOf("TabsTab")}
+          >
             <span>Inbox</span>
           </Tabs.Tab>
           <Tabs.Tab
@@ -104,8 +141,11 @@ export function TabsSection() {
       <output aria-label="Controlled value">{controlled() ?? "none"}</output>
       <output aria-label="Refused presses">{refused()}</output>
       <output aria-label="Drafts hovers">{draftsHovers()}</output>
+      <output aria-label="List hovers">{listHovers()}</output>
+      <output aria-label="Section elements created">{sectionsCreated()}</output>
       <Button onClick={() => setControlled(null)}>Select none</Button>
       <Button onClick={() => setCountsHovers(true)}>Count hovers over Drafts</Button>
+      <Button onClick={() => setCountsListHovers(true)}>Count hovers over the list</Button>
 
       <Tabs value="kept" onChange={() => setHeldRequests((count) => count + 1)}>
         <Tabs.List aria-label="Held">
@@ -136,6 +176,11 @@ export function TabsSection() {
       <Button onClick={() => setPanelsMounted((mounted) => !mounted)}>
         {panelsMounted() ? "Unmount the panels" : "Mount the panels"}
       </Button>
+
+      <Button onClick={(event) => renderInAShadowRootOf(event.currentTarget.nextElementSibling)}>
+        Render tabs in a shadow root
+      </Button>
+      <div />
     </Box>
   );
 }

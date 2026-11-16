@@ -11,7 +11,7 @@ import {
   type OpenPage,
   scriptModes,
 } from "./support/playground";
-import { elementsNamedBy, sdkStyles, tabNamed } from "./support/tabs";
+import { elementsNamedBy, sdkStyles, stateOf, tabList, tabNamed } from "./support/tabs";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 25;
@@ -96,6 +96,62 @@ inEveryEngine((browser) => {
       await drafts.hover();
 
       await expect.poll(() => hovers.textContent()).toBe("1");
+    });
+
+    test("every tab stays the element it was, and an element passed as a section is created once, across a click on another tab, an arrow key, and a handler given to the list after the first render", async () => {
+      const { page } = opened;
+      const list = tabList(page, "Controlled");
+      const created = page.getByRole("status", { name: "Section elements created" });
+      const hovers = page.getByRole("status", { name: "List hovers" });
+      const kept = () =>
+        list.evaluate((node) =>
+          [...node.querySelectorAll('[role="tab"]')].map(
+            (tab) => (tab as Element & { keptSince?: string }).keptSince ?? "a new element",
+          ),
+        );
+      const sinceTheStart = ["the start", "the start", "the start"];
+      await list.evaluate((node) => {
+        for (const tab of node.querySelectorAll('[role="tab"]')) {
+          (tab as Element & { keptSince?: string }).keptSince = "the start";
+        }
+      });
+
+      await tabNamed(page, "Controlled", "Inbox").click();
+
+      await expect.poll(() => stateOf(page, "Controlled")).toMatchObject({ selected: "Inbox" });
+      expect(await kept(), "after a click on another tab").toEqual(sinceTheStart);
+
+      await page.keyboard.press("ArrowRight");
+
+      await expect.poll(() => stateOf(page, "Controlled")).toMatchObject({ selected: "Drafts" });
+      expect(await kept(), "after an arrow key").toEqual(sinceTheStart);
+
+      await page.getByRole("button", { name: "Count hovers over the list" }).click();
+      await page.mouse.move(0, 0);
+      await tabNamed(page, "Controlled", "Locked").hover();
+
+      await expect.poll(() => hovers.textContent()).toBe("1");
+      expect(await kept(), "after the list is given a handler").toEqual(sinceTheStart);
+      expect(await created.textContent()).toBe("1");
+    });
+
+    test("tabs rendered in a shadow root keep focus and their arrow keys across a selection that steps over a disabled tab", async () => {
+      const { page } = opened;
+      const inAShadowRoot = "In a shadow root";
+      await page.getByRole("button", { name: "Render tabs in a shadow root" }).click();
+      await tabNamed(page, inAShadowRoot, "Near").click();
+
+      await page.keyboard.press("ArrowRight");
+
+      await expect
+        .poll(() => stateOf(page, inAShadowRoot))
+        .toMatchObject({ selected: "Far", focused: "Far", shown: ["Far panel"] });
+
+      await page.keyboard.press("ArrowLeft");
+
+      await expect
+        .poll(() => stateOf(page, inAShadowRoot))
+        .toMatchObject({ selected: "Near", focused: "Near", shown: ["Near panel"] });
     });
 
     test("for generated tab values under a root id, every tab's aria-controls names exactly one element, its panel, and every panel's aria-labelledby names exactly one element, its tab", async () => {

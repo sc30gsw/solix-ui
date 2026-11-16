@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { createComponent, renderToString } from "@solidjs/web";
+import { createComponent, type JSX, renderToString } from "@solidjs/web";
 import type { CompiledStyles } from "@stylexjs/stylex";
 import fc from "fast-check";
 import { expect, expectTypeOf, test } from "vite-plus/test";
@@ -276,6 +276,20 @@ test("bound to the SDK's tabs slots, each part keeps exactly our classes and our
 type Bind = Headless.Behaviour<typeof tabs>["bind"];
 type ProbeParts = { root: object; part: (name: "list" | "tab" | "panel") => object };
 type Binds<Slots> = Bind extends (parts: ProbeParts, slots: Slots) => unknown ? true : false;
+
+type BindsARootOf<Root> = Bind extends (
+  parts: { root: Root; part: (name: never) => object },
+  slots: { root: { slot: "list" } },
+) => unknown
+  ? true
+  : false;
+
+test("bind refuses, in its type, parts whose root still takes children, and takes parts whose root has none or declares them never", () => {
+  expectTypeOf<BindsARootOf<{ id?: string }>>().toEqualTypeOf<true>();
+  expectTypeOf<BindsARootOf<{ id?: string; children?: never }>>().toEqualTypeOf<true>();
+  expectTypeOf<BindsARootOf<{ id?: string; children?: JSX.Element }>>().toEqualTypeOf<false>();
+  expectTypeOf<BindsARootOf<{ children: string }>>().toEqualTypeOf<false>();
+});
 
 test("bind takes, in its type, a slot for the root and for each part the styles name, with the props that slot needs, and refuses a part the styles do not name, a slot the behaviour does not have, and a slot given without the props it needs", () => {
   expectTypeOf<Binds<{ root: { slot: "root" } }>>().toEqualTypeOf<true>();
