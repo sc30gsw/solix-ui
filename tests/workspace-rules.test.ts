@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
 import {
@@ -267,17 +267,27 @@ function packedFiles(directory: string): string[] {
   return files.map((file: { path: string }) => file.path);
 }
 
-test("a library exports a file, and its packed tarball holds every file its exports name", () => {
+function filesBeside(directory: string, exported: string[]): string[] {
+  const folders = new Set(exported.flatMap((file) => file.split("/").slice(0, 1)));
+  return [...folders].flatMap((folder) =>
+    globSync(`${folder}/**`, { cwd: directory, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(directory, join(entry.parentPath, entry.name)).split(sep).join("/")),
+  );
+}
+
+test("a library exports a file, and its packed tarball holds every file its exports name and every file in their folders", () => {
   const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
     const exported = [...new Set(exportedFiles(manifest.exports))];
+    const needed = [...new Set([...exported, ...filesBeside(directory, exported)])];
     const packed = packedFiles(directory);
     return [
       ...(exported.length === 0 ? [`${path}: package "${manifest.name}" exports no file.`] : []),
-      ...exported
+      ...needed
         .filter((file) => !packed.includes(file))
         .map(
           (file) =>
-            `${path}: the packed tarball of "${manifest.name}" leaves out ${file}, which "exports" names.`,
+            `${path}: the packed tarball of "${manifest.name}" leaves out ${file}, which "exports" names or which sits in the folder of a file they name.`,
         ),
     ];
   });
