@@ -25,4 +25,3 @@ Preconditions:
 
 - Each `Stack` is found as the parent of one of its children, because it has no text or role of its own.
 - The gap is read as `row-gap`, the longhand the `gap` shorthand sets in a column.
-- `apps/playground/tests/layout.test.ts` checks the same values one pixel below md and at md, with scripts on and off, in every installed engine.

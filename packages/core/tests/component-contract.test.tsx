@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, matchesGlob } from "node:path";
 import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import postcss from "postcss";
@@ -83,6 +83,7 @@ const generatedRuns = 300;
 const containerPart = "container";
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const contractSkill = ".agents/skills/verify-component-contract/SKILL.md";
+const fixturesFile = "packages/core/tests/fixtures.ts";
 const styleOverride = new RegExp(`^--${LIBRARY_CLASS_PREFIX}-`);
 const registeredCustomProperties = new Set(
   [...stylesheet.matchAll(/@property\s+(--[\w-]+)/g)].map(([, property]) => property),
@@ -511,20 +512,22 @@ test("every --sx- declaration the generator draws for a consumer's style or styl
   );
 });
 
-test("the contract skill has a row for each component that names its root tag and boolean attribute as fixtures does", () => {
+test("the contract skill covers every component's source file with a glob row that points at fixtures.ts", () => {
   const rows = readFileSync(join(repositoryRoot, contractSkill), "utf8")
     .split("\n")
     .filter((line) => line.startsWith("|"));
-  const violations = components.flatMap(([name, { tag, booleanAttribute }]) => {
-    const file = `packages/core/src/${name}.tsx`;
-    const row = rows.find((line) => line.includes(`\`${file}\`: \`${name}\``));
-    if (!row) return [`${contractSkill}: add a covered-code row for \`${file}\`: \`${name}\`.`];
-    return [`<${tag}>`, `\`${booleanAttribute}\``]
-      .filter((fact) => !row.includes(fact))
-      .map((fact) => `${contractSkill}: say ${fact} in the row for \`${file}\`, as fixtures does.`);
+  const globRows = rows.flatMap((line) => {
+    const glob = /^\| `([^`]*\*[^`]*)`/.exec(line)?.[1];
+    return glob === undefined ? [] : [{ glob, line }];
   });
+  const uncovered = components
+    .map(([name]) => `packages/core/src/${name}.tsx`)
+    .filter(
+      (file) =>
+        !globRows.some(({ glob, line }) => matchesGlob(file, glob) && line.includes(fixturesFile)),
+    );
 
-  expect(violations).toEqual([]);
+  expect(uncovered).toEqual([]);
 });
 
 const containerQuery = /^\(min-width: (\d*\.?\d+)(px|em|rem)\)$/;

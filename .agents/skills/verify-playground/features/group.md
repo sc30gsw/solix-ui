@@ -26,4 +26,3 @@ Preconditions:
 - Each `Group` is found as the parent of one of its buttons, because it has no text or role of its own.
 - A growing child's share is the variable `--group-child-width`, the row less its gaps divided by the number of children `Group` renders. The rule that applies it to each child sits in a layer nested in `style-props`, so a style prop on the child, such as `maw`, still wins.
 - Equal shares means the widest and the narrowest growing child differ by one pixel or less.
-- `apps/playground/tests/layout.test.ts` checks the same values one pixel below md and at md, with scripts on and off, in every installed engine.

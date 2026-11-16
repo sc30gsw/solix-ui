@@ -27,4 +27,3 @@ Preconditions:
 
 - A space is measured through its computed `min-height` and `min-width`, which hold the token's length as the engine writes it, not through its box, which an engine snaps to layout units.
 - The minimum size is the component's own variable, `--space-min-height` or `--space-min-width`, which a class in the `style-props` layer sets from `h` or `w`. Given `mih` or `miw`, the variable takes that value instead, and the style prop sets the same minimum.
-- `apps/playground/tests/layout.test.ts` checks the same values one pixel below md and at md, with scripts on and off, in every installed engine.

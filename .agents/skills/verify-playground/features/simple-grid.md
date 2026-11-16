@@ -28,6 +28,5 @@ Preconditions:
 ## Gotchas
 
 - A grid is found as the parent of one of its cells, and its columns are counted from its computed `grid-template-columns`, which every engine resolves to one length per track.
-- With `type="container"`, the grid renders inside its `container` part, an element with `container-type: inline-size` named `simple-grid`, after a `<style>` that holds the rules for the widths its values name. Those rules sit in `@layer solix.style-props`, and their classes carry a scope of their own instance, so a grid nested in another's cell takes none of the outer grid's values.
+- With `type="container"`, the grid renders inside its `container` part, an element with `container-type: inline-size`, and, while a value is keyed by a width, after a `<style>` with the rules for exactly the values it places. Those rules sit in `@layer solix.container-queries`, after the library's own layer order, and their classes carry a scope of their own instance, so a grid nested in another's cell takes none of the outer grid's values.
 - A container width is a key such as `"30em"`, `"480px"` or `"30rem"`. With container queries a breakpoint key such as `md` is ignored, and with media queries a width key is.
-- `apps/playground/tests/layout.test.ts` checks the same values one pixel below md and at md, with scripts on and off, in every installed engine.

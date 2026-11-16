@@ -24,6 +24,5 @@ Preconditions:
 ## Gotchas
 
 - Each container is found as the parent of its first line of text.
-- The grid strategy's columns, its breakout and its `data-container` come from the child rules of the container's size variable, which it sets whenever it is styled, so `unstyled` drops them with the rest of its look.
+- The grid's three columns come from the container's own styles. Where each child sits in the grid, the breakout and its `data-container` come from the child rules of the container's size variable, which it sets whenever it is styled, and `unstyled` drops them with the rest of its look.
 - A width is compared with another within one pixel, so an engine's rounding of a fraction of a pixel does not count as a difference.
-- `apps/playground/tests/layout.test.ts` checks the same values one pixel below md and at md, with scripts on and off, in every installed engine.

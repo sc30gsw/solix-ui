@@ -25,4 +25,3 @@ Preconditions:
 
 - The `Center` around `Centered content` is found as the line's parent element, because it has no text or role of its own.
 - Centred means each pair of opposite gaps differs by one pixel or less, so an engine's rounding of a half pixel does not count as off centre.
-- `apps/playground/tests/layout.test.ts` checks the same values one pixel below md and at md, with scripts on and off, in every installed engine.
