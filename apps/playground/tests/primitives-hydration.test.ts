@@ -1,11 +1,12 @@
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
-import type { BrowserValuePrimitive } from "../../../packages/primitives/tests/support/primitive-kinds";
+import type { BrowserValuePrimitive } from "../../../packages/primitives/fixtures/primitive-kinds";
 import { inEveryEngine, openPage, type OpenPage } from "./support/playground";
 
 const url = inject("playgroundUrl");
 const probe = "output[data-hydration-probe]";
 const engineWait = { timeout: 5_000 };
+const headroomCalls = '[data-case-calls="createHeadroom"]';
 
 type Revealed = { expected: string; restore: () => Promise<unknown> };
 
@@ -160,14 +161,14 @@ async function hydratedWhileScrolled(browser: Browser, y: number): Promise<strin
       await route.continue();
     });
     await page.goto(url, { waitUntil: "commit" });
-    await page.getByText(/^Headroom callbacks: /).waitFor({ state: "attached" });
+    await page.locator(headroomCalls).waitFor({ state: "attached" });
     await scrolledTo(page, y);
     gate.open();
     await page.waitForFunction(() =>
       document.querySelector("output[data-hydration-probe][data-hydrated-as]"),
     );
     await page.waitForLoadState("networkidle");
-    return await line(page, "Headroom callbacks");
+    return await page.locator(headroomCalls).textContent();
   } finally {
     await context.close();
   }
@@ -285,7 +286,7 @@ inEveryEngine((browser) => {
   });
 
   test("a page that hydrates scrolled past fixedAt calls no headroom callback, and one that hydrates at the top calls onPin and onFix", async () => {
-    expect(await hydratedWhileScrolled(browser(), 400)).toBe("Headroom callbacks: none");
-    expect(await hydratedWhileScrolled(browser(), 0)).toBe("Headroom callbacks: pin fix");
+    expect(await hydratedWhileScrolled(browser(), 400)).toBe("none");
+    expect(await hydratedWhileScrolled(browser(), 0)).toBe("pin fix");
   });
 });

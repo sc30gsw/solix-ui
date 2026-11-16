@@ -1,4 +1,3 @@
-import { createEffect } from "solid-js";
 import { access } from "./internal-access";
 import { mapBrowserValue } from "./internal-browser-value";
 import { createScrollFold, type ScrollMove } from "./internal-scroll";
@@ -29,10 +28,9 @@ export type HeadroomReturn = {
 
 type Setup = { fixedAt: number; distance: number };
 
-type Headroom = { live: boolean; progress: number; fixed: boolean; pinnedByDirection: boolean };
+type Headroom = { progress: number; fixed: boolean; pinnedByDirection: boolean };
 
 const shownWhileLoading: Headroom = Object.freeze({
-  live: false,
   progress: 1,
   fixed: true,
   pinnedByDirection: true,
@@ -46,7 +44,7 @@ function withinZeroAndOne(progress: number): number {
 
 function headroomAt(y: number, setup: Setup): Headroom {
   const fixed = y <= setup.fixedAt;
-  return { live: true, progress: fixed ? 1 : 0, fixed, pinnedByDirection: fixed };
+  return { progress: fixed ? 1 : 0, fixed, pinnedByDirection: fixed };
 }
 
 function shownBefore(state: Headroom): number {
@@ -65,7 +63,6 @@ function afterScroll(state: Headroom, move: ScrollMove, setup: Setup): Headroom 
   const fixed = move.to <= setup.fixedAt;
   const hidden = hiddenBy(scrolledDown(state, move, setup), setup);
   return {
-    live: true,
     progress: fixed ? 1 : withinZeroAndOne(shownBefore(state) - hidden),
     fixed,
     pinnedByDirection: fixed || move.to < move.from,
@@ -105,20 +102,13 @@ export function createHeadroom(options?: HeadroomOptions): HeadroomReturn {
       fixedAt: access(options?.fixedAt ?? 0),
       distance: access(options?.scrollDistance ?? 100),
     }),
-  });
-  createEffect(
-    () => {
-      const current = state();
-      return current.live ? current : undefined;
-    },
-    (current, previous) => {
-      if (current === undefined) return;
+    onChange: (current, previous) => {
       const before = previous ?? beforeAnyCallback;
       if (current.pinnedByDirection && !before.pinnedByDirection) options?.onPin?.();
       if (!current.pinnedByDirection && before.pinnedByDirection) options?.onRelease?.();
       if (current.fixed && !before.fixed) options?.onFix?.();
     },
-  );
+  });
   return {
     pinned: mapBrowserValue(state, ({ progress }) => progress > 0),
     scrollProgress: mapBrowserValue(state, ({ progress }) => progress),

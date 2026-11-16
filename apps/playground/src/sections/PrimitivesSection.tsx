@@ -4,7 +4,8 @@ import {
   type Primitive,
   serialized,
   serverCases,
-} from "../../../../packages/primitives/tests/support/server-cases";
+  startCase,
+} from "../../../../packages/primitives/fixtures/server-cases";
 
 function HydrationProbe(props: { after: string; reading?: () => string }) {
   const id = createUniqueId();
@@ -22,41 +23,36 @@ function HydrationProbe(props: { after: string; reading?: () => string }) {
 }
 
 function CaseProbe(props: { name: Primitive }) {
-  const serverCase = serverCases[props.name];
-  const returned = serverCase.create(Reflect.get(primitives, String(props.name)));
-  const ref = serverCase.ref?.(returned as never);
-  const read = serverCase.read ? () => serialized(serverCase.read?.(returned as never)) : undefined;
-  const runBrowserCommands = serverCase.browserCommands;
+  const [calls, setCalls] = createSignal<string[]>([]);
+  const callbacks = { taken: false };
+  const started = startCase(props.name, primitives, (name) => {
+    callbacks.taken = true;
+    return () => setCalls((seen) => [...seen, name]);
+  });
+  const value = started.value;
+  const read = value ? () => serialized(value.read()) : undefined;
+  const runBrowserCommands = started.browserCommands;
   if (runBrowserCommands) {
-    runBrowserCommands(returned as never);
+    runBrowserCommands();
     createEffect(
       () => undefined,
-      () => runBrowserCommands(returned as never),
+      () => runBrowserCommands(),
     );
   }
   return (
     <>
-      {ref ? (
-        <div ref={ref} class="region" tabindex="-1" data-case-region={props.name}>
+      {started.ref ? (
+        <div ref={started.ref} class="region" tabindex="-1" data-case-region={props.name}>
           {props.name}
         </div>
       ) : null}
       {read ? <output data-case-value={props.name}>{read()}</output> : null}
+      {callbacks.taken ? (
+        <output data-case-calls={props.name}>{calls().join(" ") || "none"}</output>
+      ) : null}
       <HydrationProbe after={props.name} reading={read} />
     </>
   );
-}
-
-function HeadroomCallbacks() {
-  const [calls, setCalls] = createSignal<string[]>([]);
-  const called = (name: string) => () => setCalls((seen) => [...seen, name]);
-  primitives.createHeadroom({
-    fixedAt: 0,
-    onPin: called("pin"),
-    onFix: called("fix"),
-    onRelease: called("release"),
-  });
-  return <p>Headroom callbacks: {calls().join(" ") || "none"}</p>;
 }
 
 export function PrimitivesSection() {
@@ -76,7 +72,6 @@ export function PrimitivesSection() {
       </div>
       <p>Presses outside the region: {presses()}</p>
       <p>Clicks on the region: {clicks()}</p>
-      <HeadroomCallbacks />
       {(Object.keys(serverCases) as Primitive[]).map((name) => (
         <CaseProbe name={name} />
       ))}

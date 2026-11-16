@@ -1,6 +1,5 @@
-import { type Accessor, createMemo, createSignal, from, untrack } from "solid-js";
+import { type Accessor, createEffect, createMemo, createSignal, from, untrack } from "solid-js";
 import { type Attach, createElementAttachment } from "./internal-attachment";
-import { whereAllowed } from "./internal-browser-api";
 import { type LiveConfig, sameValue } from "./internal-equal";
 import { watchEvents } from "./internal-listener";
 import type { BrowserValue, RefSetter } from "./types";
@@ -18,7 +17,32 @@ export type Subscription<T, C> = (deliver: Deliver<T>, keep: Keep, config: C) =>
 export type BrowserValueOptions<T> = {
   loadingValue: T;
   equals?: false | ((left: T, right: T) => boolean);
+  onChange?: (current: T, previous: T | undefined) => void;
 };
+
+type Delivered<T> = { value: T; live: boolean };
+
+function sameDelivery<T>(
+  equals: false | ((left: T, right: T) => boolean) = sameValue,
+): false | ((left: Delivered<T>, right: Delivered<T>) => boolean) {
+  return equals && ((left, right) => left.live === right.live && equals(left.value, right.value));
+}
+
+function isSecurityError(error: unknown): boolean {
+  return (
+    typeof error === "object" && error !== null && Reflect.get(error, "name") === "SecurityError"
+  );
+}
+
+function whereAllowed<R>(run: () => R, blocked: () => R, cleanup: () => void): R {
+  try {
+    return run();
+  } catch (error) {
+    cleanup();
+    if (isSecurityError(error)) return blocked();
+    throw error;
+  }
+}
 
 function branded<T>(read: Accessor<T>): BrowserValue<T> {
   return read as BrowserValue<T>;
@@ -41,11 +65,11 @@ export function mapBrowserValue<S, T>(
   source: BrowserValue<S>,
   project: (value: S) => T,
 ): BrowserValue<T> {
-  return branded(() => project(source()));
+  return branded(createMemo(() => project(source()), { equals: sameValue }));
 }
 
 export function createBrowserMemo<T>(compute: BrowserCompute<T>, loadingValue: T): Accessor<T> {
-  return createMemo<T>(compute, { ssrSource: "client", loadingValue });
+  return createMemo<T>(compute, { ssrSource: "client", loadingValue, equals: sameValue });
 }
 
 export function createBrowserValue<T>(
@@ -61,18 +85,24 @@ export function createBrowserValue<T, C>(
   options: BrowserValueOptions<T> & { config?: LiveConfig<C> },
 ): BrowserValue<T> {
   const config = createMemo<C | undefined>(() => options.config?.(), { equals: sameValue });
-  const value = createMemo<T>(
+  const loading: Delivered<T> = { value: options.loadingValue, live: false };
+  const delivered = createMemo<Delivered<T>>(
     () => {
       const current = config();
-      return from<T>((deliver) => {
+      return from<Delivered<T>>((deliver) => {
         const teardowns: (() => void)[] = [];
         const stop = () => {
           for (const teardown of teardowns.splice(0).reverse()) teardown();
         };
         untrack(() =>
           whereAllowed(
-            () => subscribe(deliver, (teardown) => teardowns.push(teardown), current),
-            () => deliver(options.loadingValue),
+            () =>
+              subscribe(
+                (value) => deliver({ value, live: true }),
+                (teardown) => teardowns.push(teardown),
+                current,
+              ),
+            () => deliver(loading),
             stop,
           ),
         );
@@ -81,11 +111,19 @@ export function createBrowserValue<T, C>(
     },
     {
       ssrSource: "client",
-      loadingValue: options.loadingValue,
-      equals: options.equals ?? sameValue,
+      loadingValue: loading,
+      equals: sameDelivery(options.equals),
     },
   );
-  return branded(value);
+  if (options.onChange) {
+    const reported: { last: { value: T } | undefined } = { last: undefined };
+    createEffect(delivered, (current) => {
+      if (!current.live) return;
+      options.onChange?.(current.value, reported.last?.value);
+      reported.last = { value: current.value };
+    });
+  }
+  return branded(() => delivered().value);
 }
 
 export function readOn<T, R extends EventTarget, C = undefined>(

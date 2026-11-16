@@ -1,22 +1,24 @@
-import { type Accessor, createSignal } from "solid-js";
+import { type Accessor, createRoot, createSignal } from "solid-js";
 import { describe, expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
+import type { BrowserValuePrimitive, ElementPrimitive } from "../fixtures/primitive-kinds";
+import { startCase } from "../fixtures/server-cases";
 import * as primitives from "../src/index";
 import { attachmentsDuring, flush, mount, record, unmount } from "./support/browser-harness";
 import { box, button, nextTask, press, settled, witnessed } from "./support/dom";
-import type { ElementPrimitive } from "./support/primitive-kinds";
 
 type Contracted = {
   ref: primitives.RefSetter<HTMLElement>;
   actsOn: (element: HTMLElement) => Promise<boolean>;
-  value?: {
-    read: () => unknown;
-    initial: unknown;
-    alreadyOn?: (element: HTMLElement) => Promise<unknown>;
-  };
+  read?: () => unknown;
 };
 
-type Contract = (tick: Accessor<number>) => Contracted;
+type Reading = Contracted & Required<Pick<Contracted, "read">>;
+
+type Contract<K extends ElementPrimitive> = {
+  make: () => (tick: Accessor<number>) => K extends BrowserValuePrimitive ? Reading : Contracted;
+  alreadyOn?: (element: HTMLElement) => Promise<unknown>;
+};
 
 const ping = "solix-ping";
 
@@ -78,162 +80,173 @@ async function seesItLeave(element: HTMLElement, inside: () => boolean): Promise
   return before && !after;
 }
 
-const contracts: { [K in ElementPrimitive]: () => Contract } = {
-  createClickOutside: () => {
-    const calls: string[] = [];
-    return (tick) => ({
-      ref: primitives.createClickOutside(
-        () => calls.push("outside"),
-        null,
-        null,
-        () => tick() >= 0,
-      ),
-      actsOn: async (element) => {
-        calls.length = 0;
-        await press(element);
-        await press(box("elsewhere"));
-        return calls.length === 1;
-      },
-    });
-  },
-  createElementSize: () => (tick) => {
-    const size = primitives.createElementSize<HTMLElement>(() => ({
-      box: tick() >= 0 ? "border-box" : "content-box",
-    }));
-    return {
-      ref: size.ref,
-      actsOn: (element) => resizes(element, size.width),
-      value: { read: () => [size.width(), size.height()], initial: [0, 0] },
-    };
-  },
-  createEventListener: () => {
-    const targets: (EventTarget | null)[] = [];
-    return (tick) => ({
-      ref: primitives.createEventListener(
-        ping,
-        (event) => targets.push(event.currentTarget),
-        () => ({ passive: tick() >= 0 }),
-      ),
-      actsOn: async (element) => {
-        targets.length = 0;
-        element.dispatchEvent(new Event(ping));
-        return targets.includes(element);
-      },
-    });
-  },
-  createFocusTrap: () => (tick) => ({
-    ref: primitives.createFocusTrap(() => tick() >= 0),
-    actsOn: async (element) => {
-      await nextTask();
-      const outside = button("outside");
-      outside.focus();
-      outside.remove();
-      return element.contains(document.activeElement);
+const contracts: { [K in ElementPrimitive]: Contract<K> } = {
+  createClickOutside: {
+    make: () => {
+      const calls: string[] = [];
+      return (tick) => ({
+        ref: primitives.createClickOutside(
+          () => calls.push("outside"),
+          null,
+          null,
+          () => tick() >= 0,
+        ),
+        actsOn: async (element) => {
+          calls.length = 0;
+          await press(element);
+          await press(box("elsewhere"));
+          return calls.length === 1;
+        },
+      });
     },
-  }),
-  createFocusWithin: () => () => {
-    const within = primitives.createFocusWithin<HTMLElement>();
-    return {
-      ref: within.ref,
+  },
+  createElementSize: {
+    make: () => (tick) => {
+      const size = primitives.createElementSize<HTMLElement>(() => ({
+        box: tick() >= 0 ? "border-box" : "content-box",
+      }));
+      return {
+        ref: size.ref,
+        actsOn: (element) => resizes(element, size.width),
+        read: () => [size.width(), size.height()],
+      };
+    },
+  },
+  createEventListener: {
+    make: () => {
+      const targets: (EventTarget | null)[] = [];
+      return (tick) => ({
+        ref: primitives.createEventListener(
+          ping,
+          (event) => targets.push(event.currentTarget),
+          () => ({ passive: tick() >= 0 }),
+        ),
+        actsOn: async (element) => {
+          targets.length = 0;
+          element.dispatchEvent(new Event(ping));
+          return targets.includes(element);
+        },
+      });
+    },
+  },
+  createFocusTrap: {
+    make: () => (tick) => ({
+      ref: primitives.createFocusTrap(() => tick() >= 0),
       actsOn: async (element) => {
+        await nextTask();
         const outside = button("outside");
         outside.focus();
-        const entered = record(element, "focusin", true);
-        element.querySelector("button")?.focus();
-        await witnessed(() => entered.length > 0, "the focusin");
-        const acted = within.focused();
-        outside.focus();
         outside.remove();
-        return acted;
+        return element.contains(document.activeElement);
       },
-      value: {
-        read: within.focused,
-        initial: false,
-        alreadyOn: async (element) => {
+    }),
+  },
+  createFocusWithin: {
+    make: () => () => {
+      const within = primitives.createFocusWithin<HTMLElement>();
+      return {
+        ref: within.ref,
+        actsOn: async (element) => {
+          const outside = button("outside");
+          outside.focus();
+          const entered = record(element, "focusin", true);
           element.querySelector("button")?.focus();
-          return true;
+          await witnessed(() => entered.length > 0, "the focusin");
+          const acted = within.focused();
+          outside.focus();
+          outside.remove();
+          return acted;
         },
-      },
-    };
+        read: within.focused,
+      };
+    },
+    alreadyOn: async (element) => {
+      element.querySelector("button")?.focus();
+      return true;
+    },
   },
-  createHover: () => () => {
-    const hover = primitives.createHover<HTMLElement>();
-    return {
-      ref: hover.ref,
-      actsOn: async (element) => {
-        const away = box("away");
-        await userEvent.hover(away);
-        const entered = record(element, "mouseenter");
-        await userEvent.hover(element);
-        await witnessed(() => entered.length > 0, "the mouseenter");
-        const acted = hover.hovered();
-        await userEvent.hover(away);
-        away.remove();
-        return acted;
-      },
-      value: {
-        read: hover.hovered,
-        initial: false,
-        alreadyOn: async (element) => {
+  createHover: {
+    make: () => () => {
+      const hover = primitives.createHover<HTMLElement>();
+      return {
+        ref: hover.ref,
+        actsOn: async (element) => {
+          const away = box("away");
+          await userEvent.hover(away);
+          const entered = record(element, "mouseenter");
           await userEvent.hover(element);
-          return true;
+          await witnessed(() => entered.length > 0, "the mouseenter");
+          const acted = hover.hovered();
+          await userEvent.hover(away);
+          away.remove();
+          return acted;
         },
-      },
-    };
+        read: hover.hovered,
+      };
+    },
+    alreadyOn: async (element) => {
+      await userEvent.hover(element);
+      return true;
+    },
   },
-  createInViewport: () => () => {
-    const viewport = primitives.createInViewport<HTMLElement>();
-    return {
-      ref: viewport.ref,
-      actsOn: (element) => seesItLeave(element, viewport.inViewport),
-      value: { read: viewport.inViewport, initial: false },
-    };
+  createInViewport: {
+    make: () => () => {
+      const viewport = primitives.createInViewport<HTMLElement>();
+      return {
+        ref: viewport.ref,
+        actsOn: (element) => seesItLeave(element, viewport.inViewport),
+        read: viewport.inViewport,
+      };
+    },
   },
-  createIntersection: () => (tick) => {
-    const intersection = primitives.createIntersection<HTMLElement>(() => ({
-      threshold: [0, tick() >= 0 ? 1 : 0.5],
-    }));
-    return {
-      ref: intersection.ref,
-      actsOn: (element) =>
-        seesItLeave(
-          element,
-          () =>
-            intersection.entry()?.target === element &&
-            intersection.entry()?.isIntersecting === true,
+  createIntersection: {
+    make: () => (tick) => {
+      const intersection = primitives.createIntersection<HTMLElement>(() => ({
+        threshold: [0, tick() >= 0 ? 1 : 0.5],
+      }));
+      return {
+        ref: intersection.ref,
+        actsOn: (element) =>
+          seesItLeave(
+            element,
+            () =>
+              intersection.entry()?.target === element &&
+              intersection.entry()?.isIntersecting === true,
+          ),
+        read: () => intersection.entry()?.isIntersecting ?? null,
+      };
+    },
+  },
+  createMutationObserver: {
+    make: () => {
+      const targets: Node[] = [];
+      return (tick) => ({
+        ref: primitives.createMutationObserver(
+          (records) => targets.push(...records.map(({ target }) => target)),
+          () => ({ childList: tick() >= 0, attributeFilter: ["data-state"] }),
         ),
-      value: { read: intersection.entry, initial: null },
-    };
+        actsOn: async (element) => {
+          targets.length = 0;
+          const control = mutationControl(element);
+          element.append(document.createElement("span"));
+          await witnessed(() => control.seen.length > 0, "the mutation");
+          control.disconnect();
+          return targets.includes(element);
+        },
+      });
+    },
   },
-  createMutationObserver: () => {
-    const targets: Node[] = [];
-    return (tick) => ({
-      ref: primitives.createMutationObserver(
-        (records) => targets.push(...records.map(({ target }) => target)),
-        () => ({ childList: tick() >= 0, attributeFilter: ["data-state"] }),
-      ),
-      actsOn: async (element) => {
-        targets.length = 0;
-        const control = mutationControl(element);
-        element.append(document.createElement("span"));
-        await witnessed(() => control.seen.length > 0, "the mutation");
-        control.disconnect();
-        return targets.includes(element);
-      },
-    });
-  },
-  createResizeObserver: () => (tick) => {
-    const [ref, rect] = primitives.createResizeObserver<HTMLElement>(() => ({
-      box: tick() >= 0 ? "border-box" : "content-box",
-    }));
-    return {
-      ref,
-      actsOn: (element) => resizes(element, () => rect().width),
-      value: {
+  createResizeObserver: {
+    make: () => (tick) => {
+      const [ref, rect] = primitives.createResizeObserver<HTMLElement>(() => ({
+        box: tick() >= 0 ? "border-box" : "content-box",
+      }));
+      return {
+        ref,
+        actsOn: (element) => resizes(element, () => rect().width),
         read: rect,
-        initial: { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0 },
-      },
-    };
+      };
+    },
   },
 };
 
@@ -243,9 +256,19 @@ function element(label: string): HTMLElement {
   return region;
 }
 
-describe.each(Object.entries(contracts))("%s", (_name, contract) => {
+function initialOf(name: ElementPrimitive): unknown {
+  return createRoot((dispose) => {
+    const expected = startCase(name, primitives).value?.expected;
+    dispose();
+    return expected;
+  });
+}
+
+describe.each(Object.keys(contracts) as ElementPrimitive[])("%s", (name) => {
+  const contract: Contract<ElementPrimitive> = contracts[name];
+
   function mounted() {
-    const create = contract();
+    const create = contract.make();
     const [tick, setTick] = createSignal(0);
     const contracted = mount(() => create(tick));
     return { ...contracted, setTick };
@@ -259,7 +282,7 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
   });
 
   test("the attachment moves to each element the ref receives, and right after a move no value describes the old element", async () => {
-    const { ref, actsOn, value } = mounted();
+    const { ref, actsOn, read } = mounted();
     const first = element("first");
     const second = element("second");
 
@@ -268,21 +291,21 @@ describe.each(Object.entries(contracts))("%s", (_name, contract) => {
     const onFirst = await actsOn(first);
     ref(second);
     flush();
-    const afterTheMove = value?.read();
+    const afterTheMove = read?.();
     expect([onFirst, await actsOn(first), await actsOn(second)]).toEqual([true, false, true]);
-    expect(afterTheMove).toEqual(value?.initial);
+    expect(afterTheMove).toEqual(initialOf(name));
   });
 
-  test.runIf(contract()(() => 0).value?.alreadyOn)(
+  test.runIf(contract.alreadyOn)(
     "a ref put on an element already in the state it reports reads it at once",
     async () => {
-      const { ref, value } = mounted();
+      const { ref, read } = mounted();
       const first = element("first");
-      const expected = await value?.alreadyOn?.(first);
+      const expected = await contract.alreadyOn?.(first);
 
       ref(first);
       flush();
-      expect(value?.read()).toEqual(expected);
+      expect(read?.()).toEqual(expected);
     },
   );
 

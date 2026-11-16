@@ -8,7 +8,10 @@ export const resizeSettleMs = 300;
 
 export type ScrollMove = { from: number; to: number };
 
-export type ScrollFoldOptions<S> = { loadingValue: S };
+export type ScrollFoldOptions<S> = {
+  loadingValue: S;
+  onChange?: (current: S, previous: S | undefined) => void;
+};
 
 function verticalScroll(): number {
   return lookUp(window, "scrollY") || document.documentElement.scrollTop;
@@ -71,6 +74,7 @@ export function createScrollFold<S, C>(
     {
       loadingValue: options.loadingValue,
       config: () => options.config?.(),
+      onChange: (current, previous) => options.onChange?.(current, previous),
     },
   );
 }

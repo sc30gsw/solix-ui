@@ -1,10 +1,10 @@
 import { type Accessor, createSignal } from "solid-js";
 import { describe, expect, test } from "vite-plus/test";
+import type { PageValuePrimitive } from "../fixtures/primitive-kinds";
+import { startValueCase } from "../fixtures/server-cases";
 import * as primitives from "../src/index";
 import { attachmentsDuring, flush, mount } from "./support/browser-harness";
-import type { PageValuePrimitive } from "./support/primitive-kinds";
 import { replaced } from "./support/replace";
-import { serverCases } from "./support/server-cases";
 import { applied, stubbedScroll } from "./support/scroll";
 
 type ValueContract = {
@@ -115,13 +115,14 @@ describe.each(Object.keys(contracts) as PageValuePrimitive[])("%s", (name) => {
     expect(registered > 0).toBe(live === true);
   });
 
-  test("where its browser API is missing, it gives its loading value and throws nothing", () => {
-    const { create, read, expected } = serverCases[name];
+  test("where its browser API is missing, it gives its loading value and throws nothing, after a scroll too", async () => {
     const restore = missingApis[name]();
     try {
-      const returned = mount(() => create(Reflect.get(primitives, String(name))));
+      const { value } = mount(() => startValueCase(name, primitives));
+      window.dispatchEvent(new Event("scroll"));
+      await applied();
 
-      expect(read?.(returned as never)).toEqual(expected);
+      expect(value.read()).toEqual(value.expected);
     } finally {
       restore();
     }

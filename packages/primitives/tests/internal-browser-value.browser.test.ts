@@ -5,6 +5,7 @@ import {
   createBrowserValue,
   createBrowserMemo,
   createElementValue,
+  mapBrowserValue,
   readOn,
   type Subscription,
 } from "../src/internal-browser-value";
@@ -131,6 +132,45 @@ test("a value equal by value to the one before changes nothing, and equals false
   await pinged(target);
   await pinged(target);
   expect([byValue.length, every.length]).toEqual([1, 3]);
+});
+
+test("onChange is called with each value the subscription delivers and the one delivered before it, and never for the loading value", async () => {
+  const target = new EventTarget();
+  const changes: [number, number | undefined][] = [];
+  const blocked: number[] = [];
+  mount(() => {
+    createBrowserValue(counter(5), {
+      loadingValue: 0,
+      config: () => target,
+      onChange: (current, previous) => changes.push([current, previous]),
+    });
+    createBrowserValue<number>(
+      () => {
+        throw Object.assign(new Error("blocked"), { name: "SecurityError" });
+      },
+      { loadingValue: 0, onChange: (current) => blocked.push(current) },
+    );
+  });
+
+  await pinged(target);
+  expect(changes).toEqual([
+    [5, undefined],
+    [6, 5],
+  ]);
+  expect(blocked).toEqual([]);
+});
+
+test("mapBrowserValue keeps its projection until the projected value changes", async () => {
+  const target = new EventTarget();
+  const { parity, runs } = mount(() => {
+    const count = createBrowserValue(counter(0), { loadingValue: 0, config: () => target });
+    const parity = mapBrowserValue(count, (value) => Math.floor(value / 2));
+    return { parity, runs: watch(parity) };
+  });
+
+  await pinged(target);
+  await pinged(target);
+  expect([parity(), runs]).toEqual([1, [0, 1]]);
 });
 
 test("the subscription ends when the owner is disposed", async () => {

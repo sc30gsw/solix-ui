@@ -1,6 +1,6 @@
 import { createComponent, renderToString } from "@solidjs/web";
 import { everyBrowserResource } from "./browser-resources";
-import { serialized } from "./server-cases";
+import { serialized } from "../../fixtures/server-cases";
 
 function valuesBelow(value: unknown, path: string): string[] {
   if (typeof value === "function") return [];

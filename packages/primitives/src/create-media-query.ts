@@ -1,5 +1,5 @@
 import { access, accessUntracked } from "./internal-access";
-import { lookUp } from "./internal-browser-api";
+import { browserMethod } from "./internal-browser-api";
 import { createBrowserValue, readOn } from "./internal-browser-value";
 import type { BrowserValue, MaybeAccessor, ReadOnce } from "./types";
 
@@ -20,7 +20,7 @@ export function createMediaQuery(
 ): BrowserValue<boolean> {
   return createBrowserValue(
     readOn(
-      (text: string) => lookUp(window, "matchMedia")?.call(window, text),
+      (text: string) => browserMethod(window, "matchMedia")?.(text),
       ["change"],
       (list) => list.matches,
     ),
