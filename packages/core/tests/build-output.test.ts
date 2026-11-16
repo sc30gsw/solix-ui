@@ -3,7 +3,11 @@ import { join } from "node:path";
 import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import {
+  BEHAVIOUR_SDK_LAYER,
+  HIDDEN_LAYER,
+  HIDDEN_PART_SELECTOR,
   LIBRARY_CASCADE_LAYER,
+  STABLE_CLASS_PREFIX,
   LIBRARY_CLASS_PREFIX,
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
@@ -12,7 +16,13 @@ import {
   stylePropClassPrefix,
   stylePropNames,
 } from "../src/style-prop-table";
-import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
+import {
+  builtComponents,
+  builtSource,
+  dist,
+  stableClass,
+  stylesheet as builtStylesheet,
+} from "./built-library";
 import { parse, ts } from "../../../scripts/syntax";
 import { enclosingAtRules, inStylePropLayer, nestedLayerOrder } from "./cascade-layers";
 
@@ -134,16 +144,20 @@ function depthAfterEachCharacter(css: string): number[] {
   });
 }
 
-test("every rule sits inside the one library cascade layer", () => {
-  expect(stylesheet.startsWith(`@layer ${LIBRARY_CASCADE_LAYER} {`)).toBe(true);
+test("the stylesheet first orders the behaviour SDK's layer before the library's, and then every rule sits inside the one library cascade layer", () => {
+  const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n`;
+  const layer = stylesheet.slice(order.length);
 
-  const depths = depthAfterEachCharacter(stylesheet);
-  const firstBrace = stylesheet.indexOf("{");
+  expect(stylesheet.startsWith(order)).toBe(true);
+  expect(layer.startsWith(`@layer ${LIBRARY_CASCADE_LAYER} {`)).toBe(true);
+
+  const depths = depthAfterEachCharacter(layer);
+  const firstBrace = layer.indexOf("{");
   const positionsBackAtTopLevel = depths
     .map((depth, position) => (position >= firstBrace && depth === 0 ? position : -1))
     .filter((position) => position !== -1);
 
-  expect(positionsBackAtTopLevel).toEqual([stylesheet.length - 1]);
+  expect(positionsBackAtTopLevel).toEqual([layer.length - 1]);
 });
 
 test("every class name carries the library's own prefix", () => {
@@ -192,14 +206,33 @@ test("input validity and the modal backdrop compile to the platform's own select
   expect(stylesheet).toMatch(new RegExp(`\\.${LIBRARY_CLASS_PREFIX}\\w+::backdrop\\{`));
 });
 
-test("the style-prop layer sits inside the library layer, ordered after every layer StyleX emits", () => {
+test("the style-prop layer sits inside the library layer, ordered after every layer StyleX emits, and only the hidden layer comes after it", () => {
   const order = nestedLayerOrder(libraryLayer());
 
   expect(order.length, "StyleX emits layers of its own inside the library layer").toBeGreaterThan(
-    1,
+    2,
   );
   expect(order.filter((name) => name === STYLE_PROP_LAYER)).toEqual([STYLE_PROP_LAYER]);
-  expect(order.at(-1), `the nested layer order is ${order.join(", ")}`).toBe(STYLE_PROP_LAYER);
+  expect(order.slice(-2), `the nested layer order is ${order.join(", ")}`).toEqual([
+    STYLE_PROP_LAYER,
+    HIDDEN_LAYER,
+  ]);
+});
+
+test("the hidden layer holds one rule, which hides an element that is hidden and carries a stable part class, unless it is hidden until found, and every part carries such a class", () => {
+  const rules: string[] = [];
+  libraryLayer().walkAtRules("layer", (layer) => {
+    if (layer.params !== HIDDEN_LAYER) return;
+    layer.walkRules((rule) => {
+      rules.push(`${rule.selector}{${rule.nodes.map((node) => node.toString()).join(";")}}`);
+    });
+  });
+
+  expect(rules).toEqual([`${HIDDEN_PART_SELECTOR}{display:none}`]);
+  expect(HIDDEN_PART_SELECTOR).toBe(
+    `[hidden]:where([class*="${STABLE_CLASS_PREFIX}"]):not([hidden="until-found"])`,
+  );
+  expect(stableClass("Component", "part").startsWith(STABLE_CLASS_PREFIX)).toBe(true);
 });
 
 test("the style-prop table uses the build's class prefix", () => {

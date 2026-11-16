@@ -4,6 +4,8 @@ import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import {
   compileLibrarySource,
+  BEHAVIOUR_SDK_LAYER,
+  HIDDEN_LAYER,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
   libraryStylesheet,
@@ -141,7 +143,7 @@ function sourceFor(definitions: Definition[]): string {
   return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "./disclosure-state.stylex";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
 }
 
-test("for every generated style definition, the stylesheet stays inside the library layer with prefixed classes and registered custom properties, the style-prop layer last, and nothing important", async () => {
+test("for every generated style definition, the stylesheet orders the behaviour SDK's layer first and stays inside the library layer with prefixed classes and registered custom properties, the style-prop layer and then the hidden layer last, and nothing important", async () => {
   await fc.assert(
     fc.asyncProperty(styleDefinitions, async (definitions) => {
       const { rules } = await compileLibrarySource({
@@ -156,9 +158,13 @@ test("for every generated style definition, the stylesheet stays inside the libr
         stylesheet.nodes.map((node) =>
           node.type === "atrule" ? `@${node.name} ${node.params}` : node.type,
         ),
-      ).toEqual([`@layer ${LIBRARY_CASCADE_LAYER}`]);
+      ).toEqual([
+        `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER}`,
+        `@layer ${LIBRARY_CASCADE_LAYER}`,
+      ]);
       stylesheet.each((layer) => {
-        if (layer.type === "atrule") expect(nestedLayerOrder(layer).at(-1)).toBe(STYLE_PROP_LAYER);
+        if (layer.type !== "atrule" || layer.nodes === undefined) return;
+        expect(nestedLayerOrder(layer).slice(-2)).toEqual([STYLE_PROP_LAYER, HIDDEN_LAYER]);
       });
 
       stylesheet.walkRules((rule) => {

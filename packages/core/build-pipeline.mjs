@@ -6,6 +6,10 @@ import stylexPlugin from "@stylexjs/babel-plugin";
 export const LIBRARY_CASCADE_LAYER = "solix";
 export const LIBRARY_CLASS_PREFIX = "sx";
 export const STYLE_PROP_LAYER = "style-props";
+export const HIDDEN_LAYER = "hidden";
+export const BEHAVIOUR_SDK_LAYER = "ui-sdk";
+export const STABLE_CLASS_PREFIX = "solix-";
+export const HIDDEN_PART_SELECTOR = `[hidden]:where([class*="${STABLE_CLASS_PREFIX}"]):not([hidden="until-found"])`;
 
 const typesStripped = [presetTypescript];
 const jsxKeptInTsx = [{ test: /\.tsx$/, plugins: [syntaxJsx] }];
@@ -35,5 +39,17 @@ export async function compileLibrarySource({ filename, source, packageRoot }) {
 
 export function libraryStylesheet(rules, stylePropRules) {
   const css = stylexPlugin.processStylexRules(rules, { useLayers: true });
-  return `@layer ${LIBRARY_CASCADE_LAYER} {\n${css}\n@layer ${STYLE_PROP_LAYER} {\n${stylePropRules}\n}\n}\n`;
+  return [
+    `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};`,
+    `@layer ${LIBRARY_CASCADE_LAYER} {`,
+    css,
+    `@layer ${STYLE_PROP_LAYER} {`,
+    stylePropRules,
+    "}",
+    `@layer ${HIDDEN_LAYER} {`,
+    `${HIDDEN_PART_SELECTOR}{display:none}`,
+    "}",
+    "}",
+    "",
+  ].join("\n");
 }
