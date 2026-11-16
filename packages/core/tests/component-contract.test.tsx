@@ -177,6 +177,28 @@ test.each(components)(
   },
 );
 
+const valuesThePlatformRendersNothingFor = [null, undefined, false, true, "", []];
+
+test.each(components)(
+  "%s renders a 0 given to a prop of its type that takes an element, and renders for null, undefined, false, true, an empty string and an empty list what it renders without the prop",
+  (name, { rendersElementProp, props }) => {
+    const rendered = Object.entries(rendersElementProp)
+      .filter(([, renders]) => renders)
+      .map(([prop]) => prop);
+    for (const prop of rendered) {
+      const without = render(name, { [prop]: undefined });
+
+      expect(render(name, { [prop]: 0 }), `${prop}={0}`).toContain(">0<");
+      for (const nothing of valuesThePlatformRendersNothingFor) {
+        expect(render(name, { [prop]: nothing }), `${prop}={${JSON.stringify(nothing)}}`).toBe(
+          without,
+        );
+      }
+    }
+    expect(Object.keys(props)).toEqual(expect.arrayContaining(rendered));
+  },
+);
+
 function expectClassesOnTheirParts(name: string, html: string, tokens: PartClassToken[]): void {
   const given = tokens.map(({ token }) => token);
   for (const element of elementsOf(html)) {

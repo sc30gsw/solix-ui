@@ -3,6 +3,7 @@ import type { JSX } from "@solidjs/web";
 import { children, Show } from "solid-js";
 import { partId } from "./headless";
 import { createParts, type ElementProps } from "./parts";
+import { rendersSomething } from "./renders-something";
 import { useTabs } from "./tabs-context";
 import { tokens } from "./tokens.stylex";
 
@@ -104,13 +105,13 @@ export function TabsTab(props: TabsTabProps) {
   const rightSection = children(() => props.rightSection);
   return (
     <button {...root}>
-      <Show when={leftSection()}>
+      <Show when={rendersSomething(leftSection())}>
         <span {...part("leftSection")}>{leftSection()}</span>
       </Show>
-      <Show when={label()}>
+      <Show when={rendersSomething(label())}>
         <span {...part("label")}>{label()}</span>
       </Show>
-      <Show when={rightSection()}>
+      <Show when={rendersSomething(rightSection())}>
         <span {...part("rightSection")}>{rightSection()}</span>
       </Show>
     </button>
