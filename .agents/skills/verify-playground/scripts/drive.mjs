@@ -11,15 +11,33 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
-const { breakpointWidths } = await repositoryModule("packages/core/src/style-prop-table.ts");
+const { baseKey, breakpointWidths, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const { stableClass } = await repositoryModule("packages/core/src/stable-class.ts");
-const { startAt, stateOf, tabNamed, tabsRegion } = await repositoryModule("apps/playground/tests/support/tabs.ts");
+const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX, STABLE_CLASS_PREFIX } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { account, keyboardTable, manual, panelOf, sdkStyles, startAt, stateOf, tabList, tabNamed, tabsRegion } =
+  await repositoryModule("apps/playground/tests/support/tabs.ts");
 const state = join(root, ".verify-playground");
 const pixelsPerMediaQueryEm = 16;
 const mdWidth = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 
 const style = (locator, property) =>
   locator.evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
+
+const writtenAtRunTime = (page, region, classOfTheLibrary) =>
+  page.evaluate(
+    ([selector, pattern]) => {
+      const parts = [...document.querySelectorAll(`${selector} [data-slot]`)];
+      const ours = new RegExp(pattern);
+      return {
+        partStyles: [...new Set(parts.map((part) => part.getAttribute("style") ?? ""))].sort().join(" | "),
+        htmlStyle: document.documentElement.getAttribute("style") ?? "",
+        inert: document.querySelectorAll("[inert]").length,
+        adoptedSheets: document.adoptedStyleSheets.length,
+        partsWithAForeignClass: parts.filter((part) => [...part.classList].some((name) => !ours.test(name))).length,
+      };
+    },
+    [region, classOfTheLibrary],
+  );
 
 const journeys = {
   "button-default": async ({ page, observe, shot, expected }) => {
@@ -304,6 +322,71 @@ const journeys = {
     await shot("locked", "Click Locked in the list named Controlled. The app's own handler refuses the press, so Drafts stays selected.", region);
     observe("controlled, after a click on Locked: selected tab", (await stateOf(page, "Controlled")).selected, "Drafts");
     observe("controlled, after a click on Locked: presses the app refused", await page.getByRole("status", { name: "Refused presses" }).textContent(), "1");
+  },
+  "tabs-keyboard": async ({ page, observe, shot }) => {
+    await page.locator(tabsRegion).scrollIntoViewIfNeeded();
+    await shot("tabs", "Open the page and scroll to the section named Tabs.", page.locator(tabsRegion));
+    for (const [index, { list, start, keys, focused, selected }] of keyboardTable.entries()) {
+      const row = `${list}, from ${start}, ${keys.join(" then ")}`;
+      await startAt(page, list, start);
+      for (const key of keys) await page.keyboard.press(key);
+      await page.waitForFunction(
+        ([name, wanted]) =>
+          document.activeElement?.closest(`[role="tablist"][aria-label="${name}"]`) !== null &&
+          document.activeElement?.textContent?.includes(wanted),
+        [list, focused],
+      );
+      await shot(`keys-${index + 1}`, `In ${list}, start at ${start} and press ${keys.join(", then ")}.`, tabList(page, list).locator(".."));
+      const after = await stateOf(page, list);
+      observe(`${row}: focused tab`, after.focused, focused);
+      observe(`${row}: selected tab`, after.selected, selected);
+      observe(`${row}: panels shown`, after.shown.join(), panelOf(selected));
+      observe(`${row}: tab stops`, after.tabStops.join(), selected);
+    }
+  },
+  "tabs-focus": async ({ page, observe, shot, expected }) => {
+    const region = page.locator(tabsRegion);
+    await region.scrollIntoViewIfNeeded();
+    await startAt(page, manual, "Two");
+    await startAt(page, account, "Settings");
+    const settings = tabNamed(page, account, "Settings");
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await shot("focus-ring", "Click Two in Manual vertical and Settings in Account. Leave the Account list with Shift+Tab and come back with Tab. Focus returns to the selected tab, Settings, which shows a focus ring.", region);
+    observe("Tab into the list: focused tab", (await stateOf(page, account)).focused, "Settings");
+    observe("focus ring: outline style", await style(settings, "outline-style"), "solid");
+    observe("focus ring: outline colour", await style(settings, "outline-color"), expected("--solix-color-primary"));
+    await page.keyboard.press("Tab");
+    await shot("focus-panel", "Press Tab. Focus leaves the list for the panel.", region);
+    observe("Tab out of the list: focused element", await page.evaluate(() => document.activeElement?.textContent), panelOf("Settings"));
+    await page.keyboard.press("Tab");
+    await shot("focus-next-list", "Press Tab. Focus enters the next list at its selected tab, Two.", region);
+    observe("Tab into the next list: focused tab", (await stateOf(page, manual)).focused, "Two");
+  },
+  "tabs-run-time-writes": async ({ page, observe, shot }) => {
+    const region = page.locator(tabsRegion);
+    const classOfTheLibrary = `^(?:${LIBRARY_CLASS_PREFIX}|${STABLE_CLASS_PREFIX})`;
+    const styleOfTheOneStyleProp = `--${stylePropClass("display", baseKey)}:flex`;
+    const observeWrites = async (when) => {
+      const styles = await sdkStyles(page, BEHAVIOUR_SDK_LAYER);
+      const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibrary);
+      observe(`${when}: style elements the SDK added`, styles.length, 1);
+      observe(`${when}: important declarations in them`, styles.join("").match(/!\s*important/g)?.length ?? 0, 1);
+      observe(`${when}: style attributes on the parts`, written.partStyles, ` | ${styleOfTheOneStyleProp}`);
+      observe(`${when}: style attribute on the html element`, written.htmlStyle, "");
+      observe(`${when}: inert elements`, written.inert, 0);
+      observe(`${when}: adopted style sheets`, written.adoptedSheets, 0);
+      observe(`${when}: parts that carry a class the library did not give`, written.partsWithAForeignClass, 0);
+    };
+    await region.scrollIntoViewIfNeeded();
+    await shot("tabs", "Open the page and scroll to the section named Tabs.", region);
+    await observeWrites("after hydration");
+    await startAt(page, account, "Overview");
+    for (const key of ["ArrowRight", "End", "Home"]) await page.keyboard.press(key);
+    await tabNamed(page, "Optional", "Notes").click();
+    await tabNamed(page, "Optional", "Notes").click();
+    await shot("after-keys", "Click Overview in Account and press the right arrow, End and Home. Click Notes in Optional twice.", region);
+    await observeWrites("after clicks and keys");
   },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();
