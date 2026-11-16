@@ -366,7 +366,12 @@ function publishedForEachSolidPackage(
       (published) => published.find((release) => release.version === version) ?? [],
     );
     return elsewhere.length === others.length
-      ? [{ version, eligibleAt: Math.max(eligibleAt, ...elsewhere.map((it) => it.eligibleAt)) }]
+      ? [
+          {
+            version,
+            eligibleAt: Math.max(eligibleAt, ...elsewhere.map((release) => release.eligibleAt)),
+          },
+        ]
       : [];
   });
 }

@@ -114,10 +114,22 @@ test("a symbolic link inside a skill fails, to a file or a folder, and nothing i
   const [directory] = skillDirectories;
 
   expect(problemsWith(root).filter((problem) => problem.startsWith(directory))).toEqual([
-    expect.stringContaining(`${directory}/${skill.name}/more: ${skill.pack} ships a symbolic link`),
     expect.stringContaining(
-      `${directory}/${skill.name}/secret.md: ${skill.pack} ships a symbolic link`,
+      `${directory}/${skill.name}/more: ${skill.pack} ships a symbolic link here`,
     ),
+    expect.stringContaining(
+      `${directory}/${skill.name}/secret.md: ${skill.pack} ships a symbolic link here`,
+    ),
+  ]);
+});
+
+test("a named pipe inside a skill fails like a symbolic link, without being opened", () => {
+  const { root, skill: folder } = checkoutWithSkill({});
+  spawnSync("mkfifo", [join(folder, "pipe")]);
+  const [directory] = skillDirectories;
+
+  expect(problemsWith(root).filter((problem) => problem.startsWith(directory))).toEqual([
+    expect.stringContaining(`${directory}/${skill.name}/pipe: ${skill.pack} ships a symbolic link`),
   ]);
 });
 
@@ -129,7 +141,7 @@ test("a skill whose SKILL.md is a symbolic link fails without being read", () =>
 
   expect(problemsWith(root).filter((problem) => problem.startsWith(directory))).toEqual([
     expect.stringContaining(
-      `${directory}/${skill.name}/SKILL.md: ${skill.pack} ships a symbolic link`,
+      `${directory}/${skill.name}/SKILL.md: ${skill.pack} ships a symbolic link here`,
     ),
   ]);
 });

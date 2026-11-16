@@ -43,20 +43,23 @@ function byCodeUnit(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function skillFolderEntries(folder: string): { files: string[]; symbolicLinks: string[] } {
+function skillFolderEntries(folder: string): { files: string[]; neitherFileNorFolder: string[] } {
   const files: string[] = [];
-  const symbolicLinks: string[] = [];
+  const neitherFileNorFolder: string[] = [];
   const walk = (directory: string): void => {
     for (const name of readdirSync(join(folder, directory))) {
       const path = directory === "" ? name : `${directory}/${name}`;
       const entry = lstatSync(join(folder, path));
-      if (entry.isSymbolicLink()) symbolicLinks.push(path);
-      else if (entry.isDirectory()) walk(path);
-      else files.push(path);
+      if (entry.isDirectory()) walk(path);
+      else if (entry.isFile()) files.push(path);
+      else neitherFileNorFolder.push(path);
     }
   };
   walk("");
-  return { files: files.sort(byCodeUnit), symbolicLinks: symbolicLinks.sort(byCodeUnit) };
+  return {
+    files: files.sort(byCodeUnit),
+    neitherFileNorFolder: neitherFileNorFolder.sort(byCodeUnit),
+  };
 }
 
 function lengthPrefixed(bytes: Buffer): Buffer[] {
@@ -112,11 +115,11 @@ function linkedSkillProblems(
     ];
   }
   const folder = realpathSync(link);
-  const { files, symbolicLinks } = skillFolderEntries(folder);
-  if (symbolicLinks.length > 0) {
-    return symbolicLinks.map(
+  const { files, neitherFileNorFolder } = skillFolderEntries(folder);
+  if (neitherFileNorFolder.length > 0) {
+    return neitherFileNorFolder.map(
       (path) =>
-        `${directory}/${name}/${path}: ${pack} ships a symbolic link inside this skill, which the reviewed hash does not follow. Do not approve the skill until it ships files only.`,
+        `${directory}/${name}/${path}: ${pack} ships a symbolic link here, or something else that is neither a file nor a folder, which the reviewed hash does not follow. Do not approve the skill until it ships files only.`,
     );
   }
   if (!files.includes(skillFile)) {
