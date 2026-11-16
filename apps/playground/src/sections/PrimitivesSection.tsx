@@ -1,5 +1,5 @@
 import * as primitives from "@solix/primitives";
-import { createSignal, createUniqueId, untrack } from "solid-js";
+import { createEffect, createSignal, createUniqueId, untrack } from "solid-js";
 import {
   type Primitive,
   serialized,
@@ -26,6 +26,14 @@ function CaseProbe(props: { name: Primitive }) {
   const returned = serverCase.create(Reflect.get(primitives, String(props.name)));
   const ref = serverCase.ref?.(returned as never);
   const read = serverCase.read ? () => serialized(serverCase.read?.(returned as never)) : undefined;
+  const runBrowserCommands = serverCase.browserCommands;
+  if (runBrowserCommands) {
+    runBrowserCommands(returned as never);
+    createEffect(
+      () => undefined,
+      () => runBrowserCommands(returned as never),
+    );
+  }
   return (
     <>
       {ref ? (

@@ -1,4 +1,4 @@
-import { onCleanup, untrack } from "solid-js";
+import { createEffect, onCleanup, untrack } from "solid-js";
 import { type BrowserCallback, createBrowserMemo } from "./internal-browser-value";
 
 type Command<Args extends unknown[], R> = (...args: Args) => R;
@@ -29,5 +29,12 @@ export function createBrowserCommand<Args extends unknown[], R>(
   idle: Command<Args, R>,
 ): Command<Args, R> {
   const hydrated = createBrowserMemo(() => true, false);
-  return whileOwned(() => untrack(hydrated), run, idle);
+  const effects = { ran: false };
+  createEffect(
+    () => undefined,
+    () => {
+      effects.ran = true;
+    },
+  );
+  return whileOwned(() => effects.ran || untrack(hydrated), run, idle);
 }

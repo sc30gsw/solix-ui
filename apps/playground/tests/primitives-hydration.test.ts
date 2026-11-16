@@ -173,6 +173,30 @@ async function hydratedWhileScrolled(browser: Browser, y: number): Promise<strin
   }
 }
 
+async function scrollCommandsWhileLoading(browser: Browser): Promise<string[]> {
+  const context = await browser.newContext({ viewport: { width: 800, height: 600 } });
+  try {
+    await context.addInitScript(() => {
+      const calls: string[] = [];
+      const scrollTo = window.scrollTo.bind(window);
+      Reflect.set(window, "scrollCommands", calls);
+      window.scrollTo = (...args: [ScrollToOptions?] | [number, number]) => {
+        calls.push(JSON.stringify(args));
+        Reflect.apply(scrollTo, window, args);
+      };
+    });
+    const page = await context.newPage();
+    await page.goto(url);
+    await page.waitForFunction(() =>
+      document.querySelector("output[data-hydration-probe][data-hydrated-as]"),
+    );
+    await page.waitForLoadState("networkidle");
+    return await page.evaluate((): string[] => Reflect.get(window, "scrollCommands"));
+  } finally {
+    await context.close();
+  }
+}
+
 test("the server renders the regions and lines the page shows, and a probe after each primitive", async () => {
   const html = await (await fetch(url)).text();
 
@@ -252,6 +276,12 @@ inEveryEngine((browser) => {
       await page.getByText("A region that counts clicks on it").click();
       await expect.poll(() => line(page, "Clicks on the region")).toBe("Clicks on the region: 1");
     });
+  });
+
+  test("a browser command called in a component's body while the page hydrates does nothing, and the same command called from an effect's first run acts", async () => {
+    expect(await scrollCommandsWhileLoading(browser())).toEqual([
+      JSON.stringify([{ behavior: "smooth" }]),
+    ]);
   });
 
   test("a page that hydrates scrolled past fixedAt calls no headroom callback, and one that hydrates at the top calls onPin and onFix", async () => {

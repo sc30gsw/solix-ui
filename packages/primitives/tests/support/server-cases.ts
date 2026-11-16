@@ -271,6 +271,6 @@ export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = {
     create: (createWindowScroll) => createWindowScroll(),
     read: ([position]) => position(),
     expected: { x: 0, y: 0 },
-    browserCommands: ([, scrollTo]) => scrollTo({ y: 10 }),
+    browserCommands: ([, scrollTo]) => scrollTo({}),
   }),
 };
