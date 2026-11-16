@@ -60,6 +60,13 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     polymorphic: false,
     props: { label: "Label", opened: false, children: "Content" },
   },
+  Space: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    props: {},
+  },
   TextInput: {
     tag: "input",
     booleanAttribute: "disabled",

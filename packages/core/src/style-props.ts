@@ -2,16 +2,21 @@ import type { JSX } from "@solidjs/web";
 import {
   baseKey,
   type Breakpoint,
+  breakpoints,
   canonicalOf,
   type PropertyRow,
   type ResponsiveKey,
-  responsiveKeys,
   type RowOf,
   type Scale,
   stylePropClass,
   type StylePropName,
   stylePropNames,
   stylePropTable,
+  variableClass,
+  type VariableName,
+  variableNames,
+  variableRow,
+  type VariableRowOf,
   visibilityClass,
   type VisibilityPropName,
   visibilityPropNames,
@@ -33,25 +38,39 @@ type ValueOf<Row> = Row extends PropertyRow
 
 export type StyleProp<V> = V | Absent | { [Key in ResponsiveKey]?: V | Absent };
 
+export type Variables = {
+  [Name in VariableName]?: VariableRowOf<Name>["responsive"] extends true
+    ? StyleProp<string | number>
+    : string | number | Absent;
+};
+
 export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
 } & { [Name in VisibilityPropName]?: Breakpoint | Absent };
 
-type ResolvedStyleProps = {
+export type ResolvedStyleProps = {
   classes: string[];
   properties: Record<`--${string}`, string>;
 };
 
-function responsiveEntries(value: StyleProp<string | number>): [ResponsiveKey, string | number][] {
+function keyedEntries<Key extends string>(
+  value: StyleProp<string | number>,
+  keys: readonly Key[],
+): [typeof baseKey | Key, string | number][] {
   if (value === undefined || value === null) return [];
   if (typeof value !== "object") return [[baseKey, value]];
-  return responsiveKeys.flatMap((key): [ResponsiveKey, string | number][] => {
-    const written = value[key];
+  const keyed: Partial<Record<string, string | number | Absent>> = value;
+  const every: (typeof baseKey | Key)[] = [baseKey, ...keys];
+  return every.flatMap((key): [typeof baseKey | Key, string | number][] => {
+    const written = keyed[key];
     return written === undefined || written === null ? [] : [[key, written]];
   });
 }
 
-function cssValue(row: PropertyRow, written: string | number): string | undefined {
+function cssValue(
+  row: Pick<PropertyRow, "kind" | "scale">,
+  written: string | number,
+): string | undefined {
   if (typeof written === "number") {
     return row.kind === "length" ? `${written / pixelsPerRem}rem` : String(written);
   }
@@ -90,7 +109,7 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
   const properties: Record<`--${string}`, string> = {};
   for (const name of stylePropNames) {
     const canonical = canonicalOf(name);
-    for (const [key, written] of responsiveEntries(props[name])) {
+    for (const [key, written] of keyedEntries(props[name], breakpoints)) {
       const value = cssValue(stylePropTable[canonical], written);
       if (value === undefined) continue;
       const className = stylePropClass(canonical, key);
@@ -105,4 +124,30 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
     }
   }
   return { classes: [...classes], properties };
+}
+
+function placed(
+  name: VariableName,
+  value: StyleProp<string | number>,
+): [className: string, written: string | number][] {
+  const keys = variableRow(name).responsive ? breakpoints : [];
+  return keyedEntries(value, keys).map(([key, written]) => [variableClass(name, key), written]);
+}
+
+/**
+ * The classes and custom properties that give a component's root the values of its own
+ * variables, a keyed value from each breakpoint it names.
+ */
+export function variables(given: Variables): ResolvedStyleProps {
+  const classes: string[] = [];
+  const properties: Record<`--${string}`, string> = {};
+  for (const name of variableNames) {
+    for (const [className, written] of placed(name, given[name])) {
+      const value = cssValue(variableRow(name), written);
+      if (value === undefined) continue;
+      classes.push(className);
+      properties[`--${className}`] = value;
+    }
+  }
+  return { classes, properties };
 }

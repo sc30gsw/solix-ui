@@ -19,6 +19,7 @@ const mdWidth = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 
 const style = (locator, property) =>
   locator.evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
+const elementAfter = (page, text) => page.getByText(text, { exact: true }).locator("xpath=following-sibling::*[1]");
 
 const journeys = {
   "button-default": async ({ page, observe, shot, expected }) => {
@@ -247,6 +248,20 @@ const journeys = {
     observe("open: content is visible", await content.isVisible(), true);
     observe("open: styles.summary still beats the library's open background", await style(summary, "background-color"), expected("partBackground"));
     observe("open: styles.summary still beats the library's open text colour", await style(summary, "color"), expected("partText"));
+  },
+  space: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Space" });
+    await page.setViewportSize({ width: mdWidth - 1, height: 360 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Space.`, section);
+    observe("below md: the space between Above the space and Below the space is at least its h, md", await style(elementAfter(page, "Above the space"), "min-height"), expected("--solix-spacing-md"));
+    observe("the space between Before the space and After the space keeps its w, lg, as its minimum width in a flex row", await style(elementAfter(page, "Before the space"), "min-width"), expected("--solix-spacing-lg"));
+    observe("the pinned space takes its mih, xs, as its minimum height instead of its h", await style(elementAfter(page, "Above the pinned space"), "min-height"), expected("--solix-spacing-xs"));
+
+    await page.setViewportSize({ width: mdWidth, height: 360 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The first space grows.`, section);
+    observe("at md: the space between Above the space and Below the space is at least its h, xl", await style(elementAfter(page, "Above the space"), "min-height"), expected("--solix-spacing-xl"));
   },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();

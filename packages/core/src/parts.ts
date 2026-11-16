@@ -3,7 +3,13 @@ import { createMemo, merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
 import { stableClass } from "./stable-class";
 import { stylePropKeys } from "./style-prop-table";
-import { presentStyle, resolveStyleProps, type StyleProps, withConsumerStyle } from "./style-props";
+import {
+  presentStyle,
+  type ResolvedStyleProps,
+  resolveStyleProps,
+  type StyleProps,
+  withConsumerStyle,
+} from "./style-props";
 
 export const rootPart = "root";
 
@@ -75,6 +81,10 @@ type RootProps<Props, KeptOffRoot extends keyof Props> = Omit<Props, HandledKey 
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
+type OwnVariables = () => ResolvedStyleProps;
+
+const noVariables: ResolvedStyleProps = { classes: [], properties: {} };
+
 export function createParts<
   Styles extends Compiled,
   Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
@@ -83,13 +93,18 @@ export function createParts<
   component: string,
   compiled: Styles,
   props: Props,
-  ...keptOffRoot: KeptOffRoot[]
+  ...keptOffRoot: (KeptOffRoot | OwnVariables)[]
 ): {
   root: RootProps<Props, KeptOffRoot>;
   part: (name: OtherPart<Styles>) => Part;
 } {
-  const rest = omit(props, ...keptOffRoot);
+  const rest = omit(
+    props,
+    ...keptOffRoot.filter((key): key is KeptOffRoot => typeof key !== "function"),
+  );
+  const own = keptOffRoot.find((given): given is OwnVariables => typeof given === "function");
   const resolved = createMemo(() => resolveStyleProps(rest));
+  const variables = createMemo(() => own?.() ?? noVariables);
   const wrapsAComponent = () => typeof props.component === "function";
   const stylesApi = omit(rest, (key) => !isStylesApiPropKey(key));
   const partClass = (name: keyof Styles & string): JSX.ClassValue => [
@@ -104,10 +119,13 @@ export function createParts<
     () => (wrapsAComponent() ? stylesApi : {}),
     {
       get class() {
-        return [partClass(rootPart), resolved().classes, props.class];
+        return [partClass(rootPart), variables().classes, resolved().classes, props.class];
       },
       get style() {
-        return withConsumerStyle({ ...resolved().properties, ...ownStyle(rootPart) }, props.style);
+        return withConsumerStyle(
+          { ...variables().properties, ...resolved().properties, ...ownStyle(rootPart) },
+          props.style,
+        );
       },
     },
   ) as RootProps<Props, KeptOffRoot>;

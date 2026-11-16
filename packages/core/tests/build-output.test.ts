@@ -8,13 +8,29 @@ import {
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
 import {
+  breakpoints,
   canonicalStylePropNames,
+  childRuleLayer,
+  responsiveKeys,
   stylePropClassPrefix,
   stylePropNames,
+  variableClass,
+  variableGroups,
+  variableNames,
+  variableProperty,
+  variableRow,
+  variablesOf,
+  visibilityClass,
+  visibilityPropNames,
 } from "../src/style-prop-table";
 import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
 import { parse, ts } from "../../../scripts/syntax";
-import { enclosingAtRules, inStylePropLayer, nestedLayerOrder } from "./cascade-layers";
+import {
+  enclosingAtRules,
+  inChildRuleLayer,
+  inStylePropLayer,
+  nestedLayerOrder,
+} from "./cascade-layers";
 
 const stylesheet = builtStylesheet.trim();
 const ownerBreakpoints: [name: string, width: string][] = [
@@ -52,6 +68,7 @@ type PlacedRule = {
   media: string | undefined;
   declarations: string[];
   inStylePropLayer: boolean;
+  inChildRuleLayer: boolean;
 };
 
 function libraryLayer(): postcss.AtRule {
@@ -80,6 +97,7 @@ function placedRules(): PlacedRule[] {
         node.type === "decl" ? [`${node.prop}:${node.value}`] : [],
       ),
       inStylePropLayer: inStylePropLayer(rule),
+      inChildRuleLayer: inChildRuleLayer(rule),
     });
   });
   return placed;
@@ -117,11 +135,16 @@ function setsEverythingAndMore(shorthand: string, longhand: string): boolean {
   return covered.length > inner.length && inner.every((side) => covered.includes(side));
 }
 
-function stylePropLayerRules(): { inside: PlacedRule[]; outside: PlacedRule[] } {
+function stylePropLayerRules(): {
+  inside: PlacedRule[];
+  outside: PlacedRule[];
+  childRules: PlacedRule[];
+} {
   const placed = placedRules();
   return {
-    inside: placed.filter(({ inStylePropLayer }) => inStylePropLayer),
-    outside: placed.filter(({ inStylePropLayer }) => !inStylePropLayer),
+    inside: placed.filter((rule) => rule.inStylePropLayer && !rule.inChildRuleLayer),
+    outside: placed.filter((rule) => !rule.inStylePropLayer),
+    childRules: placed.filter((rule) => rule.inChildRuleLayer),
   };
 }
 
@@ -223,7 +246,9 @@ test("the style-prop layer holds the style-prop classes and the registrations of
   expect(
     atRulesInside.filter(
       (rule) =>
-        !rule.startsWith("@media ") && !rule.startsWith(`@property ${stylePropCustomProperty}`),
+        !rule.startsWith("@media ") &&
+        !rule.startsWith(`@property ${stylePropCustomProperty}`) &&
+        rule !== `@layer ${childRuleLayer}`,
     ),
   ).toEqual([]);
 });
@@ -412,4 +437,98 @@ test("hiddenFrom and visibleFrom hide the element from, or below, each breakpoin
   });
 
   expect(violations).toEqual([]);
+});
+
+test("every variable is named apart from every other variable and every style-prop class, so its class and custom property are its own", () => {
+  const stylePropClasses = [
+    ...canonicalStylePropNames.flatMap((name) => [
+      `${LIBRARY_CLASS_PREFIX}-${name}`,
+      ...breakpoints.map((breakpoint) => `${LIBRARY_CLASS_PREFIX}-${name}-${breakpoint}`),
+    ]),
+    ...visibilityPropNames.flatMap((name) =>
+      breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
+    ),
+  ];
+  const variableClasses = variableNames.flatMap((name) =>
+    responsiveKeys.map((key) => variableClass(name, key)),
+  );
+
+  expect(variableNames.length).toBeGreaterThan(0);
+  expect(variableGroups.flatMap(variablesOf)).toHaveLength(variableNames.length);
+  expect(variableClasses.filter((found) => stylePropClasses.includes(found))).toEqual([]);
+});
+
+test("each variable sets its property from its own custom property, at its base and, when it is responsive, then at each breakpoint in ascending order", () => {
+  const { inside } = stylePropLayerRules();
+  const violations = variableNames.flatMap((name) => {
+    const keys = variableRow(name).responsive ? ownerBreakpoints : [];
+    const expected = [
+      { selector: `.${variableClass(name, "base")}`, media: undefined },
+      ...keys.map(([breakpoint, width]) => ({
+        selector: `${stylePropClass}${name}-${breakpoint}`,
+        media: `(min-width: ${width})`,
+      })),
+    ];
+    const found = inside.filter(({ selector }) =>
+      responsiveKeys.some((key) => selector === `.${variableClass(name, key)}`),
+    );
+    const written = found.map(
+      ({ selector, media }) => `${selector} in ${media ?? "no media query"}`,
+    );
+    const wanted = expected.map(
+      ({ selector, media }) => `${selector} in ${media ?? "no media query"}`,
+    );
+    const reads = found.filter(
+      ({ selector, declarations }) =>
+        JSON.stringify(declarations) !==
+        JSON.stringify([`${variableProperty(name)}:var(--${selector.slice(1)})`]),
+    );
+    return [
+      ...(JSON.stringify(written) === JSON.stringify(wanted)
+        ? []
+        : [
+            `packages/core/src/style-prop-table.ts: emit ${wanted.join(", ")} for ${name}, not ${written.join(", ")}.`,
+          ]),
+      ...reads.map(
+        ({ selector, declarations }) =>
+          `${selector} declares ${declarations.join("; ")}; make it set ${variableProperty(name)} to var(--${selector.slice(1)}).`,
+      ),
+    ];
+  });
+
+  expect(violations).toEqual([]);
+});
+
+test("the child rules sit in a layer nested in the style-prop layer, before its own rules, so a style prop on a child beats them, and each styles only the children of an element that carries a variable's class", () => {
+  const order = nestedLayerOrder(
+    (() => {
+      let found: postcss.AtRule | undefined;
+      libraryLayer().walkAtRules("layer", (rule) => {
+        if (rule.params === STYLE_PROP_LAYER) found = rule;
+      });
+      if (!found)
+        throw new Error(`packages/core/dist/styles.css: emit @layer ${STYLE_PROP_LAYER}.`);
+      return found;
+    })(),
+  );
+  const { childRules } = stylePropLayerRules();
+  const variableClasses = variableNames.map((name) => `.${variableClass(name, "base")}`);
+
+  expect(order).toEqual([childRuleLayer]);
+  expect(
+    childRules.filter(
+      ({ selector }) =>
+        !variableClasses.some((variable) => selector.startsWith(variable)) || !/ > /.test(selector),
+    ),
+  ).toEqual([]);
+});
+
+test("every variable that sets a custom property of its own is read by a component's compiled styles or by a child rule", () => {
+  const { outside, childRules } = stylePropLayerRules();
+  const readers = [...outside, ...childRules].flatMap(({ declarations }) => declarations);
+  const unread = variableNames
+    .filter((name) => variableRow(name).property === undefined)
+    .filter((name) => !readers.some((declaration) => declaration.includes(`var(--${name})`)));
+
+  expect(unread).toEqual([]);
 });

@@ -1,7 +1,12 @@
 import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
+import {
+  stylePropKeys,
+  stylePropTable,
+  variableNames,
+  variableRow,
+} from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
 import { descendants, exportsOf, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
 import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
@@ -13,6 +18,8 @@ const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
+const variablesHelper = "variables";
+const variablesModule = "./style-props";
 const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
 const partsImport = "./parts";
@@ -503,10 +510,11 @@ test("the barrel exports every component and its props type once, in alphabetica
   }
 });
 
-test("every public token is named --solix-*, is used by a component or a style-prop scale, and is defined once", () => {
-  const scalesOfStyleProps = Object.values(stylePropTable).flatMap((row) =>
-    "scale" in row ? [row.scale] : [],
-  );
+test("every public token is named --solix-*, is used by a component or the scale of a style prop or a variable, and is defined once", () => {
+  const scalesOfStyleProps = [
+    ...Object.values(stylePropTable),
+    ...variableNames.map(variableRow),
+  ].flatMap((row) => ("scale" in row && row.scale !== undefined ? [row.scale] : []));
   for (const { source } of libraries) {
     const tokensFile = relativePath(join(source, "tokens.stylex.ts"));
     const defined = Object.keys(tokenValues(tokensFile));
@@ -528,7 +536,7 @@ test("every public token is named --solix-*, is used by a component or a style-p
     ).toEqual([]);
     expect(
       defined.filter((name) => !used.includes(name)),
-      `tokens in ${tokensFile} that no component uses and no style-prop scale covers`,
+      `tokens in ${tokensFile} that no component uses and no scale of a style prop or a variable covers`,
     ).toEqual([]);
     expect(
       used.filter((name) => !defined.includes(name)),
@@ -659,4 +667,45 @@ test("no array or object in a test file lists the components by hand, unless the
   expect(names.length).toBeGreaterThan(0);
   expect(testFiles.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
+});
+
+function localNameOf(source: ts.SourceFile, module: string, exported: string): string | undefined {
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== module
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) return `${bindings.name.text}.${exported}`;
+    const element =
+      bindings && ts.isNamedImports(bindings)
+        ? bindings.elements.find((found) => (found.propertyName ?? found.name).text === exported)
+        : undefined;
+    if (element) return element.name.text;
+  }
+  return undefined;
+}
+
+function variablesGivenIn(source: ts.SourceFile): string[] {
+  const callee = localNameOf(source, variablesModule, variablesHelper);
+  if (callee === undefined) return [];
+  return callsOf(source, callee).flatMap((call) => {
+    const [given] = call.arguments;
+    return given && ts.isObjectLiteralExpression(given)
+      ? given.properties.flatMap((property) => staticPropertyName(property) ?? [])
+      : [];
+  });
+}
+
+test("every variable in the table is given by a component, as a key of the object it passes to variables from style-props.ts", () => {
+  const given = components.flatMap(({ source }) => variablesGivenIn(source));
+
+  expect(variableNames.length).toBeGreaterThan(0);
+  expect(
+    variableNames.filter((name) => !given.includes(name)),
+    `variables in ${stylePropTableFile} that no component gives`,
+  ).toEqual([]);
 });

@@ -6,7 +6,17 @@ import { expect, expectTypeOf, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
 import type { PolymorphicProps } from "../src/parts";
-import { canonicalOf, type DisplayPropName, displayPropNames } from "../src/style-prop-table";
+import {
+  breakpoints,
+  canonicalOf,
+  canonicalStylePropNames,
+  type DisplayPropName,
+  displayPropNames,
+  responsiveKeys,
+  stylePropClass,
+  visibilityClass,
+  visibilityPropNames,
+} from "../src/style-prop-table";
 import {
   classTokens,
   declarationsByPart,
@@ -58,6 +68,15 @@ const compiled: Record<string, Record<string, string[]>> = Object.fromEntries(
 );
 
 type TestStyles = { root: object };
+
+const stylePropClasses = new Set([
+  ...canonicalStylePropNames.flatMap((name) =>
+    responsiveKeys.map((key) => stylePropClass(name, key)),
+  ),
+  ...visibilityPropNames.flatMap((name) =>
+    breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
+  ),
+]);
 
 function partsOf(name: string): string[] {
   return Object.keys(compiled[name]);
@@ -290,7 +309,8 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
     (breakpoint) => breakpoint !== null && breakpoint !== undefined,
   ).length;
   const libraryClasses = classes.filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`));
-  const readByAClass = libraryClasses.filter((found) => declared.has(`--${found}`));
+  const styleClasses = libraryClasses.filter((found) => stylePropClasses.has(found));
+  const readByAClass = styleClasses.filter((found) => declared.has(`--${found}`));
 
   expect(valuesOf(root, "class")).toHaveLength(1);
   expect(classes).toContain(stableClass(name, rootPart));
@@ -304,9 +324,13 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
     "one class and one custom property for each kept value of a style prop at a breakpoint, and none for null or a value that holds ;, { or }",
   ).toBe(keptPairs.size);
   expect(
-    libraryClasses.length - readByAClass.length,
+    styleClasses.length - readByAClass.length,
     "one class and no custom property for each of hiddenFrom and visibleFrom given",
   ).toBe(visibilityGiven);
+  expect(
+    libraryClasses.filter((found) => !stylePropClasses.has(found) && !declared.has(`--${found}`)),
+    "each class of the component's own variables reads its custom property",
+  ).toEqual([]);
   expect(
     [...declared.keys()].filter(
       (property) =>

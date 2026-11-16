@@ -11,7 +11,22 @@ export type PropertyRow = {
 
 type AliasRow = { readonly aliasOf: string };
 
+type ChildRule = readonly [selector: string, declarations: string];
+
+/** A custom property, or a property, that a component sets on its root from one of its own props. */
+export type VariableRow = {
+  readonly kind: "length" | "raw";
+  readonly scale?: Scale;
+  readonly responsive: boolean;
+  readonly property?: keyof JSX.CSSProperties;
+  readonly within?: string;
+  readonly children?: readonly ChildRule[];
+};
+
 export const stylePropClassPrefix = "sx";
+export const libraryCascadeLayer = "solix";
+export const stylePropLayer = "style-props";
+export const childRuleLayer = "child-rules";
 
 export const breakpointWidths = {
   xs: "36em",
@@ -78,6 +93,13 @@ export const stylePropTable = {
   flex: { property: "flex", kind: "raw" },
 } as const satisfies Record<string, PropertyRow | AliasRow>;
 
+export const variableTable = {
+  Space: {
+    "space-min-width": { kind: "length", scale: "spacing", responsive: true },
+    "space-min-height": { kind: "length", scale: "spacing", responsive: true },
+  },
+} as const satisfies Record<string, Record<string, VariableRow>>;
+
 const visibilityTable = {
   hiddenFrom: { className: "hidden-from", query: (width: string) => `(min-width: ${width})` },
   visibleFrom: { className: "visible-from", query: (width: string) => `(width < ${width})` },
@@ -98,6 +120,14 @@ export type RowOf<Name extends StylePropName> = Rows[Name] extends {
 export type Breakpoint = keyof typeof breakpointWidths;
 export type ResponsiveKey = typeof baseKey | Breakpoint;
 export type VisibilityPropName = keyof typeof visibilityTable;
+type Groups = typeof variableTable;
+export type VariableGroup = keyof Groups;
+export type VariableName = {
+  [Group in VariableGroup]: keyof Groups[Group] & string;
+}[VariableGroup];
+export type VariableRowOf<Name extends VariableName> = {
+  [Group in VariableGroup]: Name extends keyof Groups[Group] ? Groups[Group][Name] : never;
+}[VariableGroup];
 type DisplayStylePropName = {
   [Name in StylePropName]: RowOf<Name> extends { property: "display" } ? Name : never;
 }[StylePropName];
@@ -118,11 +148,38 @@ function isVisibilityPropName(name: string): name is VisibilityPropName {
   return Object.hasOwn(visibilityTable, name);
 }
 
+function isVariableGroup(name: string): name is VariableGroup {
+  return Object.hasOwn(variableTable, name);
+}
+
+const variableRows: Record<string, VariableRow> = Object.assign(
+  {},
+  ...Object.values(variableTable),
+);
+
+function isVariableName(name: string): name is VariableName {
+  return Object.hasOwn(variableRows, name);
+}
+
 export const stylePropNames = Object.keys(stylePropTable).filter(isStylePropName);
 export const canonicalStylePropNames = stylePropNames.filter(isCanonical);
 export const breakpoints = Object.keys(breakpointWidths).filter(isBreakpoint);
 export const responsiveKeys: ResponsiveKey[] = [baseKey, ...breakpoints];
 export const visibilityPropNames = Object.keys(visibilityTable).filter(isVisibilityPropName);
+export const variableGroups = Object.keys(variableTable).filter(isVariableGroup);
+export const variableNames = Object.keys(variableRows).filter(isVariableName);
+
+export function variablesOf(group: VariableGroup): VariableName[] {
+  return Object.keys(variableTable[group]).filter(isVariableName);
+}
+
+export function variableRow(name: VariableName): VariableRow {
+  return variableRows[name];
+}
+
+export function variableProperty(name: VariableName): string {
+  return variableRow(name).property ?? `--${name}`;
+}
 
 export function canonicalOf(name: StylePropName): CanonicalStylePropName {
   if (isCanonical(name)) return name;
@@ -144,10 +201,23 @@ function shorthandDepth(name: CanonicalStylePropName): number {
   return "within" in row ? 1 + shorthandDepth(row.within) : 0;
 }
 
-export function stylePropClass(name: CanonicalStylePropName, key: ResponsiveKey): string {
+function variableDepth(name: string): number {
+  const within = variableRows[name]?.within;
+  return within === undefined ? 0 : 1 + variableDepth(within);
+}
+
+function responsiveClass(name: string, key: ResponsiveKey): string {
   return key === baseKey
     ? `${stylePropClassPrefix}-${name}`
     : `${stylePropClassPrefix}-${name}-${key}`;
+}
+
+export function stylePropClass(name: CanonicalStylePropName, key: ResponsiveKey): string {
+  return responsiveClass(name, key);
+}
+
+export function variableClass(name: VariableName, key: ResponsiveKey): string {
+  return responsiveClass(name, key);
 }
 
 export function visibilityClass(name: VisibilityPropName, breakpoint: Breakpoint): string {
@@ -158,38 +228,67 @@ function media(query: string, rules: string[]): string {
   return `@media ${query}{\n${rules.join("\n")}\n}`;
 }
 
-function registration(name: CanonicalStylePropName, key: ResponsiveKey): string {
-  return `@property --${stylePropClass(name, key)}{syntax:"*";inherits:false}`;
+function registrationRule(className: string): string {
+  return `@property --${className}{syntax:"*";inherits:false}`;
 }
 
-function reader(name: CanonicalStylePropName, key: ResponsiveKey): string {
-  const className = stylePropClass(name, key);
-  return `.${className}{${stylePropTable[name].property}:var(--${className})}`;
+function readerRule(className: string, property: string): string {
+  return `.${className}{${property}:var(--${className})}`;
 }
 
-function readersAtEveryBreakpoint(names: CanonicalStylePropName[]): string[] {
+type Reader = { name: string; property: string; responsive: boolean; depth: number };
+
+const readers: Reader[] = [
+  ...canonicalStylePropNames.map((name) => ({
+    name,
+    property: stylePropTable[name].property,
+    responsive: true,
+    depth: shorthandDepth(name),
+  })),
+  ...variableNames.map((name) => ({
+    name,
+    property: variableProperty(name),
+    responsive: variableRow(name).responsive,
+    depth: variableDepth(name),
+  })),
+];
+
+function keysOf({ responsive }: Reader): ResponsiveKey[] {
+  return responsive ? responsiveKeys : [baseKey];
+}
+
+function readersAtEveryBreakpoint(group: Reader[]): string[] {
+  const read = (key: ResponsiveKey) => (reader: Reader) =>
+    readerRule(responsiveClass(reader.name, key), reader.property);
+  const responsive = group.filter((reader) => reader.responsive);
   return [
-    ...names.map((name) => reader(name, baseKey)),
-    ...breakpoints.map((breakpoint) =>
-      media(
-        `(min-width: ${breakpointWidths[breakpoint]})`,
-        names.map((name) => reader(name, breakpoint)),
-      ),
-    ),
+    ...group.map(read(baseKey)),
+    ...(responsive.length === 0
+      ? []
+      : breakpoints.map((breakpoint) =>
+          media(`(min-width: ${breakpointWidths[breakpoint]})`, responsive.map(read(breakpoint))),
+        )),
   ];
 }
 
+function childRules(): string[] {
+  return variableNames.flatMap((name) =>
+    (variableRow(name).children ?? []).map(
+      ([selector, declarations]) =>
+        `.${responsiveClass(name, baseKey)}${selector}{${declarations}}`,
+    ),
+  );
+}
+
 export function stylePropRules(): string {
-  const depths = [...new Set(canonicalStylePropNames.map(shorthandDepth))].sort(
+  const depths = [...new Set(readers.map(({ depth }) => depth))].sort(
     (shallower, deeper) => shallower - deeper,
   );
-  const registrations = canonicalStylePropNames.flatMap((name) =>
-    responsiveKeys.map((key) => registration(name, key)),
+  const registrations = readers.flatMap((reader) =>
+    keysOf(reader).map((key) => registrationRule(responsiveClass(reader.name, key))),
   );
-  const readers = depths.flatMap((depth) =>
-    readersAtEveryBreakpoint(
-      canonicalStylePropNames.filter((name) => shorthandDepth(name) === depth),
-    ),
+  const ordered = depths.flatMap((depth) =>
+    readersAtEveryBreakpoint(readers.filter((reader) => reader.depth === depth)),
   );
   const visibility = visibilityPropNames.flatMap((name) =>
     breakpoints.map((breakpoint) =>
@@ -198,5 +297,10 @@ export function stylePropRules(): string {
       ]),
     ),
   );
-  return [...registrations, ...readers, ...visibility].join("\n");
+  return [
+    `@layer ${childRuleLayer}{\n${childRules().join("\n")}\n}`,
+    ...registrations,
+    ...ordered,
+    ...visibility,
+  ].join("\n");
 }

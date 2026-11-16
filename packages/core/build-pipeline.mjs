@@ -3,9 +3,11 @@ import syntaxJsx from "@babel/plugin-syntax-jsx";
 import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
 
-export const LIBRARY_CASCADE_LAYER = "solix";
+import { libraryCascadeLayer, stylePropLayer } from "./src/style-prop-table.ts";
+
+export const LIBRARY_CASCADE_LAYER = libraryCascadeLayer;
 export const LIBRARY_CLASS_PREFIX = "sx";
-export const STYLE_PROP_LAYER = "style-props";
+export const STYLE_PROP_LAYER = stylePropLayer;
 
 const typesStripped = [presetTypescript];
 const jsxKeptInTsx = [{ test: /\.tsx$/, plugins: [syntaxJsx] }];
