@@ -63,6 +63,67 @@ test("deep follows focus into an open shadow root, and without it the host is th
   expect(shallow()).toBe(host);
 });
 
+function shadowButtons(parent?: ParentNode): {
+  root: ShadowRoot;
+  one: HTMLButtonElement;
+  two: HTMLButtonElement;
+} {
+  const root = box("host", parent).attachShadow({ mode: "open" });
+  return { root, one: button("one", root), two: button("two", root) };
+}
+
+test("deep follows a move between two elements of one shadow root, which the document hears nothing of", async () => {
+  const { one, two } = shadowButtons();
+  const active = mount(() => createActiveElement());
+  const heardByTheDocument = record(document, "focusin", true);
+
+  one.focus();
+  await expect.poll(active, engineWait).toBe(one);
+  heardByTheDocument.length = 0;
+  two.focus();
+  await expect.poll(active, engineWait).toBe(two);
+  expect(heardByTheDocument).toEqual([]);
+});
+
+test("one Tab inside a shadow root reports the element that took focus, and not the host or the body between the two", async () => {
+  const { one, two } = shadowButtons();
+  one.focus();
+  const { seen } = mount(() => ({ seen: watch(createActiveElement()) }));
+  const arrived = record(two, "focusin");
+
+  await tab();
+  await witnessed(arrived, (events) => events.length > 0, "focus arriving on the second element");
+  await nextTask();
+  flush();
+  expect(seen).toEqual([one, two]);
+});
+
+test("deep follows a move inside a shadow root nested in another, and a move out of it into the outer one", async () => {
+  const outer = shadowButtons();
+  const inner = shadowButtons(outer.root);
+  const active = mount(() => createActiveElement());
+
+  inner.one.focus();
+  await expect.poll(active, engineWait).toBe(inner.one);
+  inner.two.focus();
+  await expect.poll(active, engineWait).toBe(inner.two);
+  outer.one.focus();
+  await expect.poll(active, engineWait).toBe(outer.one);
+});
+
+test("once the owner is disposed, a move inside a shadow root it was following is no longer followed", async () => {
+  const { one, two } = shadowButtons();
+  const active = mount(() => createActiveElement());
+  one.focus();
+  await expect.poll(active, engineWait).toBe(one);
+  const focused = record(two, "focusin");
+
+  unmount();
+  two.focus();
+  await witnessed(focused, (seen) => seen.length > 0, "the focusin");
+  expect(active()).toBe(one);
+});
+
 test("a change of deep reads the element again", async () => {
   const { host, inner } = shadowHost();
   const [deep, setDeep] = createSignal(true);

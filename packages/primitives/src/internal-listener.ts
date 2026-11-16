@@ -8,7 +8,7 @@ type EventMapOf<T> = T extends Window
       ? SVGElementEventMap
       : T extends MathMLElement
         ? MathMLElementEventMap
-        : T extends Element
+        : T extends Element | ShadowRoot
           ? HTMLElementEventMap
           : Record<string, Event>;
 
