@@ -11,6 +11,7 @@ const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { evidenceDirectory, evidenceReports, fullReportFile, recordingFile, runDirectory, summaryFile } =
   await repositoryModule("scripts/evidence-summary.mjs");
+const { stopWith } = await repositoryModule("scripts/stop-process.mjs");
 const vp = join(root, "node_modules/.bin/vp");
 const output = join(root, evidenceDirectory);
 
@@ -28,10 +29,10 @@ const journeys = [
 ];
 
 function mustPass(label, command, args) {
-  const result = spawnSync(command, args, { cwd: root, encoding: "utf8" });
+  const result = spawnSync(command, args, { cwd: root, encoding: "utf8", maxBuffer: Infinity });
   if (result.status !== 0) {
-    process.stderr.write(`${result.stdout}${result.stderr}\n${label} failed. No evidence was recorded.\n`);
-    process.exit(1);
+    const cause = result.error ? `${result.error.message}\n` : "";
+    stopWith(`${result.stdout}${result.stderr}\n${cause}${label} failed. No evidence was recorded.\n`);
   }
   return result.stdout;
 }
@@ -64,8 +65,7 @@ try {
   spawnSync(join(scripts, "cleanup.sh"), [], { cwd: root, stdio: "inherit" });
 }
 if (failed.length > 0) {
-  process.stderr.write(`Journeys failed: ${failed.join(", ")}. No evidence was recorded.\n`);
-  process.exit(1);
+  stopWith(`Journeys failed: ${failed.join(", ")}. No evidence was recorded.\n`);
 }
 
 rmSync(output, { recursive: true, force: true });

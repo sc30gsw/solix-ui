@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { repositoryRoot } from "./repository.ts";
+import { installedVp, repositoryRoot } from "./repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
 
@@ -23,7 +23,6 @@ export type RawSettings = {
   permissions?: Record<string, { skills?: string[] | boolean }>;
 };
 
-const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
 const pnpmAnswerTimeout = 30_000;
 const settingFromTheEnvironment = /^p?npm_config_/i;
 let cached: PnpmSettings | undefined;

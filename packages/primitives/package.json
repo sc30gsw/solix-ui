@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "license": "MIT",
+  "files": [
+    "dist",
+    "src"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {

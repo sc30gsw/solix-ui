@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import type { TestProject } from "vite-plus/test/node";
+import { installedVp, repositoryRoot } from "../../scripts/repository";
 import { localUrl, startServer } from "./server-process";
 
-const repositoryRoot = join(import.meta.dirname, "../..");
 const playgroundDirectory = join(repositoryRoot, "apps/playground");
 const playgroundPort = 4319;
 
@@ -21,7 +21,7 @@ function productionEnvironment(): NodeJS.ProcessEnv {
 }
 
 export async function setup(project: TestProject): Promise<() => void> {
-  execFileSync(join(repositoryRoot, "node_modules/.bin/vp"), ["run", "-r", "build"], {
+  execFileSync(installedVp, ["run", "-r", "build"], {
     cwd: repositoryRoot,
     env: productionEnvironment(),
     stdio: "inherit",
