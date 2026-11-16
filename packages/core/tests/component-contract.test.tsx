@@ -165,10 +165,8 @@ test("a component that another export carries as a static member is exported und
 
 test.each(components)(
   "%s reads each prop of its type that takes an element once in a server render of its fixture, so an element a consumer passes is created once",
-  (name, { rendersElementProp, props }) => {
-    const rendered = Object.entries(rendersElementProp)
-      .filter(([, renders]) => renders)
-      .map(([prop]) => prop);
+  (name, { elementProps, props }) => {
+    const rendered = Object.keys(elementProps);
 
     expect(Object.keys(props), "the fixture gives each such prop").toEqual(
       expect.arrayContaining(rendered),
@@ -181,10 +179,8 @@ const valuesThePlatformRendersNothingFor = [null, undefined, false, true, "", []
 
 test.each(components)(
   "%s renders a 0 given to a prop of its type that takes an element, and renders for null, undefined, false, true, an empty string and an empty list what it renders without the prop",
-  (name, { rendersElementProp, props }) => {
-    const rendered = Object.entries(rendersElementProp)
-      .filter(([, renders]) => renders)
-      .map(([prop]) => prop);
+  (name, { elementProps, props }) => {
+    const rendered = Object.keys(elementProps);
     for (const prop of rendered) {
       const without = render(name, { [prop]: undefined });
 

@@ -43,7 +43,7 @@ type Fixture<Component> = {
   booleanAttribute: string;
   takesDisplay: TakesDisplay<PropsOf<Component>>;
   polymorphic: Polymorphic<Component>;
-  rendersElementProp: Record<ElementValued<PropsOf<Component>>, boolean>;
+  elementProps: Record<ElementValued<PropsOf<Component>>, true>;
   props: PropsOf<Component>;
 };
 
@@ -55,7 +55,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "hidden",
     takesDisplay: true,
     polymorphic: true,
-    rendersElementProp: { children: true },
+    elementProps: { children: true },
     props: { children: "Content" },
   },
   Button: {
@@ -63,7 +63,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "disabled",
     takesDisplay: true,
     polymorphic: true,
-    rendersElementProp: { children: true },
+    elementProps: { children: true },
     props: { children: "Label" },
   },
   Disclosure: {
@@ -71,7 +71,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "open",
     takesDisplay: true,
     polymorphic: false,
-    rendersElementProp: { children: true },
+    elementProps: { children: true },
     props: { label: "Label", children: "Content" },
   },
   Modal: {
@@ -79,7 +79,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "hidden",
     takesDisplay: false,
     polymorphic: false,
-    rendersElementProp: { children: true },
+    elementProps: { children: true },
     props: { label: "Label", opened: false, children: "Content" },
   },
   Tabs: {
@@ -87,7 +87,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "hidden",
     takesDisplay: true,
     polymorphic: false,
-    rendersElementProp: { children: true },
+    elementProps: { children: true },
     props: { children: "Content" },
   },
   TabsList: {
@@ -95,7 +95,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "hidden",
     takesDisplay: true,
     polymorphic: false,
-    rendersElementProp: { children: true },
+    elementProps: { children: true },
     props: { children: "Content" },
   },
   TabsPanel: {
@@ -103,7 +103,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "inert",
     takesDisplay: true,
     polymorphic: false,
-    rendersElementProp: { children: true },
+    elementProps: { children: true },
     props: { value: "first", children: "Content" },
   },
   TabsTab: {
@@ -111,7 +111,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "disabled",
     takesDisplay: true,
     polymorphic: false,
-    rendersElementProp: { children: true, leftSection: true, rightSection: true },
+    elementProps: { children: true, leftSection: true, rightSection: true },
     props: { value: "first", leftSection: "Left", rightSection: "Right", children: "Label" },
   },
   TextInput: {
@@ -119,7 +119,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "disabled",
     takesDisplay: true,
     polymorphic: false,
-    rendersElementProp: { children: false },
+    elementProps: {},
     props: {},
   },
 };
