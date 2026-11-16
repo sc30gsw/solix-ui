@@ -45,7 +45,7 @@ function fixesItsOwnSettings(library: Library, node: ts.Node): boolean {
 }
 
 export const listenerRolesRule = forbidOutside({
-  description: `only ${listenerModule} refers to listen or to the DOM's addEventListener and removeEventListener, however the member is named, and outside it no call of listenerSettings leaves its options out or writes them as a literal`,
+  description: `only ${listenerModule} refers to listen or to the DOM's addEventListener and removeEventListener, by any spelling refersToDomMember resolves, and outside it no call of listenerSettings leaves its options out or writes them as a literal`,
   home: { file: listenerModule },
   find: (library, node) => {
     if (isValueReference(node) && refersTo(library, node, rawListen)) return true;
@@ -85,7 +85,7 @@ function writesAHandlerByName(library: Library, node: ts.Node): boolean {
 
 export const eventHandlerPropertiesRule = forbidOutside({
   description:
-    "no source refers to an on<event> handler property of the DOM, however the member is named, or writes one by name through Reflect.set, defineProperty or Object.assign",
+    "no source refers to an on<event> handler property of the DOM, by any spelling refersToDomMember resolves, or writes one by name through Reflect.set, defineProperty or Object.assign",
   find: (library, node) =>
     refersToDomMember(library, node, isEventHandler) || writesAHandlerByName(library, node),
   advice: `an on<event> property holds one handler that any other code replaces, and the leak check cannot see it. Listen through ${listenerModule}.`,
