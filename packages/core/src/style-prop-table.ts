@@ -1,6 +1,6 @@
 import type { JSX } from "@solidjs/web";
 
-export type Scale = "spacing" | "font-size" | "line-height" | "radius" | "color";
+export type Scale = "spacing" | "font-size" | "line-height" | "radius" | "color" | "container-size";
 
 export type PropertyRow = {
   readonly property: keyof JSX.CSSProperties;
@@ -94,6 +94,21 @@ export const stylePropTable = {
 } as const satisfies Record<string, PropertyRow | AliasRow>;
 
 export const variableTable = {
+  Container: {
+    "container-size": {
+      kind: "length",
+      scale: "container-size",
+      responsive: false,
+      children: [
+        ['[data-strategy="grid"] > *', "grid-column:2"],
+        ['[data-strategy="grid"] > [data-breakout]', "grid-column:1/-1"],
+        [
+          '[data-strategy="grid"] > [data-breakout] > [data-container]',
+          "max-width:var(--container-size);margin-inline:auto",
+        ],
+      ],
+    },
+  },
   Flex: {
     "flex-align": { kind: "raw", responsive: true, property: "align-items" },
     "flex-column-gap": {

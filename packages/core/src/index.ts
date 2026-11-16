@@ -1,6 +1,7 @@
 export { Box, type BoxProps } from "./Box";
 export { Button, type ButtonProps } from "./Button";
 export { Center, type CenterProps } from "./Center";
+export { Container, type ContainerProps } from "./Container";
 export { Disclosure, type DisclosureProps } from "./Disclosure";
 export { Flex, type FlexProps } from "./Flex";
 export { Group, type GroupProps } from "./Group";

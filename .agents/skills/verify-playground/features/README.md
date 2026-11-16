@@ -42,4 +42,5 @@ Each feature file starts with an H1 title and one paragraph describing what the 
 - [Stack](./stack.md) covers a column of children with the default gap, and a gap and alignment the consumer gives.
 - [Group](./group.md) covers a wrapping row of children with the default gap, children that grow into equal shares, and a child that takes more than its share when `preventGrowOverflow` is false.
 - [Flex](./flex.md) covers each flexbox prop, a responsive direction and gap that switch at md, `rowGap` beating `gap`, and a `Flex` rendered as a list.
+- [Container](./container.md) covers the default and a named maximum width, a fluid container, and the grid strategy's middle column with a child that breaks out of it.
 - [Server render](./server-render.md) covers the page arriving rendered and styled before any script runs, and the disclosure working with scripts off.

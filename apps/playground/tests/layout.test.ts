@@ -37,6 +37,17 @@ function widthOf(element: Locator): Promise<number> {
   return element.evaluate((node) => node.getBoundingClientRect().width);
 }
 
+async function horizontallyCentredIn(outer: Locator, inner: Locator): Promise<boolean> {
+  return outer.evaluate(
+    (parent, child) => {
+      const around = parent.getBoundingClientRect();
+      const within = child.getBoundingClientRect();
+      return Math.abs(within.left - around.left - (around.right - within.right)) <= 1;
+    },
+    await inner.elementHandle(),
+  );
+}
+
 async function centredIn(outer: Locator, inner: Locator): Promise<boolean> {
   return outer.evaluate(
     (parent, child) => {
@@ -149,6 +160,41 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
       expect(await computed(flex, "flex-wrap")).toBe("wrap");
       expect(await computed(list, "display")).toBe("flex");
       expect(await computed(list, "column-gap")).toBe(expected("--solix-spacing-lg"));
+    },
+  ],
+  [
+    "a Container centres its content up to its size, takes the whole width when fluid, and with the grid strategy puts its children in a middle column that a breakout child leaves",
+    async ({ page, expected }) => {
+      const container = (text: string) => page.getByText(text, { exact: true }).locator("xpath=..");
+      const plain = container("Inside the default container");
+      const grid = container("In the middle column of the grid container");
+      const breakout = container("Breaks out of the grid container");
+      const back = container("Back to the width of the grid container");
+
+      expect(await computed(plain, "max-width")).toBe(expected("--solix-container-size-md"));
+      expect(await computed(plain, "padding-left")).toBe(expected("--solix-spacing-md"));
+      expect(await horizontallyCentredIn(plain.locator("xpath=.."), plain)).toBe(true);
+      expect(await plain.getAttribute("data-strategy")).toBe("block");
+      expect(await computed(container("Inside the extra small container"), "max-width")).toBe(
+        expected("--solix-container-size-xs"),
+      );
+      expect(await computed(container("Inside the fluid container"), "max-width")).toBe("100%");
+      expect(await container("Inside the fluid container").getAttribute("data-fluid")).toBe("true");
+      expect(await computed(grid, "display")).toBe("grid");
+      expect(await computed(grid, "max-width")).toBe("none");
+      expect(
+        Math.abs(
+          (await widthOf(page.getByText("In the middle column of the grid container"))) -
+            (await widthOf(back)),
+        ),
+        "a child of the grid takes the middle column, as wide as the size",
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs((await widthOf(breakout)) - (await widthOf(grid))),
+        "a breakout child spans the whole grid",
+      ).toBeLessThanOrEqual(1);
+      expect(await computed(back, "max-width")).toBe(expected("--solix-container-size-xs"));
+      expect(await horizontallyCentredIn(grid, back)).toBe(true);
     },
   ],
 ];

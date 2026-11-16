@@ -30,6 +30,7 @@ const journeys = [
   ["stack", "A Stack lays its children out in a column"],
   ["group", "A Group lays its children out in a row, and grows them into equal shares"],
   ["flex", "A Flex sets the flexbox properties it is given, responsive ones at md"],
+  ["container", "A Container limits its width, or not when fluid, and lays out a breakout grid"],
   ["server-render", "The page is server-rendered and styled without JavaScript"],
 ];
 

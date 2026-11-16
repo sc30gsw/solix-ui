@@ -1,6 +1,13 @@
 import { expect, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
-import type { CenterProps, FlexProps, GroupProps, SpaceProps, StackProps } from "../src/index";
+import type {
+  CenterProps,
+  ContainerProps,
+  FlexProps,
+  GroupProps,
+  SpaceProps,
+  StackProps,
+} from "../src/index";
 import { render } from "./fixtures";
 import {
   classesOf,
@@ -263,4 +270,64 @@ const flexCases: [what: string, props: FlexProps<"div" | "section">, expected: R
 test.each(flexCases)("Flex: %s", (_, props, expected) => {
   expect(libraryOf("Flex", props)).toEqual(expected);
   expect(rootElementOf(render("Flex", props)).tag).toBe(props.component ?? "div");
+});
+
+const containerCases: [
+  what: string,
+  props: ContainerProps,
+  expected: Rendered & { strategy: string; fluid: (string | true)[] },
+][] = [
+  [
+    "is the md size with the block strategy by default",
+    {},
+    {
+      classes: ["sx-container-size"],
+      style: { "--sx-container-size": "var(--solix-container-size-md)" },
+      strategy: "block",
+      fluid: [],
+    },
+  ],
+  [
+    "takes a size from the scale, a number of pixels or any length",
+    { size: 640 },
+    {
+      classes: ["sx-container-size"],
+      style: { "--sx-container-size": "40rem" },
+      strategy: "block",
+      fluid: [],
+    },
+  ],
+  [
+    "ignores size when fluid, and marks itself",
+    { fluid: true, size: "xs" },
+    {
+      classes: ["sx-container-size"],
+      style: { "--sx-container-size": "var(--solix-container-size-md)" },
+      strategy: "block",
+      fluid: ["true"],
+    },
+  ],
+  [
+    "names the grid strategy",
+    { strategy: "grid", size: "lg" },
+    {
+      classes: ["sx-container-size"],
+      style: { "--sx-container-size": "var(--solix-container-size-lg)" },
+      strategy: "grid",
+      fluid: [],
+    },
+  ],
+  [
+    "with unstyled sets no size, so no child rule lays out its children",
+    { strategy: "grid", unstyled: true },
+    { classes: [], style: {}, strategy: "grid", fluid: [] },
+  ],
+];
+
+test.each(containerCases)("Container: %s", (_, props, { strategy, fluid, ...expected }) => {
+  const root = rootElementOf(render("Container", props));
+
+  expect(libraryOf("Container", props)).toEqual(expected);
+  expect(valuesOf(root, "data-strategy")).toEqual([strategy]);
+  expect(valuesOf(root, "data-fluid")).toEqual(fluid);
 });

@@ -347,6 +347,26 @@ const journeys = {
     observe("at md: the gap between columns is xl", await style(flex, "column-gap"), expected("--solix-spacing-xl"));
     observe("at md: the gap between rows is still rowGap, sm", await style(flex, "row-gap"), expected("--solix-spacing-sm"));
   },
+  container: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Container" });
+    const container = (text) => page.getByText(text, { exact: true }).locator("xpath=..");
+    const plain = container("Inside the default container");
+    const grid = container("In the middle column of the grid container");
+    const breakout = container("Breaks out of the grid container");
+    const back = container("Back to the width of the grid container");
+    const middle = page.getByText("In the middle column of the grid container", { exact: true });
+    await section.scrollIntoViewIfNeeded();
+    await shot("container", "Open the page and scroll to the section named Container.", section);
+    observe("the default container is at most the md container size wide", await style(plain, "max-width"), expected("--solix-container-size-md"));
+    observe("the default container pads its sides by md", await style(plain, "padding-left"), expected("--solix-spacing-md"));
+    observe("the default container carries data-strategy=block", await plain.getAttribute("data-strategy"), "block");
+    observe("the extra small container is at most the xs container size wide", await style(container("Inside the extra small container"), "max-width"), expected("--solix-container-size-xs"));
+    observe("the fluid container takes the whole width", await style(container("Inside the fluid container"), "max-width"), "100%");
+    observe("the grid container is a grid with no maximum width", `${await style(grid, "display")} ${await style(grid, "max-width")}`, "grid none");
+    observe("a child of the grid container is as wide as its size, the middle column", Math.abs((await widthOf(middle)) - (await widthOf(back))) <= 1, true);
+    observe("the breakout child spans the whole grid container", Math.abs((await widthOf(breakout)) - (await widthOf(grid))) <= 1, true);
+    observe("the data-container inside the breakout is at most the xs container size wide", await style(back, "max-width"), expected("--solix-container-size-xs"));
+  },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();
     writeFileSync(join(directory, "response.html"), html);

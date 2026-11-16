@@ -208,7 +208,7 @@ test.each(builtComponents)(
 );
 
 test.each(builtComponents)(
-  "%s puts the declarations styles names for a part in exactly that part's style, leaves out an undefined or null one, and puts the consumer's style after styles.root, where an undefined or null one replaces nothing",
+  "%s puts the declarations styles names for a part in exactly that part's style, beside the custom property of each of its own variables, leaves out an undefined or null one, and puts the consumer's style after styles.root, where an undefined or null one replaces nothing",
   (name) => {
     fc.assert(
       fc.property(
@@ -233,9 +233,17 @@ test.each(builtComponents)(
               ...presentDeclarations((part === undefined ? undefined : byPart[part]) ?? []),
               ...(part === rootPart ? declaredBy(consumerStyle) : []),
             ];
+            const ownVariables = classesOf(element)
+              .filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`))
+              .filter((found) => !stylePropClasses.has(found))
+              .map((found) => `--${found}`);
             expect(valuesOf(element, "style").length).toBeLessThanOrEqual(1);
             expect(
-              Object.fromEntries(declarationsIn(valuesOf(element, "style")[0])),
+              Object.fromEntries(
+                declarationsIn(valuesOf(element, "style")[0]).filter(
+                  ([property]) => !ownVariables.includes(property),
+                ),
+              ),
               part === undefined
                 ? `<${element.tag}>, which is no part, has no style`
                 : `the ${part} part's style holds styles.${part} without its undefined and null values${part === rootPart ? ", and then the consumer's style without its undefined and null values, which wins" : ""}`,

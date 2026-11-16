@@ -1,6 +1,7 @@
 import { BoxSection } from "./sections/BoxSection";
 import { ButtonSection } from "./sections/ButtonSection";
 import { CenterSection } from "./sections/CenterSection";
+import { ContainerSection } from "./sections/ContainerSection";
 import { ChangingPropsSection } from "./sections/ChangingPropsSection";
 import { DisclosureSection } from "./sections/DisclosureSection";
 import { FlexSection } from "./sections/FlexSection";
@@ -30,6 +31,7 @@ export default function App() {
       <StackSection />
       <GroupSection />
       <FlexSection />
+      <ContainerSection />
       <PrimitivesSection />
     </main>
   );

@@ -53,6 +53,13 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     polymorphic: true,
     props: { children: "Content" },
   },
+  Container: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    props: { children: "Content" },
+  },
   Disclosure: {
     tag: "details",
     booleanAttribute: "open",

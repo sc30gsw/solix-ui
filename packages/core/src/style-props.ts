@@ -38,8 +38,10 @@ type ValueOf<Row> = Row extends PropertyRow
 
 export type StyleProp<V> = V | Absent | { [Key in ResponsiveKey]?: V | Absent };
 
-/** A key of the spacing scale, a number of pixels written in rem, or any CSS length. */
-export type Spacing = ScaleKey<"spacing"> | number | (string & {});
+/** A key of a token scale, a number of pixels written in rem, or any CSS length. */
+export type ScaleValue<Of extends Scale> = ScaleKey<Of> | number | (string & {});
+
+export type Spacing = ScaleValue<"spacing">;
 
 export type Variables = {
   [Name in VariableName]?: VariableRowOf<Name>["responsive"] extends true
