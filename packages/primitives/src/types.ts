@@ -7,6 +7,17 @@ import type { Accessor } from "solid-js";
  */
 export type MaybeAccessor<T> = T | Accessor<T>;
 
+declare const browserValue: unique symbol;
+
+/**
+ * An accessor of a value only the browser knows, such as whether a media query matches or the size
+ * of an element. On the server, and while the page hydrates, it reads its loading value, so the
+ * markup the server sent and the hydrated page agree. It reads the browser's value from the first
+ * flush after hydration, and at once on a page that the browser renders alone. The brand is a type
+ * only, so a plain accessor is not a `BrowserValue`.
+ */
+export type BrowserValue<T> = Accessor<T> & { readonly [browserValue]: T };
+
 /**
  * An argument read once, untracked, when the primitive is created. Its name starts with `initial`,
  * `default` or `final`. It takes the value itself or an accessor, so `() => props.defaultValue`
@@ -14,6 +25,22 @@ export type MaybeAccessor<T> = T | Accessor<T>;
  * cannot travel through it, since it would be called.
  */
 export type ReadOnce<T> = T | Accessor<T>;
+
+/**
+ * The size and position of an element's box, as a resize observer reports them. `x`, `y`, `top`,
+ * `left`, `bottom` and `right` are those of the content box, from `contentRect`. `width` and
+ * `height` are the physical width and height of the box the observer watches, in any writing mode.
+ */
+export type ObserverRect = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly top: number;
+  readonly left: number;
+  readonly bottom: number;
+  readonly right: number;
+};
 
 /**
  * The ref an element primitive returns. Put it on one element, alone or in a ref array:

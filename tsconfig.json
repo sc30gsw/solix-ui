@@ -9,6 +9,7 @@
     "tests",
     "scripts",
     "packages/*/tests",
+    "packages/*/fixtures",
     "apps/*/tests",
     "packages/*/build-pipeline.mjs"
   ],

@@ -44,12 +44,15 @@ export function listenerSettings<K extends string>(
   };
 }
 
-export function listen<T extends EventTarget, K extends string>(
+function listen<T extends EventTarget, K extends string>(
   target: T,
   settings: ListenerSettings<K>,
   listener: (event: EventOf<T, K>) => void,
+  accepts: (event: Event) => boolean = () => true,
 ): () => void {
-  const handle = (event: Event) => listener(event as EventOf<T, K>);
+  const handle = (event: Event) => {
+    if (accepts(event)) listener(event as EventOf<T, K>);
+  };
   target.addEventListener(settings.type, handle, {
     capture: settings.capture,
     passive: settings.passive,
@@ -63,4 +66,38 @@ export function disposeAll(disposers: readonly (() => void)[]): () => void {
   return () => {
     for (const dispose of disposers) dispose();
   };
+}
+
+export function watchEvents<T extends EventTarget, K extends string>(
+  target: T,
+  types: readonly K[],
+  listener: (event: EventOf<T, K>) => void,
+  options?: { passive?: boolean },
+): () => void {
+  return disposeAll(
+    types.map((type) =>
+      listen<T, K>(
+        target,
+        { ...listenerSettings(type, true), passive: options?.passive },
+        listener,
+        (event) => event.bubbles || event.target === target,
+      ),
+    ),
+  );
+}
+
+export function handleEvent<T extends EventTarget, K extends string>(
+  target: T,
+  type: K,
+  listener: (event: EventOf<T, K>) => void,
+): () => void {
+  return listen<T, K>(target, listenerSettings(type), listener, (event) => !event.defaultPrevented);
+}
+
+export function listenAsAsked<T extends EventTarget, K extends string>(
+  target: T,
+  settings: ListenerSettings<K>,
+  listener: (event: EventOf<T, K>) => void,
+): () => void {
+  return listen(target, settings, listener);
 }

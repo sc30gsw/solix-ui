@@ -1,7 +1,7 @@
 import { access } from "./internal-access";
-import { createElementAttachment } from "./internal-attachment";
-import { sameItems } from "./internal-equal";
-import { disposeAll, listen, listenerSettings } from "./internal-listener";
+import { createElementAttachmentWhen } from "./internal-attachment";
+import { disposeAll, listenAsAsked, listenerSettings, watchEvents } from "./internal-listener";
+import { isNode } from "./internal-node";
 import type { MaybeAccessor, RefSetter } from "./types";
 
 type Exactly<T, U> = [T] extends [U] ? ([U] extends [T] ? true : false) : false;
@@ -34,7 +34,7 @@ function isPresent(node: Element | null | undefined): node is Element {
 }
 
 function isOnPage(target: EventTarget | null): boolean {
-  if (!(target instanceof Node) || target.ownerDocument === null) return false;
+  if (!isNode(target) || target.ownerDocument === null) return false;
   return (
     target === target.ownerDocument.documentElement || target.ownerDocument.body.contains(target)
   );
@@ -44,16 +44,6 @@ function isOutside(event: Event, inside: readonly Element[]): boolean {
   if (!isOnPage(event.target)) return false;
   const path = event.composedPath();
   return inside.every((node) => !path.includes(node));
-}
-
-function sameListening(left: Listening, right: Listening): boolean {
-  return (
-    left.capture === right.capture &&
-    sameItems(left.inside, right.inside) &&
-    (left.events === null || right.events === null
-      ? left.events === right.events
-      : sameItems(left.events, right.events))
-  );
 }
 
 function pageOf(current: Listening): Document {
@@ -67,7 +57,7 @@ function listenToEvents(
 ): () => void {
   return disposeAll(
     events.map((type) =>
-      listen(pageOf(current), listenerSettings(type, current.capture), (event) => {
+      listenAsAsked(pageOf(current), listenerSettings(type, current.capture), (event) => {
         if (isOutside(event, current.inside)) handler(event);
       }),
     ),
@@ -76,31 +66,30 @@ function listenToEvents(
 
 function listenToPresses(current: Listening, handler: (event: Event) => void): () => void {
   const page = pageOf(current);
-  const view = page.defaultView ?? window;
   const started = new Map<number, { target: EventTarget | null; outside: boolean }>();
   const endingOutside = new WeakSet<Event>();
   return disposeAll([
-    listen(view, listenerSettings(press.start, true), (event) => {
+    watchEvents(page, [press.start], (event) => {
       started.set(event.pointerId, {
         target: event.target,
         outside: isOutside(event, current.inside),
       });
     }),
     ...current.inside.map((node) =>
-      listen(node, listenerSettings(press.start, true), (event) => {
+      watchEvents(node, [press.start], (event) => {
         const start = started.get(event.pointerId);
         if (start) start.outside = false;
       }),
     ),
-    listen(view, listenerSettings(press.end, true), (event) => {
+    watchEvents(page, [press.end], (event) => {
       const start = started.get(event.pointerId);
       started.delete(event.pointerId);
       if (start?.outside && isOnPage(start.target)) endingOutside.add(event);
     }),
-    listen(view, listenerSettings(press.cancel, true), (event) => {
+    watchEvents(page, [press.cancel], (event) => {
       started.delete(event.pointerId);
     }),
-    listen(page, listenerSettings(press.end, current.capture), (event) => {
+    listenAsAsked(page, listenerSettings(press.end, current.capture), (event) => {
       if (endingOutside.has(event) && isOutside(event, current.inside)) handler(event);
     }),
   ]);
@@ -150,7 +139,11 @@ export function createClickOutside<K extends PressEventName = "pointerup">(
   capture?: MaybeAccessor<boolean>,
 ): RefSetter<Element> {
   const call = (event: Event) => handler(event as DocumentEventMap[K]);
-  return createElementAttachment<Element, Listening>(
+  return createElementAttachmentWhen<Element, Listening>(
+    (current) =>
+      current.events === null
+        ? listenToPresses(current, call)
+        : listenToEvents(current, current.events, call),
     (element) => {
       if (!access(enabled ?? true)) return undefined;
       const listed = access(nodes ?? null) ?? [element];
@@ -161,10 +154,5 @@ export function createClickOutside<K extends PressEventName = "pointerup">(
         inside: listed,
       };
     },
-    (current) =>
-      current.events === null
-        ? listenToPresses(current, call)
-        : listenToEvents(current, current.events, call),
-    sameListening,
   );
 }

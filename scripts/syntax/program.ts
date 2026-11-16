@@ -1,6 +1,6 @@
 import { resolve, sep } from "node:path";
-import { API, type CompilerOptions } from "typescript/unstable/sync";
-import type { Checker, Node, SourceFile } from "./ast.ts";
+import { API, type Checker, type CompilerOptions } from "typescript/unstable/sync";
+import type { Node, SourceFile } from "./ast.ts";
 
 export type Program = {
   sourceFile: (file: string) => SourceFile | undefined;

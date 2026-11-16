@@ -1,12 +1,6 @@
 import { createComponent, renderToString } from "@solidjs/web";
 import { everyBrowserResource } from "./browser-resources";
-
-export function serialized(value: unknown): string {
-  return JSON.stringify(value, (_key, item: unknown) => {
-    if (item instanceof Map || item instanceof Set) return [...item];
-    return item === undefined ? "undefined" : item;
-  });
-}
+import { serialized } from "../../fixtures/server-cases";
 
 function valuesBelow(value: unknown, path: string): string[] {
   if (typeof value === "function") return [];

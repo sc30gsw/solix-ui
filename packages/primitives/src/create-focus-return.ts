@@ -1,6 +1,8 @@
-import { type Accessor, createEffect, onCleanup, untrack } from "solid-js";
+import { type Accessor, createEffect, untrack } from "solid-js";
 import { access } from "./internal-access";
-import { containsComposed, deepActiveElement, isFocusTarget, moveFocus } from "./internal-focus";
+import { containsComposed, deepActiveElement } from "./internal-active";
+import { createBrowserCommand } from "./internal-command";
+import { isFocusTarget, moveFocus } from "./internal-focus";
 import type { MaybeAccessor } from "./types";
 
 /** Each option is live. */
@@ -27,8 +29,10 @@ export type FocusReturnOptions = {
  * there: a click on a focusable element outside that closed the surface leaves focus on it. An
  * element that has left the page is not focused, and that is no error.
  *
- * It returns `returnFocus`, which focuses the remembered element at once, and does nothing once
- * the owner is disposed.
+ * It returns `returnFocus`, which focuses the remembered element at once. It does nothing during
+ * the server render, and nothing once the owner is disposed. While the page hydrates it does
+ * nothing in a component's body, nor in the first run of an effect created before
+ * `createFocusReturn` was called, and it acts from the first run of an effect created after it.
  *
  * ```tsx
  * const [surface, setSurface] = createSignal<HTMLElement>();
@@ -37,14 +41,14 @@ export type FocusReturnOptions = {
  * ```
  */
 export function createFocusReturn(options: FocusReturnOptions): () => void {
-  const state: { remembered: Element | null; live: boolean } = { remembered: null, live: true };
-  onCleanup(() => {
-    state.live = false;
-  });
-  const returnFocus = () => {
-    const target = state.remembered;
-    if (state.live && isFocusTarget(target)) moveFocus(target, { preventScroll: true });
-  };
+  const state: { remembered: Element | null } = { remembered: null };
+  const returnFocus = createBrowserCommand(
+    () => {
+      const target = state.remembered;
+      if (isFocusTarget(target)) moveFocus(target, { preventScroll: true });
+    },
+    () => undefined,
+  );
   createEffect(
     () => access(options.opened),
     (opened) => {

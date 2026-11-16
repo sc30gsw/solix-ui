@@ -1,6 +1,6 @@
 export function moveFocus(target: HTMLElement): boolean {
   target.focus();
-  return document.activeElement === target;
+  return target.matches(":focus");
 }
 
 export function focusQuietly(target: HTMLElement): void {

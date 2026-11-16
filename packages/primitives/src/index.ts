@@ -1,3 +1,4 @@
+export { createActiveElement, type ActiveElementOptions } from "./create-active-element";
 export {
   createClickOutside,
   type ClickOutsideHandler,
@@ -9,15 +10,32 @@ export {
   type DisclosureHandlers,
   type DisclosureOptions,
 } from "./create-disclosure";
+export { createDocumentVisibility } from "./create-document-visibility";
+export { createElementSize, type ElementSize } from "./create-element-size";
 export { createEventListener } from "./create-event-listener";
 export { createFocusReturn, type FocusReturnOptions } from "./create-focus-return";
 export { createFocusTrap } from "./create-focus-trap";
+export {
+  createFocusWithin,
+  type FocusWithinOptions,
+  type FocusWithinReturn,
+} from "./create-focus-within";
+export { createHeadroom, type HeadroomOptions, type HeadroomReturn } from "./create-headroom";
 export { createHotkeys } from "./create-hotkeys";
+export { createHover, type HoverReturn } from "./create-hover";
+export { createInViewport, type InViewportReturn } from "./create-in-viewport";
 export { createInputState, type InputChange } from "./create-input-state";
+export { createIntersection, type IntersectionReturn } from "./create-intersection";
 export { createListState, type ListMove, type ListStateHandlers } from "./create-list-state";
 export { createMap } from "./create-map";
+export { createMediaQuery } from "./create-media-query";
+export { createMutationObserverTarget } from "./create-mutation-observer-target";
+export { createMutationObserver } from "./create-mutation-observer";
+export { createPageLeave } from "./create-page-leave";
 export { createPrevious } from "./create-previous";
 export { createQueue, type QueueOptions, type QueueReturn } from "./create-queue";
+export { createResizeObserver, type ResizeObserverReturn } from "./create-resize-observer";
+export { createScrollDirection, type ScrollDirection } from "./create-scroll-direction";
 export { createSetState, type SetStatePatch } from "./create-set-state";
 export { createSet } from "./create-set";
 export {
@@ -25,6 +43,7 @@ export {
   type StateHistory,
   type StateHistoryHandlers,
 } from "./create-state-history";
+export { createTextSelection } from "./create-text-selection";
 export { createToggle, type ToggleRequest, type ToggleReturn } from "./create-toggle";
 export {
   createUncontrolled,
@@ -32,13 +51,21 @@ export {
   type UncontrolledReturn,
 } from "./create-uncontrolled";
 export { createValidatedState, type ValidatedState } from "./create-validated-state";
+export { createViewportSize, type ViewportSize } from "./create-viewport-size";
 export { createWindowEvent } from "./create-window-event";
+export {
+  createWindowScroll,
+  type ScrollPosition,
+  type WindowScrollReturn,
+} from "./create-window-scroll";
 export { getHotkeyHandler } from "./get-hotkey-handler";
 export type {
+  BrowserValue,
   HotkeyItem,
   HotkeyItemOptions,
   ListenerOptions,
   MaybeAccessor,
+  ObserverRect,
   ReadOnce,
   RefSetter,
 } from "./types";

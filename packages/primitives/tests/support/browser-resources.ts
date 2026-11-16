@@ -1,3 +1,5 @@
+import { observerNames } from "../../src/internal-dom-observer";
+
 export type Timer = { schedule: string; cancel: string; kind: string; firesOnce: boolean };
 
 export const listenerMethods = { add: "addEventListener", remove: "removeEventListener" } as const;
@@ -19,9 +21,11 @@ export const timers: readonly Timer[] = [
   },
 ];
 
-export const observers = ["ResizeObserver", "IntersectionObserver", "MutationObserver"] as const;
+export const observers = observerNames;
 
-export const browserOnlyGlobals = [
+export const eventHandlerProperty = /^on[a-z]+$/;
+
+export const trappedOnTheServer = [
   "window",
   "document",
   "navigator",
@@ -36,7 +40,7 @@ export const browserOnlyGlobals = [
 ] as const;
 
 export const everyBrowserResource: readonly string[] = [
-  ...browserOnlyGlobals,
+  ...trappedOnTheServer,
   ...Object.values(listenerMethods),
   ...timers.flatMap(({ schedule, cancel }) => [schedule, cancel]),
   ...observers,

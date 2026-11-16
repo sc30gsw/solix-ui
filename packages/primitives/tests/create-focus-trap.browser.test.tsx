@@ -6,7 +6,16 @@ import { userEvent } from "vite-plus/test/browser";
 import { createFocusTrap, getHotkeyHandler } from "../src/index";
 import { expectNoAxeViolations } from "./support/accessibility";
 import { flush, mount, mountOn, record, unmount } from "./support/browser-harness";
-import { attached, button, focusedId, html, nextTask, settled, tab } from "./support/dom";
+import {
+  attached,
+  button,
+  focusedId,
+  html,
+  nextTask,
+  settled,
+  tab,
+  engineWait,
+} from "./support/dom";
 import {
   apply,
   changes,
@@ -158,7 +167,7 @@ test("focus that a click, a script or a frame moves outside comes back: to the f
   seen.push(focusedId());
   expect(seen).toEqual(["a", "b", "a"]);
   frame.contentDocument?.getElementById("inner")?.focus();
-  await expect.poll(focusedId, { timeout: 1_000 }).toBe("a");
+  await expect.poll(focusedId, engineWait).toBe("a");
 });
 
 test("focus that enters the page with nothing focused before it, as when it comes back from the browser's own controls, lands on the first stop", async () => {

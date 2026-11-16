@@ -1,7 +1,8 @@
 import { access } from "./internal-access";
 import { createAttachment } from "./internal-attachment";
+import { handleEvent } from "./internal-listener";
 import { runHotkeys } from "./internal-hotkey";
-import { listen, listenerSettings } from "./internal-listener";
+import { isElement, isHtmlElement } from "./internal-node";
 import type { HotkeyItem, MaybeAccessor } from "./types";
 
 const defaultTagsToIgnore = ["INPUT", "TEXTAREA", "SELECT"] as const;
@@ -17,10 +18,10 @@ function isIgnoredTarget(
   triggerOnContentEditable: boolean,
 ): boolean {
   const target = deepTarget(event);
-  if (!(target instanceof Element)) return false;
+  if (!isElement(target)) return false;
   const tag = target.tagName.toUpperCase();
   if (tagsToIgnore.some((ignored) => ignored.toUpperCase() === tag)) return true;
-  return target instanceof HTMLElement && target.isContentEditable && !triggerOnContentEditable;
+  return isHtmlElement(target) && target.isContentEditable && !triggerOnContentEditable;
 }
 
 /**
@@ -46,13 +47,11 @@ export function createHotkeys(
   tagsToIgnore?: MaybeAccessor<readonly string[]>,
   triggerOnContentEditable?: MaybeAccessor<boolean>,
 ): void {
-  createAttachment(
-    () => keydown,
-    () =>
-      listen(window, listenerSettings(keydown), (event) => {
-        const ignored = access(tagsToIgnore ?? defaultTagsToIgnore);
-        if (isIgnoredTarget(event, ignored, access(triggerOnContentEditable ?? false))) return;
-        runHotkeys(event, access(hotkeys));
-      }),
+  createAttachment(() =>
+    handleEvent(window, keydown, (event) => {
+      const ignored = access(tagsToIgnore ?? defaultTagsToIgnore);
+      if (isIgnoredTarget(event, ignored, access(triggerOnContentEditable ?? false))) return;
+      runHotkeys(event, access(hotkeys));
+    }),
   );
 }

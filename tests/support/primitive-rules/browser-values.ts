@@ -1,0 +1,46 @@
+import { assertedType, returnsAlias } from "../../../scripts/syntax";
+import {
+  at,
+  exportedFunction,
+  forbidOutside,
+  functionNameFor,
+  type PrimitiveRule,
+  publicModules,
+  reaches,
+  type Rule,
+} from "./library";
+
+const browserValueType = "BrowserValue";
+const brandHome = { file: "internal-browser-value.ts", fn: "branded" };
+
+const browserValues: Rule = (library) =>
+  publicModules(library).flatMap((module) => {
+    const fn = exportedFunction(module);
+    if (!fn || !reaches(library, fn, { file: brandHome.file, name: brandHome.fn })) return [];
+    return returnsAlias(library.compiled, fn, browserValueType)
+      ? []
+      : [
+          `${at(module, fn.name ?? fn)}: ${functionNameFor(module.file)} reaches ${brandHome.fn}, the one place a value becomes a ${browserValueType}, so it returns its value as ${browserValueType}, alone or in a tuple or object.`,
+        ];
+  });
+
+export const browserValuesRule: PrimitiveRule = {
+  description: `every public primitive that reaches ${brandHome.fn} in ${brandHome.file} returns a ${browserValueType}, alone or in a tuple or object`,
+  rule: browserValues,
+};
+
+export const browserValueAssertionsRule = forbidOutside({
+  description: `no source asserts a type to ${browserValueType}, never or any, but ${brandHome.fn} in ${brandHome.file}`,
+  home: brandHome,
+  find: (library, node) => {
+    const asserted = assertedType(library.compiled, node);
+    return (
+      asserted !== undefined &&
+      (asserted.never ||
+        asserted.any ||
+        asserted.aliases.includes(browserValueType) ||
+        asserted.brands.includes(browserValueType))
+    );
+  },
+  advice: `a value becomes a ${browserValueType} only through ${brandHome.fn} in ${brandHome.file}, and nothing is asserted to never or any. Build the value on the helpers there.`,
+});

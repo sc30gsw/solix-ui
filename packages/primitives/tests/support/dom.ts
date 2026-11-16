@@ -36,6 +36,52 @@ export function nextTask(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+export const engineTimeout = 2_000;
+
+export const engineWait = { timeout: engineTimeout, interval: 10 } as const;
+
+export async function reported(check: () => boolean, what: string): Promise<void> {
+  const deadline = performance.now() + engineTimeout;
+  while (!check()) {
+    if (performance.now() > deadline) throw new Error(`the engine never reported ${what}`);
+    await nextTask();
+  }
+}
+
+export async function witnessed<T>(
+  control: readonly T[],
+  sees: (seen: readonly T[]) => boolean,
+  what: string,
+): Promise<void> {
+  await reported(() => sees(control), `${what} to a control`);
+}
+
+type ObservedBy = {
+  ResizeObserver: ResizeObserverEntry;
+  IntersectionObserver: IntersectionObserverEntry;
+  MutationObserver: MutationRecord;
+};
+
+type ControlObserver<T> = new (callback: (entries: T[]) => void) => {
+  observe(target: Element, init?: object): void;
+  disconnect(): void;
+};
+
+export function controlFor<N extends keyof ObservedBy>(
+  name: N,
+  element: Element,
+  init?: object,
+): { seen: ObservedBy[N][]; disconnect: () => void } {
+  const seen: ObservedBy[N][] = [];
+  const classes: Record<string, unknown> = Object.fromEntries(
+    Object.entries({ ResizeObserver, IntersectionObserver, MutationObserver }),
+  );
+  const Observer = classes[name] as ControlObserver<ObservedBy[N]>;
+  const observer = new Observer((entries) => seen.push(...entries));
+  observer.observe(element, init);
+  return { seen, disconnect: () => observer.disconnect() };
+}
+
 export function settled(): Promise<void> {
   return new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),

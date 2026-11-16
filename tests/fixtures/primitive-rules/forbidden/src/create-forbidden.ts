@@ -1,8 +1,8 @@
 import * as solid from "solid-js";
 import { createRenderEffect } from "solid-js";
 import { isServer } from "@solidjs/web";
-import { accessUntracked } from "./internal-access";
-import type { MaybeAccessor, ReadOnce } from "./types";
+import { accessUntracked } from "../../../../../packages/primitives/src/internal-access";
+import type { MaybeAccessor, ReadOnce } from "../../../../../packages/primitives/src/types";
 
 let instances = 0;
 const cache = new Map<string, number>();
@@ -22,6 +22,7 @@ export type ForbiddenOptions = {
   initialCount: MaybeAccessor<number>;
 };
 
+/** Holds what the rules forbid. */
 export function createForbidden(
   options: ForbiddenOptions,
   element: HTMLElement,

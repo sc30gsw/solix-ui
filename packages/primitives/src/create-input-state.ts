@@ -1,5 +1,6 @@
 import type { Accessor } from "solid-js";
 import { accessUntracked } from "./internal-access";
+import { isEvent, isInputOfType } from "./internal-node";
 import { createValue } from "./internal-value";
 import type { ReadOnce } from "./types";
 
@@ -27,14 +28,14 @@ export function createInputState<T>(
   const value = createValue(accessUntracked(initialState));
   const fromEvent = (event: Event): T => {
     const control = event.currentTarget ?? event.target;
-    if (control instanceof HTMLInputElement && control.type === "checkbox") {
+    if (isInputOfType(control, "checkbox")) {
       return control.checked as T;
     }
     return (control as HTMLInputElement | null)?.value as T;
   };
   const onChange = (next: InputChange<T>) => {
     value.update((staged) => {
-      if (next instanceof Event) return fromEvent(next);
+      if (isEvent(next)) return fromEvent(next);
       return typeof next === "function" ? (next as (current: T) => T)(staged) : next;
     });
   };
