@@ -276,26 +276,36 @@ test("a prerelease pin with no channel of its own is behind a newer prerelease o
   expect(checkOf("a-package", "0.9.0", betas).comparison).toMatchObject({ status: "current" });
 });
 
-test("a prerelease pin of a package with no stable release yet is behind its newest prerelease of any version, and takes its channel back once a stable release is published", () => {
+test("a prerelease pin of a package with no stable release yet is behind its newest prerelease of any version that carries the pin's own identifier, and takes its channel back once a stable release is published", () => {
   const neverStable: Release[] = [
-    ["0.0.0-stage", 9],
-    ["0.1.0-beta.3", 6],
-    ["0.1.0-beta.5", 5],
-    ["0.2.0-beta.1", 3],
-    ["0.2.0-beta.2", 0.25],
+    ["2.9.0-stage", 9],
+    ["3.0.0-beta.3", 6],
+    ["3.0.0-beta.7", 5],
+    ["3.0.0-canary.1", 4],
+    ["3.1.0-beta.1", 3],
+    ["3.1.0-canary.4", 3],
+    ["3.1.0-beta.2", 0.25],
   ];
 
-  expect(checkOf("a-package", "0.1.0-beta.5", neverStable).comparison).toMatchObject({
+  expect(checkOf("a-package", "3.0.0-beta.7", neverStable).comparison).toMatchObject({
     status: "behind",
-    eligible: "0.2.0-beta.1",
-    newest: "0.2.0-beta.2",
+    eligible: "3.1.0-beta.1",
+    newest: "3.1.0-beta.2",
   });
-  expect(checkOf("a-package", "0.2.0-beta.1", neverStable).comparison).toMatchObject({
+  expect(checkOf("a-package", "3.1.0-beta.1", neverStable).comparison).toMatchObject({
     status: "not yet eligible",
   });
+  expect(checkOf("a-package", "3.0.0-canary.1", neverStable).comparison).toMatchObject({
+    status: "behind",
+    eligible: "3.1.0-canary.4",
+    newest: "3.1.0-canary.4",
+  });
+  expect(checkOf("a-package", "2.9.0-stage", neverStable).comparison).toMatchObject({
+    status: "current",
+  });
   expect(
-    checkOf("a-package", "0.1.0-beta.5", [...neverStable, ["0.1.0", 2]]).comparison,
-  ).toMatchObject({ status: "behind", eligible: "0.1.0", newest: "0.1.0" });
+    checkOf("a-package", "3.0.0-beta.7", [...neverStable, ["3.0.0", 2]]).comparison,
+  ).toMatchObject({ status: "behind", eligible: "3.0.0", newest: "3.0.0" });
 });
 
 test("a published version with no publish time, or one that is not a date, is a problem that names the package and the version", () => {
