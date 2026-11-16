@@ -20,7 +20,7 @@ const accessibilityModule = "./support/accessibility";
 const axeAssertion = "expectNoAxeViolations";
 
 export const focusMovesRule = forbidOutside({
-  description: `nothing but ${focusMover.name} in ${focusMover.file} refers to the DOM's focus method, however the member is named`,
+  description: `nothing but ${focusMover.name} in ${focusMover.file} refers to the DOM's focus method, by any spelling refersToDomMember resolves`,
   home: { file: focusMover.file, fn: focusMover.name },
   find: (library, node) =>
     refersToDomMember(library, node, (declaration) => nameOf(declaration) === focusMethod),

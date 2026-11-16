@@ -181,6 +181,8 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-respelled.ts", '(0, Reflect.get)(element, "focus")'),
     forbiddenAt("src/create-respelled.ts", 'read(element, "focus")'),
     forbiddenAt("src/create-respelled.ts", 'bound(element, "focus")'),
+    forbiddenAt("src/create-respelled.ts", 'pick(element, "focus")'),
+    forbiddenAt("src/create-respelled.ts", 'lookUp(...[element], "focus")'),
     forbiddenAt("src/create-respelled.ts", "Reflect.apply(element.focus"),
   ],
   testsNamedForModules: [

@@ -14,6 +14,9 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
     read(element, "focus");
     const { get: bound } = Reflect;
     bound(element, "focus");
+    const pick = <O extends object, K extends keyof O>(owner: O, name: K) => owner[name];
+    pick(element, "focus");
+    lookUp(...[element], "focus");
     Reflect.apply(element.focus, element, []);
     browserMethod(window, "addEventListener")?.("resize", listener);
     const { removeEventListener: stop } = window;

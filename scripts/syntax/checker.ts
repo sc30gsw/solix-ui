@@ -107,7 +107,7 @@ function boundNames(program: Program, element: ts.Node): string[] {
 }
 
 function takesAKeyOfAnother(declaration: ts.Node): boolean {
-  if (!ts.isFunctionDeclaration(declaration)) return false;
+  if (!ts.isSignatureDeclaration(declaration)) return false;
   const named = declaration.parameters[1]?.type;
   if (!named || !ts.isTypeReferenceNode(named) || !ts.isIdentifier(named.typeName)) return false;
   const key = named.typeName.text;
@@ -129,7 +129,7 @@ function readsByName(declaration: ts.Node): boolean {
 }
 
 function namesAMemberOfItsFirstArgument(program: Program, call: ts.CallExpression): boolean {
-  if (call.arguments.length < 2 || ts.isSpreadElement(call.arguments[0])) return false;
+  if (call.arguments.length < 2) return false;
   const called = program.checker.getResolvedSignature(call)?.declaration?.resolve();
   return called !== undefined && (takesAKeyOfAnother(called) || readsByName(called));
 }
