@@ -1,4 +1,4 @@
-import { importsOf } from "../syntax";
+import { importsOf } from "../../../scripts/syntax";
 import { browserTests, type PrimitiveRule, type Rule, solidModule, testAt } from "./library";
 
 const browserHarness = "./support/browser-harness";

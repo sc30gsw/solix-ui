@@ -1,4 +1,4 @@
-import { descendants, ts } from "../syntax";
+import { descendants, ts } from "../../../scripts/syntax";
 import {
   at,
   browserTestSuffixes,

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "playwright";
 import postcss from "postcss";
+import { repositoryRoot } from "./repository.ts";
 import { type TokenKind, tokenKind, tokenValues } from "./tokens.ts";
 
 const playgroundStylesheet = "apps/playground/src/app.css";
@@ -15,8 +16,6 @@ const lookProperties = [
   "height",
   ...sides.map((side) => `padding-${side}`),
 ];
-
-const repositoryRoot = join(import.meta.dirname, "..");
 
 const probedProperty = {
   colour: "color",

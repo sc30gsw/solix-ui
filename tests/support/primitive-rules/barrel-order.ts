@@ -1,5 +1,5 @@
 import { basename, join, relative } from "node:path";
-import { exportsOf, ts } from "../syntax";
+import { exportsOf, ts } from "../../../scripts/syntax";
 import { repositoryRoot } from "../workspace";
 import {
   barrelModule,

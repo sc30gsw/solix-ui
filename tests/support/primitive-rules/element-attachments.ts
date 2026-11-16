@@ -1,4 +1,10 @@
-import { declarationsOf, descendants, isInTypePosition, returnsAlias, ts } from "../syntax";
+import {
+  declarationsOf,
+  descendants,
+  isInTypePosition,
+  returnsAlias,
+  ts,
+} from "../../../scripts/syntax";
 import {
   at,
   exportedFunction,

@@ -5,7 +5,7 @@ import {
   isDomLibraryFile,
   isBrowserOnlyGlobal,
   ts,
-} from "../syntax";
+} from "../../../scripts/syntax";
 import { forbidOutside } from "./library";
 
 const observerModule = "internal-dom-observer.ts";

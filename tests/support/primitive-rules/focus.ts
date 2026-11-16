@@ -7,7 +7,7 @@ import {
   fileOf,
   nameOf,
   ts,
-} from "../syntax";
+} from "../../../scripts/syntax";
 import { repositoryRoot } from "../workspace";
 import {
   at,

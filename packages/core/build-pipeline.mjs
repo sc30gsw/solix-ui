@@ -1,4 +1,5 @@
 import { transformAsync } from "@babel/core";
+import syntaxJsx from "@babel/plugin-syntax-jsx";
 import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
 
@@ -6,14 +7,16 @@ export const LIBRARY_CASCADE_LAYER = "solix";
 export const LIBRARY_CLASS_PREFIX = "sx";
 export const STYLE_PROP_LAYER = "style-props";
 
-const typesStrippedJsxKept = [[presetTypescript, { onlyRemoveTypeImports: true }]];
+const typesStripped = [presetTypescript];
+const jsxKeptInTsx = [{ test: /\.tsx$/, plugins: [syntaxJsx] }];
 
 export async function compileLibrarySource({ filename, source, packageRoot }) {
   const result = await transformAsync(source, {
     filename,
     babelrc: false,
     configFile: false,
-    presets: typesStrippedJsxKept,
+    presets: typesStripped,
+    overrides: jsxKeptInTsx,
     plugins: [
       [
         stylexPlugin,

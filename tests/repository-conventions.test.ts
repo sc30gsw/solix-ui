@@ -3,13 +3,9 @@ import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from "
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "../scripts/browser-engines.mjs";
-import {
-  catalogVersions,
-  repositoryRoot,
-  rootManifest,
-  workflowFiles,
-  workspaceFile,
-} from "./support/workspace";
+import { approvedSkills, frontMatterOf } from "../scripts/package-skills";
+import { pnpmSettings } from "../scripts/pnpm-settings";
+import { repositoryRoot, rootManifest, workflowFiles, workspaceFile } from "./support/workspace";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -28,7 +24,12 @@ const checkoutSteps = /- uses: actions\/checkout@/g;
 const fullHistory = /^\s+fetch-depth: 0$/gm;
 const versionPrefix = /^[\^~]/;
 
-const skillNames = readdirSync(skillsDirectory).sort();
+const packageSkillIgnoreFile = ".gitignore";
+const packageSkillEntries = [packageSkillIgnoreFile, ...approvedSkills().map(({ name }) => name)];
+
+const skillNames = readdirSync(skillsDirectory)
+  .filter((name) => !packageSkillEntries.includes(name))
+  .sort();
 
 function escapeForRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -41,17 +42,6 @@ function skillText(name: string): string {
 
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
-}
-
-function frontMatterOf(text: string): Record<string, string> {
-  const block = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? "";
-  return Object.fromEntries(
-    block
-      .split("\n")
-      .map((line) => /^([a-z-]+): (.*)$/.exec(line))
-      .filter((match): match is RegExpExecArray => match !== null)
-      .map(([, key, value]) => [key, value]),
-  );
 }
 
 test("every skill is named for its directory, described, and linked from .claude/skills", () => {
@@ -78,7 +68,7 @@ test("every skill is named for its directory, described, and linked from .claude
     return problems;
   });
   const dangling = readdirSync(linkedSkillsDirectory)
-    .filter((name) => !skillNames.includes(name))
+    .filter((name) => !skillNames.includes(name) && !packageSkillEntries.includes(name))
     .map((name) => `.claude/skills/${name}: remove it, there is no .agents/skills/${name}.`);
 
   expect(skillNames.length).toBeGreaterThan(0);
@@ -242,7 +232,7 @@ test("no project-owned skill copies a version from the catalog", () => {
   const vendored = Object.keys(
     (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
   );
-  const versions = Object.entries(catalogVersions())
+  const versions = Object.entries(pnpmSettings().catalog)
     .filter(([, version]) => !version.includes(":"))
     .map(([name, version]): [string, string] => [name, version.replace(versionPrefix, "")]);
   const violations = skillNames
@@ -287,8 +277,7 @@ test("every row of the rules table in AGENTS.md is compact, so a rule edit chang
 });
 
 test("every check in the repository runs through vp run verify, before a commit and in CI", () => {
-  const manifest = rootManifest;
-  const verify = manifest.scripts?.verify ?? "";
+  const verify = rootManifest().scripts?.verify ?? "";
 
   expect(verify.split(" && ")).toEqual([
     "vp check --deny-warnings",

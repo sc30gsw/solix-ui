@@ -1,4 +1,4 @@
-import { exportsOf } from "../syntax";
+import { exportsOf } from "../../../scripts/syntax";
 import {
   at,
   functionNameFor,

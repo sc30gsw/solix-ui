@@ -116,8 +116,10 @@ class PressClose extends Step {
 }
 
 class PressTab extends Step {
-  constructor(readonly shift: boolean) {
+  readonly shift: boolean;
+  constructor(shift: boolean) {
     super();
+    this.shift = shift;
   }
   check = (model: Model) => model.open;
   async act(_model: Model, real: Real) {
@@ -127,8 +129,10 @@ class PressTab extends Step {
 }
 
 class TypeAName extends Step {
-  constructor(readonly text: string) {
+  readonly text: string;
+  constructor(text: string) {
     super();
+    this.text = text;
   }
   check = (model: Model) => model.open;
   async act(model: Model, real: Real) {

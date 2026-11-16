@@ -1,4 +1,4 @@
-import { isAsConst, outsideClosures, ts, unwrapped } from "../syntax";
+import { isAsConst, modifierFlags, outsideClosures, ts, unwrapped } from "../../../scripts/syntax";
 import { at, type PrimitiveRule, type Rule } from "./library";
 
 const callsAllowedAtModuleLevel = ["Symbol", "Object.freeze"];
@@ -39,9 +39,7 @@ const moduleState: Rule = (library) =>
         for (const member of statement.members) {
           const isStatic =
             ts.isClassStaticBlockDeclaration(member) ||
-            (ts.canHaveModifiers(member) &&
-              (ts.getModifiers(member)?.some(({ kind }) => kind === ts.SyntaxKind.StaticKeyword) ??
-                false));
+            (modifierFlags(member) & ts.ModifierFlags.Static) !== 0;
           if (isStatic && !ts.isMethodDeclaration(member)) {
             found.push([member, "a static class field"]);
           }

@@ -1,4 +1,4 @@
-import { isBrowserOnlyGlobal, reachedFrom, type ts } from "../syntax";
+import { isBrowserOnlyGlobal, reachedFrom, type ts } from "../../../scripts/syntax";
 import {
   browserOnlyRoles,
   exportedFunction,

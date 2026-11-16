@@ -7,7 +7,7 @@ import {
   nameOf,
   stringsIn,
   ts,
-} from "../syntax";
+} from "../../../scripts/syntax";
 import { calleeName, callsTo, forbidOutside, type Library, refersTo } from "./library";
 
 const listenerModule = "internal-listener.ts";
@@ -22,16 +22,16 @@ const objectAssign = "assign";
 function isDomMember(
   library: Library,
   node: ts.Node,
-  matches: (declaration: ts.Declaration) => boolean,
+  matches: (declaration: ts.Node) => boolean,
 ): boolean {
   return declarationsOf(library.compiled, node).some(
     (declaration) => isDomLibraryFile(fileOf(declaration)) && matches(declaration),
   );
 }
 
-function isEventHandler(declaration: ts.Declaration): boolean {
+function isEventHandler(declaration: ts.Node): boolean {
   return (
-    ts.isPropertySignature(declaration) &&
+    ts.isPropertySignatureDeclaration(declaration) &&
     eventHandlerProperty.test(nameOf(declaration)) &&
     eventHandlerType.test(declaration.type?.getText() ?? "")
   );
@@ -90,9 +90,7 @@ function writesAHandlerByName(library: Library, node: ts.Node): boolean {
       .some(
         (argument) =>
           ts.isObjectLiteralExpression(argument) &&
-          argument.properties.some((property) =>
-            eventHandlerProperty.test(property.name ? nameOf(property) : ""),
-          ),
+          argument.properties.some((property) => eventHandlerProperty.test(nameOf(property))),
       )
   );
 }

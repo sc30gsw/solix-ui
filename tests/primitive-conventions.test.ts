@@ -1,13 +1,13 @@
-import { globSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
-import { expect, test } from "vite-plus/test";
+import { existsSync, globSync, readFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { afterAll, expect, test } from "vite-plus/test";
 import {
   loadLibrary,
   primitiveRules,
   type PrimitiveRuleName,
   publicModules,
 } from "./support/primitive-rules/index";
-import { compile, importsOf, parse, ts } from "./support/syntax";
+import { importsOf, isTypeOnlyImport, parse, ts } from "../scripts/syntax";
 import { primitivesPackage, repositoryRoot } from "./support/workspace";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
@@ -17,6 +17,7 @@ const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const servedByVitestOrTheSolidPlugin = ["vite-plus/test", "solid-js", "@solidjs/web"];
 
 const library = loadLibrary(primitivesPackage.directory);
+afterAll(library.dispose);
 
 test("the primitives package has public modules to check", () => {
   expect(publicModules(library)).not.toEqual([]);
@@ -186,6 +187,7 @@ test("each rule passes a fixture that holds only what it allows", () => {
   const findings = Object.fromEntries(
     Object.entries(primitiveRules).map(([name, { rule }]) => [name, rule(fixture)]),
   );
+  fixture.dispose();
 
   expect(findings).toEqual(
     Object.fromEntries(Object.keys(primitiveRules).map((name) => [name, []])),
@@ -200,6 +202,7 @@ test("each rule flags every line of a fixture that breaks it, and nothing else",
       locationsOf(rule(fixture)).sort(),
     ]),
   );
+  fixture.dispose();
   const expected = Object.fromEntries(
     Object.entries(forbiddenFindings).map(([name, locations]) => [name, [...locations].sort()]),
   );
@@ -224,36 +227,27 @@ function preBundledInConfig(): string[] {
 }
 
 function bareImportsReachedFrom(entries: readonly string[]): string[] {
-  const bare = compile(entries, { packages: false }).files.flatMap((source) =>
-    importsOf(source)
-      .filter(({ typeOnly, specifier }) => !typeOnly && !specifier.startsWith("."))
-      .map(({ specifier }) => specifier),
-  );
-  return [...new Set(bare)].sort();
+  const seen = new Set<string>();
+  const bare = new Set<string>();
+  const queue = [...entries];
+  while (queue.length > 0) {
+    const file = queue.pop() ?? "";
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const source = parse(file);
+    for (const { specifier, node } of importsOf(source)) {
+      if (isTypeOnlyImport(node.importClause)) continue;
+      if (!specifier.startsWith(".")) {
+        bare.add(specifier);
+        continue;
+      }
+      const target = resolve(dirname(file), specifier);
+      const found = [`${target}.ts`, `${target}.tsx`].find((candidate) => existsSync(candidate));
+      if (found) queue.push(found);
+    }
+  }
+  return [...bare].sort();
 }
-
-const syntaxModule = "tests/support/syntax.ts";
-const conventionsTest = "tests/primitive-conventions.test.ts";
-const ruleSources = ["tests/support/primitive-rules/*.ts", conventionsTest];
-
-test(`the primitive rules reach the TypeScript API only through ${syntaxModule}`, () => {
-  const sources = globSync(ruleSources, { cwd: repositoryRoot });
-  const found = sources.flatMap((file) => {
-    const source = parse(join(repositoryRoot, file));
-    return [
-      ...importsOf(source)
-        .filter(({ specifier }) => specifier === "typescript")
-        .map(() => `${file}: imports typescript`),
-      ...(file !== conventionsTest &&
-      /\bchecker\b/.test(readFileSync(join(repositoryRoot, file), "utf8"))
-        ? [`${file}: names the checker`]
-        : []),
-    ];
-  });
-
-  expect(sources).not.toEqual([]);
-  expect(found).toEqual([]);
-});
 
 test(`${preBundledName} in ${viteConfig} names every package the browser tests import that Vitest and the Solid plugin do not serve themselves, and nothing else`, () => {
   const entries = globSync(browserTests, { cwd: repositoryRoot }).map((file) =>

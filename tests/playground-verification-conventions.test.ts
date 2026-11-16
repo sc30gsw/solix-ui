@@ -1,7 +1,7 @@
 import { globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import ts from "typescript";
 import { expect, test } from "vite-plus/test";
+import { parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
 import { repositoryRoot } from "./support/workspace";
 
 const skill = ".agents/skills/verify-playground";
@@ -40,13 +40,7 @@ function nonEmpty(where: string, names: string[]): string[] {
 }
 
 function journeysInitializer(path: string): ts.Expression {
-  const source = ts.createSourceFile(
-    path,
-    read(path),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JS,
-  );
+  const source = parse(join(repositoryRoot, path));
   const declaration = source.statements
     .filter(ts.isVariableStatement)
     .flatMap((statement) => [...statement.declarationList.declarations])
@@ -68,11 +62,7 @@ function driveJourneys(): string[] {
   }
   return nonEmpty(
     driveScript,
-    initializer.properties.flatMap((property) =>
-      property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
-        ? [property.name.text]
-        : [],
-    ),
+    initializer.properties.flatMap((property) => staticPropertyName(property) ?? []),
   );
 }
 
@@ -171,26 +161,19 @@ function holdsAPort(literal: ts.NumericLiteral): boolean {
   if (
     ts.isVariableDeclaration(holder) ||
     ts.isPropertyAssignment(holder) ||
-    ts.isParameter(holder) ||
+    ts.isParameterDeclaration(holder) ||
     ts.isBindingElement(holder)
   ) {
-    return namesAPort(holder.name);
+    return holder.name !== undefined && namesAPort(holder.name);
   }
   return false;
 }
 
-function portsIn(path: string): string[] {
-  const source = ts.createSourceFile(
-    path,
-    read(path),
-    ts.ScriptTarget.Latest,
-    true,
-    path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+function portsIn(source: ts.SourceFile): string[] {
   const found = new Set<string>();
   const visit = (node: ts.Node): void => {
     if (ts.isNumericLiteral(node) && holdsAPort(node)) found.add(String(Number(node.text)));
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(source);
   return [...found];
@@ -198,9 +181,11 @@ function portsIn(path: string): string[] {
 
 test("every test server and the verification instance listen on ports of their own", () => {
   const launchPort = launchDefaultPort.exec(read(launchScript))?.[1];
-  const ports = globSync([testConfig, testCode], { cwd: repositoryRoot })
-    .sort()
-    .flatMap((path) => portsIn(path).map((port) => ({ path, port })));
+  const paths = globSync([testConfig, testCode], { cwd: repositoryRoot }).sort();
+  const sources = parseAll(paths.map((path) => join(repositoryRoot, path)));
+  const ports = paths.flatMap((path, index) =>
+    portsIn(sources[index]).map((port) => ({ path, port })),
+  );
   const violations = ports.flatMap(({ path, port }, index) => [
     ...ports
       .slice(0, index)

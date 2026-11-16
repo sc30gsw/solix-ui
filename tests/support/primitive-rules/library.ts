@@ -2,8 +2,6 @@ import { existsSync, readdirSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import {
   type Alias,
-  type Compiled,
-  compile,
   contextualAliases,
   declarationsOf,
   descendants,
@@ -13,9 +11,11 @@ import {
   importsOf,
   isPackageFile,
   nameOf,
+  openProgram,
+  type Program,
   reachedFrom,
   ts,
-} from "../syntax";
+} from "../../../scripts/syntax";
 import { repositoryRoot } from "../workspace";
 
 export const kebabCaseModule = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts$/;
@@ -48,8 +48,9 @@ export type Library = {
   entries: string[];
   modules: Module[];
   tests: Map<string, ts.SourceFile>;
-  compiled: Compiled;
-  compiledTests: Compiled;
+  compiled: Program;
+  compiledTests: Program;
+  dispose: () => void;
 };
 
 export type Rule = (library: Library) => string[];
@@ -71,23 +72,32 @@ export function loadLibrary(directory: string): Library {
   const paths = entries
     .filter((entry) => entry.endsWith(".ts"))
     .map((entry) => join(source, entry));
-  const compiled = compile(paths);
+  const compiled = openProgram(paths);
   const testFiles = entriesOf(testDirectory).filter((entry) => /\.tsx?$/.test(entry));
-  const compiledTests = compile(
-    testFiles.map((entry) => join(testDirectory, entry)),
-    { packages: false },
-  );
+  const compiledTests = openProgram(testFiles.map((entry) => join(testDirectory, entry)));
   const tests = new Map(
     testFiles.flatMap((entry): [string, ts.SourceFile][] => {
-      const parsed = compiledTests.source(join(testDirectory, entry));
+      const parsed = compiledTests.sourceFile(join(testDirectory, entry));
       return parsed ? [[entry, parsed]] : [];
     }),
   );
   const modules = paths.flatMap((path) => {
-    const parsed = compiled.source(path);
+    const parsed = compiled.sourceFile(path);
     return parsed ? [{ file: basename(path), path, source: parsed }] : [];
   });
-  return { source, testDirectory, entries, modules, tests, compiled, compiledTests };
+  return {
+    source,
+    testDirectory,
+    entries,
+    modules,
+    tests,
+    compiled,
+    compiledTests,
+    dispose: () => {
+      compiled.dispose();
+      compiledTests.dispose();
+    },
+  };
 }
 
 export function located(node: ts.Node): string {

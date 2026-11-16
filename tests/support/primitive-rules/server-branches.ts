@@ -5,7 +5,7 @@ import {
   nameOf,
   ts,
   unwrapped,
-} from "../syntax";
+} from "../../../scripts/syntax";
 import { forbidOutside } from "./library";
 
 const serverFlag = "isServer";

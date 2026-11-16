@@ -1,4 +1,4 @@
-import { assertedType, returnsAlias } from "../syntax";
+import { assertedType, returnsAlias } from "../../../scripts/syntax";
 import {
   at,
   exportedFunction,

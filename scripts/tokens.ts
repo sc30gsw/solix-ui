@@ -1,10 +1,8 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import ts from "typescript";
+import { repositoryRoot } from "./repository.ts";
+import { parse, ts } from "./syntax.ts";
 
 export const tokensFile = "packages/core/src/tokens.stylex.ts";
-
-const repositoryRoot = join(import.meta.dirname, "..");
 
 const kindByPrefix = [
   ["--solix-color-", "colour"],
@@ -20,12 +18,7 @@ function lineOf(source: ts.SourceFile, node: ts.Node): number {
 }
 
 export function tokenValues(file: string = tokensFile): Record<string, string> {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(join(repositoryRoot, file), "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const source = parse(join(repositoryRoot, file));
   const definitions: ts.ObjectLiteralElementLike[] = [];
   const visit = (node: ts.Node): void => {
     if (
@@ -36,7 +29,7 @@ export function tokenValues(file: string = tokensFile): Record<string, string> {
     ) {
       definitions.push(...node.arguments[0].properties);
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(source);
 

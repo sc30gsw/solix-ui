@@ -1,4 +1,4 @@
-import { descendants, parameterAliases, ts } from "../syntax";
+import { descendants, findAncestor, parameterAliases, ts } from "../../../scripts/syntax";
 import {
   at,
   browserOnlyRoles,
@@ -15,15 +15,14 @@ const optionReader = { file: "internal-access.ts", name: "access" };
 const configRole = "LiveConfig";
 
 function isReadLive(library: Library, read: ts.Node): boolean {
-  const enclosing = ts.findAncestor(read.parent, ts.isFunctionLike);
+  const enclosing = findAncestor(read.parent, ts.isSignatureDeclaration);
   return (
-    ts.findAncestor(read.parent, (ancestor) => hasRole(library, ancestor, comparedByValueRoles)) !==
+    findAncestor(read.parent, (ancestor) => hasRole(library, ancestor, comparedByValueRoles)) !==
       undefined ||
     (enclosing !== undefined &&
       !hasRole(library, enclosing, browserOnlyRoles) &&
-      ts.findAncestor(enclosing.parent, (ancestor) =>
-        hasRole(library, ancestor, browserOnlyRoles),
-      ) !== undefined)
+      findAncestor(enclosing.parent, (ancestor) => hasRole(library, ancestor, browserOnlyRoles)) !==
+        undefined)
   );
 }
 

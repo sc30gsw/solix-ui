@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@babel/core": "catalog:",
+    "@babel/plugin-syntax-jsx": "catalog:",
     "@babel/preset-typescript": "catalog:",
     "@solidjs/web": "catalog:",
     "@stylexjs/babel-plugin": "catalog:",

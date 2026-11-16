@@ -1,4 +1,4 @@
-import { declarationsOf, ts } from "../syntax";
+import { declarationsOf, ts } from "../../../scripts/syntax";
 import { forbidOutside, isFromSolid } from "./library";
 
 const policyModule = "internal-browser-value.ts";

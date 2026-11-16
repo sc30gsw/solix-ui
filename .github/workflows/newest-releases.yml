@@ -1,0 +1,59 @@
+name: Newest releases
+
+on:
+  schedule:
+    - cron: "29 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pins:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          node-version-file: package.json
+          cache: true
+      - run: node scripts/check-newest-releases.ts
+
+  solid-2-canary:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          node-version-file: package.json
+          cache: true
+      - run: node scripts/solid-2-canary.ts
+      - run: vp install --no-frozen-lockfile
+      - run: vp exec playwright install --with-deps chromium firefox webkit
+      - name: Approved package skills hold the reviewed files
+        id: skills
+        continue-on-error: true
+        run: node scripts/check-package-skills.ts
+      - run: vp run verify
+        env:
+          SOLIX_PRIVATE_TERMS: ${{ secrets.SOLIX_PRIVATE_TERMS }}
+        id: verify
+        continue-on-error: true
+      - name: Say which check failed
+        if: always()
+        env:
+          SKILLS: ${{ steps.skills.outcome }}
+          VERIFY: ${{ steps.verify.outcome }}
+        run: |
+          if [ "$SKILLS" = "failure" ]; then
+            echo "::error::The approved package skills do not hold the reviewed files on the newest Solid 2 release. Read that step's log; where a skill changed, read it and record the new hash in scripts/reviewed-skills.json. vp run verify fails on that alone; read its log for any other failure." | tee -a "$GITHUB_STEP_SUMMARY"
+          elif [ "$VERIFY" = "failure" ]; then
+            echo "::error::vp run verify failed on the newest Solid 2 release and the skills step passed; read its log." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          [ "$SKILLS" != "failure" ] && [ "$VERIFY" != "failure" ]

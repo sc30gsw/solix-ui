@@ -6,7 +6,7 @@ import {
   symbolOf,
   ts,
   unwrapped,
-} from "../syntax";
+} from "../../../scripts/syntax";
 import {
   at,
   type Library,
@@ -82,8 +82,9 @@ const readOnceArguments: Rule = (library) => [
   ...publicModules(library).flatMap((module) =>
     descendants(module.source)
       .filter(
-        (node): node is ts.ParameterDeclaration | ts.PropertySignature =>
-          (ts.isParameter(node) || ts.isPropertySignature(node)) && ts.isIdentifier(node.name),
+        (node): node is ts.ParameterDeclaration | ts.PropertySignatureDeclaration =>
+          (ts.isParameterDeclaration(node) || ts.isPropertySignatureDeclaration(node)) &&
+          ts.isIdentifier(node.name),
       )
       .filter((node) => {
         const typedReadOnce =

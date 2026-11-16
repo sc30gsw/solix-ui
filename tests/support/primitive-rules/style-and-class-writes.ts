@@ -1,4 +1,4 @@
-import { descendants, stringsIn, ts, unwrapped } from "../syntax";
+import { descendants, stringsIn, ts, unwrapped } from "../../../scripts/syntax";
 import { at, type Library, type PrimitiveRule, type Rule } from "./library";
 
 const styleAndClassMembers = ["style", "className", "classList", "attributeStyleMap"];

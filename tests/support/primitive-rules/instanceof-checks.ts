@@ -1,4 +1,4 @@
-import { ts } from "../syntax";
+import { ts } from "../../../scripts/syntax";
 import { forbidOutside } from "./library";
 
 export const instanceofChecksRule = forbidOutside({

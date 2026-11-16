@@ -1,4 +1,4 @@
-import { declarationsOf, isInTypePosition, stringsIn, ts } from "../syntax";
+import { declarationsOf, isInTypePosition, stringsIn, ts } from "../../../scripts/syntax";
 import { forbidOutside, isFromSolid } from "./library";
 
 const effectsAPrimitiveAvoids = ["createRenderEffect", "createTrackedEffect"];

@@ -1,4 +1,4 @@
-import { ts } from "../syntax";
+import { ts } from "../../../scripts/syntax";
 import { forbidOutside } from "./library";
 
 const errorBoundary = { file: "internal-browser-value.ts", fn: "whereAllowed" };

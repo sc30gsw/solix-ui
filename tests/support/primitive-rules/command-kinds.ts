@@ -1,4 +1,4 @@
-import { descendants } from "../syntax";
+import { descendants } from "../../../scripts/syntax";
 import { browserGlobalsReached } from "./browser-global-reads";
 import { at, hasRole, type PrimitiveRule, type Rule, stateCommandRole } from "./library";
 

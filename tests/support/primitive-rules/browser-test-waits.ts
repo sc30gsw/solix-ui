@@ -2,11 +2,12 @@ import {
   declarationsOf,
   descendants,
   fileOf,
+  findAncestor,
   firstLine,
   isDomLibraryFile,
   nameOf,
   ts,
-} from "../syntax";
+} from "../../../scripts/syntax";
 import {
   browserTests,
   calleeName,
@@ -29,7 +30,7 @@ function isCount(node: ts.Node | undefined): boolean {
 
 function isAsserted(node: ts.Node): boolean {
   return (
-    ts.findAncestor(
+    findAncestor(
       node.parent,
       (ancestor) =>
         ts.isCallExpression(ancestor) &&

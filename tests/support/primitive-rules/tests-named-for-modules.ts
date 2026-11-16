@@ -11,7 +11,7 @@ import {
   testNamed,
 } from "./library";
 import { basename } from "node:path";
-import { exportsOf } from "../syntax";
+import { exportsOf } from "../../../scripts/syntax";
 
 function exportsAFunction(module: Module): boolean {
   return exportsOf(module.source).functions.length > 0;
