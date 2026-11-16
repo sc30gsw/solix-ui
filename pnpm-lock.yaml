@@ -203,6 +203,12 @@ catalogs:
     '@types/semver':
       specifier: 7.8.0
       version: 7.8.0
+    '@ui-sdk/core':
+      specifier: 0.1.0-beta.5
+      version: 0.1.0-beta.5
+    '@ui-sdk/solid':
+      specifier: 0.1.0-beta.5
+      version: 0.1.0-beta.5
     '@vitest/browser-playwright':
       specifier: 5.1.0
       version: 5.1.0
@@ -356,6 +362,13 @@ importers:
         version: 1.6.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(playwright@1.65.1)(typescript@7.0.2)
 
   packages/core:
+    dependencies:
+      '@ui-sdk/core':
+        specifier: 'catalog:'
+        version: 0.1.0-beta.5
+      '@ui-sdk/solid':
+        specifier: 'catalog:'
+        version: 0.1.0-beta.5(@solidjs/web@2.0.0-rc.21(solid-js@2.0.0-rc.21))(@ui-sdk/core@0.1.0-beta.5)(solid-js@2.0.0-rc.21)
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
@@ -1185,6 +1198,16 @@ packages:
     engines: {node: '>=16.20.0'}
     cpu: [x64]
     os: [win32]
+
+  '@ui-sdk/core@0.1.0-beta.5':
+    resolution: {integrity: sha512-dmunrxWrZ+vwldKJ6THQNYyyfbLFY6K82hBvIZSnuGwpEQmXKmM0iuANgGXtaqw8unSB2p9E5s3y7zfE9rgP6Q==}
+
+  '@ui-sdk/solid@0.1.0-beta.5':
+    resolution: {integrity: sha512-mTQWVtcu24Rl4Nka6qyifH8mpswSR7cNl1+ZnbIkbHmhDIS0fYsSF3QJTNd0jfqtBIsemI6sRc2QQ3k2inC2Gg==}
+    peerDependencies:
+      '@solidjs/web': '>=2.0.0-rc.14 <3'
+      '@ui-sdk/core': ^0.1.0-beta.5
+      solid-js: '>=2.0.0-rc.14 <3'
 
   '@vitest/browser-playwright@5.1.0':
     resolution: {integrity: sha512-3PbVvX/KNeUEzUeTTXw5bQDyfJS+WqU/UJ8RNWIojHb0mE6d/IBjuLmt+i7OpJ00tjNWv0O6XBm5ler/tEf3eg==}
@@ -2608,6 +2631,14 @@ snapshots:
 
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
+
+  '@ui-sdk/core@0.1.0-beta.5': {}
+
+  '@ui-sdk/solid@0.1.0-beta.5(@solidjs/web@2.0.0-rc.21(solid-js@2.0.0-rc.21))(@ui-sdk/core@0.1.0-beta.5)(solid-js@2.0.0-rc.21)':
+    dependencies:
+      '@solidjs/web': 2.0.0-rc.21(solid-js@2.0.0-rc.21)
+      '@ui-sdk/core': 0.1.0-beta.5
+      solid-js: 2.0.0-rc.21
 
   '@vitest/browser-playwright@5.1.0(@voidzero-dev/vite-plus-core@1.6.0(@types/node@26.6.6)(typescript@7.0.2))(playwright@1.65.1)(vitest@5.1.0)':
     dependencies:

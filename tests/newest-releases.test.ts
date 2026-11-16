@@ -276,6 +276,28 @@ test("a prerelease pin with no channel of its own is behind a newer prerelease o
   expect(checkOf("a-package", "0.9.0", betas).comparison).toMatchObject({ status: "current" });
 });
 
+test("a prerelease pin of a package with no stable release yet is behind its newest prerelease of any version, and takes its channel back once a stable release is published", () => {
+  const neverStable: Release[] = [
+    ["0.0.0-stage", 9],
+    ["0.1.0-beta.3", 6],
+    ["0.1.0-beta.5", 5],
+    ["0.2.0-beta.1", 3],
+    ["0.2.0-beta.2", 0.25],
+  ];
+
+  expect(checkOf("a-package", "0.1.0-beta.5", neverStable).comparison).toMatchObject({
+    status: "behind",
+    eligible: "0.2.0-beta.1",
+    newest: "0.2.0-beta.2",
+  });
+  expect(checkOf("a-package", "0.2.0-beta.1", neverStable).comparison).toMatchObject({
+    status: "not yet eligible",
+  });
+  expect(
+    checkOf("a-package", "0.1.0-beta.5", [...neverStable, ["0.1.0", 2]]).comparison,
+  ).toMatchObject({ status: "behind", eligible: "0.1.0", newest: "0.1.0" });
+});
+
 test("a published version with no publish time, or one that is not a date, is a problem that names the package and the version", () => {
   const noTime = registryDocument([["7.8.6", 10]]);
   noTime.versions = { ...noTime.versions, "7.8.7": {} };

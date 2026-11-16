@@ -82,9 +82,12 @@ const stableChannel: Channel = {
   versions: (published) => published.filter(isStable),
 };
 const prereleasePinChannel: Channel = {
-  describe: "its newest stable release, or the newest prerelease of the version it pins",
+  describe:
+    "its newest stable release, or the newest prerelease of the version it pins; its newest prerelease of any version while it has no stable release",
   versions: (published, { pinned }) =>
-    published.filter((release) => isStable(release) || isOnTheVersionOf(pinned, release)),
+    published.some(isStable)
+      ? published.filter((release) => isStable(release) || isOnTheVersionOf(pinned, release))
+      : [...published],
 };
 const solidChannel: Channel = {
   describe: `the newest Solid ${solidMajor} release, stable once a stable ${solidMajor}.x is old enough to install`,
