@@ -3,7 +3,16 @@ import { basename, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
-import { descendants, exportsOf, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
+import {
+  descendants,
+  exportsOf,
+  parse,
+  parseAll,
+  parseText,
+  staticPropertyName,
+  ts,
+} from "../scripts/syntax";
+import { moduleSpecifierOf } from "./support/module-specifiers";
 import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
@@ -33,6 +42,8 @@ const builtLibraryFile = "packages/core/tests/built-library.ts";
 const fixturesFile = "packages/core/tests/fixtures.ts";
 const testDirectory = "tests";
 const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
+const behaviourSdk = /^@ui-sdk\//;
+const behaviourSeam = "packages/core/src/headless.ts";
 
 const libraries = componentLibraries.map(({ directory, manifest }) => ({
   name: manifest.name ?? directory,
@@ -409,8 +420,10 @@ function problemsWith({ name, file, source }: Component): string[] {
       ? declaration.name.elements.map((element) => element.getText())
       : [];
   const [componentName, compiled, consumer] = call?.arguments ?? [];
+  const statement = declaration?.parent.parent;
   if (
     calls.length !== 1 ||
+    statement?.parent !== fn.body ||
     !bound.includes(rootBinding) ||
     bound.some((binding) => binding !== rootBinding && binding !== partBinding) ||
     !componentName ||
@@ -420,7 +433,7 @@ function problemsWith({ name, file, source }: Component): string[] {
     consumer?.getText() !== "props"
   ) {
     report(
-      `call ${partsHelper} once, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}.`,
+      `call ${partsHelper} once, in a statement of the component's own body, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}; a behaviour for the parts goes before the kept keys, so each bound part takes its slot there and never inline in JSX.`,
     );
     return problems;
   }
@@ -457,6 +470,46 @@ test("the library has components to check", () => {
 
 test("every component is written the one way: one function, and its root and every other part from one createParts call", () => {
   expect(components.flatMap(problemsWith)).toEqual([]);
+});
+
+function behaviourSdkImports(file: string, source: ts.SourceFile): string[] {
+  return descendants(source).flatMap((node) => {
+    const specifier = moduleSpecifierOf(node);
+    return specifier && ts.isStringLiteralLikeNode(specifier) && behaviourSdk.test(specifier.text)
+      ? [
+          `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText().split("\n")[0]} loads the behaviour SDK. Only ${behaviourSeam} does; take the behaviour from createBehaviour there, so the SDK's next change is an edit in one file.`,
+        ]
+      : [];
+  });
+}
+
+test(`no file but ${behaviourSeam} loads @ui-sdk, by an import, an export, a dynamic import, a require or an import type`, () => {
+  const files = scriptFiles.filter((file) => file !== behaviourSeam);
+  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
+  const violations = files.flatMap((file, index) => behaviourSdkImports(file, sources[index]));
+  const flagged = behaviourSdkImports(
+    "packages/core/src/Elsewhere.tsx",
+    parseText(
+      [
+        'import { tabs } from "@ui-sdk/core/tabs";',
+        'import type { Primitive } from "@ui-sdk/core";',
+        'export { usePrimitive } from "@ui-sdk/solid/primitive";',
+        'const later = await import("@ui-sdk/solid");',
+        'const required = require("@ui-sdk/core");',
+        'type Handle = import("@ui-sdk/solid/primitive").PrimitiveHandle<never>;',
+        'import { createBehaviour } from "./headless";',
+        'const named = "@ui-sdk/core";',
+      ].join("\n"),
+      ".tsx",
+    ),
+  ).map((violation) => /^[^:]+:(\d+):/.exec(violation)?.[1]);
+
+  expect(scriptFiles).toContain(behaviourSeam);
+  expect(
+    behaviourSdkImports(behaviourSeam, parse(join(repositoryRoot, behaviourSeam))),
+  ).not.toEqual([]);
+  expect(violations).toEqual([]);
+  expect(flagged).toEqual(["1", "2", "3", "4", "5", "6"]);
 });
 
 test("no source file of the library but parts.ts calls stylex.attrs or stylex.props", () => {
