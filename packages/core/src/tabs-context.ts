@@ -1,13 +1,13 @@
 import { createContext, useContext } from "solid-js";
 import type { Behaviour, tabs } from "./headless";
+import type { SteppedList } from "./step-over-disabled";
 
 export type TabsOrientation = "horizontal" | "vertical";
 
 export type TabsContextValue = {
   behaviour: Behaviour<typeof tabs>;
   baseId: () => string | undefined;
-  valueOfTab: WeakMap<Element, () => string>;
-  onListKeyDown: (event: KeyboardEvent & { currentTarget: HTMLElement }) => void;
+  steps: SteppedList<string>;
   allowTabDeactivation: () => boolean;
   keepMounted: () => boolean;
 };

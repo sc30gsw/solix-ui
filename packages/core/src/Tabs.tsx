@@ -53,7 +53,13 @@ export function Tabs(props: TabsProps) {
     activation: activateTabWithKeyboard() ? ("automatic" as const) : ("manual" as const),
     loop: loop(),
   }));
-  const valueOfTab = new WeakMap<Element, () => string>();
+  const steps = stepOverDisabled({
+    items: tab,
+    loop,
+    activate: (selected: string) => {
+      if (activateTabWithKeyboard()) behaviour.api.setValue(selected);
+    },
+  });
   const { root } = behaviour.bind(
     createParts(
       "Tabs",
@@ -77,17 +83,7 @@ export function Tabs(props: TabsProps) {
         value={{
           behaviour,
           baseId: () => (typeof props.id === "string" ? props.id : undefined),
-          valueOfTab,
-          onListKeyDown: (event) =>
-            stepOverDisabled(event, {
-              items: tab,
-              loop: loop(),
-              activate: (focused) => {
-                const valueOf = valueOfTab.get(focused);
-                if (activateTabWithKeyboard() && valueOf !== undefined)
-                  behaviour.api.setValue(valueOf());
-              },
-            }),
+          steps,
           allowTabDeactivation: () => props.allowTabDeactivation ?? false,
           keepMounted: () => props.keepMounted ?? true,
         }}

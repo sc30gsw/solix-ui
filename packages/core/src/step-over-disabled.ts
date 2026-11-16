@@ -19,26 +19,40 @@ function stepFor(key: string, container: HTMLElement, loop: boolean): Step | und
   return undefined;
 }
 
-export function stepOverDisabled(
-  event: KeyboardEvent & { currentTarget: HTMLElement },
-  options: { items: string; loop: boolean; activate: (item: HTMLElement) => void },
-): void {
-  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-  const container = event.currentTarget;
-  const items = [...container.querySelectorAll<HTMLElement>(options.items)];
-  const from = items.findIndex((item) => item === event.target);
-  const step = stepFor(event.key, container, options.loop);
-  if (from === -1 || step === undefined) return;
-  const at = (index: number) => items[step.wraps ? (index + items.length) % items.length : index];
-  const first = step.first(from, items.length);
-  if (at(first)?.matches(disabled) !== true) return;
-  event.preventDefault();
-  for (let walked = 1; walked < items.length; walked += 1) {
-    const next = at(first + walked * step.by);
-    if (next === undefined || next === items[from]) return;
-    if (next.matches(disabled)) continue;
-    next.focus();
-    options.activate(next);
-    return;
-  }
+export type SteppedList<Value> = {
+  onKeyDown: (event: KeyboardEvent & { currentTarget: HTMLElement }) => void;
+  item: (value: () => Value) => (element: Element) => void;
+};
+
+export function stepOverDisabled<Value>(options: {
+  items: string;
+  loop: () => boolean;
+  activate: (value: Value) => void;
+}): SteppedList<Value> {
+  const valueOf = new WeakMap<Element, () => Value>();
+  const onKeyDown = (event: KeyboardEvent & { currentTarget: HTMLElement }) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const container = event.currentTarget;
+    const items = [...container.querySelectorAll<HTMLElement>(options.items)];
+    const from = items.findIndex((item) => item === event.target);
+    const step = stepFor(event.key, container, options.loop());
+    if (from === -1 || step === undefined) return;
+    const at = (index: number) => items[step.wraps ? (index + items.length) % items.length : index];
+    const first = step.first(from, items.length);
+    if (at(first)?.matches(disabled) !== true) return;
+    event.preventDefault();
+    for (let walked = 1; walked < items.length; walked += 1) {
+      const next = at(first + walked * step.by);
+      if (next === undefined || next === items[from]) return;
+      if (next.matches(disabled)) continue;
+      next.focus();
+      const value = valueOf.get(next);
+      if (value !== undefined) options.activate(value());
+      return;
+    }
+  };
+  return {
+    onKeyDown,
+    item: (value) => (element) => valueOf.set(element, value),
+  };
 }
