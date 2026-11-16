@@ -1,7 +1,7 @@
 import type { OptionsOf, Primitive, PropsOf, SlotName, TypesOf } from "@ui-sdk/core";
 import { usePrimitive } from "@ui-sdk/solid/primitive";
 import type { JSX } from "@solidjs/web";
-import { merge, omit } from "solid-js";
+import { merge, omit, untrack } from "solid-js";
 import type { PartProps, PartsBehaviour } from "./parts";
 
 export { tabs } from "@ui-sdk/core/tabs";
@@ -24,8 +24,11 @@ function isHandlerProp(name: string): boolean {
   return handlerProp.test(name);
 }
 
-function isOursAlone(name: string): boolean {
-  return isHandlerProp(name) || name === refProp || name === classProp || name === styleProp;
+function isOursAlone(name: PropertyKey): boolean {
+  return (
+    typeof name === "string" &&
+    (isHandlerProp(name) || name === refProp || name === classProp || name === styleProp)
+  );
 }
 
 function call(handler: unknown, event: Handled): void {
@@ -66,18 +69,19 @@ export function bindSlot(
   });
   const behaviour = slot(attributes);
   const inOrder = [ours, own, behaviour];
-  const handlers = [...new Set(inOrder.flatMap((props) => Object.keys(props)))]
-    .filter(isHandlerProp)
-    .map((name) => [
-      name,
-      (event: Handled) => {
-        for (const props of inOrder) {
-          if (!event.defaultPrevented) call(props[name], event);
-        }
-      },
-    ]);
+  const handlerNames = untrack(() =>
+    [...new Set(inOrder.flatMap((props) => Object.keys(props)))].filter(isHandlerProp),
+  );
+  const handlers = handlerNames.map((name) => [
+    name,
+    (event: Handled) => {
+      for (const props of inOrder) {
+        if (!event.defaultPrevented) call(props[name], event);
+      }
+    },
+  ]);
   return merge(behaviour, Object.fromEntries(handlers), {
-    [refProp]: inOrder.flatMap((props) => props[refProp] ?? []),
+    [refProp]: untrack(() => inOrder.flatMap((props) => props[refProp] ?? [])),
     get [idProp]() {
       return ours[idProp] ?? own[idProp] ?? behaviour[idProp];
     },

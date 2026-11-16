@@ -50,7 +50,7 @@ Read-only. It prints one `ok` or `FAIL` line for each of: an instance was launch
 .agents/skills/verify-playground/scripts/drive.mjs <journey> [engine]
 ```
 
-Journeys: `button-default`, `consumer-override`, `token-theme`, `changing-props`, `disclosure`, `text-input`, `modal`, `box`, `styles-api`, `server-render`. Each is described in [features/](features/README.md). Engines: `chromium`, `firefox`, `webkit`. Without an engine the script uses the first one installed. The list of engines lives in `scripts/browser-engines.mjs` at the repository root; an engine that is not installed cannot be driven, and with `CI` set a missing engine is an error. The script uses Playwright, finds buttons by role and name and a disclosure by its summary text, prints one `PASS` or `FAIL` line per observation, and exits non-zero if any fails.
+Journeys: `button-default`, `consumer-override`, `token-theme`, `changing-props`, `disclosure`, `text-input`, `modal`, `box`, `styles-api`, `tabs`, `server-render`. Each is described in [features/](features/README.md). Engines: `chromium`, `firefox`, `webkit`. Without an engine the script uses the first one installed. The list of engines lives in `scripts/browser-engines.mjs` at the repository root; an engine that is not installed cannot be driven, and with `CI` set a missing engine is an error. The script uses Playwright, finds buttons by role and name and a disclosure by its summary text, prints one `PASS` or `FAIL` line per observation, and exits non-zero if any fails.
 
 To check something no journey covers, add a journey to `drive.mjs` and a file to `features/`. Do not drive the page by test id or class when a role, a name or visible text exists.
 

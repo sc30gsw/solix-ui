@@ -26,6 +26,14 @@ export function rootElementOf(html: string): Element {
   return root;
 }
 
+export function contentOf(html: string): string {
+  const [outer] = elementsOf(html);
+  if (!outer || !html.startsWith(`<${outer.tag}`) || !html.endsWith(`</${outer.tag}>`)) {
+    throw new Error(`The rendered markup is not one element: ${html}`);
+  }
+  return html.slice(html.indexOf(">") + 1, html.lastIndexOf("</"));
+}
+
 export function valuesOf(element: Element, name: string): (string | true)[] {
   return element.attributes.filter(([found]) => found === name).map(([, value]) => value);
 }

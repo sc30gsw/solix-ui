@@ -31,6 +31,10 @@ It does if it edits any of these:
 | `packages/core/src/Button.tsx`: `Button` | Its root is a `<button>` unless `component` names another element or component. `disabled` is one of its boolean attributes. |
 | `packages/core/src/Disclosure.tsx`: `Disclosure` | Its root is a `<details>`. `open` is one of its boolean attributes. |
 | `packages/core/src/Modal.tsx`: `Modal` | Its root is a `<dialog>`. `hidden` is its boolean attribute. `open` is not part of the contract: the component owns it through `opened`, and its type declares `open` as `never`. So are `display`, `hiddenFrom` and `visibleFrom`, which it keeps off its root and out of its style props. It passes a consumer's `ref` the `<dialog>` along with its own. The heading prop is `label`, because `title` is an HTML attribute that must reach the root. |
+| `packages/core/src/Tabs.tsx`: `Tabs` | Its root is a `<div>`. `hidden` is its boolean attribute. It takes its behaviour from `createBehaviour` in `packages/core/src/headless.ts` and gives it to the three components below through `packages/core/src/tabs-context.ts`. |
+| `packages/core/src/TabsList.tsx`: `TabsList` | Its root is a `<div>`, rendered inside a `Tabs`, which its fixture names as `within`. `hidden` is its boolean attribute. |
+| `packages/core/src/TabsPanel.tsx`: `TabsPanel` | Its root is a `<div>`, rendered inside a `Tabs`. `inert` is its boolean attribute, since the behaviour owns `hidden` on a panel. |
+| `packages/core/src/TabsTab.tsx`: `TabsTab` | Its root is a `<button>`, rendered inside a `Tabs`. `disabled` is its boolean attribute. Its fixture gives both sections and a label, so every part renders. |
 | `packages/core/src/TextInput.tsx`: `TextInput` | Its root is the `<input>` itself, with no wrapper. `disabled` is its boolean attribute. A consumer's `type` replaces its `text`. |
 | `packages/core/src/index.ts` | Every function it exports is a component. |
 | `packages/core/build-pipeline.mjs` | The check renders the built files in `packages/core/dist`, which is what a consumer gets. |

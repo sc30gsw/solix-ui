@@ -93,6 +93,19 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     await page.getByRole("textbox", { name: "Email" }).fill("someone@example.com");
     await page.getByText("A region that counts presses outside it").click();
     await page.getByRole("heading", { name: "Primitives" }).click();
+    await page
+      .getByRole("tablist", { name: "Account", exact: true })
+      .getByRole("tab")
+      .last()
+      .click();
+    await page.keyboard.press("ArrowRight");
+    await page.getByText("Overview panel").waitFor({ state: "visible" });
+    await page
+      .getByRole("tablist", { name: "Optional", exact: true })
+      .getByRole("tab")
+      .nth(1)
+      .click();
+    await page.getByText("Notes panel").waitFor({ state: "visible" });
   });
 
   afterAll(async () => {

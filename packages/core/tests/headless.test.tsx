@@ -145,6 +145,16 @@ function compiledAs(name: string): CompiledStyles {
   return { $$css: true, display: `probe-${name}` } as unknown as CompiledStyles;
 }
 
+test("bindSlot leaves a symbol key of ours alone, as Solid's own props proxies carry", () => {
+  const marker = Symbol("marker");
+  const bound = bindSlot({ [marker]: "ours", title: "t" }, {}, (attributes) => ({
+    ...attributes,
+    role: "tab",
+  }));
+
+  expect({ ...bound }).toMatchObject({ title: "t", role: "tab" });
+});
+
 const compiled = {
   root: compiledAs("root"),
   list: compiledAs("list"),
