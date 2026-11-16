@@ -162,7 +162,7 @@ test("a release younger than the minimum release age is not yet eligible, not be
   expect(statuses({ excluded: [{ name: "semver" }] }).semver).toBe("behind");
 });
 
-test("releasePolicy reads each minimumReleaseAgeExclude entry once, as a package name or <name>@<exact version>, and refuses any other, as it would in this repository's setting", () => {
+test("releasePolicy reads each minimumReleaseAgeExclude entry as a package name or <name>@<exact version>, refuses any other, and accepts this repository's own", () => {
   const settings = { ...pnpmSettings(), minimumReleaseAge: 1440 };
   const withExclusions = (minimumReleaseAgeExclude: string[]) =>
     releasePolicy({ ...settings, minimumReleaseAgeExclude });
@@ -254,7 +254,7 @@ test("while @solidjs/web has no stable Solid 2 yet, the canary takes the newest 
   expect(newestSolidRelease(lagging, policy, now)).toBe("2.0.0-rc.23");
 });
 
-test("a prerelease pin on the stable channel is behind a newer prerelease of the version it pins, and behind that version once it is stable", () => {
+test("a prerelease pin with no channel of its own is behind a newer prerelease of the version it pins, and behind that version once it is stable", () => {
   const betas: Release[] = [
     ["0.9.0", 99],
     ["1.0.0-beta.3", 50],
@@ -376,7 +376,7 @@ test("the Solid 2 canary refuses a peer range it cannot read instead of passing 
   );
 });
 
-test("the Solid 2 canary stays on Solid 2 when next moves to Solid 3, and takes 2.x stable when it ships", () => {
+test("the Solid 2 canary stays on Solid 2 when next moves to Solid 3, and takes 2.x stable once it is old enough to install", () => {
   const releases: Release[] = [
     ["2.0.0-rc.22", 30],
     ["2.0.0", 20],

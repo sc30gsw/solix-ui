@@ -158,10 +158,10 @@ test(`every package with TypeScript sources has a tsconfig.json, and every tscon
       ({ path }) =>
         `${path}: add a tsconfig.json that extends ${sharedSettingsFile} at the repository root.`,
     );
-  const projects = globSync("**/tsconfig.json", {
+  const projects = globSync("**/tsconfig*.json", {
     cwd: repositoryRoot,
     exclude: outsideGeneratedOrInstalled,
-  });
+  }).filter((path) => path !== sharedSettingsFile);
   const violations = projects.flatMap((path) => {
     const project = JSON.parse(readFileSync(join(repositoryRoot, path), "utf8")) as ProjectSettings;
     return [
@@ -379,7 +379,7 @@ function pathsOfTheWorkspaceFile(file: string, source: ts.SourceFile): string[] 
     ts.isStringLiteralLikeNode(node) &&
     (node.text === workspaceFile || node.text.endsWith(`/${workspaceFile}`))
       ? [
-          `${file}:${lineOf(source, node.getStart())}: ${node.getText()} writes the path of ${workspaceFile}. Take its settings from pnpmSettings() in ${pnpmSettingsReader}, the one module that reads or edits the file, so no second parser can disagree with pnpm.`,
+          `${file}:${lineOf(source, node.getStart())}: ${node.getText()} writes the path of ${workspaceFile}. Take its settings from pnpmSettings() in ${pnpmSettingsReader}, which asks pnpm, so no second parser can disagree with pnpm.`,
         ]
       : [],
   );
