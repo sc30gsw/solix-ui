@@ -28,6 +28,7 @@ Preconditions:
 
 ## Gotchas
 
+- The section is found by its exact name, `Grid`, because a region name matches as a substring and `Simple grid` holds it.
 - A column is found by its text, and its `inner` part, which lays the columns out, as its parent. A span's width is `(row + gap) × span ÷ columns − gap`, read from that part's width and its computed `column-gap`, and compared within one pixel.
 - `Grid.Col` is the component `GridCol`, which `Grid` carries. It reads `columns`, `grow` and how `Grid` queries its width from the grid's context.
 - With `type="container"`, a `Grid` renders inside its `container` part, named `solix-grid`, and its `<style>` holds the rules of its own gap and of every column's span, offset, order and align for the widths `breakpoints` names. Without `breakpoints` it renders no container and its columns keep only their base values.

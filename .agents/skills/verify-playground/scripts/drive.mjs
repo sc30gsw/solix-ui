@@ -391,7 +391,7 @@ const journeys = {
     observe("at md: the grids in containers keep their columns", `${await columnsOf(gridAround("Cell of the narrow container"))} ${await columnsOf(gridAround("Cell of the wide container"))}`, "2 4");
   },
   grid: async ({ page, observe, shot, expected }) => {
-    const section = page.getByRole("region", { name: "Grid" });
+    const section = page.getByRole("region", { name: "Grid", exact: true });
     const column = (text) => page.getByText(text, { exact: true });
     const boxOf = (element) => element.evaluate((node) => { const { left, width } = node.getBoundingClientRect(); return { left, width }; });
     const spanWidth = async (element, span, columns) => {
