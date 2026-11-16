@@ -130,6 +130,27 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
       expect((await widthOf(wide)) > (await widthOf(short)) + 1).toBe(true);
     },
   ],
+  [
+    "a Flex sets each flexbox property it is given, switches the responsive ones at md, keeps rowGap over gap, and renders the element component names",
+    async ({ page, expected, fromMd }) => {
+      const flex = page.getByRole("button", { name: "First in the flex" }).locator("xpath=..");
+      const list = page.getByRole("list", { name: "Flex list" });
+
+      expect(await computed(flex, "display")).toBe("flex");
+      expect(await computed(flex, "flex-direction")).toBe(fromMd ? "row" : "column");
+      expect(await computed(flex, "column-gap")).toBe(
+        expected(fromMd ? "--solix-spacing-xl" : "--solix-spacing-xs"),
+      );
+      expect(await computed(flex, "row-gap"), "rowGap, a longhand, beats gap at md").toBe(
+        expected("--solix-spacing-sm"),
+      );
+      expect(await computed(flex, "align-items")).toBe("center");
+      expect(await computed(flex, "justify-content")).toBe("space-between");
+      expect(await computed(flex, "flex-wrap")).toBe("wrap");
+      expect(await computed(list, "display")).toBe("flex");
+      expect(await computed(list, "column-gap")).toBe(expected("--solix-spacing-lg"));
+    },
+  ],
 ];
 
 inEveryEngine((browser) => {

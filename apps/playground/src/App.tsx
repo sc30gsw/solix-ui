@@ -3,6 +3,7 @@ import { ButtonSection } from "./sections/ButtonSection";
 import { CenterSection } from "./sections/CenterSection";
 import { ChangingPropsSection } from "./sections/ChangingPropsSection";
 import { DisclosureSection } from "./sections/DisclosureSection";
+import { FlexSection } from "./sections/FlexSection";
 import { GroupSection } from "./sections/GroupSection";
 import { ModalSection } from "./sections/ModalSection";
 import { PrimitivesSection } from "./sections/PrimitivesSection";
@@ -28,6 +29,7 @@ export default function App() {
       <CenterSection />
       <StackSection />
       <GroupSection />
+      <FlexSection />
       <PrimitivesSection />
     </main>
   );

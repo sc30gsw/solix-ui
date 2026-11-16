@@ -94,6 +94,27 @@ export const stylePropTable = {
 } as const satisfies Record<string, PropertyRow | AliasRow>;
 
 export const variableTable = {
+  Flex: {
+    "flex-align": { kind: "raw", responsive: true, property: "align-items" },
+    "flex-column-gap": {
+      kind: "length",
+      scale: "spacing",
+      responsive: true,
+      property: "column-gap",
+      within: "flex-gap",
+    },
+    "flex-direction": { kind: "raw", responsive: true, property: "flex-direction" },
+    "flex-gap": { kind: "length", scale: "spacing", responsive: true, property: "gap" },
+    "flex-justify": { kind: "raw", responsive: true, property: "justify-content" },
+    "flex-row-gap": {
+      kind: "length",
+      scale: "spacing",
+      responsive: true,
+      property: "row-gap",
+      within: "flex-gap",
+    },
+    "flex-wrap": { kind: "raw", responsive: true, property: "flex-wrap" },
+  },
   Group: {
     "group-align": { kind: "raw", responsive: false },
     "group-child-width": {

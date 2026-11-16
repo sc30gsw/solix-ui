@@ -60,6 +60,13 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     polymorphic: false,
     props: { label: "Label", children: "Content" },
   },
+  Flex: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: true,
+    props: { children: "Content" },
+  },
   Group: {
     tag: "div",
     booleanAttribute: "hidden",

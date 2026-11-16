@@ -124,6 +124,7 @@ function longhandsSetBy(property: string): string[] {
     return sides.map((side) => `${family}-${side}`);
   }
   if (property === "inset") return boxSides;
+  if (property === "gap") return ["row-gap", "column-gap"];
   if (property === "background") return backgroundLonghands.map((part) => `background-${part}`);
   return [property];
 }
@@ -335,6 +336,7 @@ test("every rule of a shorthand style prop, at every breakpoint, comes before ev
       "padding-block > padding-top",
       "inset > top",
       "background > background-size",
+      "gap > row-gap",
     ]),
   );
   expect(violations).toEqual([]);

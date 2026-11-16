@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
-import type { CenterProps, GroupProps, SpaceProps, StackProps } from "../src/index";
+import type { CenterProps, FlexProps, GroupProps, SpaceProps, StackProps } from "../src/index";
 import { render } from "./fixtures";
 import {
   classesOf,
@@ -211,4 +211,56 @@ test.each(groupCases)("Group: %s", (_, props, { grow, children, ...expected }) =
   ).toEqual(["span", "span", "i"]);
   expect(html, "it renders no text for a falsy child").not.toMatch(/>0<|>false<|>true</);
   expect(elementsOf(html)).toHaveLength(children + 1);
+});
+
+const flexCases: [what: string, props: FlexProps<"div" | "section">, expected: Rendered][] = [
+  ["sets nothing of its own by default", {}, { classes: [], style: {} }],
+  [
+    "gives each flexbox prop its own variable, at each breakpoint it names",
+    {
+      gap: { base: "xs", md: 32 },
+      rowGap: "sm",
+      columnGap: { lg: "xl" },
+      align: "center",
+      justify: { base: "flex-start", sm: "center" },
+      wrap: "wrap",
+      direction: { base: "column", md: "row" },
+    },
+    {
+      classes: [
+        "sx-flex-align",
+        "sx-flex-column-gap-lg",
+        "sx-flex-direction",
+        "sx-flex-direction-md",
+        "sx-flex-gap",
+        "sx-flex-gap-md",
+        "sx-flex-justify",
+        "sx-flex-justify-sm",
+        "sx-flex-row-gap",
+        "sx-flex-wrap",
+      ],
+      style: {
+        "--sx-flex-align": "center",
+        "--sx-flex-column-gap-lg": "var(--solix-spacing-xl)",
+        "--sx-flex-direction": "column",
+        "--sx-flex-direction-md": "row",
+        "--sx-flex-gap": "var(--solix-spacing-xs)",
+        "--sx-flex-gap-md": "2rem",
+        "--sx-flex-justify": "flex-start",
+        "--sx-flex-justify-sm": "center",
+        "--sx-flex-row-gap": "var(--solix-spacing-sm)",
+        "--sx-flex-wrap": "wrap",
+      },
+    },
+  ],
+  [
+    "keeps its variables on the element component names",
+    { component: "section", gap: "md" },
+    { classes: ["sx-flex-gap"], style: { "--sx-flex-gap": "var(--solix-spacing-md)" } },
+  ],
+];
+
+test.each(flexCases)("Flex: %s", (_, props, expected) => {
+  expect(libraryOf("Flex", props)).toEqual(expected);
+  expect(rootElementOf(render("Flex", props)).tag).toBe(props.component ?? "div");
 });

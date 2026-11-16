@@ -29,6 +29,7 @@ const journeys = [
   ["center", "A Center puts its content in its middle, inline or not"],
   ["stack", "A Stack lays its children out in a column"],
   ["group", "A Group lays its children out in a row, and grows them into equal shares"],
+  ["flex", "A Flex sets the flexbox properties it is given, responsive ones at md"],
   ["server-render", "The page is server-rendered and styled without JavaScript"],
 ];
 

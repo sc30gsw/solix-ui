@@ -324,6 +324,29 @@ const journeys = {
     observe("with preventGrowOverflow false a child has no maximum width", await style(wide, "max-width"), "none");
     observe("with preventGrowOverflow false the wide child takes more of the row than the short one", (await widthOf(wide)) > (await widthOf(short)) + 1, true);
   },
+  flex: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Flex" });
+    const flex = page.getByRole("button", { name: "First in the flex" }).locator("xpath=..");
+    const list = page.getByRole("list", { name: "Flex list" });
+    await page.setViewportSize({ width: mdWidth - 1, height: 360 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Flex.`, section);
+    observe("below md: the Flex lays its buttons out in a column", await style(flex, "flex-direction"), "column");
+    observe("below md: the gap between columns is xs", await style(flex, "column-gap"), expected("--solix-spacing-xs"));
+    observe("the gap between rows is rowGap, sm, not gap", await style(flex, "row-gap"), expected("--solix-spacing-sm"));
+    observe("align centres the buttons across the main axis", await style(flex, "align-items"), "center");
+    observe("justify spreads the buttons along the main axis", await style(flex, "justify-content"), "space-between");
+    observe("wrap lets the buttons wrap", await style(flex, "flex-wrap"), "wrap");
+    observe("the Flex list is the <ul> its component prop names, a flex container", await style(list, "display"), "flex");
+    observe("the Flex list's gap is lg", await style(list, "column-gap"), expected("--solix-spacing-lg"));
+
+    await page.setViewportSize({ width: mdWidth, height: 360 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The buttons move into a row.`, section);
+    observe("at md: the Flex lays its buttons out in a row", await style(flex, "flex-direction"), "row");
+    observe("at md: the gap between columns is xl", await style(flex, "column-gap"), expected("--solix-spacing-xl"));
+    observe("at md: the gap between rows is still rowGap, sm", await style(flex, "row-gap"), expected("--solix-spacing-sm"));
+  },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();
     writeFileSync(join(directory, "response.html"), html);
