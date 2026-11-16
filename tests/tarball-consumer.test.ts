@@ -11,13 +11,14 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Page } from "playwright";
+import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { BEHAVIOUR_SDK_LAYER } from "../packages/core/build-pipeline.mjs";
 import { pnpmSettings, workspaceFile } from "../scripts/pnpm-settings";
 import { allowedRuntimeDependencies } from "../scripts/runtime-dependencies";
 import { stateOf, tabNamed } from "../apps/playground/tests/support/tabs";
-import { inEveryEngine } from "./support/served-app";
+import { browserType, enginesToVerify } from "../scripts/browser-engines.mjs";
+import { sharedSettings } from "../scripts/syntax";
 import { type RunningServer, startServer } from "./support/server-process";
 import {
   componentLibraries,
@@ -36,6 +37,8 @@ const fromOutsideTheRepository = allowedRuntimeDependencies().flatMap(({ depende
   seam === undefined ? [] : [dependency],
 );
 const settingsAConsumerWrites = ["plugins"];
+const settingsOfAnAppInThisRepository = join(repositoryRoot, "apps/playground/tsconfig.json");
+const [engine] = enginesToVerify();
 const servers: [label: string, port: number, command: string[]][] = [
   ["the built server in plain Node", builtServerPort, ["node", "dist/server/node.js"]],
   [
@@ -78,6 +81,23 @@ function buildWith(appSource: string): void {
   run(join(app, "node_modules/.bin/vp"), ["build"], app);
 }
 
+function compilerOptionsOf(settings: string): Record<string, unknown> {
+  const { compilerOptions } = JSON.parse(readFileSync(settings, "utf8")) as {
+    compilerOptions: Record<string, unknown>;
+  };
+  return compilerOptions;
+}
+
+function typeErrors(): string {
+  try {
+    run(join(app, "node_modules/.bin/tsc"), ["--project", app], app);
+    return "";
+  } catch (error) {
+    const { stdout, stderr } = error as { stdout?: string; stderr?: string };
+    return `${stdout ?? ""}${stderr ?? ""}` || String(error);
+  }
+}
+
 function packInto(destination: string, directory: string): string {
   const [tarball] = run("pnpm", ["pack", "--pack-destination", destination], directory)
     .split("\n")
@@ -110,9 +130,21 @@ beforeAll(() => {
       },
       devDependencies: {
         "@solidjs/vite-plugin": versionOf("@solidjs/vite-plugin"),
+        typescript: versionOf("typescript"),
         vite: versionOf("vite"),
         "vite-plus": versionOf("vite-plus"),
       },
+    }),
+  );
+  writeFileSync(
+    join(app, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        ...compilerOptionsOf(sharedSettings),
+        ...compilerOptionsOf(settingsOfAnAppInThisRepository),
+        strict: true,
+      },
+      include: ["src"],
     }),
   );
   writeFileSync(
@@ -173,49 +205,53 @@ test("the consumer's Vite configuration sets nothing but the Solid plugin: no de
   expect(config).not.toMatch(/stylex|optimizeDeps|alias/);
 });
 
+test("the consumer's app and every type the library hands it pass a strict type check against the installed tarballs, with the repository's compiler settings", () => {
+  expect(typeErrors()).toBe("");
+});
+
 test("a consumer that renders only a Button ships none of the SDK, and one that renders Tabs ships it", () => {
   expect(clientWithButtonOnly.length).toBeGreaterThan(0);
   expect(clientWithButtonOnly.includes(BEHAVIOUR_SDK_LAYER)).toBe(false);
   expect(clientScripts().includes(BEHAVIOUR_SDK_LAYER)).toBe(true);
 });
 
-inEveryEngine((browser) => {
-  describe.each(servers)("served by %s", (_, port, command) => {
-    let server: RunningServer;
-    let page: Page;
-    const problems: string[] = [];
+describe.each(servers)(`served by %s, in ${engine}`, (_, port, command) => {
+  let browser: Browser;
+  let server: RunningServer;
+  let page: Page;
+  const problems: string[] = [];
 
-    beforeAll(async () => {
-      server = await startServer({ directory: app, port, command });
-      page = await browser().newPage();
-      page.on("console", (message) => {
-        if (message.type() === "error" || message.type() === "warning") {
-          problems.push(message.text());
-        }
-      });
-      page.on("pageerror", (error) => problems.push(String(error)));
-      await page.goto(server.url, { waitUntil: "networkidle" });
-    }, installAndBuildTimeout);
-
-    afterAll(async () => {
-      await page.close();
-      server.stop();
+  beforeAll(async () => {
+    server = await startServer({ directory: app, port, command });
+    browser = await browserType(engine).launch();
+    page = await browser.newPage();
+    page.on("console", (message) => {
+      if (message.type() === "error" || message.type() === "warning") {
+        problems.push(message.text());
+      }
     });
+    page.on("pageerror", (error) => problems.push(String(error)));
+    await page.goto(server.url, { waitUntil: "networkidle" });
+  }, installAndBuildTimeout);
 
-    test("the consumer's Tabs arrive rendered, hydrate, and select by click and by arrow key, with no console error or warning", async () => {
-      const state = () => stateOf(page, "Consumer");
+  afterAll(async () => {
+    await browser.close();
+    server.stop();
+  });
 
-      expect(await (await fetch(server.url)).text()).toContain('role="tablist"');
-      expect(await state()).toMatchObject({ selected: "One", shown: ["One panel"] });
+  test("the consumer's Tabs arrive rendered, hydrate, and select by click and by arrow key, with no console error or warning", async () => {
+    const state = () => stateOf(page, "Consumer");
 
-      await tabNamed(page, "Consumer", "Two").click();
+    expect(await (await fetch(server.url)).text()).toContain('role="tablist"');
+    expect(await state()).toMatchObject({ selected: "One", shown: ["One panel"] });
 
-      await expect.poll(state).toMatchObject({ selected: "Two", shown: ["Two panel"] });
+    await tabNamed(page, "Consumer", "Two").click();
 
-      await page.keyboard.press("ArrowRight");
+    await expect.poll(state).toMatchObject({ selected: "Two", shown: ["Two panel"] });
 
-      await expect.poll(state).toMatchObject({ selected: "One", shown: ["One panel"] });
-      expect(problems).toEqual([]);
-    });
+    await page.keyboard.press("ArrowRight");
+
+    await expect.poll(state).toMatchObject({ selected: "One", shown: ["One panel"] });
+    expect(problems).toEqual([]);
   });
 });
