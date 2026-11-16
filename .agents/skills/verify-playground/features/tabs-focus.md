@@ -27,4 +27,3 @@ Preconditions:
 
 - A panel with no focusable content is itself a tab stop, so Tab from a list reaches its panel before the next list.
 - A focus ring shows only for keyboard focus. A click on a tab focuses it without a ring, which is why the journey leaves the list and comes back.
-- After a click on the selected tab of `Optional` selects none, the tab stop is the first enabled tab of that list, not the tab that was clicked.

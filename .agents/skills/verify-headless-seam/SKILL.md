@@ -63,7 +63,7 @@ No model checker or verifier runs on a Solid component or on the SDK, so this is
 
 ## What a pass does not cover
 
-- Handlers and refs of the generated props in a browser. The stand-in test calls merged handlers with a stand-in event, and the SDK test calls the tab's click handler directly in Node. The browser test holds two real cases.
+- Handlers and refs of the generated props in a browser. The stand-in test calls merged handlers with a stand-in event, and the SDK test calls the tab's click handler directly in Node. `behaviour-seam.test.ts` holds one handler given after the first render; `consumer.test.ts` each root's ref.
 - A ref given after the first render. `bindSlot` reads the refs once, when it binds.
 - An SDK slot whose attributes include a style. No tabs slot has one, so the style order is checked against the stand-in only.
 - A part repeated inside one component, such as an option rendered from data. `bind` binds each part of its map once, and no component binds one per item yet.

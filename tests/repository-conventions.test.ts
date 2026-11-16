@@ -152,12 +152,19 @@ test("every verification skill says which commit it was last confirmed against",
   expect(violations).toEqual([]);
 });
 
+const coveredCodeHeader = "Covered code";
+
 function coveredPathsOf(text: string): string[] {
-  return text
-    .split("\n")
-    .filter((line) => line.startsWith("| ") && !line.startsWith("| ---"))
-    .slice(1)
-    .flatMap((row) => [...(row.split(" | ")[0] ?? "").matchAll(backticked)].map(([, path]) => path))
+  const rows = text.split("\n").map((line) => (line.startsWith("| ") ? line : undefined));
+  return rows
+    .flatMap((row, index) => {
+      if (row === undefined || row.startsWith("| ---")) return [];
+      const header = rows.slice(0, index + 1).findLastIndex((line) => line === undefined) + 1;
+      if (header === index) return [];
+      const cells = (rows[header] ?? "").replace(/^\| | \|$/g, "").split(" | ");
+      const column = Math.max(cells.indexOf(coveredCodeHeader), 0);
+      return [...(row.split(" | ")[column] ?? "").matchAll(backticked)].map(([, path]) => path);
+    })
     .filter((path) => existsSync(join(repositoryRoot, path)));
 }
 

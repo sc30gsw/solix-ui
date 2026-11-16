@@ -27,7 +27,7 @@ const journeys = [
   ["tabs", "Tabs select by click and by key, step over a disabled tab, and can select none"],
   ["tabs-keyboard", "Every row of the keyboard table moves focus and selection as the tabs pattern says"],
   ["tabs-focus", "The Tab key enters a tab list at its selected tab and leaves it for the panel"],
-  ["tabs-run-time-writes", "The SDK writes one style element into the page, and nothing on the parts"],
+  ["tabs-run-time-writes", "The SDK writes one style element into the page, and no style or class on the parts"],
   ["server-render", "The page is server-rendered and styled without JavaScript"],
 ];
 
