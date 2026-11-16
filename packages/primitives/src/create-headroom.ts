@@ -12,11 +12,11 @@ export type HeadroomOptions = {
    * any scroll past `fixedAt` reveals or hides it fully.
    */
   scrollDistance?: MaybeAccessor<number>;
-  /** Called when scrolling up, or entering the fixed zone, pins the element. */
+  /** Called when the position enters the fixed zone, or the scroll turns up outside it. */
   onPin?: () => void;
   /** Called when the scroll position enters the fixed zone. */
   onFix?: () => void;
-  /** Called when scrolling down outside the fixed zone releases a pinned element. */
+  /** Called when the scroll turns down outside the fixed zone. */
   onRelease?: () => void;
 };
 
