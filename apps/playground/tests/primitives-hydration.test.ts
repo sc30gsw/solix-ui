@@ -10,9 +10,19 @@ const headroomCalls = '[data-case-calls="createHeadroom"]';
 
 type Revealed = { expected: string; restore: () => Promise<unknown> };
 
-async function scrolledTo(page: Page, y: number): Promise<void> {
-  await page.evaluate((top) => window.scrollTo({ top, behavior: "instant" }), y);
-  await page.waitForFunction((top) => Math.round(window.scrollY) === top, y, revealWait);
+function scrolledTo(page: Page, y: number): Promise<void> {
+  return page.evaluate(
+    (top) =>
+      new Promise<void>((resolve) => {
+        if (Math.round(window.scrollY) === top) {
+          resolve();
+          return;
+        }
+        document.addEventListener("scroll", () => resolve(), { once: true });
+        window.scrollTo({ top, behavior: "instant" });
+      }),
+    y,
+  );
 }
 
 function region(page: Page, name: string) {
