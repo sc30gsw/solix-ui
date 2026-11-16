@@ -31,8 +31,10 @@ It does if it edits any of these:
 | `packages/core/src/Button.tsx`: `Button` | Its root is a `<button>` unless `component` names another element or component. `disabled` is one of its boolean attributes. |
 | `packages/core/src/Center.tsx`: `Center` | Its root is a `<div>` unless `component` names another element or component. `hidden` is its boolean attribute. With `inline` it carries `data-inline="true"`. |
 | `packages/core/src/Disclosure.tsx`: `Disclosure` | Its root is a `<details>`. `open` is one of its boolean attributes. |
+| `packages/core/src/Group.tsx`: `Group` | Its root is a `<div>`. `hidden` is its boolean attribute. It renders its children itself, leaving out `null`, `undefined`, booleans, `""` and `0`. With `grow` it carries `data-grow="true"` and, unless `unstyled`, the variable whose child rule makes each child grow. |
 | `packages/core/src/Modal.tsx`: `Modal` | Its root is a `<dialog>`. `hidden` is its boolean attribute. `open` is not part of the contract: the component owns it through `opened`, and its type declares `open` as `never`. So are `display`, `hiddenFrom` and `visibleFrom`, which it keeps off its root and out of its style props. It passes a consumer's `ref` the `<dialog>` along with its own. The heading prop is `label`, because `title` is an HTML attribute that must reach the root. |
 | `packages/core/src/Space.tsx`: `Space` | Its root is a `<div>`. `hidden` is its boolean attribute. Its `h` and `w`, or `mih` and `miw` when given, are also its minimum height and width, through its own variables. |
+| `packages/core/src/Stack.tsx`: `Stack` | Its root is a `<div>`. `hidden` is its boolean attribute. |
 | `packages/core/src/TextInput.tsx`: `TextInput` | Its root is the `<input>` itself, with no wrapper. `disabled` is its boolean attribute. A consumer's `type` replaces its `text`. |
 | `packages/core/src/index.ts` | Every function it exports is a component. |
 | `packages/core/build-pipeline.mjs` | The check renders the built files in `packages/core/dist`, which is what a consumer gets. |

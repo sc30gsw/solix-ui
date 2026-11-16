@@ -27,6 +27,8 @@ const journeys = [
   ["styles-api", "Classes, styles and unstyled restyle a component's parts, and Button takes a style prop"],
   ["space", "A Space keeps the height and width it is given, at each breakpoint"],
   ["center", "A Center puts its content in its middle, inline or not"],
+  ["stack", "A Stack lays its children out in a column"],
+  ["group", "A Group lays its children out in a row, and grows them into equal shares"],
   ["server-render", "The page is server-rendered and styled without JavaScript"],
 ];
 

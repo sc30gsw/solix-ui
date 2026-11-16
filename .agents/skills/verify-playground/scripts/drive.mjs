@@ -19,6 +19,7 @@ const mdWidth = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 
 const style = (locator, property) =>
   locator.evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
+const widthOf = (locator) => locator.evaluate((node) => node.getBoundingClientRect().width);
 const elementAfter = (page, text) => page.getByText(text, { exact: true }).locator("xpath=following-sibling::*[1]");
 
 const journeys = {
@@ -283,6 +284,45 @@ const journeys = {
     );
     observe("the inline Center is an inline flex container", await style(link, "display"), "inline-flex");
     observe("the inline Center is the link its component prop names", await link.getAttribute("href"), "#center");
+  },
+  stack: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Stack" });
+    const first = page.getByRole("button", { name: "First in the stack" });
+    const second = page.getByRole("button", { name: "Second in the stack" });
+    const stack = first.locator("xpath=..");
+    const centred = page.getByText("Top of the centred stack", { exact: true }).locator("xpath=..");
+    await section.scrollIntoViewIfNeeded();
+    await shot("stack", "Open the page and scroll to the section named Stack.", section);
+    observe("the Stack lays its children out in a column", await style(stack, "flex-direction"), "column");
+    observe("the Stack's gap is md by default", await style(stack, "row-gap"), expected("--solix-spacing-md"));
+    observe("the Stack stretches its children by default", await style(stack, "align-items"), "stretch");
+    observe(
+      "Second in the stack sits below First in the stack",
+      await second.evaluate((node, above) => node.getBoundingClientRect().top >= above.getBoundingClientRect().bottom, await first.elementHandle()),
+      true,
+    );
+    observe("the centred Stack takes the gap it is given, xl", await style(centred, "row-gap"), expected("--solix-spacing-xl"));
+    observe("the centred Stack centres its children", await style(centred, "align-items"), "center");
+  },
+  group: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Group" });
+    const first = page.getByRole("button", { name: "First in the group" });
+    const group = first.locator("xpath=..");
+    const growing = ["Grows", "Grows too", "Grows as well"].map((name) => page.getByRole("button", { name, exact: true }));
+    const wide = page.getByRole("button", { name: /^A label wide enough/ });
+    const short = page.getByRole("button", { name: "Short", exact: true });
+    await section.scrollIntoViewIfNeeded();
+    await shot("group", "Open the page and scroll to the section named Group.", section);
+    observe("the Group lays its children out in a row", await style(group, "flex-direction"), "row");
+    observe("the Group wraps by default", await style(group, "flex-wrap"), "wrap");
+    observe("the Group's gap is md by default", await style(group, "column-gap"), expected("--solix-spacing-md"));
+    observe("the Group centres its children across the row by default", await style(group, "align-items"), "center");
+    observe("the growing Group carries data-grow", await growing[0].locator("xpath=..").getAttribute("data-grow"), "true");
+    const widths = await Promise.all(growing.map(widthOf));
+    observe("each child of the growing Group takes the same share of the row", Math.max(...widths) - Math.min(...widths) <= 1, true);
+    observe("a child of the growing Group grows", await style(growing[0], "flex-grow"), "1");
+    observe("with preventGrowOverflow false a child has no maximum width", await style(wide, "max-width"), "none");
+    observe("with preventGrowOverflow false the wide child takes more of the row than the short one", (await widthOf(wide)) > (await widthOf(short)) + 1, true);
   },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();

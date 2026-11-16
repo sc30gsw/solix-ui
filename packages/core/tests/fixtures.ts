@@ -60,6 +60,13 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     polymorphic: false,
     props: { label: "Label", children: "Content" },
   },
+  Group: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    props: { children: "Content" },
+  },
   Modal: {
     tag: "dialog",
     booleanAttribute: "hidden",
@@ -73,6 +80,13 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     takesDisplay: true,
     polymorphic: false,
     props: {},
+  },
+  Stack: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    props: { children: "Content" },
   },
   TextInput: {
     tag: "input",

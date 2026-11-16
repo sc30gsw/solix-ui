@@ -1,8 +1,15 @@
 import { expect, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
-import type { CenterProps, SpaceProps } from "../src/index";
+import type { CenterProps, GroupProps, SpaceProps, StackProps } from "../src/index";
 import { render } from "./fixtures";
-import { classesOf, declarationsIn, type Element, rootElementOf, valuesOf } from "./markup";
+import {
+  classesOf,
+  declarationsIn,
+  type Element,
+  elementsOf,
+  rootElementOf,
+  valuesOf,
+} from "./markup";
 
 type Rendered = { classes: string[]; style: Record<string, string> };
 
@@ -90,4 +97,118 @@ test.each(centerCases)("Center: %s", (_, props, tag, inline) => {
 
   expect(root.tag).toBe(tag);
   expect(valuesOf(root, "data-inline")).toEqual(inline);
+});
+
+const stackCases: [what: string, props: StackProps, expected: Rendered][] = [
+  [
+    "sets nothing of its own by default, so its styles give the gap md",
+    {},
+    { classes: [], style: {} },
+  ],
+  [
+    "gives gap, align and justify to their variables",
+    { gap: "lg", align: "center", justify: "space-between" },
+    {
+      classes: ["sx-stack-align", "sx-stack-gap", "sx-stack-justify"],
+      style: {
+        "--sx-stack-align": "center",
+        "--sx-stack-gap": "var(--solix-spacing-lg)",
+        "--sx-stack-justify": "space-between",
+      },
+    },
+  ],
+  [
+    "writes a number of pixels as rem",
+    { gap: 24 },
+    { classes: ["sx-stack-gap"], style: { "--sx-stack-gap": "1.5rem" } },
+  ],
+];
+
+test.each(stackCases)("Stack: %s", (_, props, expected) => {
+  expect(libraryOf("Stack", props)).toEqual(expected);
+});
+
+const threeChildren = "calc((100% + var(--group-gap)) / 3 - var(--group-gap))";
+
+const groupCases: [
+  what: string,
+  props: GroupProps,
+  expected: Rendered & { grow: (string | true)[]; children: number },
+][] = [
+  [
+    "sets nothing of its own by default and renders its children",
+    {},
+    { classes: [], style: {}, grow: [], children: 3 },
+  ],
+  [
+    "gives gap, align, justify and wrap to their variables",
+    { gap: "xs", align: "flex-start", justify: "center", wrap: "nowrap" },
+    {
+      classes: ["sx-group-align", "sx-group-gap", "sx-group-justify", "sx-group-wrap"],
+      style: {
+        "--sx-group-align": "flex-start",
+        "--sx-group-gap": "var(--solix-spacing-xs)",
+        "--sx-group-justify": "center",
+        "--sx-group-wrap": "nowrap",
+      },
+      grow: [],
+      children: 3,
+    },
+  ],
+  [
+    "with grow, marks itself and keeps each child to its share of the row",
+    { grow: true },
+    {
+      classes: ["sx-group-child-width"],
+      style: { "--sx-group-child-width": threeChildren },
+      grow: ["true"],
+      children: 3,
+    },
+  ],
+  [
+    "with grow and preventGrowOverflow false, lets each child grow past its share",
+    { grow: true, preventGrowOverflow: false },
+    {
+      classes: ["sx-group-child-width"],
+      style: { "--sx-group-child-width": "none" },
+      grow: ["true"],
+      children: 3,
+    },
+  ],
+  [
+    "with grow and unstyled, keeps its mark and drops the rule that grows its children",
+    { grow: true, unstyled: true },
+    { classes: [], style: {}, grow: ["true"], children: 3 },
+  ],
+];
+
+test.each(groupCases)("Group: %s", (_, props, { grow, children, ...expected }) => {
+  const html = render("Group", {
+    ...props,
+    get children() {
+      return [
+        null,
+        <span>First</span>,
+        false,
+        "",
+        0,
+        true,
+        <span>Second</span>,
+        undefined,
+        <i>Third</i>,
+      ];
+    },
+  });
+  const root = rootElementOf(html);
+
+  expect(libraryOf("Group", { ...props, children: ["a", "b", "c"] })).toEqual(expected);
+  expect(valuesOf(root, "data-grow")).toEqual(grow);
+  expect(
+    elementsOf(html)
+      .slice(1)
+      .map(({ tag }) => tag),
+    "it leaves out every falsy child",
+  ).toEqual(["span", "span", "i"]);
+  expect(html, "it renders no text for a falsy child").not.toMatch(/>0<|>false<|>true</);
+  expect(elementsOf(html)).toHaveLength(children + 1);
 });

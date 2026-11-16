@@ -3,9 +3,11 @@ import { ButtonSection } from "./sections/ButtonSection";
 import { CenterSection } from "./sections/CenterSection";
 import { ChangingPropsSection } from "./sections/ChangingPropsSection";
 import { DisclosureSection } from "./sections/DisclosureSection";
+import { GroupSection } from "./sections/GroupSection";
 import { ModalSection } from "./sections/ModalSection";
 import { PrimitivesSection } from "./sections/PrimitivesSection";
 import { SpaceSection } from "./sections/SpaceSection";
+import { StackSection } from "./sections/StackSection";
 import { StylesApiSection } from "./sections/StylesApiSection";
 import { TextInputSection } from "./sections/TextInputSection";
 import "./app.css";
@@ -24,6 +26,8 @@ export default function App() {
       <StylesApiSection />
       <SpaceSection />
       <CenterSection />
+      <StackSection />
+      <GroupSection />
       <PrimitivesSection />
     </main>
   );

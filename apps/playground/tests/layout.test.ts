@@ -25,6 +25,18 @@ function after(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true }).locator("xpath=following-sibling::*[1]");
 }
 
+async function below(lower: Locator, upper: Locator): Promise<boolean> {
+  const [top, bottom] = await Promise.all([
+    lower.evaluate((node) => node.getBoundingClientRect().top),
+    upper.evaluate((node) => node.getBoundingClientRect().bottom),
+  ]);
+  return top >= bottom;
+}
+
+function widthOf(element: Locator): Promise<number> {
+  return element.evaluate((node) => node.getBoundingClientRect().width);
+}
+
 async function centredIn(outer: Locator, inner: Locator): Promise<boolean> {
   return outer.evaluate(
     (parent, child) => {
@@ -71,6 +83,51 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
       );
       expect(await computed(link, "display")).toBe("inline-flex");
       expect(await link.getAttribute("href")).toBe("#center");
+    },
+  ],
+  [
+    "a Stack lays its children out in a column with the md gap, or the gap and alignment it is given",
+    async ({ page, expected }) => {
+      const first = page.getByRole("button", { name: "First in the stack" });
+      const stack = first.locator("xpath=..");
+      const centred = page
+        .getByText("Top of the centred stack", { exact: true })
+        .locator("xpath=..");
+
+      expect(await computed(stack, "flex-direction")).toBe("column");
+      expect(await computed(stack, "row-gap")).toBe(expected("--solix-spacing-md"));
+      expect(await computed(stack, "align-items")).toBe("stretch");
+      expect(await below(page.getByRole("button", { name: "Second in the stack" }), first)).toBe(
+        true,
+      );
+      expect(await computed(centred, "row-gap")).toBe(expected("--solix-spacing-xl"));
+      expect(await computed(centred, "align-items")).toBe("center");
+    },
+  ],
+  [
+    "a Group lays its children out in a wrapping row with the md gap, and with grow gives each an equal share, or lets one take more when preventGrowOverflow is false",
+    async ({ page, expected }) => {
+      const first = page.getByRole("button", { name: "First in the group" });
+      const group = first.locator("xpath=..");
+      const growing = ["Grows", "Grows too", "Grows as well"].map((name) =>
+        page.getByRole("button", { name, exact: true }),
+      );
+      const wide = page.getByRole("button", { name: /^A label wide enough/ });
+      const short = page.getByRole("button", { name: "Short", exact: true });
+
+      expect(await computed(group, "flex-direction")).toBe("row");
+      expect(await computed(group, "flex-wrap")).toBe("wrap");
+      expect(await computed(group, "column-gap")).toBe(expected("--solix-spacing-md"));
+      expect(await computed(group, "align-items")).toBe("center");
+      expect(await growing[0].locator("xpath=..").getAttribute("data-grow")).toBe("true");
+      const widths = await Promise.all(growing.map(widthOf));
+      expect(
+        Math.max(...widths) - Math.min(...widths),
+        "each growing child takes the same share of the row",
+      ).toBeLessThanOrEqual(1);
+      expect(await computed(growing[0], "flex-grow")).toBe("1");
+      expect(await computed(wide, "max-width")).toBe("none");
+      expect((await widthOf(wide)) > (await widthOf(short)) + 1).toBe(true);
     },
   ],
 ];
