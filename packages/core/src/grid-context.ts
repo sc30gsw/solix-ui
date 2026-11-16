@@ -1,10 +1,10 @@
 import { createContext, useContext } from "solid-js";
-import type { ContainerQueries } from "./style-props";
+import type { QueryContainer } from "./style-props";
 
 export type GridContextValue = {
   columns: () => number;
   grow: () => boolean;
-  queries: () => ContainerQueries | undefined;
+  container: QueryContainer;
 };
 
 export const GridContext = createContext<GridContextValue | null>(null);

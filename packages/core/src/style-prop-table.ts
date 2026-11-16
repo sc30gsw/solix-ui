@@ -11,21 +11,24 @@ export type PropertyRow = {
 
 type AliasRow = { readonly aliasOf: string };
 
-type ChildRule = readonly [selector: string, declarations: string];
+type ChildRule = {
+  readonly when?: string;
+  readonly path: readonly [string, ...string[]];
+  readonly set: (own: string) => Readonly<Record<string, string>>;
+};
 
-/** A custom property, or a property, that a component sets on its root from one of its own props. */
-export type VariableRow = {
+type VariableRow = {
   readonly kind: "length" | "raw";
   readonly scale?: Scale;
   readonly responsive: boolean;
-  readonly property?: keyof JSX.CSSProperties;
-  readonly within?: string;
   readonly children?: readonly ChildRule[];
 };
 
 export const stylePropClassPrefix = "sx";
 export const libraryCascadeLayer = "solix";
+export const componentLayer = "components";
 export const stylePropLayer = "style-props";
+export const containerQueryLayer = "container-queries";
 export const childRuleLayer = "child-rules";
 
 export const breakpointWidths = {
@@ -100,44 +103,30 @@ export const variableTable = {
       scale: "container-size",
       responsive: false,
       children: [
-        ['[data-strategy="grid"] > *', "grid-column:2"],
-        ['[data-strategy="grid"] > [data-breakout]', "grid-column:1/-1"],
-        [
-          '[data-strategy="grid"] > [data-breakout] > [data-container]',
-          "max-width:var(--container-size);margin-inline:auto",
-        ],
+        { when: '[data-strategy="grid"]', path: ["*"], set: () => ({ "grid-column": "2" }) },
+        {
+          when: '[data-strategy="grid"]',
+          path: ["[data-breakout]"],
+          set: () => ({ "grid-column": "1/-1" }),
+        },
+        {
+          when: '[data-strategy="grid"]',
+          path: ["[data-breakout]", "[data-container]"],
+          set: (own) => ({ "max-width": own, "margin-inline": "auto" }),
+        },
       ],
     },
   },
   Flex: {
-    "flex-align": { kind: "raw", responsive: true, property: "align-items" },
-    "flex-column-gap": {
-      kind: "length",
-      scale: "spacing",
-      responsive: true,
-      property: "column-gap",
-      within: "flex-gap",
-    },
-    "flex-direction": { kind: "raw", responsive: true, property: "flex-direction" },
-    "flex-gap": { kind: "length", scale: "spacing", responsive: true, property: "gap" },
-    "flex-justify": { kind: "raw", responsive: true, property: "justify-content" },
-    "flex-row-gap": {
-      kind: "length",
-      scale: "spacing",
-      responsive: true,
-      property: "row-gap",
-      within: "flex-gap",
-    },
-    "flex-wrap": { kind: "raw", responsive: true, property: "flex-wrap" },
+    "flex-align": { kind: "raw", responsive: true },
+    "flex-column-gap": { kind: "length", scale: "spacing", responsive: true },
+    "flex-direction": { kind: "raw", responsive: true },
+    "flex-gap": { kind: "length", scale: "spacing", responsive: true },
+    "flex-justify": { kind: "raw", responsive: true },
+    "flex-row-gap": { kind: "length", scale: "spacing", responsive: true },
+    "flex-wrap": { kind: "raw", responsive: true },
   },
   Grid: {
-    "col-align-self": { kind: "raw", responsive: true },
-    "col-flex-basis": { kind: "raw", responsive: true },
-    "col-flex-grow": { kind: "raw", responsive: true },
-    "col-max-width": { kind: "raw", responsive: true },
-    "col-offset": { kind: "raw", responsive: true },
-    "col-order": { kind: "raw", responsive: true },
-    "col-width": { kind: "raw", responsive: true },
     "grid-align": { kind: "raw", responsive: false },
     "grid-column-gap": { kind: "length", scale: "spacing", responsive: true },
     "grid-gap": { kind: "length", scale: "spacing", responsive: true },
@@ -145,12 +134,21 @@ export const variableTable = {
     "grid-overflow": { kind: "raw", responsive: false },
     "grid-row-gap": { kind: "length", scale: "spacing", responsive: true },
   },
+  GridCol: {
+    "col-align-self": { kind: "raw", responsive: true },
+    "col-flex-basis": { kind: "raw", responsive: true },
+    "col-flex-grow": { kind: "raw", responsive: true },
+    "col-max-width": { kind: "raw", responsive: true },
+    "col-offset": { kind: "raw", responsive: true },
+    "col-order": { kind: "raw", responsive: true },
+    "col-width": { kind: "raw", responsive: true },
+  },
   Group: {
     "group-align": { kind: "raw", responsive: false },
     "group-child-width": {
       kind: "raw",
       responsive: false,
-      children: [[" > *", "flex-grow:1;max-width:var(--group-child-width)"]],
+      children: [{ path: ["*"], set: (own) => ({ "flex-grow": "1", "max-width": own }) }],
     },
     "group-gap": { kind: "length", scale: "spacing", responsive: false },
     "group-justify": { kind: "raw", responsive: false },
@@ -164,8 +162,8 @@ export const variableTable = {
     "sg-spacing-y": { kind: "length", scale: "spacing", responsive: true },
   },
   Space: {
-    "space-min-width": { kind: "length", scale: "spacing", responsive: true },
     "space-min-height": { kind: "length", scale: "spacing", responsive: true },
+    "space-min-width": { kind: "length", scale: "spacing", responsive: true },
   },
   Stack: {
     "stack-align": { kind: "raw", responsive: false },
@@ -196,9 +194,8 @@ export type ResponsiveKey = typeof baseKey | Breakpoint;
 export type VisibilityPropName = keyof typeof visibilityTable;
 type Groups = typeof variableTable;
 export type VariableGroup = keyof Groups;
-export type VariableName = {
-  [Group in VariableGroup]: keyof Groups[Group] & string;
-}[VariableGroup];
+export type VariablesOf<Group extends VariableGroup> = keyof Groups[Group] & string;
+export type VariableName = { [Group in VariableGroup]: VariablesOf<Group> }[VariableGroup];
 export type VariableRowOf<Name extends VariableName> = {
   [Group in VariableGroup]: Name extends keyof Groups[Group] ? Groups[Group][Name] : never;
 }[VariableGroup];
@@ -222,10 +219,6 @@ function isVisibilityPropName(name: string): name is VisibilityPropName {
   return Object.hasOwn(visibilityTable, name);
 }
 
-function isVariableGroup(name: string): name is VariableGroup {
-  return Object.hasOwn(variableTable, name);
-}
-
 const variableRows: Record<string, VariableRow> = Object.assign(
   {},
   ...Object.values(variableTable),
@@ -247,12 +240,20 @@ export function variablesOf(group: VariableGroup): VariableName[] {
   return Object.keys(variableTable[group]).filter(isVariableName);
 }
 
+export function isVariableGroup(name: string): name is VariableGroup {
+  return Object.hasOwn(variableTable, name);
+}
+
 export function variableRow(name: VariableName): VariableRow {
   return variableRows[name];
 }
 
-export function variableProperty(name: VariableName): string {
-  return variableRow(name).property ?? `--${name}`;
+export function hasChildRules(name: VariableName): boolean {
+  return variableRow(name).children !== undefined;
+}
+
+export function variableProperty(name: VariableName): `--${string}` {
+  return `--${name}`;
 }
 
 export function canonicalOf(name: StylePropName): CanonicalStylePropName {
@@ -275,11 +276,6 @@ function shorthandDepth(name: CanonicalStylePropName): number {
   return "within" in row ? 1 + shorthandDepth(row.within) : 0;
 }
 
-export function variableDepth(name: string): number {
-  const within = variableRows[name]?.within;
-  return within === undefined ? 0 : 1 + variableDepth(within);
-}
-
 function responsiveClass(name: string, key: ResponsiveKey): string {
   return key === baseKey
     ? `${stylePropClassPrefix}-${name}`
@@ -292,6 +288,10 @@ export function stylePropClass(name: CanonicalStylePropName, key: ResponsiveKey)
 
 export function variableClass(name: VariableName, key: ResponsiveKey): string {
   return responsiveClass(name, key);
+}
+
+export function containerVariableClass(name: VariableName, scope: string, slot: number): string {
+  return `${responsiveClass(name, baseKey)}-c${scope}-${slot}`;
 }
 
 export function visibilityClass(name: VisibilityPropName, breakpoint: Breakpoint): string {
@@ -323,7 +323,7 @@ const readers: Reader[] = [
     name,
     property: variableProperty(name),
     responsive: variableRow(name).responsive,
-    depth: variableDepth(name),
+    depth: 0,
   })),
 ];
 
@@ -347,12 +347,16 @@ function readersAtEveryBreakpoint(group: Reader[]): string[] {
 
 function childRules(): string[] {
   return variableNames.flatMap((name) =>
-    (variableRow(name).children ?? []).map(
-      ([selector, declarations]) =>
-        `.${responsiveClass(name, baseKey)}${selector}{${declarations}}`,
-    ),
+    (variableRow(name).children ?? []).map(({ when = "", path, set }) => {
+      const declarations = Object.entries(set(`var(${variableProperty(name)})`))
+        .map(([property, value]) => `${property}:${value}`)
+        .join(";");
+      return `.${variableClass(name, baseKey)}${when}>${path.join(">")}{${declarations}}`;
+    }),
   );
 }
+
+export const layerOrder = `@layer ${componentLayer}, ${stylePropLayer}, ${containerQueryLayer};`;
 
 export function stylePropRules(): string {
   const depths = [...new Set(readers.map(({ depth }) => depth))].sort(

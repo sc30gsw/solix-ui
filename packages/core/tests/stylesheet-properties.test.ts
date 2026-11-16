@@ -9,7 +9,7 @@ import {
   libraryStylesheet,
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
-import { stylePropRules } from "../src/style-prop-table";
+import { componentLayer, containerQueryLayer, stylePropRules } from "../src/style-prop-table";
 import { nestedLayerOrder } from "./cascade-layers";
 
 const packageRoot = join(import.meta.dirname, "..");
@@ -158,7 +158,13 @@ test("for every generated style definition, the stylesheet stays inside the libr
         ),
       ).toEqual([`@layer ${LIBRARY_CASCADE_LAYER}`]);
       stylesheet.each((layer) => {
-        if (layer.type === "atrule") expect(nestedLayerOrder(layer).at(-1)).toBe(STYLE_PROP_LAYER);
+        if (layer.type === "atrule") {
+          expect(nestedLayerOrder(layer)).toEqual([
+            componentLayer,
+            STYLE_PROP_LAYER,
+            containerQueryLayer,
+          ]);
+        }
       });
 
       stylesheet.walkRules((rule) => {

@@ -4,22 +4,14 @@ import { createUniqueId, Show } from "solid-js";
 import { GridCol } from "./GridCol";
 import { GridContext } from "./grid-context";
 import { createParts, type ElementProps } from "./parts";
-import { type Breakpoint, breakpoints, variablesOf } from "./style-prop-table";
-import {
-  containerQueries,
-  containerRules,
-  type Spacing,
-  type StyleProp,
-  variables,
-} from "./style-props";
+import { type Breakpoint, breakpoints } from "./style-prop-table";
+import { type ContainerWidth, createQueryContainer, type VariableProp } from "./style-props";
 import { tokens } from "./tokens.stylex";
 
-const containerName = "solix-grid";
 const defaultColumns = 12;
 
 const styles = stylex.create({
   container: {
-    containerName,
     containerType: "inline-size",
   },
   root: {
@@ -43,63 +35,52 @@ const styles = stylex.create({
 export type GridProps = ElementProps<
   "div",
   typeof styles,
-  {
-    gap?: StyleProp<Spacing>;
-    rowGap?: StyleProp<Spacing>;
-    columnGap?: StyleProp<Spacing>;
+  (
+    | { type?: "media"; breakpoints?: never }
+    | { type: "container"; breakpoints?: Record<Breakpoint, ContainerWidth> }
+  ) & {
+    gap?: VariableProp<"grid-gap">;
+    rowGap?: VariableProp<"grid-row-gap">;
+    columnGap?: VariableProp<"grid-column-gap">;
     grow?: boolean;
-    justify?: JSX.CSSProperties["justify-content"];
-    align?: JSX.CSSProperties["align-items"];
+    justify?: VariableProp<"grid-justify", JSX.CSSProperties["justify-content"]>;
+    align?: VariableProp<"grid-align", JSX.CSSProperties["align-items"]>;
     columns?: number;
-    overflow?: JSX.CSSProperties["overflow"];
-    type?: "media" | "container";
-    breakpoints?: Record<Breakpoint, string>;
+    overflow?: VariableProp<"grid-overflow", JSX.CSSProperties["overflow"]>;
   }
 >;
 
 export function Grid(props: GridProps) {
-  const scope = createUniqueId();
-  const queries = () => {
+  const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const widths = props.breakpoints;
-    return containerQueries(
-      scope,
-      widths === undefined ? [] : breakpoints.map((name) => [name, widths[name]]),
-    );
-  };
-  const queried = () => (props.breakpoints === undefined ? undefined : queries());
+    return widths === undefined ? [] : breakpoints.map((name) => [name, widths[name]]);
+  });
   const { root, part } = createParts(
     "Grid",
     styles,
     props,
-    () =>
-      variables(
-        {
-          "grid-align": props.align,
-          "grid-column-gap": props.columnGap,
-          "grid-gap": props.gap,
-          "grid-justify": props.justify,
-          "grid-overflow": props.overflow,
-          "grid-row-gap": props.rowGap,
-        },
-        queries(),
-      ),
-    "align",
+    {
+      variables: {
+        "grid-align": "align",
+        "grid-column-gap": "columnGap",
+        "grid-gap": "gap",
+        "grid-justify": "justify",
+        "grid-overflow": "overflow",
+        "grid-row-gap": "rowGap",
+      },
+      queries: container,
+    },
     "breakpoints",
     "children",
-    "columnGap",
     "columns",
-    "gap",
     "grow",
-    "justify",
-    "overflow",
-    "rowGap",
     "type",
   );
   const context = {
     columns: () => props.columns ?? defaultColumns,
     grow: () => props.grow ?? false,
-    queries,
+    container,
   };
   const grid = (
     <div {...root}>
@@ -109,13 +90,9 @@ export function Grid(props: GridProps) {
     </div>
   );
   return (
-    <Show when={queried()} fallback={grid}>
-      {(container) => (
-        <div {...part("container")}>
-          <style>{containerRules(container(), containerName, variablesOf("Grid"))}</style>
-          {grid}
-        </div>
-      )}
+    <Show when={container.queries()?.widths.length} fallback={grid}>
+      <Show when={container.rules()}>{(rules) => <style>{rules()}</style>}</Show>
+      <div {...part("container")}>{grid}</div>
     </Show>
   );
 }

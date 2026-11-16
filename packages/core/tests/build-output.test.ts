@@ -11,8 +11,10 @@ import {
   breakpoints,
   canonicalStylePropNames,
   childRuleLayer,
+  componentLayer,
+  containerQueryLayer,
+  layerOrder,
   responsiveKeys,
-  stylePropClassPrefix,
   stylePropNames,
   variableClass,
   variableGroups,
@@ -124,7 +126,6 @@ function longhandsSetBy(property: string): string[] {
     return sides.map((side) => `${family}-${side}`);
   }
   if (property === "inset") return boxSides;
-  if (property === "gap") return ["row-gap", "column-gap"];
   if (property === "background") return backgroundLonghands.map((part) => `background-${part}`);
   return [property];
 }
@@ -215,18 +216,12 @@ test("input validity and the modal backdrop compile to the platform's own select
   expect(stylesheet).toMatch(new RegExp(`\\.${LIBRARY_CLASS_PREFIX}\\w+::backdrop\\{`));
 });
 
-test("the style-prop layer sits inside the library layer, ordered after every layer StyleX emits", () => {
-  const order = nestedLayerOrder(libraryLayer());
-
-  expect(order.length, "StyleX emits layers of its own inside the library layer").toBeGreaterThan(
-    1,
-  );
-  expect(order.filter((name) => name === STYLE_PROP_LAYER)).toEqual([STYLE_PROP_LAYER]);
-  expect(order.at(-1), `the nested layer order is ${order.join(", ")}`).toBe(STYLE_PROP_LAYER);
-});
-
-test("the style-prop table uses the build's class prefix", () => {
-  expect(stylePropClassPrefix).toBe(LIBRARY_CLASS_PREFIX);
+test("the library layer ranks its components, then its style props, then the container queries a component writes at run time", () => {
+  expect(nestedLayerOrder(libraryLayer())).toEqual([
+    componentLayer,
+    STYLE_PROP_LAYER,
+    containerQueryLayer,
+  ]);
 });
 
 test("the style-prop layer holds the style-prop classes and the registrations of their custom properties, each with the library prefix, and nothing else", () => {
@@ -336,7 +331,6 @@ test("every rule of a shorthand style prop, at every breakpoint, comes before ev
       "padding-block > padding-top",
       "inset > top",
       "background > background-size",
-      "gap > row-gap",
     ]),
   );
   expect(violations).toEqual([]);
@@ -459,10 +453,10 @@ test("every variable is named apart from every other variable and every style-pr
   expect(variableClasses.filter((found) => stylePropClasses.includes(found))).toEqual([]);
 });
 
-test("each variable sets the property its row names, or else the custom property named for it, from its own custom property, at its base and, when it is responsive, then at each breakpoint in ascending order", () => {
+test("each variable sets the custom property named for it from its own --sx- custom property, at its base and, when it is responsive, then at each breakpoint in ascending order", () => {
   const { inside } = stylePropLayerRules();
   const violations = variableNames.flatMap((name) => {
-    const property = variableRow(name).property ?? `--${name}`;
+    const property = `--${name}`;
     const keys = variableRow(name).responsive ? ownerBreakpoints : [];
     const expected = [
       { selector: `.${variableClass(name, "base")}`, media: undefined },
@@ -501,36 +495,90 @@ test("each variable sets the property its row names, or else the custom property
   expect(violations).toEqual([]);
 });
 
-test("the child rules sit in a layer nested in the style-prop layer, before its own rules, so a style prop on a child beats them, and each styles only the children of an element that carries a variable's class", () => {
-  const order = nestedLayerOrder(
-    (() => {
-      let found: postcss.AtRule | undefined;
-      libraryLayer().walkAtRules("layer", (rule) => {
-        if (rule.params === STYLE_PROP_LAYER) found = rule;
-      });
-      if (!found)
-        throw new Error(`packages/core/dist/styles.css: emit @layer ${STYLE_PROP_LAYER}.`);
-      return found;
-    })(),
-  );
-  const { childRules } = stylePropLayerRules();
-  const variableClasses = variableNames.map((name) => `.${variableClass(name, "base")}`);
+type ParsedSelector = { compounds: string[]; combinators: string[]; list: boolean };
 
-  expect(order).toEqual([childRuleLayer]);
-  expect(
-    childRules.filter(
-      ({ selector }) =>
-        !variableClasses.some((variable) => selector.startsWith(variable)) || !/ > /.test(selector),
-    ),
-  ).toEqual([]);
+function parseSelector(selector: string): ParsedSelector {
+  const compounds = [""];
+  const combinators: string[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let pending: string | undefined;
+  let list = false;
+  for (const character of selector) {
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === "[" || character === "(") {
+      depth += 1;
+    } else if (character === "]" || character === ")") {
+      depth -= 1;
+    } else if (depth === 0 && character === ",") {
+      list = true;
+      continue;
+    } else if (depth === 0 && /[\s>+~]/.test(character)) {
+      pending = (pending ?? "") + character;
+      continue;
+    }
+    if (pending !== undefined) {
+      combinators.push(pending.trim() === "" ? " " : pending.trim());
+      compounds.push("");
+      pending = undefined;
+    }
+    compounds[compounds.length - 1] += character;
+  }
+  return { compounds, combinators, list };
+}
+
+test("each child rule is one selector, from an element that carries a variable's class to its children, or to the children of a child it names, joined by > alone, in a layer nested first in the style-prop layer, so a style prop on a child beats it", () => {
+  let styleProps: postcss.AtRule | undefined;
+  libraryLayer().walkAtRules("layer", (rule) => {
+    if (rule.params === STYLE_PROP_LAYER) styleProps = rule;
+  });
+  const { childRules } = stylePropLayerRules();
+  const variableClasses = variableNames.map((name) => variableClass(name, "base"));
+  const problems = childRules.flatMap(({ selector }) => {
+    const { compounds, combinators, list } = parseSelector(selector);
+    const [owner = "", child, grandchild] = compounds;
+    const carrier = /^\.([\w-]+)/.exec(owner)?.[1];
+    return [
+      ...(list ? [`${selector}: write one selector, not a list.`] : []),
+      ...(combinators.every((combinator) => combinator === ">")
+        ? []
+        : [`${selector}: join its compound selectors with > alone.`]),
+      ...(carrier !== undefined && variableClasses.includes(carrier)
+        ? []
+        : [`${selector}: start from the class of a variable.`]),
+      ...(child === undefined || compounds.length > 3 || (grandchild !== undefined && child === "*")
+        ? [`${selector}: style the children, or the children of a child it names, and no deeper.`]
+        : []),
+    ];
+  });
+
+  expect(styleProps && nestedLayerOrder(styleProps)).toEqual([childRuleLayer]);
+  expect(childRules.length).toBeGreaterThan(0);
+  expect(problems).toEqual([]);
 });
 
-test("every variable that sets a custom property of its own is read by a component's compiled styles or by a child rule", () => {
+test("the library layer first names its sub-layers in the order it ranks them, the statement a component's run-time rules start with, and StyleX's layers sit in the first", () => {
+  const [first] = libraryLayer().nodes ?? [];
+  let components: postcss.AtRule | undefined;
+  libraryLayer().each((node) => {
+    if (node.type === "atrule" && node.name === "layer" && node.params === componentLayer) {
+      components = node;
+    }
+  });
+
+  expect(first?.type === "atrule" ? `@layer ${first.params};` : first?.toString()).toBe(layerOrder);
+  expect(components && nestedLayerOrder(components).length).toBeGreaterThan(0);
+});
+
+test("every variable's custom property is read by a component's compiled styles or by a child rule", () => {
   const { outside, childRules } = stylePropLayerRules();
   const readers = [...outside, ...childRules].flatMap(({ declarations }) => declarations);
-  const unread = variableNames
-    .filter((name) => variableRow(name).property === undefined)
-    .filter((name) => !readers.some((declaration) => declaration.includes(`var(--${name})`)));
+  const unread = variableNames.filter(
+    (name) => !readers.some((declaration) => declaration.includes(`var(--${name})`)),
+  );
 
   expect(unread).toEqual([]);
 });

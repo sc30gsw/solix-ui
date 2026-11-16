@@ -2,7 +2,8 @@ import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { children } from "solid-js";
 import { createParts, type ElementProps } from "./parts";
-import { type Spacing, variables } from "./style-props";
+import { variableProperty } from "./style-prop-table";
+import type { VariableProp } from "./style-props";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -24,10 +25,10 @@ export type GroupProps = ElementProps<
   "div",
   typeof styles,
   {
-    justify?: JSX.CSSProperties["justify-content"];
-    align?: JSX.CSSProperties["align-items"];
-    wrap?: JSX.CSSProperties["flex-wrap"];
-    gap?: Spacing;
+    justify?: VariableProp<"group-justify", JSX.CSSProperties["justify-content"]>;
+    align?: VariableProp<"group-align", JSX.CSSProperties["align-items"]>;
+    wrap?: VariableProp<"group-wrap", JSX.CSSProperties["flex-wrap"]>;
+    gap?: VariableProp<"group-gap">;
     grow?: boolean;
     preventGrowOverflow?: boolean;
   }
@@ -40,29 +41,27 @@ function rendersSomething(child: unknown): boolean {
 export function Group(props: GroupProps) {
   const resolved = children(() => props.children);
   const present = () => resolved.toArray().filter(rendersSomething);
+  const gap = `var(${variableProperty("group-gap")})`;
   const childWidth = () =>
     props.preventGrowOverflow === false
       ? "none"
-      : `calc((100% + var(--group-gap)) / ${present().length} - var(--group-gap))`;
+      : `calc((100% + ${gap}) / ${present().length} - ${gap})`;
   const { root } = createParts(
     "Group",
     styles,
     props,
-    () =>
-      variables({
-        "group-align": props.align,
-        "group-child-width": props.grow && !props.unstyled ? childWidth() : undefined,
-        "group-gap": props.gap,
-        "group-justify": props.justify,
-        "group-wrap": props.wrap,
-      }),
-    "align",
+    {
+      variables: {
+        "group-align": "align",
+        "group-child-width": (given) => (given.grow ? childWidth() : undefined),
+        "group-gap": "gap",
+        "group-justify": "justify",
+        "group-wrap": "wrap",
+      },
+    },
     "children",
-    "gap",
     "grow",
-    "justify",
     "preventGrowOverflow",
-    "wrap",
   );
   return (
     <div data-grow={props.grow ? "true" : undefined} {...root}>

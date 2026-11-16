@@ -4,21 +4,25 @@ import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import postcss from "postcss";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import {
-  LIBRARY_CASCADE_LAYER,
-  LIBRARY_CLASS_PREFIX,
-  STYLE_PROP_LAYER,
-} from "../build-pipeline.mjs";
+import { LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
 import type { PolymorphicProps } from "../src/parts";
 import {
+  baseKey,
   breakpoints,
   canonicalOf,
+  layerOrder,
   canonicalStylePropNames,
+  containerQueryLayer,
   type DisplayPropName,
   displayPropNames,
   responsiveKeys,
   stylePropClass,
+  variableClass,
+  variableGroups,
+  variableNames,
+  variableRow,
+  variablesOf,
   visibilityClass,
   visibilityPropNames,
 } from "../src/style-prop-table";
@@ -28,6 +32,7 @@ import {
   consumerStyles,
   elementsToRender,
   partClassTokens,
+  declaredStyleProp,
   stringAttributes,
   stylePropCases,
 } from "./arbitraries";
@@ -37,6 +42,7 @@ import {
   compiledClassesOf,
   library,
   renderBuilt,
+  resolveVariables,
   rootPart,
   stableClass,
   stylesheet,
@@ -53,7 +59,14 @@ import {
   stylePropPropsOf,
   styleWritten,
 } from "./consumer-props";
-import { components, fixtures, polymorphicComponents, render, type TakesDisplay } from "./fixtures";
+import {
+  components,
+  fixtures,
+  polymorphicComponents,
+  render,
+  renderTwiceOnOnePage,
+  type TakesDisplay,
+} from "./fixtures";
 import {
   classesOf,
   declarationsIn,
@@ -156,7 +169,7 @@ test.each(components)(
 );
 
 test.each(builtComponents)(
-  "%s renders, under its fixture, the root and every other key of its built styles object, each on one element that starts with exactly that key's compiled classes and then its stable class, the root first or right after the container part",
+  "%s renders, under its fixture, the root and every other key of its built styles object, each on one element that starts with exactly that key's compiled classes and then its stable class, the root first or the first part inside the container part",
   (name) => {
     const parts = partsOf(name);
     const html = render(name);
@@ -166,12 +179,8 @@ test.each(builtComponents)(
     const partsInOrder = elements.flatMap((element) => partsOn(name, element));
     expect(
       partsInOrder[0] === containerPart ? partsInOrder.slice(0, 2) : partsOn(name, elements[0]),
-      "the first element is the root, or the container part that queries its width, with the root the next part",
+      "the first element is the root, or the container part, with the root the next part",
     ).toEqual(partsInOrder[0] === containerPart ? [containerPart, rootPart] : [rootPart]);
-    expect(
-      topLevelTags(html),
-      "the markup is one element, so the root is inside the container part",
-    ).toHaveLength(1);
     expect(
       elements.filter((element) => partsOn(name, element).length > 1),
       "an element carries one part",
@@ -518,26 +527,39 @@ test("the contract skill has a row for each component that names its root tag an
   expect(violations).toEqual([]);
 });
 
-const queryContainerWidth = /^[\w-]+ \(min-width: \d*\.?\d+(?:px|em|rem)\)$/;
+const containerQuery = /^\(min-width: (\d*\.?\d+)(px|em|rem)\)$/;
+const pixelsPerEm = 16;
+
+function containerClassParts(className: string): { name: string; scope: string } | undefined {
+  const [, name = "", scope = ""] =
+    new RegExp(`^${LIBRARY_CLASS_PREFIX}-(.+)-c(\\w+)-\\d+$`).exec(className) ?? [];
+  return variableNames.some((variable) => variable === name) ? { name, scope } : undefined;
+}
+
+function scopesOf(classes: Iterable<string>): Set<string> {
+  return new Set([...classes].flatMap((found) => containerClassParts(found)?.scope ?? []));
+}
 
 function containerRuleProblems(name: string, html: string): string[] {
   const rendered = new Set(elementsOf(html).flatMap(classesOf));
+  const order = `@layer ${LIBRARY_CASCADE_LAYER}{${layerOrder}}`;
   return rulesOf(html).flatMap((rules) => {
-    const sheet = postcss.parse(rules);
-    const problems: string[] = [];
-    const [layer, ...others] = sheet.nodes;
+    if (!rules.startsWith(order)) return [`${name}: start its rules with ${order}.`];
+    const [layer, ...others] = postcss.parse(rules.slice(order.length)).nodes;
     if (
       others.length > 0 ||
       layer?.type !== "atrule" ||
       layer.name !== "layer" ||
-      layer.params !== `${LIBRARY_CASCADE_LAYER}.${STYLE_PROP_LAYER}`
+      layer.params !== `${LIBRARY_CASCADE_LAYER}.${containerQueryLayer}`
     ) {
       return [
-        `${name}: put its container rules in one @layer ${LIBRARY_CASCADE_LAYER}.${STYLE_PROP_LAYER}.`,
+        `${name}: put its container rules in one @layer ${LIBRARY_CASCADE_LAYER}.${containerQueryLayer} after the order.`,
       ];
     }
+    const problems: string[] = [];
     const registered = new Set<string>();
-    const scopes = new Set<string>();
+    const read: string[] = [];
+    const widths: number[] = [];
     layer.each((node) => {
       if (node.type === "atrule" && node.name === "property") {
         registered.add(node.params);
@@ -551,56 +573,117 @@ function containerRuleProblems(name: string, html: string): string[] {
         }
         return;
       }
-      if (
-        node.type !== "atrule" ||
-        node.name !== "container" ||
-        !queryContainerWidth.test(node.params)
-      ) {
+      const [, amount, unit] =
+        node.type === "atrule" ? (containerQuery.exec(node.params) ?? []) : [];
+      if (node.type !== "atrule" || node.name !== "container" || amount === undefined) {
         problems.push(
-          `${node.toString()}: write only @property and @container <name> (min-width: <length>).`,
+          `${node.toString()}: write only @property and @container (min-width: <length>).`,
         );
         return;
       }
+      widths.push(Number(amount) * (unit === "px" ? 1 : pixelsPerEm));
       node.each((rule) => {
-        if (rule.type !== "rule" || !/^\.[\w-]+$/.test(rule.selector)) {
-          problems.push(`${rule.toString()}: select one class.`);
+        const className =
+          rule.type === "rule" ? /^\.([\w-]+)$/.exec(rule.selector)?.[1] : undefined;
+        const placed = className === undefined ? undefined : containerClassParts(className);
+        if (rule.type !== "rule" || className === undefined || placed === undefined) {
+          problems.push(
+            `${rule.toString()}: select one class a variable places for a container width.`,
+          );
           return;
         }
-        const className = rule.selector.slice(1);
-        const scope = /-c([\w]+)-\d+$/.exec(className)?.[1];
-        if (!className.startsWith(`${LIBRARY_CLASS_PREFIX}-`) || scope === undefined) {
+        read.push(className);
+        const declarations = rule.nodes.flatMap((part) =>
+          part.type === "decl" ? [`${part.prop}:${part.value}`] : [],
+        );
+        if (
+          JSON.stringify(declarations) !== JSON.stringify([`--${placed.name}:var(--${className})`])
+        ) {
           problems.push(
-            `${className}: name it ${LIBRARY_CLASS_PREFIX}-<variable>-c<scope>-<slot>.`,
+            `${className}: set --${placed.name} to var(--${className}) and nothing else.`,
           );
-        } else {
-          scopes.add(scope);
-        }
-        const reads = rule.nodes.flatMap((part) => (part.type === "decl" ? [part.value] : []));
-        if (JSON.stringify(reads) !== JSON.stringify([`var(--${className})`])) {
-          problems.push(`${className}: read var(--${className}) and nothing else.`);
         }
         if (!registered.has(`--${className}`)) problems.push(`--${className}: register it.`);
       });
     });
-    if (scopes.size > 1) problems.push(`${name}: scope one style element's rules to one instance.`);
-    const ownClasses = [...rendered].filter((found) =>
-      [...scopes].some((scope) => new RegExp(`-c${scope}-\\d+$`).test(found)),
-    );
-    if (scopes.size === 1 && ownClasses.length === 0) {
-      problems.push(`${name}: put the classes its container rules read on its own elements.`);
-    }
-    return problems;
+    const scopes = scopesOf(read);
+    return [
+      ...problems,
+      ...(widths.every((width, index) => index === 0 || width > widths[index - 1])
+        ? []
+        : [`${name}: write its container widths in ascending order, not ${widths.join(", ")}.`]),
+      ...(scopes.size === 1 ? [] : [`${name}: scope one style element's rules to one instance.`]),
+      ...(read.some((className) => rendered.has(className))
+        ? []
+        : [`${name}: put at least one class its container rules read on its own elements.`]),
+    ];
   });
 }
 
 test.each(builtComponents)(
-  "%s writes the container rules it renders into the library's style-prop layer, registered not to inherit, each reading the custom property of its own class, under a container width, for one instance's classes",
+  "%s starts each style element it renders with the library's layer order, then writes, in the style-prop layer, registrations not inherited and, in ascending container widths, rules that each set a variable's custom property from its own class, for one instance's classes",
   (name) => {
-    const html = render(name);
-
-    expect(containerRuleProblems(name, html)).toEqual([]);
+    expect(containerRuleProblems(name, render(name))).toEqual([]);
   },
 );
+
+test.each(builtComponents)(
+  "%s rendered twice on one page scopes the container classes and rules of each copy apart",
+  (name) => {
+    const html = renderTwiceOnOnePage(name);
+    const scopes = scopesOf(elementsOf(html).flatMap(classesOf));
+    const ruleScopes = rulesOf(html).map((rules) =>
+      [...scopesOf(rules.match(/[\w-]+/g) ?? [])].join(" "),
+    );
+
+    expect([0, 2]).toContain(scopes.size);
+    expect(new Set(ruleScopes).size, "each style element reads one copy's scope").toBe(
+      ruleScopes.length,
+    );
+  },
+);
+
+test.each(builtComponents.filter((name) => containerPart in compiledClassesOf(name)))(
+  "%s, whose styles have a container part, renders under its fixture its rules first, if any, and then that part with the root as its only element child",
+  (name) => {
+    const html = render(name);
+    const withoutRules = html.replaceAll(/<style[^>]*>[^<]*<\/style>/g, "");
+    const container = elementCarrying(html, stableClass(name, containerPart));
+    const inside = withoutRules.slice(
+      withoutRules.indexOf(">") + 1,
+      withoutRules.lastIndexOf("</"),
+    );
+
+    expect(topLevelTags(html).filter((tag) => tag !== "style")).toEqual([container.tag]);
+    expect(html.startsWith("<style") || html.startsWith(`<${container.tag}`)).toBe(true);
+    expect(topLevelTags(inside)).toHaveLength(1);
+    expect(classesOf(rootElementOf(inside))).toContain(stableClass(name, rootPart));
+  },
+);
+
+test("every variable drops null and a value that holds ;, { or }, and writes each value it keeps as one class and the custom property that class reads", () => {
+  fc.assert(
+    fc.property(fc.constantFrom(...variableNames), declaredStyleProp, (name, declared) => {
+      const group = variableGroups.find((found) => variablesOf(found).some((own) => own === name));
+      if (group === undefined) throw new Error(`${name}: put it in a group.`);
+      const { classes, properties } = resolveVariables(
+        group,
+        { [name]: declared.written },
+        undefined,
+        () => false,
+      );
+      const kept = responsiveKeys.filter(
+        (key) =>
+          declared.keptKeys.includes(key) && (variableRow(name).responsive || key === baseKey),
+      );
+
+      expect(Object.values(properties).filter((css) => /[;{}]/.test(css))).toEqual([]);
+      expect(Object.keys(properties).sort()).toEqual(classes.map((found) => `--${found}`).sort());
+      expect(classes.sort()).toEqual(kept.map((key) => variableClass(name, key)).sort());
+    }),
+    { numRuns: generatedRuns },
+  );
+});
 
 test("a component that another export carries as a static member is exported under the carrier's name followed by the member's, and rendered outside its carrier it throws an error that names the carrier", () => {
   const carried = Object.entries(carriedComponents);

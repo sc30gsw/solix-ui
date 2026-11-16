@@ -2,7 +2,8 @@ import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { useGrid } from "./grid-context";
 import { createParts, type ElementProps } from "./parts";
-import { type StyleProp, variables } from "./style-props";
+import { variableProperty } from "./style-prop-table";
+import { eachValue, type StyleProp, type VariableProp, withBase } from "./style-props";
 
 const styles = stylex.create({
   root: {
@@ -34,31 +35,11 @@ export type GridColProps = ElementProps<
   typeof styles,
   {
     span?: StyleProp<Span>;
-    order?: StyleProp<number>;
+    order?: VariableProp<"col-order", number>;
     offset?: StyleProp<number>;
-    align?: StyleProp<JSX.CSSProperties["align-self"]>;
+    align?: VariableProp<"col-align-self", JSX.CSSProperties["align-self"]>;
   }
 >;
-
-function eachValue<V extends string | number>(
-  value: StyleProp<V>,
-  write: (given: V) => string | undefined,
-): StyleProp<string> {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "object") return write(value);
-  return Object.fromEntries(
-    Object.entries(value).map(([key, given]) => [
-      key,
-      given === undefined || given === null ? given : write(given),
-    ]),
-  );
-}
-
-function withBase<V extends string | number>(value: StyleProp<V>, base: V): StyleProp<V> {
-  if (value === undefined || value === null) return base;
-  if (typeof value !== "object") return value;
-  return { ...value, base: value.base ?? base };
-}
 
 function share(part: number, columns: number): string {
   return String(Math.round((part / columns) * fractionDigits) / fractionDigits);
@@ -66,43 +47,43 @@ function share(part: number, columns: number): string {
 
 export function GridCol(props: GridColProps) {
   const grid = useGrid();
-  const span = () => withBase(props.span, defaultSpan);
+  const gap = `var(${variableProperty("grid-column-gap")})`;
+  const span = (given: GridColProps) => withBase<Span>(given.span, defaultSpan);
   const basis = (given: Span) => {
     if (given === "content") return "auto";
     if (given === "auto") return "0rem";
     if (!given) return undefined;
-    return `calc((100% + var(--grid-column-gap)) * ${share(given, grid.columns())} - var(--grid-column-gap))`;
+    return `calc((100% + ${gap}) * ${share(given, grid.columns())} - ${gap})`;
   };
   const { root } = createParts(
     "GridCol",
     styles,
     props,
-    () =>
-      variables(
-        {
-          "col-align-self": props.align,
-          "col-flex-basis": eachValue(span(), basis),
-          "col-flex-grow": eachValue(span(), (given) => {
-            if (!given) return undefined;
-            return given === "auto" || grid.grow() ? "1" : "0";
+    {
+      variables: {
+        "col-align-self": "align",
+        "col-flex-basis": (given) => eachValue<Span>(span(given), basis),
+        "col-flex-grow": (given) =>
+          eachValue<Span>(span(given), (each) => {
+            if (!each) return undefined;
+            return each === "auto" || grid.grow() ? "1" : "0";
           }),
-          "col-max-width": eachValue(span(), (given) => {
-            if (given === "auto" || grid.grow()) return "100%";
-            return given === "content" ? "unset" : basis(given);
+        "col-max-width": (given) =>
+          eachValue<Span>(span(given), (each) => {
+            if (each === "auto" || grid.grow()) return "100%";
+            return each === "content" ? "unset" : basis(each);
           }),
-          "col-offset": eachValue(props.offset, (given) =>
-            given === 0
-              ? "0"
-              : `calc((100% + var(--grid-column-gap)) * ${share(given, grid.columns())})`,
+        "col-offset": (given) =>
+          eachValue<number>(given.offset, (each) =>
+            each === 0 ? "0" : `calc((100% + ${gap}) * ${share(each, grid.columns())})`,
           ),
-          "col-order": eachValue(props.order, String),
-          "col-width": eachValue(span(), (given) => (given === "content" ? "auto" : undefined)),
-        },
-        grid.queries(),
-      ),
-    "align",
+        "col-order": "order",
+        "col-width": (given) =>
+          eachValue<Span>(span(given), (each) => (each === "content" ? "auto" : undefined)),
+      },
+      queries: grid.container,
+    },
     "offset",
-    "order",
     "span",
   );
   return <div {...root} />;

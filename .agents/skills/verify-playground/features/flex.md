@@ -27,6 +27,6 @@ Preconditions:
 ## Gotchas
 
 - The `Flex` around the buttons is found as the parent of `First in the flex`.
-- The flexbox props are variables that set the properties themselves, from the `style-props` layer, so they act as style props do: a consumer's class beats them, and `unstyled` keeps them.
-- `rowGap` and `columnGap` are longhands of `gap`, and their rules come after every rule of `gap` at every breakpoint, so `gap` at md does not undo `rowGap` at its base.
+- The flexbox props are variables that set `--flex-gap`, `--flex-row-gap` and the others, which the `Flex`'s own styles read, so a consumer's class beats them, and `unstyled` drops them with the rest of its look.
+- `--flex-row-gap` and `--flex-column-gap` fall back to `--flex-gap`, so `rowGap` replaces `gap` for rows at every breakpoint, and `gap` at md does not undo `rowGap` at its base.
 - `apps/playground/tests/layout.test.ts` checks the same values one pixel below md and at md, with scripts on and off, in every installed engine.

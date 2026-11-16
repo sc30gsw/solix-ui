@@ -1,7 +1,13 @@
 import { Box, Grid } from "@solix/core";
 import { refOf } from "../ref-of";
 
-const containerBreakpoints = { xs: "10em", sm: "15em", md: "20em", lg: "25em", xl: "30em" };
+const containerBreakpoints = {
+  xs: "10em",
+  sm: "15em",
+  md: "20em",
+  lg: "25em",
+  xl: "30em",
+} as const;
 
 export function GridSection() {
   return (

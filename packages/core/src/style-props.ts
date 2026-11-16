@@ -1,9 +1,12 @@
 import type { JSX } from "@solidjs/web";
+import { createSignal, onCleanup } from "solid-js";
 import {
   baseKey,
   type Breakpoint,
   breakpoints,
   canonicalOf,
+  containerVariableClass,
+  layerOrder,
   libraryCascadeLayer,
   type PropertyRow,
   readerRule,
@@ -12,15 +15,14 @@ import {
   type RowOf,
   type Scale,
   stylePropClass,
-  stylePropClassPrefix,
-  stylePropLayer,
+  containerQueryLayer,
   type StylePropName,
   stylePropNames,
   stylePropTable,
   variableClass,
-  variableDepth,
+  type VariableGroup,
   type VariableName,
-  variableNames,
+  variablesOf,
   variableProperty,
   variableRow,
   type VariableRowOf,
@@ -55,23 +57,53 @@ export type Spacing = ScaleValue<"spacing">;
 /** A container width that a value keyed for container queries applies from, such as `"40em"`. */
 export type ContainerWidth = `${number}${"px" | "em" | "rem"}`;
 
-/** A value for every width, or one for each breakpoint or container width it applies from. */
-export type ResponsiveProp<V> =
+/** A value for every width, or one for each container width it applies from. */
+export type ContainerProp<V> =
   | V
   | Absent
-  | { [Key in ResponsiveKey | ContainerWidth]?: V | Absent };
+  | ({ [Key in typeof baseKey | ContainerWidth]?: V | Absent } & {
+      [Key in Breakpoint]?: never;
+    });
 
-export type Variables = {
-  [Name in VariableName]?: VariableRowOf<Name>["responsive"] extends true
-    ? ResponsiveProp<string | number>
-    : string | number | Absent;
-};
+type Keyed<V> = V | Absent | Readonly<Record<string, V | Absent>>;
 
-/** The container widths, in ascending order, that the values given to `variables` are keyed by. */
+type Row<Name extends VariableName> = VariableRowOf<Name>;
+
+type DefaultValue<Name extends VariableName> =
+  Row<Name> extends { kind: "length"; scale: infer Of extends Scale }
+    ? ScaleValue<Of>
+    : Row<Name> extends { kind: "length" }
+      ? number | (string & {})
+      : string | number;
+
+/** A prop that sets the variable `Name`, keyed by breakpoint when its row is responsive. */
+export type VariableProp<
+  Name extends VariableName,
+  Value = DefaultValue<Name>,
+> = Row<Name>["responsive"] extends true ? StyleProp<Value> : Value | Absent;
+
+/** A prop that sets the responsive variable `Name`, keyed by container width. */
+export type ContainerVariableProp<
+  Name extends VariableName,
+  Value = DefaultValue<Name>,
+> = ContainerProp<Value>;
+
+export type VariableValue = Keyed<string | number>;
+
 export type ContainerQueries = {
   readonly scope: string;
   readonly widths: readonly (readonly [key: string, width: string])[];
 };
+
+type Used = readonly [name: VariableName, slot: number];
+
+export type QueryContainer = {
+  readonly queries: () => ContainerQueries | undefined;
+  readonly report: (used: () => readonly Used[]) => void;
+  readonly rules: () => string | undefined;
+};
+
+export type ResolvedVariables = ResolvedStyleProps & { readonly used: readonly Used[] };
 
 export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
@@ -83,7 +115,7 @@ export type ResolvedStyleProps = {
 };
 
 function keyedEntries<Key extends string>(
-  value: ResponsiveProp<string | number>,
+  value: VariableValue,
   keys: readonly Key[],
 ): [typeof baseKey | Key, string | number][] {
   if (value === undefined || value === null) return [];
@@ -155,54 +187,76 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
   return { classes: [...classes], properties };
 }
 
-function containerClass(name: VariableName, queries: ContainerQueries, slot: number): string {
-  return `${stylePropClassPrefix}-${name}-c${queries.scope}-${slot}`;
+export function eachValue<V extends string | number>(
+  value: Keyed<V>,
+  write: (given: V) => string | undefined,
+): Keyed<string> {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object") return write(value);
+  return Object.fromEntries(
+    Object.entries(value).map(([key, given]) => [
+      key,
+      given === undefined || given === null ? given : write(given),
+    ]),
+  );
+}
+
+export function withBase<V extends string | number>(value: Keyed<V>, base: V): Keyed<V> {
+  if (value === undefined || value === null) return base;
+  if (typeof value !== "object") return value;
+  return { ...value, [baseKey]: value[baseKey] ?? base };
 }
 
 function placed(
   name: VariableName,
-  value: ResponsiveProp<string | number>,
+  value: VariableValue,
   queries: ContainerQueries | undefined,
-): [className: string, written: string | number][] {
+): [className: string, written: string | number, slot: number | undefined][] {
   if (!variableRow(name).responsive) {
-    return keyedEntries(value, []).map(([, written]) => [variableClass(name, baseKey), written]);
+    return keyedEntries(value, []).map(([, written]) => [
+      variableClass(name, baseKey),
+      written,
+      undefined,
+    ]);
   }
   if (queries === undefined) {
     return keyedEntries(value, breakpoints).map(([key, written]) => [
       variableClass(name, key),
       written,
+      undefined,
     ]);
   }
   const slots = queries.widths.map(([key]) => key);
-  return keyedEntries(value, slots).map(([key, written]) => [
-    key === baseKey
-      ? variableClass(name, baseKey)
-      : containerClass(name, queries, slots.indexOf(key)),
-    written,
-  ]);
+  return keyedEntries(value, slots).map(([key, written]) => {
+    if (key === baseKey) return [variableClass(name, baseKey), written, undefined];
+    const slot = slots.indexOf(key);
+    return [containerVariableClass(name, queries.scope, slot), written, slot];
+  });
 }
 
-/**
- * The classes and custom properties that give a component's root the values of its own
- * variables. A keyed value applies from each breakpoint it names, or, given `queries`, from each
- * container width it names, whose rules `containerRules` writes.
- */
-export function variables(given: Variables, queries?: ContainerQueries): ResolvedStyleProps {
+export function resolveVariables(
+  group: VariableGroup,
+  given: Readonly<Partial<Record<VariableName, VariableValue>>>,
+  queries: ContainerQueries | undefined,
+  leaveOut: (name: VariableName) => boolean,
+): ResolvedVariables {
   const classes: string[] = [];
   const properties: Record<`--${string}`, string> = {};
-  for (const name of variableNames) {
-    for (const [className, written] of placed(name, given[name], queries)) {
+  const used: Used[] = [];
+  for (const name of variablesOf(group)) {
+    if (leaveOut(name)) continue;
+    for (const [className, written, slot] of placed(name, given[name], queries)) {
       const value = cssValue(variableRow(name), written);
       if (value === undefined) continue;
       classes.push(className);
       properties[`--${className}`] = value;
+      if (slot !== undefined) used.push([name, slot]);
     }
   }
-  return { classes, properties };
+  return { classes, properties, used };
 }
 
-/** The keys of a value that are container widths. */
-export function containerWidthsOf(value: ResponsiveProp<unknown>): ContainerWidth[] {
+export function containerWidthsOf(value: Keyed<unknown>): ContainerWidth[] {
   if (value === undefined || value === null || typeof value !== "object") return [];
   return Object.keys(value).filter((key): key is ContainerWidth => containerWidth.test(key));
 }
@@ -212,46 +266,59 @@ function pixelsOf(width: string): number {
   return Number(amount) * (unit === "px" ? 1 : pixelsPerRem);
 }
 
-/**
- * The container widths a component queries, valid lengths only and in ascending order, under a
- * scope that keeps its classes apart from every other instance's.
- */
-export function containerQueries(
-  scope: string,
-  widths: readonly (readonly [key: string, width: string])[],
-): ContainerQueries {
-  return {
-    scope: scope.replace(characterOutsideAClassName, "_"),
-    widths: widths
-      .filter(([, width]) => containerWidth.test(width))
-      .toSorted(([, narrower], [, wider]) => pixelsOf(narrower) - pixelsOf(wider)),
-  };
+function rulesFor(queries: ContainerQueries, used: readonly Used[]): string | undefined {
+  if (used.length === 0) return undefined;
+  const registrations = used.map(([name, slot]) =>
+    registrationRule(containerVariableClass(name, queries.scope, slot)),
+  );
+  const readers = queries.widths.flatMap(([, width], slot) => {
+    const atSlot = used.filter(([, at]) => at === slot);
+    if (atSlot.length === 0) return [];
+    const read = atSlot.map(([name]) =>
+      readerRule(containerVariableClass(name, queries.scope, slot), variableProperty(name)),
+    );
+    return [`@container (min-width: ${width}){${read.join("")}}`];
+  });
+  return `@layer ${libraryCascadeLayer}{${layerOrder}}@layer ${libraryCascadeLayer}.${containerQueryLayer}{${[...registrations, ...readers].join("")}}`;
 }
 
-/**
- * The rules that apply, inside the container named `container`, the values `variables` placed
- * for `queries`. Its text holds only class names, property names and validated widths.
- */
-export function containerRules(
-  queries: ContainerQueries,
-  container: string,
-  names: readonly VariableName[],
-): string {
-  const responsive = names.filter((name) => variableRow(name).responsive);
-  const depths = [...new Set(responsive.map(variableDepth))].sort(
-    (shallower, deeper) => shallower - deeper,
+function uniqueUsed(used: readonly Used[]): Used[] {
+  const seen = new Map(used.map((pair) => [pair.join(" "), pair]));
+  return [...seen.values()].sort(([before, beforeSlot], [after, afterSlot]) =>
+    beforeSlot === afterSlot ? before.localeCompare(after) : beforeSlot - afterSlot,
   );
-  const registrations = queries.widths.flatMap((_, slot) =>
-    responsive.map((name) => registrationRule(containerClass(name, queries, slot))),
-  );
-  const readers = depths.flatMap((depth) =>
-    queries.widths.map(
-      ([, width], slot) =>
-        `@container ${container} (min-width: ${width}){${responsive
-          .filter((name) => variableDepth(name) === depth)
-          .map((name) => readerRule(containerClass(name, queries, slot), variableProperty(name)))
-          .join("")}}`,
-    ),
-  );
-  return `@layer ${libraryCascadeLayer}.${stylePropLayer}{${[...registrations, ...readers].join("")}}`;
+}
+
+export function createQueryContainer(
+  scope: string,
+  widths: () => readonly (readonly [key: string, width: string])[] | undefined,
+): QueryContainer {
+  const reporters: (() => readonly Used[])[] = [];
+  const [reported, setReported] = createSignal(0, { ownedWrite: true });
+  const queries = () => {
+    const given = widths();
+    if (given === undefined) return undefined;
+    return {
+      scope: scope.replace(characterOutsideAClassName, "_"),
+      widths: given
+        .filter(([, width]) => containerWidth.test(width))
+        .toSorted(([, narrower], [, wider]) => pixelsOf(narrower) - pixelsOf(wider)),
+    };
+  };
+  return {
+    queries,
+    report(used) {
+      reporters.push(used);
+      setReported((count) => count + 1);
+      onCleanup(() => {
+        reporters.splice(reporters.indexOf(used), 1);
+        setReported((count) => count + 1);
+      });
+    },
+    rules() {
+      reported();
+      const current = queries();
+      return current && rulesFor(current, uniqueUsed(reporters.flatMap((used) => used())));
+    },
+  };
 }

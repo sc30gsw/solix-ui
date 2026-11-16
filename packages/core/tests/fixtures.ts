@@ -2,10 +2,12 @@ import { expect } from "vite-plus/test";
 import type * as Library from "../src/index";
 import type { DisplayPropName } from "../src/style-prop-table";
 import {
+  type Around,
   carriedComponents,
   type ConsumerProps,
   handledKeys,
   renderBuilt,
+  renderBuiltTwice,
   renderBuiltWithin,
 } from "./built-library";
 import { elementsOf } from "./markup";
@@ -175,11 +177,18 @@ function fixturePropsOf(name: string): ConsumerProps {
   return fixtures[name].props;
 }
 
-function renderGiven(name: string, given: ConsumerProps): string {
+function aroundOf(name: string): Around | undefined {
   const carrier = carriedComponents[name]?.carrier;
-  return carrier === undefined
-    ? renderBuilt(name, given)
-    : renderBuiltWithin(carrier, fixturePropsOf(carrier), name, given);
+  return carrier === undefined ? undefined : { carrier, props: fixturePropsOf(carrier) };
+}
+
+function renderGiven(name: string, given: ConsumerProps): string {
+  const around = aroundOf(name);
+  return around === undefined ? renderBuilt(name, given) : renderBuiltWithin(around, name, given);
+}
+
+export function renderTwiceOnOnePage(name: string): string {
+  return renderBuiltTwice(name, fixturePropsOf(name), aroundOf(name));
 }
 
 export function render(name: string, props: ConsumerProps = {}): string {

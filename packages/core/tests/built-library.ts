@@ -5,6 +5,7 @@ import type { Component } from "solid-js";
 import type * as Library from "../src/index";
 import type * as Parts from "../src/parts";
 import type * as StableClass from "../src/stable-class";
+import type * as StyleProps from "../src/style-props";
 import { parse, staticPropertyName, ts } from "../../../scripts/syntax";
 import { memberMarkupOf } from "./markup";
 
@@ -32,6 +33,10 @@ export const { handledKeys, rootPart, stylesApiPropKeys } = (await import(
 )) as typeof Parts;
 
 export const { stableClass } = (await import(join(dist, "stable-class.js"))) as typeof StableClass;
+
+export const { resolveVariables } = (await import(
+  join(dist, "style-props.js")
+)) as typeof StyleProps;
 
 export const stylesheet = readFileSync(join(dist, "styles.css"), "utf8");
 
@@ -61,27 +66,35 @@ export const carriedComponents: Record<string, Carried> = Object.fromEntries(
   ),
 );
 
-export function renderBuilt(name: string, props: ConsumerProps): string {
-  return renderToString(() => createComponent(builtNamed(name), props));
+export type Around = { carrier: string; props: ConsumerProps };
+
+function created(name: string, props: ConsumerProps, around: Around | undefined) {
+  if (around === undefined) return createComponent(builtNamed(name), props);
+  return createComponent(builtNamed(around.carrier), {
+    ...around.props,
+    get children() {
+      return createComponent(builtNamed(name), props);
+    },
+  });
 }
 
-export function renderBuiltWithin(
-  around: string,
-  aroundProps: ConsumerProps,
+export function renderBuilt(name: string, props: ConsumerProps): string {
+  return renderToString(() => created(name, props, undefined));
+}
+
+export function renderBuiltWithin(around: Around, name: string, props: ConsumerProps): string {
+  return memberMarkupOf(
+    renderToString(() => created(name, props, around)),
+    stableClass(around.carrier, ""),
+  );
+}
+
+export function renderBuiltTwice(
   name: string,
   props: ConsumerProps,
+  around: Around | undefined,
 ): string {
-  return memberMarkupOf(
-    renderToString(() =>
-      createComponent(builtNamed(around), {
-        ...aroundProps,
-        get children() {
-          return createComponent(builtNamed(name), props);
-        },
-      }),
-    ),
-    `solix-${around}-`,
-  );
+  return renderToString(() => [created(name, props, around), created(name, props, around)]);
 }
 
 function keyOf(property: ts.ObjectLiteralElementLike, where: string): string {

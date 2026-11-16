@@ -1,5 +1,5 @@
 import { createComponent, renderToString } from "@solidjs/web";
-import { expect, test } from "vite-plus/test";
+import { expect, expectTypeOf, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import type {
   CenterProps,
@@ -355,16 +355,14 @@ function simpleGridOf(props: SimpleGridProps): Rendered & {
     style: Object.fromEntries(declarationsIn(valuesOf(root, "style")[0])),
     autoColumns: valuesOf(root, "data-auto-cols"),
     rules: rulesOf(html),
-    wrapped:
-      rootElementOf(html) !== root &&
-      classesOf(rootElementOf(html)).includes("solix-SimpleGrid-container"),
+    wrapped: html.includes("solix-SimpleGrid-container"),
   };
 }
 
 test("SimpleGrid: with media queries, keys its columns and spacing by breakpoint, and renders no container part and no rules", () => {
   const rendered = simpleGridOf({
     type: "media",
-    cols: { base: 1, sm: 2, "40em": 5 },
+    cols: { base: 1, sm: 2 },
     spacing: { base: "xs", lg: 24 },
     verticalSpacing: "xl",
   });
@@ -390,10 +388,21 @@ test("SimpleGrid: with media queries, keys its columns and spacing by breakpoint
   });
 });
 
-test("SimpleGrid: with container queries, renders its root inside the container part, keys its values by container width, ignores a breakpoint key, and writes a rule for each width in ascending order", () => {
+test("SimpleGrid's type refuses a container width key with media queries and a breakpoint key with container queries, and Grid's refuses breakpoints that are not container widths", () => {
+  expectTypeOf<{ type: "media"; cols: { "40em": number } }>().not.toExtend<SimpleGridProps>();
+  expectTypeOf<{ type: "container"; cols: { md: number } }>().not.toExtend<SimpleGridProps>();
+  expectTypeOf<{ type: "container"; cols: { "40em": number } }>().toExtend<SimpleGridProps>();
+  expectTypeOf<{
+    type: "container";
+    breakpoints: { xs: "1px"; sm: "2px"; md: "wide"; lg: "4px"; xl: "5px" };
+  }>().not.toExtend<GridProps>();
+  expectTypeOf<{ type: "media"; breakpoints: Record<"xs", "1px"> }>().not.toExtend<GridProps>();
+});
+
+test("SimpleGrid: with container queries, renders its root inside the container part, keys its values by container width, and writes a rule for each width in ascending order", () => {
   const rendered = simpleGridOf({
     type: "container",
-    cols: { base: 1, "500px": 3, "30em": 2, md: 4 },
+    cols: { base: 1, "500px": 3, "30em": 2 },
     spacing: { "30em": "xl" },
   });
   const widths = [...rendered.rules.join("").matchAll(/\(min-width: ([^)]+)\)/g)].map(
@@ -648,9 +657,31 @@ test("GridCol: in a grid with container queries and breakpoints, keys its values
   const [rules] = rulesOf(html);
 
   expect(classes).toContain("sx-col-flex-basis-c0-2");
-  expect(rules).toContain("@container solix-grid (min-width: 20em){");
+  expect(rules).toContain("@container (min-width: 20em){");
+  expect(
+    [...rules.matchAll(/@property (--[\w-]+)/g)].map(([, property]) => property),
+    "the grid's rules hold only the pairs its columns use",
+  ).toEqual(["--sx-col-flex-basis-c0-2", "--sx-col-flex-grow-c0-2", "--sx-col-max-width-c0-2"]);
   expect(rules).toContain(
     ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}",
   );
-  expect(classesOf(rootElementOf(html))).toContain("solix-Grid-container");
+  expect(html).toContain("solix-Grid-container");
+});
+
+test("a grid with container queries and no value keyed by a width renders its container part and no style element", () => {
+  const simple = render("SimpleGrid", { type: "container", cols: 2, spacing: "md" });
+  const grid = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      breakpoints: { xs: "10em", sm: "15em", md: "20em", lg: "25em", xl: "30em" },
+      get children() {
+        return createComponent(library.GridCol, { span: 6 });
+      },
+    }),
+  );
+
+  expect(simple).toContain("solix-SimpleGrid-container");
+  expect(grid).toContain("solix-Grid-container");
+  expect(rulesOf(simple)).toEqual([]);
+  expect(rulesOf(grid)).toEqual([]);
 });

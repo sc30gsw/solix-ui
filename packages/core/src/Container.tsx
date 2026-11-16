@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { createParts, type ElementProps } from "./parts";
-import { type ScaleValue, variables } from "./style-props";
+import type { VariableProp } from "./style-props";
 import { tokens } from "./tokens.stylex";
 
 const styles = stylex.create({
@@ -32,22 +32,22 @@ export type ContainerProps = ElementProps<
   "div",
   typeof styles,
   {
-    size?: ScaleValue<"container-size">;
+    size?: VariableProp<"container-size">;
     fluid?: boolean;
     strategy?: "block" | "grid";
   }
 >;
 
 export function Container(props: ContainerProps) {
-  const size = () => {
-    if (props.unstyled) return undefined;
-    return props.fluid ? defaultSize : (props.size ?? defaultSize);
-  };
   const { root } = createParts(
     "Container",
     styles,
     props,
-    () => variables({ "container-size": size() }),
+    {
+      variables: {
+        "container-size": (given) => (given.fluid ? defaultSize : (given.size ?? defaultSize)),
+      },
+    },
     "fluid",
     "size",
     "strategy",

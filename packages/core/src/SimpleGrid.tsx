@@ -1,22 +1,16 @@
 import * as stylex from "@stylexjs/stylex";
 import { createUniqueId, Show } from "solid-js";
 import { createParts, type ElementProps } from "./parts";
-import { variablesOf } from "./style-prop-table";
 import {
-  containerQueries,
-  containerRules,
+  type ContainerVariableProp,
   containerWidthsOf,
-  type ResponsiveProp,
-  type Spacing,
-  variables,
+  createQueryContainer,
+  type VariableProp,
 } from "./style-props";
 import { tokens } from "./tokens.stylex";
 
-const containerName = "simple-grid";
-
 const styles = stylex.create({
   container: {
-    containerName,
     containerType: "inline-size",
   },
   root: {
@@ -39,62 +33,58 @@ const styles = stylex.create({
 export type SimpleGridProps = ElementProps<
   "div",
   typeof styles,
-  {
-    cols?: ResponsiveProp<number>;
-    spacing?: ResponsiveProp<Spacing>;
-    verticalSpacing?: ResponsiveProp<Spacing>;
-    type?: "media" | "container";
-    minColWidth?: string | number;
+  (
+    | {
+        type?: "media";
+        cols?: VariableProp<"sg-cols", number>;
+        spacing?: VariableProp<"sg-spacing-x">;
+        verticalSpacing?: VariableProp<"sg-spacing-y">;
+      }
+    | {
+        type: "container";
+        cols?: ContainerVariableProp<"sg-cols", number>;
+        spacing?: ContainerVariableProp<"sg-spacing-x">;
+        verticalSpacing?: ContainerVariableProp<"sg-spacing-y">;
+      }
+  ) & {
+    minColWidth?: VariableProp<"sg-min-col-width">;
     autoFlow?: "auto-fit" | "auto-fill";
-    autoRows?: string;
+    autoRows?: VariableProp<"sg-auto-rows">;
   }
 >;
 
 export function SimpleGrid(props: SimpleGridProps) {
-  const scope = createUniqueId();
-  const autoColumns = () => props.minColWidth !== undefined;
-  const queries = () => {
+  const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const keyed = [props.cols, props.spacing, props.verticalSpacing].flatMap(containerWidthsOf);
-    return containerQueries(
-      scope,
-      [...new Set(keyed)].map((width) => [width, width]),
-    );
-  };
+    return [...new Set(keyed)].map((width) => [width, width]);
+  });
+  const autoColumns = () => props.minColWidth !== undefined;
   const { root, part } = createParts(
     "SimpleGrid",
     styles,
     props,
-    () =>
-      variables(
-        {
-          "sg-auto-rows": props.autoRows,
-          "sg-cols": autoColumns() ? undefined : props.cols,
-          "sg-min-col-width": props.minColWidth,
-          "sg-spacing-x": props.spacing,
-          "sg-spacing-y": props.verticalSpacing,
-        },
-        queries(),
-      ),
+    {
+      variables: {
+        "sg-auto-rows": "autoRows",
+        "sg-cols": (given) => (given.minColWidth === undefined ? given.cols : undefined),
+        "sg-min-col-width": "minColWidth",
+        "sg-spacing-x": "spacing",
+        "sg-spacing-y": "verticalSpacing",
+      },
+      queries: container,
+    },
     "autoFlow",
-    "autoRows",
     "cols",
-    "minColWidth",
-    "spacing",
     "type",
-    "verticalSpacing",
   );
   const grid = (
     <div data-auto-cols={autoColumns() ? (props.autoFlow ?? "auto-fill") : undefined} {...root} />
   );
   return (
-    <Show when={queries()} fallback={grid}>
-      {(queried) => (
-        <div {...part("container")}>
-          <style>{containerRules(queried(), containerName, variablesOf("SimpleGrid"))}</style>
-          {grid}
-        </div>
-      )}
+    <Show when={container.queries()} fallback={grid}>
+      <Show when={container.rules()}>{(rules) => <style>{rules()}</style>}</Show>
+      <div {...part("container")}>{grid}</div>
     </Show>
   );
 }

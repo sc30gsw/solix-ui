@@ -4,10 +4,15 @@ import { expect, test } from "vite-plus/test";
 import {
   stylePropKeys,
   stylePropTable,
+  variableGroups,
   variableNames,
   variableRow,
 } from "../packages/core/src/style-prop-table";
-import { carriedComponents } from "../packages/core/tests/built-library";
+import {
+  builtComponents,
+  carriedComponents,
+  compiledClassesOf,
+} from "../packages/core/tests/built-library";
 import { tokenValues } from "../scripts/tokens";
 import { descendants, exportsOf, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
 import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
@@ -19,11 +24,8 @@ const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
-const variablesHelper = "variables";
-const solidModule = "solid-js";
-const showComponent = "Show";
 const containerPart = "container";
-const variablesModule = "./style-props";
+const variablesOption = "variables";
 const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
 const partsImport = "./parts";
@@ -99,49 +101,10 @@ function unwrapped(node: ts.Expression): ts.Expression {
   return ts.isParenthesizedExpression(node) ? unwrapped(node.expression) : node;
 }
 
-function attributeExpression(tag: JsxTag, name: string): ts.Expression | undefined {
-  const found = tag.attributes.properties.find(
-    (property): property is ts.JsxAttribute =>
-      ts.isJsxAttribute(property) && property.name.getText() === name,
-  );
-  const initializer = found?.initializer;
-  return initializer && ts.isJsxExpression(initializer) ? initializer.expression : undefined;
-}
-
-function wrapsInContainerPart(within: ts.Node, binding: string): boolean {
-  return descendants(within).some(
-    (node) =>
-      ts.isJsxElement(node) &&
-      spreadsOn(node.openingElement).includes(`${partBinding}("${containerPart}")`) &&
-      node.children.some(
-        (child) => ts.isJsxExpression(child) && child.expression?.getText() === binding,
-      ),
-  );
-}
-
-function shownRoot(fn: ts.FunctionDeclaration, show: ts.JsxElement): JsxTag | undefined {
-  const fallback = attributeExpression(show.openingElement, "fallback");
-  if (!fallback || !ts.isIdentifier(fallback)) return undefined;
-  const declaration = variableNamed(fn, fallback.text);
-  const element = declaration?.initializer && unwrapped(declaration.initializer);
-  if (!declaration || !isConst(declaration) || !element) return undefined;
-  const tag = ts.isJsxElement(element)
-    ? element.openingElement
-    : ts.isJsxSelfClosingElement(element)
-      ? element
-      : undefined;
-  return tag && wrapsInContainerPart(show, fallback.text) ? tag : undefined;
-}
-
 function returnedRoots(fn: ts.FunctionDeclaration): JsxTag[] {
-  const show = localNameOf(fn.getSourceFile(), solidModule, showComponent);
   return descendants(fn).flatMap((node): JsxTag[] => {
     if (!ts.isReturnStatement(node) || !node.expression) return [];
     const returned = unwrapped(node.expression);
-    if (ts.isJsxElement(returned) && returned.openingElement.tagName.getText() === show) {
-      const root = shownRoot(fn, returned);
-      return root ? [root] : [returned.openingElement];
-    }
     if (ts.isJsxElement(returned)) return [returned.openingElement];
     return ts.isJsxSelfClosingElement(returned) ? [returned] : [];
   });
@@ -214,15 +177,19 @@ function propsShapeOf(alias: ts.TypeAliasDeclaration | undefined): PropsShape | 
 
 type OwnPropNames = { names: string[]; unread: string[] };
 
+function typeMembers(type: ts.TypeNode): ts.TypeNode[] {
+  if (ts.isParenthesizedTypeNode(type)) return typeMembers(type.type);
+  if (ts.isIntersectionTypeNode(type) || ts.isUnionTypeNode(type)) {
+    return type.types.flatMap(typeMembers);
+  }
+  return [type];
+}
+
 function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
-  const members = !ownProps
-    ? []
-    : ts.isIntersectionTypeNode(ownProps)
-      ? [...ownProps.types]
-      : [ownProps];
+  const members = ownProps ? typeMembers(ownProps) : [];
   const literalMembers = members.filter(ts.isTypeLiteralNode).flatMap((literal) => literal.members);
   return {
-    names: literalMembers.flatMap((member) => staticPropertyName(member) ?? []),
+    names: [...new Set(literalMembers.flatMap((member) => staticPropertyName(member) ?? []))],
     unread: [
       ...members.filter(
         (member) => !ts.isTypeLiteralNode(member) && member.getText() !== displayPropsRefused,
@@ -230,6 +197,21 @@ function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
       ...literalMembers.filter((member) => staticPropertyName(member) === undefined),
     ].map((member) => member.getText()),
   };
+}
+
+function propsGivenToVariables(argument: ts.Expression): string[] {
+  if (!ts.isObjectLiteralExpression(argument)) return [];
+  const option = argument.properties.find(
+    (property) => staticPropertyName(property) === variablesOption,
+  );
+  const given = option && ts.isPropertyAssignment(option) ? option.initializer : undefined;
+  return given && ts.isObjectLiteralExpression(given)
+    ? given.properties.flatMap((property) =>
+        ts.isPropertyAssignment(property) && ts.isStringLiteral(property.initializer)
+          ? [property.initializer.text]
+          : [],
+      )
+    : [];
 }
 
 function keptOffRootProblems(
@@ -240,7 +222,9 @@ function keptOffRootProblems(
 ): string[] {
   const kept = call.arguments
     .slice(3)
-    .flatMap((argument) => (ts.isStringLiteral(argument) ? [argument.text] : []));
+    .flatMap((argument) =>
+      ts.isStringLiteral(argument) ? [argument.text] : propsGivenToVariables(argument),
+    );
   const readsChildren = descendants(fn).some(
     (node) => ts.isPropertyAccessExpression(node) && node.getText() === `props.${childrenProp}`,
   );
@@ -330,14 +314,17 @@ function overloadProblems(
       ];
 }
 
-function rootProblems(fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
-  const roots = returnedRoots(fn);
-  const [root] = roots;
+function rootProblems(name: string, fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
   const rootSpreads = jsxTags(fn).filter((tag) => spreadsOn(tag).includes(rootBinding));
+  const wrapped = builtComponents.includes(name) && containerPart in compiledClassesOf(name);
+  const roots = wrapped ? rootSpreads : returnedRoots(fn);
+  const [root] = roots;
   const problems: string[] = [];
   if (roots.length !== 1) {
     return [
-      `return one root element, and spread {...${rootBinding}} from ${partsHelper} on it. To render it inside its ${containerPart} part only some of the time, bind it to a const and return <${showComponent} fallback={thatConst}> from ${solidModule}, whose child renders {thatConst} inside the element that spreads ${partBinding}("${containerPart}").`,
+      wrapped
+        ? `spread {...${rootBinding}} from ${partsHelper} on one element. Where it renders it, inside its ${containerPart} part or not, the component contract checks from the markup.`
+        : `return one root element, and spread {...${rootBinding}} from ${partsHelper} on it.`,
     ];
   }
   if (rootSpreads.length !== 1 || rootSpreads[0] !== root) {
@@ -487,7 +474,7 @@ function problemsWith({ name, file, source }: Component): string[] {
         shape,
       ),
       ...keptOffRootProblems(name, fn, call, shape),
-      ...rootProblems(fn, shape),
+      ...rootProblems(name, fn, shape),
       ...partProblems(fn),
       ...descendants(fn)
         .filter(
@@ -721,43 +708,9 @@ test("no array or object in a test file lists the components by hand, unless the
   expect(violations).toEqual([]);
 });
 
-function localNameOf(source: ts.SourceFile, module: string, exported: string): string | undefined {
-  for (const statement of source.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== module
-    ) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamespaceImport(bindings)) return `${bindings.name.text}.${exported}`;
-    const element =
-      bindings && ts.isNamedImports(bindings)
-        ? bindings.elements.find((found) => (found.propertyName ?? found.name).text === exported)
-        : undefined;
-    if (element) return element.name.text;
-  }
-  return undefined;
-}
+test("each group of the variable table is named for a component, so createParts takes it by that component's name", () => {
+  const names = components.map(({ name }) => name);
 
-function variablesGivenIn(source: ts.SourceFile): string[] {
-  const callee = localNameOf(source, variablesModule, variablesHelper);
-  if (callee === undefined) return [];
-  return callsOf(source, callee).flatMap((call) => {
-    const [given] = call.arguments;
-    return given && ts.isObjectLiteralExpression(given)
-      ? given.properties.flatMap((property) => staticPropertyName(property) ?? [])
-      : [];
-  });
-}
-
-test("every variable in the table is given by a component, as a key of the object it passes to variables from style-props.ts", () => {
-  const given = components.flatMap(({ source }) => variablesGivenIn(source));
-
-  expect(variableNames.length).toBeGreaterThan(0);
-  expect(
-    variableNames.filter((name) => !given.includes(name)),
-    `variables in ${stylePropTableFile} that no component gives`,
-  ).toEqual([]);
+  expect(variableGroups.length).toBeGreaterThan(0);
+  expect(variableGroups.filter((group) => !names.includes(group))).toEqual([]);
 });
