@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import type { TestProject } from "vite-plus/test/node";
-import { startServer } from "./server-process";
+import { localUrl, startServer } from "./server-process";
 
 const repositoryRoot = join(import.meta.dirname, "../..");
 const playgroundDirectory = join(repositoryRoot, "apps/playground");
@@ -26,11 +26,19 @@ export async function setup(project: TestProject): Promise<() => void> {
     env: productionEnvironment(),
     stdio: "inherit",
   });
-  const playground = await startServer({
-    directory: playgroundDirectory,
-    port: playgroundPort,
-    command: ["node", "dist/server/node.js"],
-  });
-  project.provide("playgroundUrl", playground.url);
-  return playground.stop;
+  try {
+    const playground = await startServer({
+      directory: playgroundDirectory,
+      port: playgroundPort,
+      command: ["node", "dist/server/node.js"],
+    });
+    project.provide("playgroundUrl", playground.url);
+    return playground.stop;
+  } catch (error) {
+    process.stderr.write(
+      `The playground did not start, so every test that opens it fails. The tests that need no page still run and say what they find.\n${String(error)}`,
+    );
+    project.provide("playgroundUrl", localUrl(playgroundPort));
+    return () => undefined;
+  }
 }
