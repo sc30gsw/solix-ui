@@ -1,7 +1,14 @@
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createActiveElement } from "../src/index";
-import { flush, mount, record, unmount, watch } from "./support/browser-harness";
+import {
+  flush,
+  mount,
+  record,
+  reportAfterDispose,
+  unmount,
+  watch,
+} from "./support/browser-harness";
 import { box, button, engineWait, nextTask, tab, witnessed } from "./support/dom";
 import { replaced, withoutGlobal } from "./support/replace";
 
@@ -72,7 +79,7 @@ function shadowButtons(parent?: ParentNode): {
   return { root, one: button("one", root), two: button("two", root) };
 }
 
-test("deep follows a move between two elements of one shadow root, which the document hears nothing of", async () => {
+test("deep follows a move between two elements of one shadow root, whose focusin the document does not hear", async () => {
   const { one, two } = shadowButtons();
   const active = mount(() => createActiveElement());
   const heardByTheDocument = record(document, "focusin", true);
@@ -97,6 +104,38 @@ test("one Tab inside a shadow root reports the element that took focus, and not 
   flush();
   expect(seen).toEqual([one, two]);
 });
+
+test("deep follows a move from an element in a shadow root to that root's own host, when the host takes focus itself", async () => {
+  const { host, inner } = shadowHost();
+  host.tabIndex = 0;
+  const active = mount(() => createActiveElement());
+  inner.focus();
+  await expect.poll(active, engineWait).toBe(inner);
+
+  host.focus();
+  await expect.poll(active, engineWait).toBe(host);
+});
+
+test.each([
+  { place: "in the page", parent: (): ParentNode => document.body },
+  { place: "in that shadow root", parent: (root: ShadowRoot): ParentNode => root },
+])(
+  "one Tab inside a shadow root, while a blur handler removes a node $place, ends on the element that took focus, and a later move in that root is followed",
+  async ({ parent }) => {
+    const { root, one, two } = shadowButtons();
+    const tooltip = box("tooltip", parent(root));
+    one.addEventListener("blur", () => tooltip.remove());
+    one.focus();
+    const active = mount(() => createActiveElement());
+    const arrived = record(two, "focusin");
+
+    await tab();
+    await witnessed(arrived, (events) => events.length > 0, "focus arriving on the second element");
+    await expect.poll(active, engineWait).toBe(two);
+    one.focus();
+    await expect.poll(active, engineWait).toBe(one);
+  },
+);
 
 test("deep follows a move inside a shadow root nested in another, and a move out of it into the outer one", async () => {
   const outer = shadowButtons();
@@ -174,6 +213,33 @@ test("a focused element that is removed is not kept, in the page or in a shadow 
   await expect.poll(active, engineWait).toBe(document.body);
 });
 
+function silencingFocusout<T>(run: () => T): T {
+  const silence = (event: Event) => event.stopImmediatePropagation();
+  window.addEventListener("focusout", silence, true);
+  try {
+    return run();
+  } finally {
+    window.removeEventListener("focusout", silence, true);
+  }
+}
+
+test("once document.body is replaced, a focused element removed from the new body is not kept, in an engine that sends no focusout for the removal", async () => {
+  const active = mount(() => createActiveElement());
+  const original = document.body;
+  const fresh = document.createElement("body");
+  original.replaceWith(fresh);
+  try {
+    const first = button("first");
+    first.focus();
+    await expect.poll(active, engineWait).toBe(first);
+
+    silencingFocusout(() => first.remove());
+    await expect.poll(active, engineWait).toBe(fresh);
+  } finally {
+    fresh.replaceWith(original);
+  }
+});
+
 test("without MutationObserver it still follows focus, and nothing throws", async () => {
   const first = button("first");
   const active = withoutGlobal("MutationObserver", () => mount(() => createActiveElement()));
@@ -192,4 +258,16 @@ test("once the owner is disposed, focus is no longer followed", async () => {
   first.focus();
   await witnessed(focused, (seen) => seen.length > 0, "the focusin");
   expect(active()).toBe(document.body);
+});
+
+test("once the owner is disposed, the read that two moves in one task left for the next task is dropped", () => {
+  const first = button("first");
+  const second = button("second");
+  const third = button("third");
+  first.focus();
+  mount(() => createActiveElement());
+
+  second.focus();
+  third.focus();
+  expect(reportAfterDispose()).toEqual([]);
 });
