@@ -31,6 +31,23 @@ export const held = "Held";
 export const generated = "Generated";
 export const inAShadowRoot = "In a shadow root";
 
+export const tabNames = {
+  account: { overview: "Overview", billing: "Billing", members: "Members", security: "Security" },
+  manual: { one: "One", two: "Two", three: "Three" },
+  vertical: { alpha: "Alpha", beta: "Beta", gamma: "Gamma", delta: "Delta" },
+  optional: { archive: "Archive", notes: "Notes", files: "Files", trash: "Trash" },
+  rightToLeft: { north: "North", east: "East", south: "South", west: "West" },
+  controlled: { inbox: "Inbox", drafts: "Drafts", locked: "Locked" },
+  held: { kept: "Kept", asked: "Asked", styled: "Styled", classed: "Classed" },
+  inAShadowRoot: { near: "Near", middle: "Middle", far: "Far" },
+} as const;
+
+const { overview, billing, members, security } = tabNames.account;
+const { one, two, three } = tabNames.manual;
+const { alpha, beta, gamma, delta } = tabNames.vertical;
+const { archive, notes, files, trash } = tabNames.optional;
+const { north, east, south, west } = tabNames.rightToLeft;
+
 function enabled(...names: string[]): TabSetup[] {
   return names.map((name) => ({ name, disabled: false, panel: {} }));
 }
@@ -45,12 +62,12 @@ export const tabsSetups: TabsSetup[] = [
     selectsOnArrow: true,
     deselects: false,
     keepsHiddenPanels: true,
-    initial: "Overview",
+    initial: overview,
     tabs: [
-      { name: "Overview", disabled: false, leftSection: "1", panel: {} },
-      { name: "Billing", disabled: true, panel: {} },
-      { name: "Members", disabled: false, panel: { display: "flex" } },
-      { name: "Settings", disabled: false, rightSection: "4", panel: {} },
+      { name: overview, disabled: false, leftSection: "1", panel: {} },
+      { name: billing, disabled: true, panel: {} },
+      { name: members, disabled: false, panel: { display: "flex" } },
+      { name: security, disabled: false, rightSection: "4", panel: {} },
     ],
   },
   {
@@ -61,8 +78,8 @@ export const tabsSetups: TabsSetup[] = [
     selectsOnArrow: false,
     deselects: false,
     keepsHiddenPanels: true,
-    initial: "Two",
-    tabs: enabled("One", "Two", "Three"),
+    initial: two,
+    tabs: enabled(one, two, three),
   },
   {
     list: vertical,
@@ -72,8 +89,8 @@ export const tabsSetups: TabsSetup[] = [
     selectsOnArrow: true,
     deselects: false,
     keepsHiddenPanels: true,
-    initial: "Beta",
-    tabs: [...enabled("Alpha", "Beta", "Gamma"), { name: "Delta", disabled: true, panel: {} }],
+    initial: beta,
+    tabs: [...enabled(alpha, beta, gamma), { name: delta, disabled: true, panel: {} }],
   },
   {
     list: optional,
@@ -85,10 +102,10 @@ export const tabsSetups: TabsSetup[] = [
     keepsHiddenPanels: false,
     initial: null,
     tabs: [
-      { name: "Archive", disabled: true },
-      { name: "Notes", disabled: false, panel: {} },
-      { name: "Files", disabled: false, panel: { keepMounted: true } },
-      { name: "Trash", disabled: true },
+      { name: archive, disabled: true },
+      { name: notes, disabled: false, panel: {} },
+      { name: files, disabled: false, panel: { keepMounted: true } },
+      { name: trash, disabled: true },
     ],
   },
   {
@@ -99,12 +116,8 @@ export const tabsSetups: TabsSetup[] = [
     selectsOnArrow: true,
     deselects: false,
     keepsHiddenPanels: true,
-    initial: "North",
-    tabs: [
-      ...enabled("North"),
-      { name: "East", disabled: true, panel: {} },
-      ...enabled("South", "West"),
-    ],
+    initial: north,
+    tabs: [...enabled(north), { name: east, disabled: true, panel: {} }, ...enabled(south, west)],
   },
 ];
 
@@ -118,14 +131,14 @@ export function panelOf(name: string): string {
 
 export type NamedTabs = { list: string; tabs: readonly { name: string }[] };
 
-function named(...names: string[]): { name: string }[] {
-  return names.map((name) => ({ name }));
+function named(names: Readonly<Record<string, string>>): { name: string }[] {
+  return Object.values(names).map((name) => ({ name }));
 }
 
 export const handWrittenTabs: NamedTabs[] = [
-  { list: controlled, tabs: named("Inbox", "Drafts", "Locked") },
-  { list: held, tabs: named("Kept", "Asked", "Styled", "Classed") },
-  { list: inAShadowRoot, tabs: named("Near", "Middle", "Far") },
+  { list: controlled, tabs: named(tabNames.controlled) },
+  { list: held, tabs: named(tabNames.held) },
+  { list: inAShadowRoot, tabs: named(tabNames.inAShadowRoot) },
 ];
 
 export function tabNamesOf(list: string): string[] {

@@ -9,14 +9,14 @@ import {
   held as heldList,
   inAShadowRoot,
   panelOf,
-  tabNamesOf,
+  tabNames,
   tabsSetups,
   valueOf,
 } from "./tabs-setups";
 
-const [inbox, drafts, locked] = tabNamesOf(controlledList);
-const [kept, asked, styled, classed] = tabNamesOf(heldList);
-const [near, middle, far] = tabNamesOf(inAShadowRoot);
+const { inbox, drafts, locked } = tabNames.controlled;
+const { kept, asked, styled, classed } = tabNames.held;
+const { near, middle, far } = tabNames.inAShadowRoot;
 
 function tabValuesIn(text: string): string[] | undefined {
   try {

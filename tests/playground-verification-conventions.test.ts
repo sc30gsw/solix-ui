@@ -1,7 +1,7 @@
 import { globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
+import { descendants, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
 import { repositoryRoot } from "./support/workspace";
 
 const skill = ".agents/skills/verify-playground";
@@ -13,6 +13,9 @@ const evidenceScript = `${skill}/scripts/evidence.mjs`;
 const launchScript = `${skill}/scripts/launch.sh`;
 const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
 const testConfig = "vite.config.ts";
+const setupsModules = "apps/playground/src/sections/*-setups.ts";
+const namesObject = /Names$/;
+const playgroundTestCode = "apps/playground/tests/**/*.{ts,tsx,mjs}";
 const featureSections = [
   "Sub-features",
   "How to get to it (user POV)",
@@ -213,4 +216,54 @@ test("every test server and the verification instance listen on ports of their o
     `${testCode}: no port was found, written as a call argument or as the value of a name that holds "port"`,
   ).toBeGreaterThan(0);
   expect([...violations, ...documented]).toEqual([]);
+});
+
+type HeldName = { name: string; module: string };
+
+function stringLeaves(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  return typeof value === "object" && value !== null
+    ? Object.values(value).flatMap(stringLeaves)
+    : [];
+}
+
+async function namesTheSetupsHold(): Promise<HeldName[]> {
+  const modules = globSync(setupsModules, { cwd: repositoryRoot });
+  const held = await Promise.all(
+    modules.map(async (module) => {
+      const exported: Record<string, unknown> = await import(join(repositoryRoot, module));
+      const listNames = Object.values(exported).flatMap((value) =>
+        typeof value === "string" ? [value] : [],
+      );
+      const itemNames = Object.entries(exported).flatMap(([name, value]) =>
+        namesObject.test(name) ? stringLeaves(value) : [],
+      );
+      const { panelOf } = exported;
+      const panelTexts =
+        typeof panelOf === "function" ? itemNames.map((name) => String(panelOf(name))) : [];
+      return [...listNames, ...itemNames, ...panelTexts].map((name) => ({ name, module }));
+    }),
+  );
+  return held.flat();
+}
+
+test("no playground test or drive script writes, as a string, a list's name, an item's name in an exported *Names object, or a panel's text that a setups module holds: each reads it from that module", async () => {
+  const held = await namesTheSetupsHold();
+  const files = [...globSync(playgroundTestCode, { cwd: repositoryRoot }), driveScript];
+  const violations = files.flatMap((file) => {
+    const source = parse(join(repositoryRoot, file));
+    return descendants(source).flatMap((node) => {
+      const found = ts.isStringLiteralLikeNode(node)
+        ? held.find(({ name }) => name === node.text)
+        : undefined;
+      return found
+        ? [
+            `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText()} is a name ${found.module} holds. Read it from that module.`,
+          ]
+        : [];
+    });
+  });
+
+  expect(held).not.toEqual([]);
+  expect(violations).toEqual([]);
 });

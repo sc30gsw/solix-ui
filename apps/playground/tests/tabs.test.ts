@@ -16,15 +16,22 @@ import {
   panelOf,
   stateOf,
   tabList,
-  tabNamed,
   tabLists,
+  tabNamed,
+  tabNames,
   tabsRegion,
   tabsSetups,
+  valueOf,
   vertical,
 } from "./support/tabs";
 import { pathBetween, singleSteps } from "./support/roving-list-model";
 
 const url = inject("playgroundUrl");
+const { overview, billing, members, security } = tabNames.account;
+const { two } = tabNames.manual;
+const { notes, files } = tabNames.optional;
+const { inbox, drafts, locked } = tabNames.controlled;
+const { kept, asked, styled, classed } = tabNames.held;
 const axeSource = join(import.meta.dirname, "../../../node_modules/axe-core/axe.min.js");
 const wcag22LevelAOrAA = /^wcag2\d?a{1,2}$/;
 
@@ -44,24 +51,24 @@ inEveryEngine((browser) => {
       const { page } = opened;
 
       expect(await stateOf(page, account)).toEqual({
-        selected: "Overview",
+        selected: overview,
         focused: null,
-        shown: ["Overview panel"],
-        tabStops: ["Overview"],
+        shown: [panelOf(overview)],
+        tabStops: [overview],
       });
       expect(await stateOf(page, optional)).toMatchObject({
         selected: null,
         focused: null,
         shown: [],
       });
-      expect(await page.getByText("Members panel").getAttribute("class")).toContain(
+      expect(await page.getByText(panelOf(members)).getAttribute("class")).toContain(
         stylePropClass("display", baseKey),
       );
-      expect(await stateOf(page, held)).toMatchObject({ shown: ["Kept panel"] });
-      expect(await page.getByText("Styled panel").getAttribute("style")).toBe(
+      expect(await stateOf(page, held)).toMatchObject({ shown: [panelOf(kept)] });
+      expect(await page.getByText(panelOf(styled)).getAttribute("style")).toBe(
         displayedByTheApp.style,
       );
-      expect(await page.getByText("Classed panel").getAttribute("class")).toContain(
+      expect(await page.getByText(panelOf(classed)).getAttribute("class")).toContain(
         displayedByTheApp.class,
       );
     });
@@ -80,22 +87,24 @@ inEveryEngine((browser) => {
 
     test("a click selects a tab, shows its panel alone and points the tab at it by the ids the root's id starts", async () => {
       const { page } = opened;
-      const members = tabNamed(page, account, "Members");
+      const membersTab = tabNamed(page, account, members);
 
-      await members.click();
+      await membersTab.click();
 
       expect(await stateOf(page, account)).toEqual({
-        selected: "Members",
-        focused: "Members",
-        shown: ["Members panel"],
-        tabStops: ["Members"],
+        selected: members,
+        focused: members,
+        shown: [panelOf(members)],
+        tabStops: [members],
       });
-      expect(await members.getAttribute("id")).toBe("account-tab-members");
-      expect(await members.getAttribute("aria-controls")).toBe("account-panel-members");
-      expect(await page.getByText("Members panel").getAttribute("aria-labelledby")).toBe(
-        "account-tab-members",
+      expect(await membersTab.getAttribute("id")).toBe(`account-tab-${valueOf(members)}`);
+      expect(await membersTab.getAttribute("aria-controls")).toBe(
+        `account-panel-${valueOf(members)}`,
       );
-      expect(await computed(page.getByText("Members panel"), "display")).toBe("flex");
+      expect(await page.getByText(panelOf(members)).getAttribute("aria-labelledby")).toBe(
+        `account-tab-${valueOf(members)}`,
+      );
+      expect(await computed(page.getByText(panelOf(members)), "display")).toBe("flex");
       expect(await page.locator("#account").getAttribute("class")).toContain(
         stableClass("Tabs", rootPart),
       );
@@ -117,21 +126,21 @@ inEveryEngine((browser) => {
         });
       });
 
-      await tabNamed(page, account, "Settings").click();
+      await tabNamed(page, account, security).click();
 
       await expect.poll(transitions).toContain("color");
     });
 
     test("a disabled tab is disabled, and a click on it selects nothing", async () => {
       const { page } = opened;
-      const billing = tabNamed(page, account, "Billing");
+      const billingTab = tabNamed(page, account, billing);
       const { selected, shown } = await stateOf(page, account);
 
-      await billing.click({ force: true });
+      await billingTab.click({ force: true });
 
-      expect(await billing.isDisabled()).toBe(true);
-      expect(await billing.getAttribute("data-disabled")).toBe("");
-      expect(await billing.getAttribute("aria-selected")).toBe("false");
+      expect(await billingTab.isDisabled()).toBe(true);
+      expect(await billingTab.getAttribute("data-disabled")).toBe("");
+      expect(await billingTab.getAttribute("aria-selected")).toBe("false");
       expect(await stateOf(page, account)).toMatchObject({ selected, shown });
     });
 
@@ -144,7 +153,7 @@ inEveryEngine((browser) => {
             return panel === null ? null : (document.getElementById(panel)?.textContent ?? "");
           }),
         );
-      await tabNamed(page, optional, "Files").click();
+      await tabNamed(page, optional, files).click();
 
       for (const { list, tabs, keepsHiddenPanels } of tabsSetups) {
         expect(await controls(list), list).toEqual(
@@ -160,12 +169,7 @@ inEveryEngine((browser) => {
             tab.getAttribute("aria-controls"),
           ),
         ),
-      ).toEqual([
-        "account-panel-overview",
-        "account-panel-billing",
-        "account-panel-members",
-        "account-panel-settings",
-      ]);
+      ).toEqual(Object.values(tabNames.account).map((name) => `account-panel-${valueOf(name)}`));
     });
 
     test("a list, its tabs and its panels carry the orientation, and only a vertical list says so to assistive technology", async () => {
@@ -231,43 +235,45 @@ inEveryEngine((browser) => {
 
     test("the Tab key enters a tab list at its selected tab and leaves it for the panel, which is focusable", async () => {
       const { page } = opened;
-      await tabNamed(page, manual, "Two").click();
-      await tabNamed(page, account, "Settings").click();
+      await tabNamed(page, manual, two).click();
+      await tabNamed(page, account, security).click();
       await page.keyboard.press("Tab");
 
-      expect(await page.evaluate(() => document.activeElement?.textContent)).toBe("Settings panel");
+      expect(await page.evaluate(() => document.activeElement?.textContent)).toBe(
+        panelOf(security),
+      );
 
       await page.keyboard.press("Tab");
 
-      expect(await stateOf(page, manual)).toMatchObject({ focused: "Two" });
+      expect(await stateOf(page, manual)).toMatchObject({ focused: two });
     });
 
     test("with allowTabDeactivation a click on the selected tab selects none, and with keepMounted false a panel keeps its content only while it shows, unless the panel itself keeps it", async () => {
       const { page } = opened;
-      const notes = tabNamed(page, optional, "Notes");
+      const notesTab = tabNamed(page, optional, notes);
       const panels = () =>
         tabList(page, optional).evaluate((node) =>
           [...(node.parentElement?.querySelectorAll('[role="tabpanel"]') ?? [])].map(
             (panel) => panel.textContent,
           ),
         );
-      if ((await stateOf(page, optional)).selected === "Notes") await notes.click();
-      await tabNamed(page, optional, "Files").click();
+      if ((await stateOf(page, optional)).selected === notes) await notesTab.click();
+      await tabNamed(page, optional, files).click();
 
-      expect(await panels()).toEqual(["", "Files panel"]);
+      expect(await panels()).toEqual(["", panelOf(files)]);
 
-      await notes.click();
+      await notesTab.click();
 
       expect(await stateOf(page, optional)).toMatchObject({
-        selected: "Notes",
-        shown: ["Notes panel"],
+        selected: notes,
+        shown: [panelOf(notes)],
       });
-      expect(await panels()).toEqual(["Notes panel", "Files panel"]);
+      expect(await panels()).toEqual([panelOf(notes), panelOf(files)]);
 
-      await notes.click();
+      await notesTab.click();
 
       expect(await stateOf(page, optional)).toMatchObject({ selected: null, shown: [] });
-      expect(await panels()).toEqual(["", "Files panel"]);
+      expect(await panels()).toEqual(["", panelOf(files)]);
     });
 
     test("a controlled Tabs shows the value the app holds, tells the app each selection, and a tab whose own click handler prevents the default is never selected", async () => {
@@ -275,18 +281,18 @@ inEveryEngine((browser) => {
       const value = page.getByRole("status", { name: "Controlled value" });
       const refused = page.getByRole("status", { name: "Refused presses" });
 
-      expect(await stateOf(page, controlled)).toMatchObject({ selected: "Drafts" });
+      expect(await stateOf(page, controlled)).toMatchObject({ selected: drafts });
 
-      await tabNamed(page, controlled, "Inbox").click();
+      await tabNamed(page, controlled, inbox).click();
 
       expect(await value.textContent()).toBe("inbox");
-      expect(await stateOf(page, controlled)).toMatchObject({ selected: "Inbox" });
+      expect(await stateOf(page, controlled)).toMatchObject({ selected: inbox });
 
-      await tabNamed(page, controlled, "Locked").click();
+      await tabNamed(page, controlled, locked).click();
 
       expect(await refused.textContent()).toBe("1");
       expect(await value.textContent()).toBe("inbox");
-      expect(await stateOf(page, controlled)).toMatchObject({ selected: "Inbox" });
+      expect(await stateOf(page, controlled)).toMatchObject({ selected: inbox });
 
       await page.getByRole("button", { name: "Select none" }).click();
 
@@ -298,22 +304,22 @@ inEveryEngine((browser) => {
       const { page } = opened;
       const requests = page.getByRole("status", { name: "Held requests" });
 
-      await tabNamed(page, held, "Asked").click();
+      await tabNamed(page, held, asked).click();
 
       await expect.poll(() => requests.textContent()).toBe("1");
       expect(await stateOf(page, held)).toMatchObject({
-        selected: "Kept",
-        shown: ["Kept panel"],
+        selected: kept,
+        shown: [panelOf(kept)],
       });
 
-      await tabNamed(page, held, "Kept").focus();
+      await tabNamed(page, held, kept).focus();
       await page.keyboard.press("ArrowRight");
 
       await expect.poll(() => requests.textContent()).toBe("2");
       expect(await stateOf(page, held)).toMatchObject({
-        selected: "Kept",
-        focused: "Asked",
-        shown: ["Kept panel"],
+        selected: kept,
+        focused: asked,
+        shown: [panelOf(kept)],
       });
     });
 
@@ -339,8 +345,8 @@ inEveryEngine((browser) => {
       const context = await browser().newContext();
       const page = await context.newPage();
       await page.goto(url, { waitUntil: "networkidle" });
-      await tabNamed(page, account, "Members").click();
-      await tabNamed(page, optional, "Notes").click();
+      await tabNamed(page, account, members).click();
+      await tabNamed(page, optional, notes).click();
       await page.addScriptTag({ path: axeSource });
       const found = await page.evaluate(
         async ([region, tagPattern]) => {
@@ -416,12 +422,12 @@ inEveryEngine((browser) => {
       const usual = await openPage(browser(), url);
       const reduced = await openPage(browser(), url, { reducedMotion: "reduce" });
 
-      expect(await computed(tabNamed(usual.page, account, "Members"), "transition-property")).toBe(
+      expect(await computed(tabNamed(usual.page, account, members), "transition-property")).toBe(
         "color",
       );
-      expect(
-        await computed(tabNamed(reduced.page, account, "Members"), "transition-property"),
-      ).toBe("none");
+      expect(await computed(tabNamed(reduced.page, account, members), "transition-property")).toBe(
+        "none",
+      );
 
       await usual.close();
       await reduced.close();
@@ -432,15 +438,11 @@ inEveryEngine((browser) => {
       const page = await forced.newPage();
       await page.goto(url, { waitUntil: "networkidle" });
 
-      expect(await computed(tabNamed(page, account, "Overview"), "border-bottom-style")).toBe(
+      expect(await computed(tabNamed(page, account, overview), "border-bottom-style")).toBe(
         "solid",
       );
-      expect(await computed(tabNamed(page, account, "Members"), "border-bottom-style")).toBe(
-        "none",
-      );
-      expect(await computed(tabNamed(page, account, "Overview"), "border-bottom-width")).toBe(
-        "2px",
-      );
+      expect(await computed(tabNamed(page, account, members), "border-bottom-style")).toBe("none");
+      expect(await computed(tabNamed(page, account, overview), "border-bottom-width")).toBe("2px");
 
       await forced.close();
     });

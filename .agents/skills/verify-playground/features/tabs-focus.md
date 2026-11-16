@@ -11,7 +11,7 @@ The Tab key treats a list of tabs as one stop. It enters a list at the selected 
 
 ## How to get to it (user POV)
 
-- Click `Two` in `Manual vertical` and `Settings` in `Account`.
+- Click `Two` in `Manual vertical` and `Security` in `Account`.
 - Press Shift+Tab, then Tab three times.
 
 ## Driving it with drive.mjs
@@ -20,7 +20,7 @@ Preconditions:
 
 - `doctor.sh` exits 0.
 
-- **Focus.** Run `.agents/skills/verify-playground/scripts/drive.mjs tabs-focus`. It observes `Tab into the list: focused tab` (`Settings`), `focus ring: outline style` (`solid`), `focus ring: outline colour` (the primary token), `Tab out of the list: focused element` (`Settings panel`) and `Tab into the next list: focused tab` (`Two`).
+- **Focus.** Run `.agents/skills/verify-playground/scripts/drive.mjs tabs-focus`. It observes `Tab into the list: focused tab` (`Security`), `focus ring: outline style` (`solid`), `focus ring: outline colour` (the primary token), `Tab out of the list: focused element` (`Security panel`) and `Tab into the next list: focused tab` (`Two`).
 - **Proof.** The evidence directory holds `01-focus-ring.png`, `02-focus-panel.png` and `03-focus-next-list.png`, with `recording.webm` and `observations.json`.
 
 ## Gotchas

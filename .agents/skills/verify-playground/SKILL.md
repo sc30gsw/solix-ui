@@ -62,7 +62,7 @@ A behaviour component keeps its own elements and takes keyboard, focus, selectio
 - **Focus.** `tabs-focus` leaves a list with Shift+Tab, returns with Tab, and follows Tab into the panel and into the next list.
 - **What the SDK writes at run time.** `tabs-run-time-writes` reads every `<style>` element and adopted style sheet on the page, the `style` attribute of every element that carries `data-slot`, the `style` attribute of `<html>`, the `inert` elements, and whether a part carries a class the library did not give.
 
-A list of tabs is found with `tabList` and a tab with `tabNamed` from that support file, because a tab's accessible name includes its sections. To add a list to the page, add it to `apps/playground/src/sections/tabs-setups.ts`, which the section renders and the tests read, and give it a row in `keyboardTable`.
+A list of tabs is found with `tabList` and a tab with `tabNamed` from that support file, because a tab's accessible name includes its sections. To add a list to the page, add it to `apps/playground/src/sections/tabs-setups.ts`, with its tabs named in `tabNames`, which the section renders and the tests and `drive.mjs` read, and give it a row in `keyboardTable`.
 
 ## Evidence
 
