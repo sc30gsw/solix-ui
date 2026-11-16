@@ -1,24 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import {
-  existsSync,
-  lstatSync,
-  readdirSync,
-  readFileSync,
-  readlinkSync,
-  realpathSync,
-} from "node:fs";
-import { basename, join, relative, sep } from "node:path";
+import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
+import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "../scripts/browser-engines.mjs";
-import {
-  catalogVersions,
-  repositoryRoot,
-  rootManifest,
-  workflowFiles,
-  workspaceFile,
-} from "./support/workspace";
+import { approvedSkills, frontMatterOf } from "../scripts/package-skills";
 import { pnpmSettings } from "../scripts/pnpm-settings";
+import { repositoryRoot, rootManifest, workflowFiles, workspaceFile } from "./support/workspace";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -37,18 +24,8 @@ const checkoutSteps = /- uses: actions\/checkout@/g;
 const fullHistory = /^\s+fetch-depth: 0$/gm;
 const versionPrefix = /^[\^~]/;
 
-const reviewedSkillsFile = "scripts/reviewed-skills.json";
 const packageSkillIgnoreFile = ".gitignore";
-const skillDirectories = [".agents/skills", ".claude/skills"];
-const skillFolders = skillDirectories.join(" and ");
-const installed = existsSync(join(repositoryRoot, "node_modules/.modules.yaml"));
-const approvedSkills = Object.entries(pnpmSettings().approvedSkills).flatMap(([pack, names]) =>
-  names.map((name) => ({ pack, name })),
-);
-const reviewedHashes = JSON.parse(
-  readFileSync(join(repositoryRoot, reviewedSkillsFile), "utf8"),
-) as Record<string, Record<string, string>>;
-const packageSkillEntries = [packageSkillIgnoreFile, ...approvedSkills.map(({ name }) => name)];
+const packageSkillEntries = [packageSkillIgnoreFile, ...approvedSkills().map(({ name }) => name)];
 
 const skillNames = readdirSync(skillsDirectory)
   .filter((name) => !packageSkillEntries.includes(name))
@@ -65,17 +42,6 @@ function skillText(name: string): string {
 
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
-}
-
-function frontMatterOf(text: string): Record<string, string> {
-  const block = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? "";
-  return Object.fromEntries(
-    block
-      .split("\n")
-      .map((line) => /^([a-z-]+): (.*)$/.exec(line))
-      .filter((match): match is RegExpExecArray => match !== null)
-      .map(([, key, value]) => [key, value]),
-  );
 }
 
 test("every skill is named for its directory, described, and linked from .claude/skills", () => {
@@ -108,145 +74,6 @@ test("every skill is named for its directory, described, and linked from .claude
   expect(skillNames.length).toBeGreaterThan(0);
   expect([...violations, ...dangling]).toEqual([]);
 });
-
-function trackedFiles(directory: string): string[] {
-  return spawnSync("git", ["ls-files", "--", directory], { cwd: repositoryRoot, encoding: "utf8" })
-    .stdout.split("\n")
-    .filter((line) => line !== "");
-}
-
-function isIgnored(path: string): boolean {
-  return spawnSync("git", ["check-ignore", "-q", path], { cwd: repositoryRoot }).status === 0;
-}
-
-function skillFolderContent(directory: string): { hash: string; symbolicLinks: string[] } {
-  const root = realpathSync(directory);
-  const hash = createHash("sha256");
-  const entries = readdirSync(root, { recursive: true, withFileTypes: true }).map((entry) => ({
-    entry,
-    path: relative(root, join(entry.parentPath, entry.name)).split(sep).join("/"),
-  }));
-  const files = entries
-    .filter(({ entry }) => entry.isFile())
-    .map(({ path }) => path)
-    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
-  for (const path of files) {
-    hash.update(`${path}\0`);
-    hash.update(readFileSync(join(root, path)));
-    hash.update("\0");
-  }
-  return {
-    hash: hash.digest("hex"),
-    symbolicLinks: entries.filter(({ entry }) => entry.isSymbolicLink()).map(({ path }) => path),
-  };
-}
-
-test(`${reviewedSkillsFile} records a reviewed hash for exactly the package skills ${workspaceFile} approves`, () => {
-  const recorded = Object.entries(reviewedHashes).flatMap(([pack, skills]) =>
-    Object.keys(skills).map((name) => `${pack} ${name}`),
-  );
-  const approved = approvedSkills.map(({ pack, name }) => `${pack} ${name}`);
-  const violations = [
-    ...approved
-      .filter((entry) => !recorded.includes(entry))
-      .map(
-        (entry) =>
-          `${reviewedSkillsFile}: record the reviewed hash of ${entry}, which ${workspaceFile} approves.`,
-      ),
-    ...recorded
-      .filter((entry) => !approved.includes(entry))
-      .map(
-        (entry) =>
-          `${reviewedSkillsFile}: remove ${entry}, which ${workspaceFile} does not approve.`,
-      ),
-  ];
-
-  expect(violations).toEqual([]);
-});
-
-test(`in ${skillFolders}, git ignores the approved package skills and tracks every other entry`, () => {
-  const violations = skillDirectories.flatMap((directory) => {
-    const tracked = trackedFiles(directory);
-    const isTracked = (entry: string) =>
-      tracked.some(
-        (file) => file === `${directory}/${entry}` || file.startsWith(`${directory}/${entry}/`),
-      );
-    const entries = existsSync(join(repositoryRoot, directory))
-      ? readdirSync(join(repositoryRoot, directory))
-      : [];
-    return [
-      ...approvedSkills
-        .filter(({ name }) => isTracked(name))
-        .map(
-          ({ pack, name }) =>
-            `${directory}/${name}: a project skill has the name of the skill ${pack} ships and ${workspaceFile} approves. Rename one of them.`,
-        ),
-      ...approvedSkills
-        .filter(({ name }) => !isTracked(name) && !isIgnored(`${directory}/${name}`))
-        .map(
-          ({ name }) =>
-            `${directory}/${name}: let pnpm's ${packageSkillIgnoreFile} there ignore it; run vp install and commit that file.`,
-        ),
-      ...entries
-        .filter((entry) => !approvedSkills.some(({ name }) => name === entry))
-        .filter((entry) => !isTracked(entry))
-        .map(
-          (entry) =>
-            `${directory}/${entry}: it is neither tracked nor a package skill ${workspaceFile} approves. Commit it, approve it there, or remove it.`,
-        ),
-    ];
-  });
-
-  expect(violations).toEqual([]);
-});
-
-test.skipIf(!installed)(
-  `pnpm links exactly the approved package skills into ${skillFolders}, each to its package, holding the files whose hash ${reviewedSkillsFile} records`,
-  () => {
-    const violations = skillDirectories.flatMap((directory) => {
-      const linkedToPackages = readdirSync(join(repositoryRoot, directory)).filter((entry) => {
-        const path = join(repositoryRoot, directory, entry);
-        return lstatSync(path).isSymbolicLink() && readlinkSync(path).includes("node_modules/");
-      });
-      return [
-        ...linkedToPackages
-          .filter((entry) => !approvedSkills.some(({ name }) => name === entry))
-          .map(
-            (entry) =>
-              `${directory}/${entry}: it links a package skill that ${workspaceFile} does not approve. Remove the link, or read the skill and approve it there by name.`,
-          ),
-        ...approvedSkills.flatMap(({ pack, name }) => {
-          const link = join(repositoryRoot, directory, name);
-          const target = existsSync(link) ? readlinkSync(link) : "";
-          if (!target.includes(`/node_modules/${pack}/skills/${name}`)) {
-            return [
-              `${directory}/${name}: pnpm has not linked ${pack}'s skill ${name} here. Run vp install.`,
-            ];
-          }
-          const front = frontMatterOf(readFileSync(join(link, "SKILL.md"), "utf8"));
-          const { hash, symbolicLinks } = skillFolderContent(link);
-          const reviewed = reviewedHashes[pack]?.[name];
-          return [
-            ...(front.name === name
-              ? []
-              : [`${directory}/${name}/SKILL.md: ${pack} names this skill "${front.name}".`]),
-            ...symbolicLinks.map(
-              (path) =>
-                `${directory}/${name}/${path}: ${pack} ships a symbolic link inside this skill, whose text a hash cannot hold. Do not approve the skill until it ships files only.`,
-            ),
-            ...(hash === reviewed
-              ? []
-              : [
-                  `${directory}/${name}: ${pack} ${reviewed === undefined ? "ships this skill with no reviewed hash" : "changed the files of this skill"}. Read every file of it, hidden ones included, as data, then record its hash, ${hash}, in ${reviewedSkillsFile}.`,
-                ]),
-          ];
-        }),
-      ];
-    });
-
-    expect(violations).toEqual([]);
-  },
-);
 
 test("every .agents or .claude path that a project-owned skill names exists", () => {
   const vendored = Object.keys(
@@ -405,7 +232,7 @@ test("no project-owned skill copies a version from the catalog", () => {
   const vendored = Object.keys(
     (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
   );
-  const versions = Object.entries(catalogVersions())
+  const versions = Object.entries(pnpmSettings().catalog)
     .filter(([, version]) => !version.includes(":"))
     .map(([name, version]): [string, string] => [name, version.replace(versionPrefix, "")]);
   const violations = skillNames
@@ -450,8 +277,7 @@ test("every row of the rules table in AGENTS.md is compact, so a rule edit chang
 });
 
 test("every check in the repository runs through vp run verify, before a commit and in CI", () => {
-  const manifest = rootManifest;
-  const verify = manifest.scripts?.verify ?? "";
+  const verify = rootManifest().scripts?.verify ?? "";
 
   expect(verify.split(" && ")).toEqual([
     "vp check --deny-warnings",

@@ -39,7 +39,7 @@ jobs:
       - name: Approved package skills hold the reviewed files
         id: skills
         continue-on-error: true
-        run: vp test tests/repository-conventions.test.ts -t "pnpm links exactly the approved package skills"
+        run: node scripts/check-package-skills.ts
       - run: vp run verify
         env:
           SOLIX_PRIVATE_TERMS: ${{ secrets.SOLIX_PRIVATE_TERMS }}
@@ -52,8 +52,8 @@ jobs:
           VERIFY: ${{ steps.verify.outcome }}
         run: |
           if [ "$SKILLS" = "failure" ]; then
-            echo "::error::The newest Solid 2 release changed the files of an approved package skill. Read them, then record the new hash in scripts/reviewed-skills.json. vp run verify fails on that alone; read its log for any other failure." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::The approved package skills do not hold the reviewed files on the newest Solid 2 release. Read that step's log; where a skill changed, read it and record the new hash in scripts/reviewed-skills.json. vp run verify fails on that alone; read its log for any other failure." | tee -a "$GITHUB_STEP_SUMMARY"
           elif [ "$VERIFY" = "failure" ]; then
-            echo "::error::vp run verify failed on the newest Solid 2 release: the code does not work with it." | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::error::vp run verify failed on the newest Solid 2 release and the skills step passed; read its log." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
           [ "$SKILLS" != "failure" ] && [ "$VERIFY" != "failure" ]

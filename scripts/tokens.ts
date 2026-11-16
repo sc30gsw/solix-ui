@@ -1,9 +1,8 @@
 import { join } from "node:path";
+import { repositoryRoot } from "./repository.ts";
 import { parse, ts } from "./syntax.ts";
 
 export const tokensFile = "packages/core/src/tokens.stylex.ts";
-
-const repositoryRoot = join(import.meta.dirname, "..");
 
 const kindByPrefix = [
   ["--solix-color-", "colour"],

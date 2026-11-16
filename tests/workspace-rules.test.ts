@@ -3,8 +3,8 @@ import { join } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
 import { commentsIn, descendants, parseAll, parseText, ts } from "../scripts/syntax";
+import { pnpmSettings } from "../scripts/pnpm-settings";
 import {
-  catalogVersions,
   type Manifest,
   libraryNames,
   libraryPackages,
@@ -65,7 +65,7 @@ function lowestMajorOf(range: string): number | undefined {
 }
 
 function nodeRangeAndLowestMajor(): [string, number] {
-  const range = rootManifest.engines?.node;
+  const range = rootManifest().engines?.node;
   const major =
     range === undefined || semver.validRange(range) === "*" ? undefined : lowestMajorOf(range);
   if (range === undefined || major === undefined)
@@ -440,7 +440,7 @@ test("source code carries no comment except a doc comment on a public API", () =
 });
 
 test("every peer range of a library package accepts the version the catalog pins", () => {
-  const catalog = catalogVersions();
+  const { catalog } = pnpmSettings();
   const violations = libraryPackages.flatMap(({ path, manifest }) =>
     Object.entries(manifest.peerDependencies ?? {}).flatMap(([name, range]) => {
       if (libraryNames.includes(name)) return [];
@@ -467,7 +467,7 @@ test("the project is MIT-licensed in its licence text, its root manifest and eve
         `${path}: set "license" to "${projectLicence}", not "${manifest.license}".`,
     );
 
-  expect(rootManifest.license, `package.json: set "license" to "${projectLicence}"`).toBe(
+  expect(rootManifest().license, `package.json: set "license" to "${projectLicence}"`).toBe(
     projectLicence,
   );
   expect(licenceText.split("\n")[0], `LICENSE: start with "${projectLicence} License"`).toBe(
@@ -507,7 +507,7 @@ test("in every workflow, each node-version-file is package.json, no line names n
 });
 
 test("no .node-version, .nvmrc or .tool-versions file, devEngines.runtime or engines.node outside package.json exists, and @types/node shares the lowest major of engines.node", () => {
-  const typesRange = catalogVersions()["@types/node"] ?? "";
+  const typesRange = pnpmSettings().catalog["@types/node"] ?? "";
   const writtenAgain = [
     ...globSync(nodeVersionFilesThatCompete, {
       cwd: repositoryRoot,

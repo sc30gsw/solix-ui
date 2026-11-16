@@ -5,8 +5,8 @@ import {
   nodeReleases,
   registryDocuments,
   releasePolicy,
-  rootManifest,
 } from "./release-sources.ts";
+import { rootManifest } from "./repository.ts";
 
 const settings = pnpmSettings();
 const pins = pinsOf(rootManifest(), settings.catalog);

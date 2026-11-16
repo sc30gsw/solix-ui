@@ -8,8 +8,8 @@ import {
   type ReleasePolicy,
 } from "./newest-releases.ts";
 import { type PnpmSettings, workspaceFile } from "./pnpm-settings.ts";
+import { repositoryRoot } from "./repository.ts";
 
-const repositoryRoot = join(import.meta.dirname, "..");
 const registry = "https://registry.npmjs.org";
 const nodeIndex = "https://nodejs.org/dist/index.json";
 
@@ -22,10 +22,6 @@ export function releasePolicy(settings: PnpmSettings): ReleasePolicy {
     excluded: settings.minimumReleaseAgeExclude,
     now: Date.now(),
   };
-}
-
-export function rootManifest(): { packageManager?: string; engines?: { node?: string } } {
-  return JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8"));
 }
 
 export function heldBackEntries(): HeldBack[] {

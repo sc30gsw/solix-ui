@@ -16,7 +16,8 @@ import {
   withCatalogVersions,
 } from "../scripts/newest-releases";
 import { pnpmSettings, settingsFrom, workspaceFile } from "../scripts/pnpm-settings";
-import { heldBackEntries, rootManifest } from "../scripts/release-sources";
+import { heldBackEntries } from "../scripts/release-sources";
+import { rootManifest } from "../scripts/repository";
 
 const now = Date.parse("2026-11-14T12:00:00Z");
 const day = 24 * 60 * 60_000;

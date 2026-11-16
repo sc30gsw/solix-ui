@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { repositoryRoot } from "./repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
 
@@ -20,7 +21,6 @@ export type RawSettings = {
   permissions?: Record<string, { skills?: string[] | boolean }>;
 };
 
-const repositoryRoot = join(import.meta.dirname, "..");
 const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
 let read: PnpmSettings | undefined;
 

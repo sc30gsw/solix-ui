@@ -1,26 +1,14 @@
-import { type Dirent, globSync, readFileSync } from "node:fs";
+import { type Dirent, globSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
-import { pnpmSettings } from "../../scripts/pnpm-settings";
-
-export const repositoryRoot = join(import.meta.dirname, "../..");
-export const primitivesDirectory = join(repositoryRoot, "packages/primitives");
+import { manifestAt, repositoryRoot } from "../../scripts/repository";
 
 export { workspaceFile } from "../../scripts/pnpm-settings";
+export { type Manifest, repositoryRoot, rootManifest } from "../../scripts/repository";
+
+export const primitivesDirectory = join(repositoryRoot, "packages/primitives");
 
 const generatedOrInstalled = new Set(["node_modules", "dist", ".git"]);
 const peerDependencyThatMarksALibrary = "solid-js";
-
-export type Manifest = {
-  name?: string;
-  license?: string;
-  engines?: Record<string, string>;
-  packageManager?: string;
-  devEngines?: Record<string, unknown>;
-  scripts?: Record<string, string>;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-  peerDependencies?: Record<string, string>;
-};
 
 export function outsideGeneratedOrInstalled(entry: string | Dirent): boolean {
   return (typeof entry === "string" ? entry : entry.name)
@@ -34,12 +22,8 @@ export const packages = globSync("**/package.json", {
 }).map((path) => ({
   path,
   directory: join(repositoryRoot, dirname(path)),
-  manifest: JSON.parse(readFileSync(join(repositoryRoot, path), "utf8")) as Manifest,
+  manifest: manifestAt(path),
 }));
-
-export const rootManifest = JSON.parse(
-  readFileSync(join(repositoryRoot, "package.json"), "utf8"),
-) as Manifest;
 
 export const libraryPackages = packages.filter(
   ({ manifest }) => peerDependencyThatMarksALibrary in (manifest.peerDependencies ?? {}),
@@ -69,7 +53,3 @@ export const scriptFiles = globSync("**/*.{ts,tsx,mjs,cjs,js}", {
 });
 
 export const workflowFiles = globSync(".github/workflows/*.{yml,yaml}", { cwd: repositoryRoot });
-
-export function catalogVersions(): Record<string, string> {
-  return pnpmSettings().catalog;
-}
