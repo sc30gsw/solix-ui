@@ -20,10 +20,12 @@ import { pnpmSettings } from "../scripts/pnpm-settings";
 import {
   type ExportTarget,
   type Manifest,
+  installedVersions,
   installedVp,
   libraryNames,
   libraryPackages,
   outsideGeneratedOrInstalled,
+  packageManagerAnswerTimeout,
   packages,
   primitivesDirectory,
   primitivesPackage,
@@ -53,7 +55,6 @@ const allowedForPrimitives = ["solid-js"];
 const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name ?? ""];
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
-const packAnswerTimeout = 30_000;
 const webStandardsOnly =
   "A library is built on web standards and has no runtime dependency: it names Solid, StyleX and the primitives package as peers. Use a platform feature or a fallback written in this repository.";
 
@@ -257,7 +258,7 @@ function packedFiles(directory: string): string[] {
     cwd: directory,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    timeout: packAnswerTimeout,
+    timeout: packageManagerAnswerTimeout,
   });
   const packed: unknown = JSON.parse(answer);
   const files =
@@ -524,20 +525,6 @@ test("source code carries no comment except a doc comment on a public API", () =
   expect(scriptFiles.length).toBeGreaterThan(10);
   expect(comments, "Remove the comment and say it with a name, a constant or a test.").toEqual([]);
 });
-
-type Installed = { name: string; version: string };
-
-function installedVersions(names: readonly string[]): Installed[] {
-  const answer = execFileSync(installedVp, ["why", ...names, "-r", "--json"], {
-    cwd: repositoryRoot,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: packAnswerTimeout,
-  });
-  const installed: unknown = JSON.parse(answer);
-  if (!Array.isArray(installed)) throw new Error(`The package manager answered: ${answer}`);
-  return installed.map(({ name, version }: Installed) => ({ name, version }));
-}
 
 test("every package of a Solid release is installed at the version the catalog pins, wherever it is installed", () => {
   const { catalog } = pnpmSettings();

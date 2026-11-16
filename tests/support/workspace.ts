@@ -6,7 +6,9 @@ export { workspaceFile } from "../../scripts/pnpm-settings";
 export {
   type ExportTarget,
   type Manifest,
+  installedVersions,
   installedVp,
+  packageManagerAnswerTimeout,
   repositoryRoot,
   rootManifest,
 } from "../../scripts/repository";

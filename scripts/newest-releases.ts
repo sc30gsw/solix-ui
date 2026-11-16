@@ -1,4 +1,5 @@
 import semver from "semver";
+import { listed } from "./repository.ts";
 
 export const heldBackFile = "scripts/held-back-releases.json";
 export const packageManagerPinName = "packageManager";
@@ -113,10 +114,6 @@ export const channels: Record<string, Channel> = {
 export const solidPackages = Object.keys(channels).filter(
   (name) => channels[name] === solidChannel,
 );
-
-export function listed(names: readonly string[]): string {
-  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
-}
 
 function channelOf({ registryName, pinned }: RegistryPin): Channel {
   return (
