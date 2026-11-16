@@ -17,7 +17,6 @@ import {
   variableClass,
   variableGroups,
   variableNames,
-  variableProperty,
   variableRow,
   variablesOf,
   visibilityClass,
@@ -458,9 +457,10 @@ test("every variable is named apart from every other variable and every style-pr
   expect(variableClasses.filter((found) => stylePropClasses.includes(found))).toEqual([]);
 });
 
-test("each variable sets its property from its own custom property, at its base and, when it is responsive, then at each breakpoint in ascending order", () => {
+test("each variable sets the property its row names, or else the custom property named for it, from its own custom property, at its base and, when it is responsive, then at each breakpoint in ascending order", () => {
   const { inside } = stylePropLayerRules();
   const violations = variableNames.flatMap((name) => {
+    const property = variableRow(name).property ?? `--${name}`;
     const keys = variableRow(name).responsive ? ownerBreakpoints : [];
     const expected = [
       { selector: `.${variableClass(name, "base")}`, media: undefined },
@@ -481,7 +481,7 @@ test("each variable sets its property from its own custom property, at its base 
     const reads = found.filter(
       ({ selector, declarations }) =>
         JSON.stringify(declarations) !==
-        JSON.stringify([`${variableProperty(name)}:var(--${selector.slice(1)})`]),
+        JSON.stringify([`${property}:var(--${selector.slice(1)})`]),
     );
     return [
       ...(JSON.stringify(written) === JSON.stringify(wanted)
@@ -491,7 +491,7 @@ test("each variable sets its property from its own custom property, at its base 
           ]),
       ...reads.map(
         ({ selector, declarations }) =>
-          `${selector} declares ${declarations.join("; ")}; make it set ${variableProperty(name)} to var(--${selector.slice(1)}).`,
+          `${selector} declares ${declarations.join("; ")}; make it set ${property} to var(--${selector.slice(1)}).`,
       ),
     ];
   });
