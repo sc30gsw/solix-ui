@@ -190,7 +190,10 @@ async function scrollCommandsWhileLoading(browser: Browser): Promise<string[]> {
       const scrollTo = window.scrollTo.bind(window);
       Reflect.set(window, "scrollCommands", calls);
       window.scrollTo = (...args: [ScrollToOptions?] | [number, number]) => {
-        calls.push(JSON.stringify(args));
+        const caller =
+          document.documentElement.getAttribute("data-commands-called-from") ??
+          "the component's body";
+        calls.push(`${caller}: ${JSON.stringify(args)}`);
         Reflect.apply(scrollTo, window, args);
       };
     });
@@ -287,9 +290,9 @@ inEveryEngine((browser) => {
     });
   });
 
-  test("a browser command called in a component's body while the page hydrates does nothing, and the same command called from an effect's first run acts", async () => {
+  test("while the page hydrates, a browser command called in a component's body or from the first run of an effect created before its primitive does nothing, and called from the first run of an effect created after it acts", async () => {
     expect(await scrollCommandsWhileLoading(browser())).toEqual([
-      JSON.stringify([{ behavior: "smooth" }]),
+      `an effect created after the primitive: ${JSON.stringify([{ behavior: "smooth" }])}`,
     ]);
   });
 

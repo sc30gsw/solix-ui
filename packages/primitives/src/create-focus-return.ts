@@ -30,7 +30,9 @@ export type FocusReturnOptions = {
  * element that has left the page is not focused, and that is no error.
  *
  * It returns `returnFocus`, which focuses the remembered element at once. It does nothing during
- * the server render and while the page hydrates, and nothing once the owner is disposed.
+ * the server render, and nothing once the owner is disposed. While the page hydrates it does
+ * nothing in a component's body, nor in the first run of an effect created before
+ * `createFocusReturn` was called, and it acts from the first run of an effect created after it.
  *
  * ```tsx
  * const [surface, setSurface] = createSignal<HTMLElement>();

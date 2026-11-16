@@ -22,9 +22,24 @@ function HydrationProbe(props: { after: string; reading?: () => string }) {
   );
 }
 
+const commandsCalledFrom = "data-commands-called-from";
+
+function calledFrom(caller: string, run: () => void): void {
+  document.documentElement.setAttribute(commandsCalledFrom, caller);
+  run();
+  document.documentElement.removeAttribute(commandsCalledFrom);
+}
+
 function CaseProbe(props: { name: Primitive }) {
   const [calls, setCalls] = createSignal<string[]>([]);
   const callbacks = { taken: false };
+  const browserCommands: { run: () => void } = { run: () => undefined };
+  if (serverCases[props.name].has.browserCommands) {
+    createEffect(
+      () => undefined,
+      () => calledFrom("an effect created before the primitive", browserCommands.run),
+    );
+  }
   const started = startCase(props.name, primitives, (name) => {
     callbacks.taken = true;
     return () => setCalls((seen) => [...seen, name]);
@@ -33,10 +48,11 @@ function CaseProbe(props: { name: Primitive }) {
   const read = value ? () => serialized(value.read()) : undefined;
   const runBrowserCommands = started.browserCommands;
   if (runBrowserCommands) {
+    browserCommands.run = runBrowserCommands;
     runBrowserCommands();
     createEffect(
       () => undefined,
-      () => runBrowserCommands(),
+      () => calledFrom("an effect created after the primitive", runBrowserCommands),
     );
   }
   return (

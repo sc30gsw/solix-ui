@@ -18,8 +18,10 @@ export type WindowScrollReturn = [
  * browser leaves out reads `0`. A position equal by value to the one before changes nothing.
  *
  * `scrollTo` scrolls the window smoothly to the axes it is given as numbers, and leaves the other
- * where it is. It does nothing during the server render and while the page hydrates, and nothing
- * once the owner is disposed.
+ * where it is. It does nothing during the server render, and nothing once the owner is disposed.
+ * While the page hydrates it does nothing in a component's body, nor in the first run of an effect
+ * created before `createWindowScroll` was called, and it acts from the first run of an effect
+ * created after it. So an effect that scrolls as the page opens is created after it.
  *
  * ```tsx
  * const [position, scrollTo] = createWindowScroll();

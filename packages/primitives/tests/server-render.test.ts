@@ -56,7 +56,7 @@ test("a primitive that returns nothing, or only functions, passes; one that retu
 });
 
 test.each(primitives)(
-  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, keeps it when a browser command is called there, runs a state command there without a browser read, and returns nothing or only functions",
+  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, keeps it when a browser command is called there, calls a state command there without a browser read, and returns nothing or only functions",
   (name) => {
     const { returned, value, expected, afterBrowserCommands, touched } = renderOnTheServer(name);
 

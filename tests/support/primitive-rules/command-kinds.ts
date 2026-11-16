@@ -11,7 +11,7 @@ const commandKinds: Rule = (library) =>
         return reads.length === 0
           ? []
           : [
-              `${at(module, body)}: ${[...new Set(reads.map((read) => read.text))].join(", ")}: a command whose body reaches a browser-only global must do nothing until an effect has run and never on the server, so make it with createBrowserCommand, not createStateCommand.`,
+              `${at(module, body)}: ${[...new Set(reads.map((read) => read.text))].join(", ")}: a command whose body reaches a browser-only global must do nothing on the server, nor while the page hydrates until an effect created after it has run, so make it with createBrowserCommand, not createStateCommand.`,
             ];
       }),
   );
