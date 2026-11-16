@@ -6,8 +6,11 @@ import { rootPart, stableClass } from "../../../packages/core/tests/built-librar
 import { computed, inEveryEngine, openPage, type OpenPage } from "./support/playground";
 import {
   account,
+  controlled,
   displayedByTheApp,
   elementsNamedBy,
+  generated,
+  held,
   manual,
   optional,
   panelOf,
@@ -53,7 +56,7 @@ inEveryEngine((browser) => {
       expect(await page.getByText("Members panel").getAttribute("class")).toContain(
         stylePropClass("display", baseKey),
       );
-      expect(await stateOf(page, "Held")).toMatchObject({ shown: ["Kept panel"] });
+      expect(await stateOf(page, held)).toMatchObject({ shown: ["Kept panel"] });
       expect(await page.getByText("Styled panel").getAttribute("style")).toBe(
         displayedByTheApp.style,
       );
@@ -271,42 +274,42 @@ inEveryEngine((browser) => {
       const value = page.getByRole("status", { name: "Controlled value" });
       const refused = page.getByRole("status", { name: "Refused presses" });
 
-      expect(await stateOf(page, "Controlled")).toMatchObject({ selected: "Drafts" });
+      expect(await stateOf(page, controlled)).toMatchObject({ selected: "Drafts" });
 
-      await tabNamed(page, "Controlled", "Inbox").click();
+      await tabNamed(page, controlled, "Inbox").click();
 
       expect(await value.textContent()).toBe("inbox");
-      expect(await stateOf(page, "Controlled")).toMatchObject({ selected: "Inbox" });
+      expect(await stateOf(page, controlled)).toMatchObject({ selected: "Inbox" });
 
-      await tabNamed(page, "Controlled", "Locked").click();
+      await tabNamed(page, controlled, "Locked").click();
 
       expect(await refused.textContent()).toBe("1");
       expect(await value.textContent()).toBe("inbox");
-      expect(await stateOf(page, "Controlled")).toMatchObject({ selected: "Inbox" });
+      expect(await stateOf(page, controlled)).toMatchObject({ selected: "Inbox" });
 
       await page.getByRole("button", { name: "Select none" }).click();
 
       expect(await value.textContent()).toBe("none");
-      expect(await stateOf(page, "Controlled")).toMatchObject({ selected: null, shown: [] });
+      expect(await stateOf(page, controlled)).toMatchObject({ selected: null, shown: [] });
     });
 
     test("a controlled Tabs whose app changes nothing keeps showing the app's value, and tells the app each request", async () => {
       const { page } = opened;
       const requests = page.getByRole("status", { name: "Held requests" });
 
-      await tabNamed(page, "Held", "Asked").click();
+      await tabNamed(page, held, "Asked").click();
 
       await expect.poll(() => requests.textContent()).toBe("1");
-      expect(await stateOf(page, "Held")).toMatchObject({
+      expect(await stateOf(page, held)).toMatchObject({
         selected: "Kept",
         shown: ["Kept panel"],
       });
 
-      await tabNamed(page, "Held", "Kept").focus();
+      await tabNamed(page, held, "Kept").focus();
       await page.keyboard.press("ArrowRight");
 
       await expect.poll(() => requests.textContent()).toBe("2");
-      expect(await stateOf(page, "Held")).toMatchObject({
+      expect(await stateOf(page, held)).toMatchObject({
         selected: "Kept",
         focused: "Asked",
         shown: ["Kept panel"],
@@ -315,7 +318,7 @@ inEveryEngine((browser) => {
 
     test("a tab names its panel only while the panel is in the page: with the panels unmounted no tab has aria-controls, and mounted again each tab names its own", async () => {
       const { page } = opened;
-      const mounted = await elementsNamedBy(page, "Generated");
+      const mounted = await elementsNamedBy(page, generated);
 
       expect(mounted).not.toEqual([]);
       expect(mounted).toEqual(mounted.map(() => ({ tab: [["its own"]], panel: [["its own"]] })));
@@ -323,12 +326,12 @@ inEveryEngine((browser) => {
       await page.getByRole("button", { name: "Unmount the panels" }).click();
 
       await expect
-        .poll(() => elementsNamedBy(page, "Generated"))
+        .poll(() => elementsNamedBy(page, generated))
         .toEqual(mounted.map(() => ({ tab: [], panel: [] })));
 
       await page.getByRole("button", { name: "Mount the panels" }).click();
 
-      await expect.poll(() => elementsNamedBy(page, "Generated")).toEqual(mounted);
+      await expect.poll(() => elementsNamedBy(page, generated)).toEqual(mounted);
     });
 
     test("axe-core finds no WCAG 2.2 A or AA violation in the Tabs region", async () => {

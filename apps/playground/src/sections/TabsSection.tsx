@@ -2,7 +2,21 @@ import { render } from "@solidjs/web";
 import { Box, Button, Tabs, TextInput } from "@solix/core";
 import { createSignal, For, Show } from "solid-js";
 import { refOf } from "../ref-of";
-import { displayedByTheApp, panelOf, tabsSetups, valueOf } from "./tabs-setups";
+import {
+  controlled as controlledList,
+  displayedByTheApp,
+  generated as generatedList,
+  held as heldList,
+  inAShadowRoot,
+  panelOf,
+  tabNamesOf,
+  tabsSetups,
+  valueOf,
+} from "./tabs-setups";
+
+const [inbox, drafts, locked] = tabNamesOf(controlledList);
+const [kept, asked, styled, classed] = tabNamesOf(heldList);
+const [near, middle, far] = tabNamesOf(inAShadowRoot);
 
 function tabValuesIn(text: string): string[] | undefined {
   try {
@@ -19,17 +33,17 @@ function tabValuesIn(text: string): string[] | undefined {
 
 function TabsInAShadowRoot() {
   return (
-    <Tabs defaultValue="near">
-      <Tabs.List aria-label="In a shadow root">
-        <Tabs.Tab value="near">Near</Tabs.Tab>
-        <Tabs.Tab value="middle" disabled>
-          Middle
+    <Tabs defaultValue={valueOf(near)}>
+      <Tabs.List aria-label={inAShadowRoot}>
+        <Tabs.Tab value={valueOf(near)}>{near}</Tabs.Tab>
+        <Tabs.Tab value={valueOf(middle)} disabled>
+          {middle}
         </Tabs.Tab>
-        <Tabs.Tab value="far">Far</Tabs.Tab>
+        <Tabs.Tab value={valueOf(far)}>{far}</Tabs.Tab>
       </Tabs.List>
-      <Tabs.Panel value="near">Near panel</Tabs.Panel>
-      <Tabs.Panel value="middle">Middle panel</Tabs.Panel>
-      <Tabs.Panel value="far">Far panel</Tabs.Panel>
+      <Tabs.Panel value={valueOf(near)}>{panelOf(near)}</Tabs.Panel>
+      <Tabs.Panel value={valueOf(middle)}>{panelOf(middle)}</Tabs.Panel>
+      <Tabs.Panel value={valueOf(far)}>{panelOf(far)}</Tabs.Panel>
     </Tabs>
   );
 }
@@ -41,7 +55,7 @@ function renderInAShadowRootOf(host: Element | null | undefined): void {
 }
 
 export function TabsSection() {
-  const [controlled, setControlled] = createSignal<string | null>("drafts");
+  const [controlled, setControlled] = createSignal<string | null>(valueOf(drafts));
   const [refused, setRefused] = createSignal(0);
   const [countsHovers, setCountsHovers] = createSignal(false);
   const [draftsHovers, setDraftsHovers] = createSignal(0);
@@ -101,42 +115,42 @@ export function TabsSection() {
 
       <Tabs value={controlled()} onChange={(value) => setControlled(value)} ref={refOf("Tabs")}>
         <Tabs.List
-          aria-label="Controlled"
+          aria-label={controlledList}
           ref={refOf("TabsList")}
           {...(countsListHovers()
             ? { onPointerEnter: () => setListHovers((count) => count + 1) }
             : {})}
         >
           <Tabs.Tab
-            value="inbox"
+            value={valueOf(inbox)}
             leftSection={<span ref={() => setSectionsCreated((count) => count + 1)}>In</span>}
             ref={refOf("TabsTab")}
           >
-            <span>Inbox</span>
+            <span>{inbox}</span>
           </Tabs.Tab>
           <Tabs.Tab
-            value="drafts"
+            value={valueOf(drafts)}
             {...(countsHovers()
               ? { onPointerEnter: () => setDraftsHovers((count) => count + 1) }
               : {})}
           >
-            Drafts
+            {drafts}
           </Tabs.Tab>
           <Tabs.Tab
-            value="locked"
+            value={valueOf(locked)}
             onClick={(event) => {
               event.preventDefault();
               setRefused((count) => count + 1);
             }}
           >
-            Locked
+            {locked}
           </Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="inbox" ref={refOf("TabsPanel")}>
-          Inbox panel
+        <Tabs.Panel value={valueOf(inbox)} ref={refOf("TabsPanel")}>
+          {panelOf(inbox)}
         </Tabs.Panel>
-        <Tabs.Panel value="drafts">Drafts panel</Tabs.Panel>
-        <Tabs.Panel value="locked">Locked panel</Tabs.Panel>
+        <Tabs.Panel value={valueOf(drafts)}>{panelOf(drafts)}</Tabs.Panel>
+        <Tabs.Panel value={valueOf(locked)}>{panelOf(locked)}</Tabs.Panel>
       </Tabs>
       <output aria-label="Controlled value">{controlled() ?? "none"}</output>
       <output aria-label="Refused presses">{refused()}</output>
@@ -147,26 +161,26 @@ export function TabsSection() {
       <Button onClick={() => setCountsHovers(true)}>Count hovers over Drafts</Button>
       <Button onClick={() => setCountsListHovers(true)}>Count hovers over the list</Button>
 
-      <Tabs value="kept" onChange={() => setHeldRequests((count) => count + 1)}>
-        <Tabs.List aria-label="Held">
-          <Tabs.Tab value="kept">Kept</Tabs.Tab>
-          <Tabs.Tab value="asked">Asked</Tabs.Tab>
-          <Tabs.Tab value="styled">Styled</Tabs.Tab>
-          <Tabs.Tab value="classed">Classed</Tabs.Tab>
+      <Tabs value={valueOf(kept)} onChange={() => setHeldRequests((count) => count + 1)}>
+        <Tabs.List aria-label={heldList}>
+          <Tabs.Tab value={valueOf(kept)}>{kept}</Tabs.Tab>
+          <Tabs.Tab value={valueOf(asked)}>{asked}</Tabs.Tab>
+          <Tabs.Tab value={valueOf(styled)}>{styled}</Tabs.Tab>
+          <Tabs.Tab value={valueOf(classed)}>{classed}</Tabs.Tab>
         </Tabs.List>
-        <Tabs.Panel value="kept">Kept panel</Tabs.Panel>
-        <Tabs.Panel value="asked">Asked panel</Tabs.Panel>
-        <Tabs.Panel value="styled" style={displayedByTheApp.style}>
-          Styled panel
+        <Tabs.Panel value={valueOf(kept)}>{panelOf(kept)}</Tabs.Panel>
+        <Tabs.Panel value={valueOf(asked)}>{panelOf(asked)}</Tabs.Panel>
+        <Tabs.Panel value={valueOf(styled)} style={displayedByTheApp.style}>
+          {panelOf(styled)}
         </Tabs.Panel>
-        <Tabs.Panel value="classed" class={displayedByTheApp.class}>
-          Classed panel
+        <Tabs.Panel value={valueOf(classed)} class={displayedByTheApp.class}>
+          {panelOf(classed)}
         </Tabs.Panel>
       </Tabs>
       <output aria-label="Held requests">{heldRequests()}</output>
 
       <Tabs id="generated">
-        <Tabs.List aria-label="Generated">
+        <Tabs.List aria-label={generatedList}>
           <For each={generated()}>{(value) => <Tabs.Tab value={value}>{value}</Tabs.Tab>}</For>
         </Tabs.List>
         <Show when={panelsMounted()}>

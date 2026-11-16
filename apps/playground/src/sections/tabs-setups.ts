@@ -26,6 +26,10 @@ export const manual = "Manual vertical";
 export const vertical = "Vertical";
 export const optional = "Optional";
 export const rightToLeft = "Right to left";
+export const controlled = "Controlled";
+export const held = "Held";
+export const generated = "Generated";
+export const inAShadowRoot = "In a shadow root";
 
 function enabled(...names: string[]): TabSetup[] {
   return names.map((name) => ({ name, disabled: false, panel: {} }));
@@ -110,4 +114,22 @@ export function valueOf(name: string): string {
 
 export function panelOf(name: string): string {
   return `${name} panel`;
+}
+
+export type NamedTabs = { list: string; tabs: readonly { name: string }[] };
+
+function named(...names: string[]): { name: string }[] {
+  return names.map((name) => ({ name }));
+}
+
+export const handWrittenTabs: NamedTabs[] = [
+  { list: controlled, tabs: named("Inbox", "Drafts", "Locked") },
+  { list: held, tabs: named("Kept", "Asked", "Styled", "Classed") },
+  { list: inAShadowRoot, tabs: named("Near", "Middle", "Far") },
+];
+
+export function tabNamesOf(list: string): string[] {
+  const found = [...tabsSetups, ...handWrittenTabs].find((setup) => setup.list === list);
+  if (!found) throw new Error(`${list}: the playground names no list of tabs so.`);
+  return found.tabs.map(({ name }) => name);
 }

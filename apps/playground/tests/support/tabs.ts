@@ -4,12 +4,17 @@ import {
   manual,
   optional,
   rightToLeft,
+  tabNamesOf,
   vertical,
 } from "../../src/sections/tabs-setups.ts";
 
 export {
   account,
+  controlled,
   displayedByTheApp,
+  generated,
+  held,
+  inAShadowRoot,
   manual,
   optional,
   panelOf,
@@ -112,22 +117,37 @@ export function tabNamed(page: Page, list: string, name: string): Locator {
     .filter({ has: page.getByText(name, { exact: true }) });
 }
 
-export function stateOf(page: Page, list: string): Promise<TabsState> {
-  return tabList(page, list).evaluate((node) => {
+export async function stateOf(
+  page: Page,
+  list: string,
+  names: readonly string[] = tabNamesOf(list),
+): Promise<TabsState> {
+  const found = await tabList(page, list).evaluate((node) => {
     const tabs = [...node.querySelectorAll<HTMLElement>('[role="tab"]')];
-    const label = (tab: HTMLElement | undefined) =>
-      tab?.querySelector('[class*="-label"]')?.textContent ?? null;
     const root = node.parentElement;
     const { activeElement } = node.getRootNode() as Document | ShadowRoot;
     return {
-      selected: label(tabs.find((tab) => tab.getAttribute("aria-selected") === "true")),
-      focused: label(tabs.find((tab) => tab === activeElement)),
-      tabStops: tabs.filter((tab) => tab.tabIndex === 0).map(label),
+      count: tabs.length,
+      selected: tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true"),
+      focused: tabs.findIndex((tab) => tab === activeElement),
+      tabStops: tabs.flatMap((tab, index) => (tab.tabIndex === 0 ? [index] : [])),
       shown: [...(root?.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]') ?? [])]
         .filter((panel) => getComputedStyle(panel).display !== "none")
         .map((panel) => panel.textContent ?? ""),
     };
   });
+  if (found.count !== names.length) {
+    throw new Error(
+      `${list}: the page renders ${found.count} tabs, and the setup names ${names.length}.`,
+    );
+  }
+  const nameAt = (index: number) => names[index] ?? null;
+  return {
+    selected: nameAt(found.selected),
+    focused: nameAt(found.focused),
+    tabStops: found.tabStops.map(nameAt),
+    shown: found.shown,
+  };
 }
 
 export function activeAndSelected(

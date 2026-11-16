@@ -244,7 +244,7 @@ describe.each(servers)(`served by %s, in ${engine}`, (_, port, command) => {
   });
 
   test("the consumer's Tabs arrive rendered, hydrate, and select by click and by arrow key, with no console error or warning", async () => {
-    const state = () => stateOf(page, "Consumer");
+    const state = () => stateOf(page, "Consumer", ["One", "Two"]);
 
     expect(await (await fetch(server.url)).text()).toContain('role="tablist"');
     expect(await state()).toMatchObject({ selected: "One", shown: ["One panel"] });

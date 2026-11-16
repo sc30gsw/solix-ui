@@ -14,7 +14,7 @@ const { expectedValues, lookOf } = await repositoryModule("scripts/expected-valu
 const { baseKey, breakpointWidths, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
 const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX } = await repositoryModule("packages/core/build-pipeline.mjs");
-const { account, displayedByTheApp, keyboardTable, manual, panelOf, startAt, stateOf, stylesAddedToThePage, tabList, tabNamed, tabsRegion } =
+const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, stylesAddedToThePage, tabList, tabNamed, tabsRegion } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
 const state = join(root, ".verify-playground");
 const pixelsPerMediaQueryEm = 16;
@@ -275,52 +275,52 @@ const journeys = {
     };
     await region.scrollIntoViewIfNeeded();
     await shot("tabs", "Open the page and scroll to the section named Tabs.", region);
-    const first = await stateOf(page, "Account");
+    const first = await stateOf(page, account);
     observe("at first: selected tab", first.selected, "Overview");
     observe("at first: panels shown", first.shown.join(), "Overview panel");
-    observe("at first: selected tab text colour", await style(tabNamed(page, "Account", "Overview"), "color"), expected("--solix-color-primary"));
-    observe("at first: another tab text colour", await style(tabNamed(page, "Account", "Members"), "color"), expected("--solix-color-text"));
-    observe("at first: the disabled tab is disabled", await tabNamed(page, "Account", "Billing").isDisabled(), true);
+    observe("at first: selected tab text colour", await style(tabNamed(page, account, "Overview"), "color"), expected("--solix-color-primary"));
+    observe("at first: another tab text colour", await style(tabNamed(page, account, "Members"), "color"), expected("--solix-color-text"));
+    observe("at first: the disabled tab is disabled", await tabNamed(page, account, "Billing").isDisabled(), true);
 
-    await tabNamed(page, "Account", "Members").click();
+    await tabNamed(page, account, "Members").click();
     await shot("click", "Click the tab named Members. Its panel replaces the Overview panel.", region);
-    const clicked = await stateOf(page, "Account");
+    const clicked = await stateOf(page, account);
     observe("after a click on Members: selected tab", clicked.selected, "Members");
     observe("after a click on Members: panels shown", clicked.shown.join(), "Members panel");
-    observe("after a click on Members: the tab names its panel", await tabNamed(page, "Account", "Members").getAttribute("aria-controls"), "account-panel-members");
+    observe("after a click on Members: the tab names its panel", await tabNamed(page, account, "Members").getAttribute("aria-controls"), "account-panel-members");
 
-    await startAt(page, "Account", "Overview");
-    const stepped = await press("ArrowRight", "Account", "Click Overview and press the right arrow. Focus and selection step over the disabled Billing tab to Members.", "arrow-steps-over-disabled");
+    await startAt(page, account, "Overview");
+    const stepped = await press("ArrowRight", account, "Click Overview and press the right arrow. Focus and selection step over the disabled Billing tab to Members.", "arrow-steps-over-disabled");
     observe("right arrow from Overview: focused tab", stepped.focused, "Members");
     observe("right arrow from Overview: selected tab", stepped.selected, "Members");
-    const atEnd = await press("End", "Account", "Press End. The last tab, Settings, is focused and selected.", "end");
+    const atEnd = await press("End", account, "Press End. The last tab, Settings, is focused and selected.", "end");
     observe("End: focused and selected tab", `${atEnd.focused} ${atEnd.selected}`, "Settings Settings");
-    const wrapped = await press("ArrowRight", "Account", "Press the right arrow on the last tab. It wraps to Overview.", "arrow-wraps");
+    const wrapped = await press("ArrowRight", account, "Press the right arrow on the last tab. It wraps to Overview.", "arrow-wraps");
     observe("right arrow from the last tab: focused and selected tab", `${wrapped.focused} ${wrapped.selected}`, "Overview Overview");
 
-    await startAt(page, "Manual vertical", "Two");
-    const moved = await press("ArrowDown", "Manual vertical", "In the vertical list, click Two and press the down arrow. Focus moves to Three and Two stays selected.", "manual-arrow");
+    await startAt(page, manual, "Two");
+    const moved = await press("ArrowDown", manual, "In the vertical list, click Two and press the down arrow. Focus moves to Three and Two stays selected.", "manual-arrow");
     observe("manual, down arrow from Two: focused tab", moved.focused, "Three");
     observe("manual, down arrow from Two: selected tab", moved.selected, "Two");
-    const activated = await press("Enter", "Manual vertical", "Press Enter. Three is selected.", "manual-enter");
+    const activated = await press("Enter", manual, "Press Enter. Three is selected.", "manual-enter");
     observe("manual, Enter on Three: selected tab", activated.selected, "Three");
-    observe("manual, Enter on Three: the selected tab's edge at its inline end, and under it", `${await style(tabNamed(page, "Manual vertical", "Three"), "border-inline-end-style")} ${await style(tabNamed(page, "Manual vertical", "Three"), "border-bottom-style")}`, "solid none");
-    const stopped = await press("ArrowDown", "Manual vertical", "Press the down arrow on the last tab. This list does not wrap, so focus stays on Three.", "manual-no-wrap");
+    observe("manual, Enter on Three: the selected tab's edge at its inline end, and under it", `${await style(tabNamed(page, manual, "Three"), "border-inline-end-style")} ${await style(tabNamed(page, manual, "Three"), "border-bottom-style")}`, "solid none");
+    const stopped = await press("ArrowDown", manual, "Press the down arrow on the last tab. This list does not wrap, so focus stays on Three.", "manual-no-wrap");
     observe("manual, down arrow on the last tab: focused tab", stopped.focused, "Three");
 
-    observe("optional: nothing is selected at first", (await stateOf(page, "Optional")).selected, null);
-    await tabNamed(page, "Optional", "Notes").click();
+    observe("optional: nothing is selected at first", (await stateOf(page, optional)).selected, null);
+    await tabNamed(page, optional, "Notes").click();
     await shot("optional-selected", "Click Notes in the list named Optional. Its panel shows.", region);
-    observe("optional, after a click on Notes: panels shown", (await stateOf(page, "Optional")).shown.join(), "Notes panel");
-    await tabNamed(page, "Optional", "Notes").click();
+    observe("optional, after a click on Notes: panels shown", (await stateOf(page, optional)).shown.join(), "Notes panel");
+    await tabNamed(page, optional, "Notes").click();
     await shot("optional-deselected", "Click Notes again. No tab is selected and no panel shows.", region);
-    const none = await stateOf(page, "Optional");
+    const none = await stateOf(page, optional);
     observe("optional, after a second click on Notes: selected tab", none.selected, null);
     observe("optional, after a second click on Notes: panels shown", none.shown.join(), "");
 
-    await tabNamed(page, "Controlled", "Locked").click();
+    await tabNamed(page, controlled, "Locked").click();
     await shot("locked", "Click Locked in the list named Controlled. The app's own handler refuses the press, so Drafts stays selected.", region);
-    observe("controlled, after a click on Locked: selected tab", (await stateOf(page, "Controlled")).selected, "Drafts");
+    observe("controlled, after a click on Locked: selected tab", (await stateOf(page, controlled)).selected, "Drafts");
     observe("controlled, after a click on Locked: presses the app refused", await page.getByRole("status", { name: "Refused presses" }).textContent(), "1");
   },
   "tabs-keyboard": async ({ page, observe, shot }) => {
@@ -383,8 +383,8 @@ const journeys = {
     await observeWrites("after hydration");
     await startAt(page, account, "Overview");
     for (const key of ["ArrowRight", "End", "Home"]) await page.keyboard.press(key);
-    await tabNamed(page, "Optional", "Notes").click();
-    await tabNamed(page, "Optional", "Notes").click();
+    await tabNamed(page, optional, "Notes").click();
+    await tabNamed(page, optional, "Notes").click();
     await shot("after-keys", "Click Overview in Account and press the right arrow, End and Home. Click Notes in Optional twice.", region);
     await observeWrites("after clicks and keys");
   },
