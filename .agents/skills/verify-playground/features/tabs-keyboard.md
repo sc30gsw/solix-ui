@@ -29,4 +29,4 @@ Preconditions:
 - A row starts by clicking its starting tab, or by focusing it when it is already selected, so a row of `Optional` starts where it says and not with no tab selected. `startAt` in the support file does this.
 - A list has one tab stop, its selected tab while one is selected. Arrow keys in `Manual vertical` move focus but not the tab stop, so a row there that ends without Enter or Space names the starting tab as the tab stop.
 - A disabled tab is natively disabled. A click on it moves focus to the page body in Chromium, so a row never starts from one.
-- The table is written by hand. A row that disagrees with the model fails `apps/playground/tests/tabs-model.test.ts` before any browser opens.
+- The table is written by hand. A row that disagrees with the model fails `apps/playground/tests/roving-list-model.test.ts` before any browser opens.

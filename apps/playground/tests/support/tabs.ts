@@ -5,8 +5,11 @@ import {
   optional,
   rightToLeft,
   tabNamesOf,
+  type TabsSetup,
+  tabsSetups,
   vertical,
 } from "../../src/sections/tabs-setups.ts";
+import type { RovingList } from "./roving-list-model.ts";
 
 export {
   account,
@@ -25,6 +28,21 @@ export {
 } from "../../src/sections/tabs-setups.ts";
 
 export const tabsRegion = 'section[aria-label="Tabs"]';
+
+export function rovingListOf(setup: TabsSetup): RovingList {
+  return {
+    name: setup.list,
+    items: setup.tabs,
+    orientation: setup.orientation,
+    direction: setup.direction,
+    loop: setup.loop,
+    selectsOnMove: setup.selectsOnArrow,
+    deselects: setup.deselects,
+    initial: setup.initial,
+  };
+}
+
+export const tabLists: RovingList[] = tabsSetups.map(rovingListOf);
 
 export type KeyboardCase = {
   list: string;

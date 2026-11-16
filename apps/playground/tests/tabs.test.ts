@@ -17,11 +17,12 @@ import {
   stateOf,
   tabList,
   tabNamed,
+  tabLists,
   tabsRegion,
   tabsSetups,
   vertical,
 } from "./support/tabs";
-import { pathBetween, singleSteps } from "./support/tabs-model";
+import { pathBetween, singleSteps } from "./support/roving-list-model";
 
 const url = inject("playgroundUrl");
 const axeSource = join(import.meta.dirname, "../../../node_modules/axe-core/axe.min.js");
@@ -382,12 +383,12 @@ inEveryEngine((browser) => {
       expect(found.violations).toEqual([]);
     });
 
-    test.each(tabsSetups.flatMap(singleSteps))(
-      "in $setup.list, with $from.selected selected and focus on $from.focused, after $key $to.selected is selected and focus is on $to.focused",
-      async ({ setup, from, key, to }) => {
-        const { list } = setup;
+    test.each(tabLists.flatMap(singleSteps))(
+      "in $list.name, with $from.selected selected and focus on $from.focused, after $key $to.selected is selected and focus is on $to.focused",
+      async ({ list: rovingList, from, key, to }) => {
+        const list = rovingList.name;
         const { selected, focused } = await stateOf(opened.page, list);
-        for (const action of pathBetween(setup, { selected, focused }, from)) {
+        for (const action of pathBetween(rovingList, { selected, focused }, from)) {
           if ("click" in action) await tabNamed(opened.page, list, action.click).click();
           else await opened.page.keyboard.press(action.key);
         }

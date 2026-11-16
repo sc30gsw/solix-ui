@@ -9,11 +9,11 @@ description: Checks that the state of a component that takes its behaviour from 
 
 For any sequence of clicks and keys on an instance of a behaviour component that the playground renders, what the page shows is what a model of that instance says. The model knows only what a user could know about the instance, and nothing about the code.
 
-Each behaviour component has one row here. The next one adds a row, a setups module, a model and its tests.
+Each behaviour component has one row here. The next one adds a row, a setups module and its checks, and a model only where the roving list does not describe it.
 
 | Component | Covered code | Setups the playground renders | Model | Checks |
 | --- | --- | --- | --- | --- |
-| `Tabs` | `packages/core/src/Tabs*.tsx`, `packages/core/src/tabs-context.ts`, `packages/core/src/step-over-disabled.ts`; `apps/playground/src/sections/TabsSection.tsx`, which renders every entry of `tabsSetups` as a set of tabs whose list is named for the entry, with the entry's direction as `dir` and each panel's text from `panelOf`; and `apps/playground/tests/support/tabs.ts`, whose `keyboardTable` is the tabs pattern written by hand and whose `stateOf` reads the selected tab, the focused tab and the tabs with `tabindex` 0 by their index in the list, names them from the setups module, and reads the panels displayed | `apps/playground/src/sections/tabs-setups.ts` | `apps/playground/tests/support/tabs-model.ts` | `apps/playground/tests/tabs-model.test.ts`, `apps/playground/tests/tabs-protocol.test.ts` and the single steps in `apps/playground/tests/tabs.test.ts` |
+| `Tabs` | `packages/core/src/Tabs*.tsx`, `packages/core/src/tabs-context.ts`, `packages/core/src/step-over-disabled.ts`; `apps/playground/src/sections/TabsSection.tsx`, which renders every entry of `tabsSetups` as a set of tabs whose list is named for the entry, with the entry's direction as `dir` and each panel's text from `panelOf`; and `apps/playground/tests/support/tabs.ts`, whose `keyboardTable` is the tabs pattern written by hand and whose `stateOf` reads the selected tab, the focused tab and the tabs with `tabindex` 0 by their index in the list, names them from the setups module, and reads the panels displayed | `apps/playground/src/sections/tabs-setups.ts` | `apps/playground/tests/support/roving-list-model.ts`, given each setup through `rovingListOf` in `apps/playground/tests/support/tabs.ts` | `apps/playground/tests/roving-list-model.test.ts`, `apps/playground/tests/tabs-protocol.test.ts` and the single steps in `apps/playground/tests/tabs.test.ts` |
 
 **The selection of Tabs.** The model of a list holds two facts, the selected tab and the focused tab. It knows the list's tabs and which are disabled, its orientation, its direction, whether it wraps, whether an arrow selects, and whether a click on the selected tab selects none.
 
@@ -45,7 +45,7 @@ Last confirmed against commit `951be12`. Run `git diff 951be12 -- packages/core/
 ## Run it
 
 ```bash
-vp test apps/playground/tests/tabs-model.test.ts apps/playground/tests/tabs-protocol.test.ts apps/playground/tests/tabs.test.ts
+vp test apps/playground/tests/roving-list-model.test.ts apps/playground/tests/tabs-protocol.test.ts apps/playground/tests/tabs.test.ts
 ```
 
 It takes about twenty-five seconds with one engine installed. With `CI` set, all three engines must be installed.
@@ -54,7 +54,7 @@ It takes about twenty-five seconds with one engine installed. With `CI` set, all
 
 No model checker runs on a Solid component or on the SDK, so this is not a proof. The selection is a small state machine, so the checks run the real component against a model of it in three ways.
 
-- `tabs-model.test.ts` runs in Node. It checks every row of the hand-written keyboard table against the model, so the model and the pattern as a person wrote it down agree before a browser opens.
+- `roving-list-model.test.ts` runs in Node. It checks every row of the hand-written keyboard table against the model, so the model and the pattern as a person wrote it down agree before a browser opens.
 - The single steps in `tabs.test.ts` take every state the model can reach in each list and every key, bring the page to that state by the shortest way the model knows, press the key, and compare the page with the model. This covers every key from every state, once.
 - `tabs-protocol.test.ts` uses fast-check's model-based commands. It generates sequences of clicks and keys, runs each against the built app from a fresh page load, and compares the page with the model after every action. A failing sequence is shrunk to the shortest that still fails.
 
@@ -75,7 +75,7 @@ No model checker runs on a Solid component or on the SDK, so this is not a proof
 
 ## Reading a failure
 
-- **`the model agrees with the keyboard table` fails.** The table and the model disagree, and no browser was involved. Decide from the tabs pattern which is wrong. A row whose start the model cannot reach names a disabled tab or a tab the list does not have.
+- **`the roving-list model agrees with the keyboard table` fails.** The table and the model disagree, and no browser was involved. Decide from the tabs pattern which is wrong. A row whose start the model cannot reach names a disabled tab or a tab the list does not have.
 - **A single step fails.** Its name is the list, the state, the key and what the model expects, such as `in Vertical, with Gamma selected and focus on Gamma, after ArrowDown Alpha is selected and focus is on Alpha`. Replay it by hand in the playground. If the page is right and the model wrong, fix the model and say what was wrong. If the page is wrong, it is a bug in the component or a change in the SDK; report it in those words and do not loosen the model.
 - **The generated check fails after `Counterexample`.** It prints the list and the shortest sequence, such as `click the enabled tab at position 1, counted round the list, press ArrowLeft`, and the first observation that disagreed. Treat it as a single step that the single steps missed, and say which state they do not reach.
 - **A timeout in `page.goto` or a click.** The server did not start, or the section no longer renders what `tabsSetups` describes.
@@ -84,8 +84,8 @@ No model checker runs on a Solid component or on the SDK, so this is not a proof
 ## When the change is intended
 
 - A new list of tabs in the playground, or a changed one: change its entry in `tabsSetups`, which the section renders and the model reads, and give it a row in `keyboardTable`.
-- A new fact about a list, such as tabs that close: add it to `TabsSetup` and to the model, with a row in the table that shows it.
+- A new fact about a list, such as tabs that close: add it to `TabsSetup`, to `RovingList` through `rovingListOf`, and to the model, with a row in the table that shows it.
 - A new way to change the selection: add an action to the model and a command class to `steps` in the generated check.
-- A new behaviour component: add its row to the first table, its setups beside the section that renders them, its model beside `tabs-model.ts`, and the three checks for it.
+- A new behaviour component: add its row to the first table, its setups beside the section that renders them, and the three checks for it. A list whose items take focus by arrow keys, such as a menu, a listbox or a radio group, describes each setup as a `RovingList` and reuses the model in `roving-list-model.ts`, adding a fact to `RovingList` and the model only where its pattern differs; anything else gets a model of its own beside it.
 - Upgrading the SDK, Solid, Playwright or fast-check: run the command above.
 - Mutation check after editing covered code: in `packages/core/src/step-over-disabled.ts` make the `onKeyDown` that `stepOverDisabled` returns return at once and run the command. The single steps must fail on a key that points at a disabled tab, such as `in Account, with Overview selected and focus on Overview, after ArrowRight Members is selected and focus is on Members`, and the generated check must fail with a sequence that presses an arrow towards a disabled tab. Restore the file afterwards.

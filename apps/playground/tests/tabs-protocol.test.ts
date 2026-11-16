@@ -2,29 +2,29 @@ import fc from "fast-check";
 import type { Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
 import { inEveryEngine } from "./support/playground";
+import { activeAndSelected, panelOf, stateOf, tabLists, tabNamed } from "./support/tabs";
 import {
-  activeAndSelected,
-  panelOf,
-  stateOf,
-  tabNamed,
-  type TabsSetup,
-  tabsSetups,
-} from "./support/tabs";
-import { afterKey, afterPressOn, type Key, keys, type TabsModel } from "./support/tabs-model";
+  afterKey,
+  afterPressOn,
+  type Key,
+  keys,
+  type RovingList,
+  type RovingListState,
+} from "./support/roving-list-model";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 15;
 const longestSequence = 12;
-type Model = TabsModel & { setup: TabsSetup };
+type Model = RovingListState & { list: RovingList };
 type Real = { page: Page };
 
-function become(model: Model, next: TabsModel): void {
+function become(model: Model, next: RovingListState): void {
   model.selected = next.selected;
   model.focused = next.focused;
 }
 
 async function expectAgreement(model: Model, { page }: Real): Promise<void> {
-  const { list } = model.setup;
+  const { name: list } = model.list;
   await expect
     .poll(() => stateOf(page, list))
     .toMatchObject({
@@ -60,12 +60,12 @@ class ClickTab extends Step {
     super();
     this.position = position;
   }
-  tab = ({ setup }: Model) => setup.tabs[this.position % setup.tabs.length];
+  tab = ({ list }: Model) => list.items[this.position % list.items.length];
   check = (model: Model) => !this.tab(model).disabled;
   async act(model: Model, { page }: Real) {
     const { name } = this.tab(model);
-    await tabNamed(page, model.setup.list, name).click();
-    become(model, afterPressOn(model.setup, model, name));
+    await tabNamed(page, model.list.name, name).click();
+    become(model, afterPressOn(model.list, model, name));
   }
   toString = () => `click the enabled tab at position ${this.position}, counted round the list`;
 }
@@ -79,7 +79,7 @@ class PressKey extends Step {
   check = (model: Model) => model.focused !== null;
   async act(model: Model, { page }: Real) {
     await page.keyboard.press(this.key);
-    become(model, afterKey(model.setup, model, this.key));
+    become(model, afterKey(model.list, model, this.key));
   }
   toString = () => `press ${this.key}`;
 }
@@ -95,11 +95,11 @@ inEveryEngine((browser) => {
 
     await fc.assert(
       fc.asyncProperty(
-        fc.constantFrom(...tabsSetups),
+        fc.constantFrom(...tabLists),
         fc.commands(steps, { maxCommands: longestSequence }),
-        async (setup, sequence) => {
+        async (list, sequence) => {
           await page.goto(url, { waitUntil: "networkidle" });
-          const model: Model = { setup, selected: setup.initial, focused: null };
+          const model: Model = { list, selected: list.initial, focused: null };
 
           await expectAgreement(model, { page });
           await fc.asyncModelRun(() => ({ model, real: { page } }), sequence);
