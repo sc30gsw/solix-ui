@@ -1,3 +1,4 @@
+import { createComponent, renderToString } from "@solidjs/web";
 import { expect, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import type {
@@ -5,16 +6,20 @@ import type {
   ContainerProps,
   FlexProps,
   GroupProps,
+  SimpleGridProps,
   SpaceProps,
   StackProps,
 } from "../src/index";
+import { library } from "./built-library";
 import { render } from "./fixtures";
 import {
   classesOf,
   declarationsIn,
   type Element,
+  elementCarrying,
   elementsOf,
   rootElementOf,
+  rulesOf,
   valuesOf,
 } from "./markup";
 
@@ -330,4 +335,124 @@ test.each(containerCases)("Container: %s", (_, props, { strategy, fluid, ...expe
   expect(libraryOf("Container", props)).toEqual(expected);
   expect(valuesOf(root, "data-strategy")).toEqual([strategy]);
   expect(valuesOf(root, "data-fluid")).toEqual(fluid);
+});
+
+const gridRoot = "solix-SimpleGrid-root";
+
+function simpleGridOf(props: SimpleGridProps): Rendered & {
+  autoColumns: (string | true)[];
+  rules: string[];
+  wrapped: boolean;
+} {
+  const html = render("SimpleGrid", props);
+  const root = elementCarrying(html, gridRoot);
+  return {
+    classes: classesOf(root)
+      .filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`))
+      .sort(),
+    style: Object.fromEntries(declarationsIn(valuesOf(root, "style")[0])),
+    autoColumns: valuesOf(root, "data-auto-cols"),
+    rules: rulesOf(html),
+    wrapped:
+      rootElementOf(html) !== root &&
+      classesOf(rootElementOf(html)).includes("solix-SimpleGrid-container"),
+  };
+}
+
+test("SimpleGrid: with media queries, keys its columns and spacing by breakpoint, and renders no container part and no rules", () => {
+  const rendered = simpleGridOf({
+    type: "media",
+    cols: { base: 1, sm: 2, "40em": 5 },
+    spacing: { base: "xs", lg: 24 },
+    verticalSpacing: "xl",
+  });
+
+  expect(rendered).toEqual({
+    classes: [
+      "sx-sg-cols",
+      "sx-sg-cols-sm",
+      "sx-sg-spacing-x",
+      "sx-sg-spacing-x-lg",
+      "sx-sg-spacing-y",
+    ],
+    style: {
+      "--sx-sg-cols": "1",
+      "--sx-sg-cols-sm": "2",
+      "--sx-sg-spacing-x": "var(--solix-spacing-xs)",
+      "--sx-sg-spacing-x-lg": "1.5rem",
+      "--sx-sg-spacing-y": "var(--solix-spacing-xl)",
+    },
+    autoColumns: [],
+    rules: [],
+    wrapped: false,
+  });
+});
+
+test("SimpleGrid: with container queries, renders its root inside the container part, keys its values by container width, ignores a breakpoint key, and writes a rule for each width in ascending order", () => {
+  const rendered = simpleGridOf({
+    type: "container",
+    cols: { base: 1, "500px": 3, "30em": 2, md: 4 },
+    spacing: { "30em": "xl" },
+  });
+  const widths = [...rendered.rules.join("").matchAll(/\(min-width: ([^)]+)\)/g)].map(
+    ([, width]) => width,
+  );
+
+  expect(rendered.wrapped).toBe(true);
+  expect(rendered.classes).toEqual([
+    "sx-sg-cols",
+    "sx-sg-cols-c0-0",
+    "sx-sg-cols-c0-1",
+    "sx-sg-spacing-x-c0-0",
+  ]);
+  expect(rendered.style).toEqual({
+    "--sx-sg-cols": "1",
+    "--sx-sg-cols-c0-0": "2",
+    "--sx-sg-cols-c0-1": "3",
+    "--sx-sg-spacing-x-c0-0": "var(--solix-spacing-xl)",
+  });
+  expect(widths).toEqual(["30em", "500px"]);
+});
+
+test("SimpleGrid: with minColWidth, fills the row with columns at least that wide and ignores cols, or fits them with autoFlow", () => {
+  expect(
+    simpleGridOf({
+      type: "media",
+      spacing: undefined,
+      minColWidth: 200,
+      cols: 3,
+      autoRows: "8rem",
+    }),
+  ).toEqual({
+    classes: ["sx-sg-auto-rows", "sx-sg-min-col-width"],
+    style: { "--sx-sg-auto-rows": "8rem", "--sx-sg-min-col-width": "12.5rem" },
+    autoColumns: ["auto-fill"],
+    rules: [],
+    wrapped: false,
+  });
+  expect(
+    simpleGridOf({ type: "media", minColWidth: "10rem", autoFlow: "auto-fit" }).autoColumns,
+  ).toEqual(["auto-fit"]);
+});
+
+test("SimpleGrid: two grids with container queries in one page scope their classes and rules apart", () => {
+  const Built = library.SimpleGrid;
+  const given = { type: "container", cols: { base: 1, "30em": 2 } } as const;
+  const html = renderToString(() => [
+    createComponent(Built, { ...given, children: "First" }),
+    createComponent(Built, { ...given, children: "Second" }),
+  ]);
+  const roots = elementsOf(html).filter((element) => classesOf(element).includes(gridRoot));
+  const scoped = roots.map((root) =>
+    classesOf(root).filter((found) => found.startsWith("sx-sg-cols-c")),
+  );
+  const rules = rulesOf(html);
+
+  expect(roots).toHaveLength(2);
+  expect(scoped[0]).toHaveLength(1);
+  expect(scoped[1]).toHaveLength(1);
+  expect(scoped[0][0]).not.toBe(scoped[1][0]);
+  expect(rules[0]).toContain(`.${scoped[0][0]}{`);
+  expect(rules[0]).not.toContain(`.${scoped[1][0]}{`);
+  expect(rules[1]).toContain(`.${scoped[1][0]}{`);
 });

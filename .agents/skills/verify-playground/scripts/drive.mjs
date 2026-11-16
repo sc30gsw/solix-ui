@@ -367,6 +367,29 @@ const journeys = {
     observe("the breakout child spans the whole grid container", Math.abs((await widthOf(breakout)) - (await widthOf(grid))) <= 1, true);
     observe("the data-container inside the breakout is at most the xs container size wide", await style(back, "max-width"), expected("--solix-container-size-xs"));
   },
+  "simple-grid": async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Simple grid" });
+    const gridAround = (text) => page.getByText(text, { exact: true }).locator("xpath=..");
+    const columnsOf = (grid) => grid.evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length);
+    const media = gridAround("First cell");
+    await page.setViewportSize({ width: mdWidth - 1, height: 720 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Simple grid.`, section);
+    observe("below md: the first grid has the 2 columns of its sm value", await columnsOf(media), 2);
+    observe("below md: the gap between its columns is xs", await style(media, "column-gap"), expected("--solix-spacing-xs"));
+    observe("the gap between its rows is verticalSpacing, xl", await style(media, "row-gap"), expected("--solix-spacing-xl"));
+    observe("the grid in a 320 pixel container has 2 columns, past 18em", await columnsOf(gridAround("Cell of the narrow container")), 2);
+    observe("the grid in a 560 pixel container has 4 columns, past 30em", await columnsOf(gridAround("Cell of the wide container")), 4);
+    observe("the grid in one cell of it queries its own container and has 1 column", await columnsOf(gridAround("Cell of the nested container")), 1);
+    observe("the auto-filled grid makes columns at least 160 pixels wide", (await widthOf(page.getByText("Auto-filled cell", { exact: true }))) >= 160, true);
+
+    await page.setViewportSize({ width: mdWidth, height: 720 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The first grid takes a third column.`, section);
+    observe("at md: the first grid has the 3 columns of its md value", await columnsOf(media), 3);
+    observe("at md: the gap between its columns is lg", await style(media, "column-gap"), expected("--solix-spacing-lg"));
+    observe("at md: the grids in containers keep their columns", `${await columnsOf(gridAround("Cell of the narrow container"))} ${await columnsOf(gridAround("Cell of the wide container"))}`, "2 4");
+  },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();
     writeFileSync(join(directory, "response.html"), html);

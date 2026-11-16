@@ -141,6 +141,13 @@ export const variableTable = {
     "group-justify": { kind: "raw", responsive: false },
     "group-wrap": { kind: "raw", responsive: false },
   },
+  SimpleGrid: {
+    "sg-auto-rows": { kind: "raw", responsive: false },
+    "sg-cols": { kind: "raw", responsive: true },
+    "sg-min-col-width": { kind: "length", responsive: false },
+    "sg-spacing-x": { kind: "length", scale: "spacing", responsive: true },
+    "sg-spacing-y": { kind: "length", scale: "spacing", responsive: true },
+  },
   Space: {
     "space-min-width": { kind: "length", scale: "spacing", responsive: true },
     "space-min-height": { kind: "length", scale: "spacing", responsive: true },
@@ -253,7 +260,7 @@ function shorthandDepth(name: CanonicalStylePropName): number {
   return "within" in row ? 1 + shorthandDepth(row.within) : 0;
 }
 
-function variableDepth(name: string): number {
+export function variableDepth(name: string): number {
   const within = variableRows[name]?.within;
   return within === undefined ? 0 : 1 + variableDepth(within);
 }
@@ -280,11 +287,11 @@ function media(query: string, rules: string[]): string {
   return `@media ${query}{\n${rules.join("\n")}\n}`;
 }
 
-function registrationRule(className: string): string {
+export function registrationRule(className: string): string {
   return `@property --${className}{syntax:"*";inherits:false}`;
 }
 
-function readerRule(className: string, property: string): string {
+export function readerRule(className: string, property: string): string {
   return `.${className}{${property}:var(--${className})}`;
 }
 

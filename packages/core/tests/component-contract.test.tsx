@@ -2,8 +2,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
+import postcss from "postcss";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
+import {
+  LIBRARY_CASCADE_LAYER,
+  LIBRARY_CLASS_PREFIX,
+  STYLE_PROP_LAYER,
+} from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
 import type { PolymorphicProps } from "../src/parts";
 import {
@@ -52,11 +57,15 @@ import {
   declarationsIn,
   type Element,
   elementsOf,
+  elementCarrying,
   rootElementOf,
+  rulesOf,
+  topLevelTags,
   valuesOf,
 } from "./markup";
 
 const generatedRuns = 300;
+const containerPart = "container";
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const contractSkill = ".agents/skills/verify-component-contract/SKILL.md";
 const styleOverride = new RegExp(`^--${LIBRARY_CLASS_PREFIX}-`);
@@ -77,6 +86,10 @@ const stylePropClasses = new Set([
     breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
   ),
 ]);
+
+function rootOf(name: string, html: string): Element {
+  return elementCarrying(html, stableClass(name, rootPart));
+}
 
 function partsOf(name: string): string[] {
   return Object.keys(compiled[name]);
@@ -110,7 +123,8 @@ test.each(components)(
     const rootClasses = builtComponents.map((other) => stableClass(other, rootPart));
     fc.assert(
       fc.property(classTokens, stringAttributes, fc.boolean(), (tokens, attributes, flag) => {
-        const root = rootElementOf(
+        const root = rootOf(
+          name,
           render(name, {
             class: classValueFrom(tokens),
             ...attributes,
@@ -140,13 +154,22 @@ test.each(components)(
 );
 
 test.each(builtComponents)(
-  "%s renders, under its fixture, the root and every other key of its built styles object, each on one element that starts with exactly that key's compiled classes and then its stable class, the root first",
+  "%s renders, under its fixture, the root and every other key of its built styles object, each on one element that starts with exactly that key's compiled classes and then its stable class, the root first or right after the container part",
   (name) => {
     const parts = partsOf(name);
-    const elements = elementsOf(render(name));
+    const html = render(name);
+    const elements = elementsOf(html);
     const rendered = elements.flatMap((element) => partsOn(name, element));
 
-    expect(partsOn(name, elements[0]), "the first element is the root").toEqual([rootPart]);
+    const partsInOrder = elements.flatMap((element) => partsOn(name, element));
+    expect(
+      partsInOrder[0] === containerPart ? partsInOrder.slice(0, 2) : partsOn(name, elements[0]),
+      "the first element is the root, or the container part that queries its width, with the root the next part",
+    ).toEqual(partsInOrder[0] === containerPart ? [containerPart, rootPart] : [rootPart]);
+    expect(
+      topLevelTags(html),
+      "the markup is one element, so the root is inside the container part",
+    ).toHaveLength(1);
     expect(
       elements.filter((element) => partsOn(name, element).length > 1),
       "an element carries one part",
@@ -371,7 +394,7 @@ test.each(components)(
             ...(component === undefined ? {} : { component }),
           };
           const html = render(name, props);
-          const root = rootElementOf(html);
+          const root = rootOf(name, html);
 
           expect(render(name, props), "a second render gives the same markup").toBe(html);
           expect(root.tag).toBe(component ?? tag);
@@ -415,7 +438,7 @@ test("PolymorphicProps takes the attributes of the element component names and t
 test.each(polymorphicComponents)(
   "%s renders the element its component prop names, with that element's attributes",
   (name) => {
-    const root = rootElementOf(render(name, { component: "a", href: elsewhere }));
+    const root = rootOf(name, render(name, { component: "a", href: elsewhere }));
 
     expect(root.tag).toBe("a");
     expect(valuesOf(root, "href")).toEqual([elsewhere]);
@@ -430,7 +453,8 @@ function Card(props: JSX.HTMLAttributes<HTMLElement>) {
 test.each(polymorphicComponents)(
   "%s resolves every style prop, display ones included, for a function component its component prop names, which gets the sx- classes and custom properties and no display or hiddenFrom attribute",
   (name) => {
-    const root = rootElementOf(
+    const root = rootOf(
+      name,
       render(name, { component: Card, display: "flex", hiddenFrom: "sm", p: 4 }),
     );
 
@@ -491,3 +515,87 @@ test("the contract skill has a row for each component that names its root tag an
 
   expect(violations).toEqual([]);
 });
+
+const queryContainerWidth = /^[\w-]+ \(min-width: \d*\.?\d+(?:px|em|rem)\)$/;
+
+function containerRuleProblems(name: string, html: string): string[] {
+  const rendered = new Set(elementsOf(html).flatMap(classesOf));
+  return rulesOf(html).flatMap((rules) => {
+    const sheet = postcss.parse(rules);
+    const problems: string[] = [];
+    const [layer, ...others] = sheet.nodes;
+    if (
+      others.length > 0 ||
+      layer?.type !== "atrule" ||
+      layer.name !== "layer" ||
+      layer.params !== `${LIBRARY_CASCADE_LAYER}.${STYLE_PROP_LAYER}`
+    ) {
+      return [
+        `${name}: put its container rules in one @layer ${LIBRARY_CASCADE_LAYER}.${STYLE_PROP_LAYER}.`,
+      ];
+    }
+    const registered = new Set<string>();
+    const scopes = new Set<string>();
+    layer.each((node) => {
+      if (node.type === "atrule" && node.name === "property") {
+        registered.add(node.params);
+        const declared = Object.fromEntries(
+          (node.nodes ?? []).flatMap((part) =>
+            part.type === "decl" ? [[part.prop, part.value]] : [],
+          ),
+        );
+        if (declared.syntax !== '"*"' || declared.inherits !== "false") {
+          problems.push(`${node.params}: register it with syntax "*" and inherits: false.`);
+        }
+        return;
+      }
+      if (
+        node.type !== "atrule" ||
+        node.name !== "container" ||
+        !queryContainerWidth.test(node.params)
+      ) {
+        problems.push(
+          `${node.toString()}: write only @property and @container <name> (min-width: <length>).`,
+        );
+        return;
+      }
+      node.each((rule) => {
+        if (rule.type !== "rule" || !/^\.[\w-]+$/.test(rule.selector)) {
+          problems.push(`${rule.toString()}: select one class.`);
+          return;
+        }
+        const className = rule.selector.slice(1);
+        const scope = /-c([\w]+)-\d+$/.exec(className)?.[1];
+        if (!className.startsWith(`${LIBRARY_CLASS_PREFIX}-`) || scope === undefined) {
+          problems.push(
+            `${className}: name it ${LIBRARY_CLASS_PREFIX}-<variable>-c<scope>-<slot>.`,
+          );
+        } else {
+          scopes.add(scope);
+        }
+        const reads = rule.nodes.flatMap((part) => (part.type === "decl" ? [part.value] : []));
+        if (JSON.stringify(reads) !== JSON.stringify([`var(--${className})`])) {
+          problems.push(`${className}: read var(--${className}) and nothing else.`);
+        }
+        if (!registered.has(`--${className}`)) problems.push(`--${className}: register it.`);
+      });
+    });
+    if (scopes.size > 1) problems.push(`${name}: scope one style element's rules to one instance.`);
+    const ownClasses = [...rendered].filter((found) =>
+      [...scopes].some((scope) => new RegExp(`-c${scope}-\\d+$`).test(found)),
+    );
+    if (scopes.size === 1 && ownClasses.length === 0) {
+      problems.push(`${name}: put the classes its container rules read on its own elements.`);
+    }
+    return problems;
+  });
+}
+
+test.each(builtComponents)(
+  "%s writes the container rules it renders into the library's style-prop layer, registered not to inherit, each reading the custom property of its own class, under a container width, for one instance's classes",
+  (name) => {
+    const html = render(name);
+
+    expect(containerRuleProblems(name, html)).toEqual([]);
+  },
+);

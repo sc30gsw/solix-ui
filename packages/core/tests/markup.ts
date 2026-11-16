@@ -26,6 +26,51 @@ export function rootElementOf(html: string): Element {
   return root;
 }
 
+export function elementCarrying(html: string, className: string): Element {
+  const carrying = elementsOf(html).filter((element) => classesOf(element).includes(className));
+  if (carrying.length !== 1) {
+    throw new Error(
+      `The rendered markup holds ${carrying.length} elements with ${className}: ${html}`,
+    );
+  }
+  return carrying[0];
+}
+
+const tag = /<(\/?)([a-z][a-z0-9-]*)(?:\s[^>]*?)?(\/?)>/g;
+const voidElements = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "source",
+  "track",
+  "wbr",
+]);
+
+export function topLevelTags(html: string): string[] {
+  let depth = 0;
+  const found: string[] = [];
+  for (const [, closing, name, selfClosing] of html.matchAll(tag)) {
+    if (closing) {
+      depth -= 1;
+      continue;
+    }
+    if (depth === 0) found.push(name);
+    if (!selfClosing && !voidElements.has(name)) depth += 1;
+  }
+  return found;
+}
+
+export function rulesOf(html: string): string[] {
+  return [...html.matchAll(/<style[^>]*>([^<]*)<\/style>/g)].map(([, rules]) => rules);
+}
+
 export function valuesOf(element: Element, name: string): (string | true)[] {
   return element.attributes.filter(([found]) => found === name).map(([, value]) => value);
 }

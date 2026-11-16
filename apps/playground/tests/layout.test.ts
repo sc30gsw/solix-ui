@@ -33,6 +33,16 @@ async function below(lower: Locator, upper: Locator): Promise<boolean> {
   return top >= bottom;
 }
 
+function columnsOf(grid: Locator): Promise<number> {
+  return grid.evaluate(
+    (node) => getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length,
+  );
+}
+
+function gridAround(page: Page, text: string): Locator {
+  return page.getByText(text, { exact: true }).locator("xpath=..");
+}
+
 function widthOf(element: Locator): Promise<number> {
   return element.evaluate((node) => node.getBoundingClientRect().width);
 }
@@ -195,6 +205,34 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
       ).toBeLessThanOrEqual(1);
       expect(await computed(back, "max-width")).toBe(expected("--solix-container-size-xs"));
       expect(await horizontallyCentredIn(grid, back)).toBe(true);
+    },
+  ],
+  [
+    "a SimpleGrid takes the columns and spacing its breakpoints name, or with container queries the columns its container's width names, and fills a row with columns at least minColWidth wide",
+    async ({ page, expected, fromMd }) => {
+      const media = page.getByText("First cell", { exact: true }).locator("xpath=..");
+      const narrow = gridAround(page, "Cell of the narrow container");
+      const wide = gridAround(page, "Cell of the wide container");
+      const nested = gridAround(page, "Cell of the nested container");
+      const filled = gridAround(page, "Auto-filled cell");
+
+      expect(await computed(media, "display")).toBe("grid");
+      expect(await columnsOf(media)).toBe(fromMd ? 3 : 2);
+      expect(await computed(media, "column-gap")).toBe(
+        expected(fromMd ? "--solix-spacing-lg" : "--solix-spacing-xs"),
+      );
+      expect(await computed(media, "row-gap")).toBe(expected("--solix-spacing-xl"));
+      expect(await columnsOf(narrow), "a 320 pixel container is past 18em").toBe(2);
+      expect(await columnsOf(wide), "a 560 pixel container is past 30em").toBe(4);
+      expect(await columnsOf(nested), "a grid in one cell queries its own container").toBe(1);
+      expect(await computed(narrow, "row-gap"), "verticalSpacing follows spacing").toBe(
+        expected("--solix-spacing-md"),
+      );
+      expect(
+        (await widthOf(page.getByText("Auto-filled cell", { exact: true }))) >= 160 &&
+          (await columnsOf(filled)) > 2,
+        "auto-fill makes as many columns of at least 160 pixels as fit",
+      ).toBe(true);
     },
   ],
 ];

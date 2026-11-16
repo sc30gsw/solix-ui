@@ -6,6 +6,7 @@ export { Disclosure, type DisclosureProps } from "./Disclosure";
 export { Flex, type FlexProps } from "./Flex";
 export { Group, type GroupProps } from "./Group";
 export { Modal, type ModalProps } from "./Modal";
+export { SimpleGrid, type SimpleGridProps } from "./SimpleGrid";
 export { Space, type SpaceProps } from "./Space";
 export { Stack, type StackProps } from "./Stack";
 export { TextInput, type TextInputProps } from "./TextInput";

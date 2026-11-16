@@ -88,6 +88,18 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     polymorphic: false,
     props: { label: "Label", opened: false, children: "Content" },
   },
+  SimpleGrid: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    props: {
+      type: "container",
+      cols: { base: 1, "30em": 2 },
+      spacing: { "20em": "xl" },
+      children: "Content",
+    },
+  },
   Space: {
     tag: "div",
     booleanAttribute: "hidden",

@@ -19,6 +19,9 @@ const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
 const variablesHelper = "variables";
+const solidModule = "solid-js";
+const showComponent = "Show";
+const containerPart = "container";
 const variablesModule = "./style-props";
 const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
@@ -95,10 +98,49 @@ function unwrapped(node: ts.Expression): ts.Expression {
   return ts.isParenthesizedExpression(node) ? unwrapped(node.expression) : node;
 }
 
+function attributeExpression(tag: JsxTag, name: string): ts.Expression | undefined {
+  const found = tag.attributes.properties.find(
+    (property): property is ts.JsxAttribute =>
+      ts.isJsxAttribute(property) && property.name.getText() === name,
+  );
+  const initializer = found?.initializer;
+  return initializer && ts.isJsxExpression(initializer) ? initializer.expression : undefined;
+}
+
+function wrapsInContainerPart(within: ts.Node, binding: string): boolean {
+  return descendants(within).some(
+    (node) =>
+      ts.isJsxElement(node) &&
+      spreadsOn(node.openingElement).includes(`${partBinding}("${containerPart}")`) &&
+      node.children.some(
+        (child) => ts.isJsxExpression(child) && child.expression?.getText() === binding,
+      ),
+  );
+}
+
+function shownRoot(fn: ts.FunctionDeclaration, show: ts.JsxElement): JsxTag | undefined {
+  const fallback = attributeExpression(show.openingElement, "fallback");
+  if (!fallback || !ts.isIdentifier(fallback)) return undefined;
+  const declaration = variableNamed(fn, fallback.text);
+  const element = declaration?.initializer && unwrapped(declaration.initializer);
+  if (!declaration || !isConst(declaration) || !element) return undefined;
+  const tag = ts.isJsxElement(element)
+    ? element.openingElement
+    : ts.isJsxSelfClosingElement(element)
+      ? element
+      : undefined;
+  return tag && wrapsInContainerPart(show, fallback.text) ? tag : undefined;
+}
+
 function returnedRoots(fn: ts.FunctionDeclaration): JsxTag[] {
+  const show = localNameOf(fn.getSourceFile(), solidModule, showComponent);
   return descendants(fn).flatMap((node): JsxTag[] => {
     if (!ts.isReturnStatement(node) || !node.expression) return [];
     const returned = unwrapped(node.expression);
+    if (ts.isJsxElement(returned) && returned.openingElement.tagName.getText() === show) {
+      const root = shownRoot(fn, returned);
+      return root ? [root] : [returned.openingElement];
+    }
     if (ts.isJsxElement(returned)) return [returned.openingElement];
     return ts.isJsxSelfClosingElement(returned) ? [returned] : [];
   });
@@ -293,7 +335,9 @@ function rootProblems(fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
   const rootSpreads = jsxTags(fn).filter((tag) => spreadsOn(tag).includes(rootBinding));
   const problems: string[] = [];
   if (roots.length !== 1) {
-    return [`return one root element, and spread {...${rootBinding}} from ${partsHelper} on it.`];
+    return [
+      `return one root element, and spread {...${rootBinding}} from ${partsHelper} on it. To render it inside its ${containerPart} part only some of the time, bind it to a const and return <${showComponent} fallback={thatConst}> from ${solidModule}, whose child renders {thatConst} inside the element that spreads ${partBinding}("${containerPart}").`,
+    ];
   }
   if (rootSpreads.length !== 1 || rootSpreads[0] !== root) {
     problems.push(

@@ -58,7 +58,7 @@ No verifier runs on a JavaScript build script, so this is not a proof. `styleshe
 
 ## What a pass does not cover
 
-- `stylex.keyframes`, `stylex.createTheme`, pseudo-elements other than `::backdrop`, conditions inside a `::backdrop` block, and styles whose values are only known at run time.
+- `stylex.keyframes`, `stylex.createTheme`, pseudo-elements other than `::backdrop`, conditions inside a `::backdrop` block, and styles whose values are only known at run time. The container rules a component renders at run time are not in the stylesheet; `packages/core/tests/component-contract.test.tsx` checks their layer, their registrations and their classes.
 - The browser's cascade itself. That an unlayered rule beats a layered one comes from the CSS specification; `apps/playground/tests/button.test.ts` and `apps/playground/tests/box.test.ts` check it in each installed engine for a few cases.
 - A consumer who puts their own CSS in a layer declared before `solix`. That consumer loses to the library.
 - `!important` in generated definitions. The generator never writes it, so only the real sources are checked for it.

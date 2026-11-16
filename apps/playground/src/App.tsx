@@ -8,6 +8,7 @@ import { FlexSection } from "./sections/FlexSection";
 import { GroupSection } from "./sections/GroupSection";
 import { ModalSection } from "./sections/ModalSection";
 import { PrimitivesSection } from "./sections/PrimitivesSection";
+import { SimpleGridSection } from "./sections/SimpleGridSection";
 import { SpaceSection } from "./sections/SpaceSection";
 import { StackSection } from "./sections/StackSection";
 import { StylesApiSection } from "./sections/StylesApiSection";
@@ -32,6 +33,7 @@ export default function App() {
       <GroupSection />
       <FlexSection />
       <ContainerSection />
+      <SimpleGridSection />
       <PrimitivesSection />
     </main>
   );
