@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -10,12 +11,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { BEHAVIOUR_SDK_LAYER } from "../packages/core/build-pipeline.mjs";
 import { pnpmSettings, workspaceFile } from "../scripts/pnpm-settings";
-import { allowedRuntimeDependencies } from "../scripts/runtime-dependencies";
+import { allowedRuntimeDependencyNames } from "../scripts/runtime-dependencies";
 import { stateOf, tabNamed } from "../apps/playground/tests/support/tabs";
 import { browserType, enginesToVerify } from "../scripts/browser-engines.mjs";
 import { sharedSettings } from "../scripts/syntax";
@@ -33,7 +33,7 @@ const fixtures = join(repositoryRoot, "tests/fixtures/tarball-consumer");
 const builtServerPort = 4323;
 const developmentServerPort = 4324;
 const installAndBuildTimeout = 240_000;
-const fromOutsideTheRepository = allowedRuntimeDependencies().map(({ dependency }) => dependency);
+const fromOutsideTheRepository = allowedRuntimeDependencyNames();
 const settingsAConsumerWrites = ["plugins"];
 const settingsOfAnAppInThisRepository = join(repositoryRoot, "apps/playground/tsconfig.json");
 const [engine] = enginesToVerify();
@@ -55,7 +55,7 @@ const servers: [label: string, port: number, command: string[]][] = [
 ];
 
 let app: string;
-let clientWithButtonOnly = "";
+let clientModulesWithButtonOnly: string[] = [];
 
 function run(command: string, args: string[], directory: string): string {
   return execFileSync(command, args, {
@@ -66,17 +66,37 @@ function run(command: string, args: string[], directory: string): string {
   });
 }
 
-function clientScripts(): string {
+function clientModules(): string[] {
   const assets = join(app, "dist/client/assets");
   return readdirSync(assets)
-    .filter((file) => file.endsWith(".js"))
-    .map((file) => readFileSync(join(assets, file), "utf8"))
-    .join("\n");
+    .filter((file) => file.endsWith(".js.map"))
+    .flatMap((file) => {
+      const { sources, sourceRoot = "" } = JSON.parse(readFileSync(join(assets, file), "utf8")) as {
+        sources: string[];
+        sourceRoot?: string;
+      };
+      return sources.map((source) => resolve(assets, sourceRoot, source));
+    })
+    .map((module) => (existsSync(module) ? realpathSync(module) : module));
+}
+
+function besideTheLibrary(): string {
+  return join(
+    realpathSync(join(app, "node_modules", libraryName)),
+    ...libraryName.split("/").map(() => ".."),
+  );
+}
+
+function ofTheSdk(modules: string[]): string[] {
+  const packages = fromOutsideTheRepository.map((name) =>
+    realpathSync(join(besideTheLibrary(), name)),
+  );
+  return modules.filter((module) => packages.some((home) => module.startsWith(`${home}/`)));
 }
 
 function buildWith(appSource: string): void {
   copyFileSync(join(fixtures, appSource), join(app, "src/App.tsx"));
-  run(join(app, "node_modules/.bin/vp"), ["build"], app);
+  run(join(app, "node_modules/.bin/vp"), ["build", "--sourcemap"], app);
 }
 
 function compilerOptionsOf(settings: string): Record<string, unknown> {
@@ -158,7 +178,7 @@ beforeAll(() => {
   );
   run("pnpm", ["install", "--prefer-offline", "--ignore-scripts"], app);
   buildWith("ButtonApp.tsx");
-  clientWithButtonOnly = clientScripts();
+  clientModulesWithButtonOnly = clientModules();
   buildWith("TabsApp.tsx");
 }, installAndBuildTimeout);
 
@@ -167,12 +187,8 @@ afterAll(() => {
 });
 
 test("a consumer that names every library by its packed tarball gets one copy of each, the one the component library resolves as its peer, and gets the SDK as a dependency of the component library, at the version the catalog pins, without listing it", () => {
-  const besideTheLibrary = join(
-    realpathSync(join(app, "node_modules", libraryName)),
-    ...libraryName.split("/").map(() => ".."),
-  );
   const installed = (name: string) =>
-    JSON.parse(readFileSync(join(besideTheLibrary, name, "package.json"), "utf8")) as {
+    JSON.parse(readFileSync(join(besideTheLibrary(), name, "package.json"), "utf8")) as {
       version: string;
     };
   const consumer = JSON.parse(readFileSync(join(app, "package.json"), "utf8")) as {
@@ -186,7 +202,7 @@ test("a consumer that names every library by its packed tarball gets one copy of
     const name = manifest.name ?? "";
     expect(consumer.dependencies[name], `${name} in the consumer's own manifest`).toMatch(/\.tgz$/);
     expect(settings.includes(name), `${name} in the consumer's ${workspaceFile}`).toBe(false);
-    expect(realpathSync(join(besideTheLibrary, name)), name).toBe(
+    expect(realpathSync(join(besideTheLibrary(), name)), name).toBe(
       realpathSync(join(app, "node_modules", name)),
     );
   }
@@ -213,10 +229,10 @@ test("the consumer's app and every type the library hands it pass a strict type 
   expect(typeErrors()).toBe("");
 });
 
-test("a consumer that renders only a Button ships none of the SDK, and one that renders Tabs ships it", () => {
-  expect(clientWithButtonOnly.length).toBeGreaterThan(0);
-  expect(clientWithButtonOnly.includes(BEHAVIOUR_SDK_LAYER)).toBe(false);
-  expect(clientScripts().includes(BEHAVIOUR_SDK_LAYER)).toBe(true);
+test("a consumer that renders only a Button bundles no module of the SDK's packages into its client scripts, by the source maps of its build, and one that renders Tabs bundles some", () => {
+  expect(clientModulesWithButtonOnly).not.toEqual([]);
+  expect(ofTheSdk(clientModulesWithButtonOnly)).toEqual([]);
+  expect(ofTheSdk(clientModules())).not.toEqual([]);
 });
 
 describe.each(servers)(`served by %s, in ${engine}`, (_, port, command) => {

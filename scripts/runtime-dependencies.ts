@@ -17,6 +17,10 @@ export function allowedRuntimeDependencies(): AllowedRuntimeDependency[] {
   ) as AllowedRuntimeDependency[];
 }
 
+export function allowedRuntimeDependencyNames(): string[] {
+  return [...new Set(allowedRuntimeDependencies().map(({ dependency }) => dependency))];
+}
+
 export function loads(dependency: string, specifier: string): boolean {
   return specifier === dependency || specifier.startsWith(`${dependency}/`);
 }
