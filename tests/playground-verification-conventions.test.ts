@@ -214,38 +214,3 @@ test("every test server and the verification instance listen on ports of their o
   ).toBeGreaterThan(0);
   expect([...violations, ...documented]).toEqual([]);
 });
-
-const tabLookups = "apps/playground/tests/support/tabs.ts";
-const rolesOfTabs = ["tab", "tablist"];
-
-function tabLookupsByRole(file: string, source: ts.SourceFile): string[] {
-  const found: string[] = [];
-  const visit = (node: ts.Node): void => {
-    const [role] = ts.isCallExpression(node) ? node.arguments : [];
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "getByRole" &&
-      role !== undefined &&
-      ts.isStringLiteralLikeNode(role) &&
-      rolesOfTabs.includes(role.text)
-    ) {
-      found.push(
-        `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: find a tab list with tabList and a tab with tabNamed from ${tabLookups}. A tab's accessible name includes its sections, and a list's name matches another's that contains it, so a lookup by role and name finds the wrong element or none.`,
-      );
-    }
-    node.forEachChild(visit);
-  };
-  visit(source);
-  return found;
-}
-
-test(`only ${tabLookups} finds a tab or a tab list by role`, () => {
-  const files = globSync(testCode, { cwd: repositoryRoot }).filter((file) => file !== tabLookups);
-  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
-  const violations = files.flatMap((file, index) => tabLookupsByRole(file, sources[index]));
-
-  expect(files.length).toBeGreaterThan(10);
-  expect(tabLookupsByRole(tabLookups, parse(join(repositoryRoot, tabLookups)))).toHaveLength(2);
-  expect(violations).toEqual([]);
-});

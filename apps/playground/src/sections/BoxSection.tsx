@@ -25,6 +25,12 @@ export function BoxSection() {
       </Box>
       <Box hiddenFrom="md">Hidden from md</Box>
       <Box visibleFrom="md">Visible from md</Box>
+      <Box hidden display="flex">
+        Hidden with a display
+      </Box>
+      <Box hidden="until-found" display="flex">
+        Hidden until found with a display
+      </Box>
     </Box>
   );
 }
