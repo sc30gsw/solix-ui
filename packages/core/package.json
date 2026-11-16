@@ -32,8 +32,8 @@
     "solid-js": "catalog:"
   },
   "peerDependencies": {
-    "@solidjs/web": "^2.0.0-rc.21",
+    "@solidjs/web": "^2.0.0-rc.22",
     "@stylexjs/stylex": "^0.19.2",
-    "solid-js": "^2.0.0-rc.21"
+    "solid-js": "^2.0.0-rc.22"
   }
 }
