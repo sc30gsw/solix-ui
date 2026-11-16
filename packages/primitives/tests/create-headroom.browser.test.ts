@@ -264,3 +264,53 @@ test("for every generated sequence of scroll positions, its progress, pinned sta
     ),
   );
 });
+
+test("for every generated sequence of scroll positions, the documented rules hold: progress stays between 0 and 1, it is 1 in the fixed zone, a scroll down never raises it and a scroll up never lowers it, and a scroll with no vertical move changes nothing and calls nothing", async () => {
+  await fc.assert(
+    fc.asyncProperty(
+      setups,
+      fc.array(onScrollGrid(16), { maxLength: 25 }),
+      async (setup, positions) => {
+        const scroll = stubbedScroll(setup.start);
+        try {
+          const calls: string[] = [];
+          const headroom = mount(() =>
+            createHeadroom({
+              fixedAt: setup.fixedAt,
+              scrollDistance: setup.distance,
+              onPin: () => calls.push("pin"),
+              onFix: () => calls.push("fix"),
+              onRelease: () => calls.push("release"),
+            }),
+          );
+          const at = { y: setup.start };
+          for (const y of positions) {
+            const before = { progress: headroom.scrollProgress(), calls: calls.length };
+            scroll.to(y);
+            await applied();
+            const progress = headroom.scrollProgress();
+            const step = `a scroll from ${at.y} to ${y}`;
+            expect(progress >= 0 && progress <= 1, `progress within 0 and 1 after ${step}`).toBe(
+              true,
+            );
+            expect(headroom.pinned(), `pinned after ${step}`).toBe(progress > 0);
+            expect(
+              y > setup.fixedAt || progress === 1,
+              `fully shown in the fixed zone after ${step}`,
+            ).toBe(true);
+            expect(y <= at.y || progress <= before.progress, `not raised by ${step}`).toBe(true);
+            expect(y >= at.y || progress >= before.progress, `not lowered by ${step}`).toBe(true);
+            expect(
+              y !== at.y || (progress === before.progress && calls.length === before.calls),
+              `nothing changed or called by ${step}`,
+            ).toBe(true);
+            at.y = y;
+          }
+        } finally {
+          unmount();
+          scroll.restore();
+        }
+      },
+    ),
+  );
+});
