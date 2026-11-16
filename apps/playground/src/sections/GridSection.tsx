@@ -17,12 +17,16 @@ export function GridSection() {
         <Grid.Col span={4} offset={4}>
           A third after an offset
         </Grid.Col>
+      </Grid>
+      <Grid mt="md">
         <Grid.Col span={6} order={{ base: 2, md: 1 }}>
           Ordered one
         </Grid.Col>
         <Grid.Col span={6} order={{ base: 1, md: 2 }}>
           Ordered two
         </Grid.Col>
+      </Grid>
+      <Grid mt="md">
         <Grid.Col span="content">Content column</Grid.Col>
         <Grid.Col span="auto">Auto column</Grid.Col>
         <Grid.Col span={3}>Fixed column</Grid.Col>

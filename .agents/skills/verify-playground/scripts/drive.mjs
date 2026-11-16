@@ -393,7 +393,7 @@ const journeys = {
   grid: async ({ page, observe, shot, expected }) => {
     const section = page.getByRole("region", { name: "Grid", exact: true });
     const column = (text) => page.getByText(text, { exact: true });
-    const boxOf = (element) => element.evaluate((node) => { const { left, width } = node.getBoundingClientRect(); return { left, width }; });
+    const boxOf = (element) => element.evaluate((node) => { const { left, top, width } = node.getBoundingClientRect(); return { left, top, width }; });
     const spanWidth = async (element, span, columns) => {
       const inner = element.locator("xpath=..");
       const { width } = await boxOf(inner);
@@ -411,7 +411,9 @@ const journeys = {
     const third = await boxOf(column("A third"));
     const gap = Number.parseFloat(await style(column("A third").locator("xpath=.."), "column-gap"));
     observe("A third after an offset leaves 4 columns empty before it", near((await boxOf(column("A third after an offset"))).left - (third.left + third.width), (await spanWidth(column("A third"), 4, 12)) + 2 * gap), true);
-    observe("below md: Ordered two comes before Ordered one", (await boxOf(column("Ordered two"))).left < (await boxOf(column("Ordered one"))).left, true);
+    const ordered = async () => [await boxOf(column("Ordered one")), await boxOf(column("Ordered two"))];
+    const [oneBelow, twoBelow] = await ordered();
+    observe("below md: Ordered two comes before Ordered one, in one row", oneBelow.top === twoBelow.top && twoBelow.left < oneBelow.left, true);
     observe("Content column is as wide as its content", await style(column("Content column"), "flex-basis"), "auto");
     observe("Auto column grows into the rest of its row", await style(column("Auto column"), "flex-grow"), "1");
     observe("with grow, two columns of 6 out of 24 each fill half the row", near((await boxOf(column("Grows to half"))).width, await spanWidth(column("Grows to half"), 12, 24)), true);
@@ -424,7 +426,8 @@ const journeys = {
     await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The first two columns share a row, and the ordered columns swap.`, section);
     observe("at md: Half from md spans 6 of 12 columns", near((await boxOf(half)).width, await spanWidth(half, 6, 12)), true);
     observe("at md: the gap is lg", await style(half.locator("xpath=.."), "column-gap"), expected("--solix-spacing-lg"));
-    observe("at md: Ordered one comes before Ordered two", (await boxOf(column("Ordered one"))).left < (await boxOf(column("Ordered two"))).left, true);
+    const [oneAtMd, twoAtMd] = await ordered();
+    observe("at md: Ordered one comes before Ordered two, in one row", oneAtMd.top === twoAtMd.top && oneAtMd.left < twoAtMd.left, true);
   },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();

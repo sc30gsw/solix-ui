@@ -43,12 +43,12 @@ function gridAround(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true }).locator("xpath=..");
 }
 
-type Box = { left: number; width: number };
+type Box = { left: number; top: number; width: number };
 
 function boxOf(element: Locator): Promise<Box> {
   return element.evaluate((node) => {
-    const { left, width } = node.getBoundingClientRect();
-    return { left, width };
+    const { left, top, width } = node.getBoundingClientRect();
+    return { left, top, width };
   });
 }
 
@@ -288,7 +288,10 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
         boxOf(column("Ordered one")),
         boxOf(column("Ordered two")),
       ]);
-      expect(one.left < two.left, "order puts one first from md, and two first below").toBe(fromMd);
+      expect(
+        one.top === two.top && (fromMd ? one.left < two.left : two.left < one.left),
+        "order puts two first below md and one first from md, in one row",
+      ).toBe(true);
       const content = column("Content column");
       expect(await computed(content, "width")).not.toBe(
         await computed(content.locator("xpath=.."), "width"),
