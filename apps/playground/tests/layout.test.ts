@@ -25,6 +25,21 @@ function after(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true }).locator("xpath=following-sibling::*[1]");
 }
 
+async function centredIn(outer: Locator, inner: Locator): Promise<boolean> {
+  return outer.evaluate(
+    (parent, child) => {
+      const around = parent.getBoundingClientRect();
+      const within = child.getBoundingClientRect();
+      const even = (before: number, after: number) => Math.abs(before - after) <= 1;
+      return (
+        even(within.left - around.left, around.right - within.right) &&
+        even(within.top - around.top, around.bottom - within.bottom)
+      );
+    },
+    await inner.elementHandle(),
+  );
+}
+
 const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = [
   [
     "a Space keeps the height and width it is given as its minimum, unless mih or miw replaces it",
@@ -41,6 +56,21 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
         await computed(after(page, "Above the pinned space"), "min-height"),
         "mih replaces h as the minimum height",
       ).toBe(expected("--solix-spacing-xs"));
+    },
+  ],
+  [
+    "a Center puts its content in its middle, and an inline Center is an inline flex container that component makes a link",
+    async ({ page }) => {
+      const content = page.getByText("Centered content", { exact: true });
+      const center = content.locator("xpath=..");
+      const link = page.getByRole("link", { name: "Inline centered link" });
+
+      expect(await computed(center, "display")).toBe("flex");
+      expect(await centredIn(center, content), "the content's margins to each edge are even").toBe(
+        true,
+      );
+      expect(await computed(link, "display")).toBe("inline-flex");
+      expect(await link.getAttribute("href")).toBe("#center");
     },
   ],
 ];

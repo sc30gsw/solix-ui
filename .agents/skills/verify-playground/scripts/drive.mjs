@@ -263,6 +263,27 @@ const journeys = {
     await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The first space grows.`, section);
     observe("at md: the space between Above the space and Below the space is at least its h, xl", await style(elementAfter(page, "Above the space"), "min-height"), expected("--solix-spacing-xl"));
   },
+  center: async ({ page, observe, shot }) => {
+    const section = page.getByRole("region", { name: "Center" });
+    const content = page.getByText("Centered content", { exact: true });
+    const center = content.locator("xpath=..");
+    const link = page.getByRole("link", { name: "Inline centered link" });
+    await section.scrollIntoViewIfNeeded();
+    await shot("center", "Open the page and scroll to the section named Center.", section);
+    observe("the Center is a flex container", await style(center, "display"), "flex");
+    observe(
+      "Centered content sits in the middle of the Center, as far from each edge as from the one opposite",
+      await center.evaluate((parent, child) => {
+        const around = parent.getBoundingClientRect();
+        const within = child.getBoundingClientRect();
+        const even = (before, after) => Math.abs(before - after) <= 1;
+        return even(within.left - around.left, around.right - within.right) && even(within.top - around.top, around.bottom - within.bottom);
+      }, await content.elementHandle()),
+      true,
+    );
+    observe("the inline Center is an inline flex container", await style(link, "display"), "inline-flex");
+    observe("the inline Center is the link its component prop names", await link.getAttribute("href"), "#center");
+  },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();
     writeFileSync(join(directory, "response.html"), html);

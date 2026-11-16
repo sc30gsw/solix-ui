@@ -1,5 +1,6 @@
 import { BoxSection } from "./sections/BoxSection";
 import { ButtonSection } from "./sections/ButtonSection";
+import { CenterSection } from "./sections/CenterSection";
 import { ChangingPropsSection } from "./sections/ChangingPropsSection";
 import { DisclosureSection } from "./sections/DisclosureSection";
 import { ModalSection } from "./sections/ModalSection";
@@ -22,6 +23,7 @@ export default function App() {
       <BoxSection />
       <StylesApiSection />
       <SpaceSection />
+      <CenterSection />
       <PrimitivesSection />
     </main>
   );

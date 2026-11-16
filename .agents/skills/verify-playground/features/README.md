@@ -38,4 +38,5 @@ Each feature file starts with an H1 title and one paragraph describing what the 
 - [Box](./box.md) covers style props against a component default, a consumer's class and a consumer's `style`, a responsive value, a longhand against its shorthand, a style prop that inherits nothing from an ancestor `Box`, and `hiddenFrom` and `visibleFrom` on either side of md.
 - [Styles API](./styles-api.md) covers `classes`, `styles` and `unstyled` on a component's parts.
 - [Space](./space.md) covers the height and width a `Space` keeps as its minimum, at each breakpoint, and `mih` replacing `h`.
+- [Center](./center.md) covers content in the middle of a `Center`, and an inline `Center` rendered as a link.
 - [Server render](./server-render.md) covers the page arriving rendered and styled before any script runs, and the disclosure working with scripts off.

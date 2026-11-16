@@ -1,8 +1,8 @@
 import { expect, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
-import type { SpaceProps } from "../src/index";
+import type { CenterProps, SpaceProps } from "../src/index";
 import { render } from "./fixtures";
-import { classesOf, declarationsIn, rootElementOf, valuesOf } from "./markup";
+import { classesOf, declarationsIn, type Element, rootElementOf, valuesOf } from "./markup";
 
 type Rendered = { classes: string[]; style: Record<string, string> };
 
@@ -66,4 +66,28 @@ const spaceCases: [what: string, props: SpaceProps, expected: Rendered][] = [
 
 test.each(spaceCases)("Space: %s", (_, props, expected) => {
   expect(libraryOf("Space", props)).toEqual(expected);
+});
+
+const centerCases: [
+  what: string,
+  props: CenterProps<"div" | "a">,
+  tag: string,
+  inline: (string | true)[],
+][] = [
+  ["renders a <div> and marks nothing by default", {}, "div", []],
+  ["marks an inline Center with data-inline", { inline: true }, "div", ["true"]],
+  ["leaves data-inline off when inline is false", { inline: false }, "div", []],
+  [
+    "renders the element component names, inline too",
+    { component: "a", inline: true },
+    "a",
+    ["true"],
+  ],
+];
+
+test.each(centerCases)("Center: %s", (_, props, tag, inline) => {
+  const root: Element = rootElementOf(render("Center", props));
+
+  expect(root.tag).toBe(tag);
+  expect(valuesOf(root, "data-inline")).toEqual(inline);
 });
