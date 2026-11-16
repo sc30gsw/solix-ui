@@ -5,8 +5,12 @@ import { manifestAt, repositoryRoot } from "../../scripts/repository";
 export { workspaceFile } from "../../scripts/pnpm-settings";
 export {
   type ExportTarget,
+  type Installed,
   type Manifest,
+  installedVersions,
   installedVp,
+  listed,
+  packageManagerAnswerTimeout,
   repositoryRoot,
   rootManifest,
 } from "../../scripts/repository";

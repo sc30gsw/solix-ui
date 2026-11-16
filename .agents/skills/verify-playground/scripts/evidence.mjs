@@ -12,6 +12,8 @@ const { engineNames, enginesToVerify } = await repositoryModule("scripts/browser
 const { evidenceDirectory, evidenceReports, fullReportFile, recordingFile, runDirectory, summaryFile } =
   await repositoryModule("scripts/evidence-summary.mjs");
 const { stopWith } = await repositoryModule("scripts/stop-process.mjs");
+const { installedVersions, listed } = await repositoryModule("scripts/repository.ts");
+const { solidPackages } = await repositoryModule("scripts/newest-releases.ts");
 const vp = join(root, "node_modules/.bin/vp");
 const output = join(root, evidenceDirectory);
 
@@ -109,13 +111,21 @@ const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root
 const uncommitted = execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim();
 const recordedFrom = uncommitted === "" ? `\`${commit}\`` : `\`${commit}\` with uncommitted changes`;
 
-const app = "apps/playground";
+const installedSolid = installedVersions(solidPackages);
+const solidVersions = solidPackages
+  .map((name) => {
+    const versions = [
+      ...new Set(installedSolid.filter((each) => each.name === name).map(({ version }) => version)),
+    ];
+    return `${name} ${versions.length === 0 ? "not installed" : listed(versions)}`;
+  })
+  .join(", ");
 const lib = "packages/core";
 const { fullReport, summary } = evidenceReports({
   facts: [
     ["Recorded", `${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`],
     ["Source", recordedFrom],
-    ["Solid", `solid-js ${installedVersion(app, "solid-js")}, @solidjs/web ${installedVersion(app, "@solidjs/web")}`],
+    ["Solid", solidVersions],
     ["StyleX", `@stylexjs/stylex ${installedVersion(lib, "@stylexjs/stylex")}`],
     ["Vite+", `vite-plus ${installedVersion(".", "vite-plus")}`],
     ["Browser engines", browserEngines],

@@ -3,12 +3,13 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { installedVp, repositoryRoot } from "./repository.ts";
+import { installedVp, listed, packageManagerAnswerTimeout, repositoryRoot } from "./repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
 
 export type PnpmSettings = {
   catalog: Record<string, string>;
+  overrides: Record<string, string>;
   minimumReleaseAge: number | undefined;
   minimumReleaseAgeStrict: boolean;
   minimumReleaseAgeExclude: string[];
@@ -17,13 +18,13 @@ export type PnpmSettings = {
 
 export type RawSettings = {
   catalog?: Record<string, string>;
+  overrides?: Record<string, string>;
   minimumReleaseAge?: number;
   minimumReleaseAgeStrict?: boolean;
   minimumReleaseAgeExclude?: string[] | null;
   permissions?: Record<string, { skills?: string[] | boolean }>;
 };
 
-const pnpmAnswerTimeout = 30_000;
 const settingFromTheEnvironment = /^p?npm_config_/i;
 let cached: PnpmSettings | undefined;
 
@@ -46,6 +47,7 @@ export function settingsFrom(raw: RawSettings): PnpmSettings {
   }
   return {
     catalog: raw.catalog,
+    overrides: raw.overrides ?? {},
     minimumReleaseAge: raw.minimumReleaseAge,
     minimumReleaseAgeStrict: raw.minimumReleaseAgeStrict ?? false,
     minimumReleaseAgeExclude: raw.minimumReleaseAgeExclude ?? [],
@@ -66,7 +68,7 @@ function pnpmAnswer(directory: string, vp: string): string {
       cwd: directory,
       encoding: "utf8",
       env: { ...withoutSettings(process.env), XDG_CONFIG_HOME: noUserConfig },
-      timeout: pnpmAnswerTimeout,
+      timeout: packageManagerAnswerTimeout,
     });
   } catch (error) {
     const { code } = error as NodeJS.ErrnoException;
@@ -78,7 +80,7 @@ function pnpmAnswer(directory: string, vp: string): string {
     }
     if (code === "ETIMEDOUT") {
       throw new Error(
-        `${vp} pm config list gave no answer in ${pnpmAnswerTimeout / 1000} seconds.`,
+        `${vp} pm config list gave no answer in ${packageManagerAnswerTimeout / 1000} seconds.`,
         { cause: error },
       );
     }
@@ -138,7 +140,7 @@ export function rewriteCatalog(
   }
   if (!pnpmReportsTheChange) {
     throw new Error(
-      `${workspaceFile}: after the edit pnpm does not report exactly ${Object.keys(versions).join(" and ")} changed; it was undone.`,
+      `${workspaceFile}: after the edit pnpm does not report exactly ${listed(Object.keys(versions))} changed; it was undone.`,
     );
   }
 }
