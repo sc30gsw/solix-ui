@@ -8,10 +8,11 @@ import {
   stringsIn,
   ts,
 } from "../syntax";
-import { calleeName, forbidOutside, type Library, refersTo } from "./library";
+import { calleeName, callsTo, forbidOutside, type Library, refersTo } from "./library";
 
 const listenerModule = "internal-listener.ts";
 const rawListen = { file: listenerModule, name: "listen" };
+const consumerSettings = { file: listenerModule, name: "listenerSettings" };
 const domMethods = ["addEventListener", "removeEventListener"];
 const eventHandlerProperty = /^on[a-z]+$/;
 const eventHandlerType = /^\(\(this: [A-Za-z]+, ev: [A-Za-z]+\) => any\) \| null$/;
@@ -42,18 +43,30 @@ function memberName(node: ts.Node): ts.Node | undefined {
   return undefined;
 }
 
+function fixesItsOwnSettings(library: Library, node: ts.Node): boolean {
+  if (!callsTo(library, node, consumerSettings) || !ts.isCallExpression(node)) return false;
+  const options = node.arguments[1];
+  return (
+    options === undefined ||
+    ts.isObjectLiteralExpression(options) ||
+    options.kind === ts.SyntaxKind.TrueKeyword ||
+    options.kind === ts.SyntaxKind.FalseKeyword
+  );
+}
+
 export const listenerRolesRule = forbidOutside({
-  description: `only ${listenerModule} names listen or the DOM's addEventListener and removeEventListener`,
+  description: `only ${listenerModule} names listen or the DOM's addEventListener and removeEventListener, and a primitive builds listener settings only from options it was given`,
   home: { file: listenerModule },
   find: (library, node) => {
     if (isValueReference(node)) return refersTo(library, node, rawListen);
+    if (fixesItsOwnSettings(library, node)) return true;
     const member = memberName(node);
     return (
       member !== undefined &&
       isDomMember(library, member, (declaration) => domMethods.includes(nameOf(declaration)))
     );
   },
-  advice: `listen through ${listenerModule}: watchEvents to read state in the capture phase, handleEvent to act after Solid's delegated handlers, or listenAsAsked with a consumer's ListenerOptions, so each listener is removed with the capture it was added with.`,
+  advice: `listen through ${listenerModule}: watchEvents to read state in the capture phase, handleEvent to act after Solid's delegated handlers, or listenAsAsked with settings built from the ListenerOptions a consumer gave, so each listener is removed with the capture it was added with.`,
 });
 
 function callsTheLibrary(library: Library, call: ts.CallExpression, names: string[]): boolean {

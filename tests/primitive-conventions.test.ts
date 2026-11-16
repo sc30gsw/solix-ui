@@ -141,6 +141,7 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
   ],
   listenerRoles: [
     forbiddenAt("src/create-misbehaving.ts", "element.addEventListener"),
+    forbiddenAt("src/create-misbehaving.ts", 'listenerSettings("ping")'),
     forbiddenAt("src/create-misbehaving.ts", "return listen("),
   ],
   eventHandlerProperties: [

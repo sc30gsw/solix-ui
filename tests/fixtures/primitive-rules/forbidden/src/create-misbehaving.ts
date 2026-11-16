@@ -2,6 +2,7 @@ import { createMemo, from } from "solid-js";
 import { access } from "../../../../../packages/primitives/src/internal-access";
 import { createAttachment } from "../../../../../packages/primitives/src/internal-attachment";
 import { createBrowserValue } from "../../../../../packages/primitives/src/internal-browser-value";
+import { listenAsAsked, listenerSettings } from "../../../../../packages/primitives/src/internal-listener";
 import { listen } from "./internal-listener";
 
 export function createMisbehaving(options: { size: MaybeSize }, element: HTMLElement): () => number {
@@ -15,6 +16,7 @@ export function createMisbehaving(options: { size: MaybeSize }, element: HTMLEle
       element.addEventListener("ping", () => height);
       element.onfocus = () => height;
       Reflect.set(element, "onblur", () => height);
+      listenAsAsked(element, listenerSettings("ping"), () => undefined);
       return listen(element, "ping", () => undefined);
     },
     () => access(options.size),
