@@ -6,9 +6,8 @@ export type TabsOrientation = "horizontal" | "vertical";
 export type TabsContextValue = {
   behaviour: Behaviour<typeof tabs>;
   baseId: () => string | undefined;
-  orientation: () => TabsOrientation;
-  loop: () => boolean;
-  activateTabWithKeyboard: () => boolean;
+  valueOfTab: WeakMap<Element, () => string>;
+  onListKeyDown: (event: KeyboardEvent & { currentTarget: HTMLElement }) => void;
   allowTabDeactivation: () => boolean;
   keepMounted: () => boolean;
 };

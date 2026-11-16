@@ -2,11 +2,14 @@ import * as stylex from "@stylexjs/stylex";
 import { createSignal, untrack } from "solid-js";
 import { createBehaviour, tabs } from "./headless";
 import { createParts, type ElementProps } from "./parts";
+import { stepOverDisabled } from "./step-over-disabled";
 import { TabsContext, type TabsOrientation } from "./tabs-context";
 import { TabsList } from "./TabsList";
 import { TabsPanel } from "./TabsPanel";
 import { TabsTab } from "./TabsTab";
 import { tokens } from "./tokens.stylex";
+
+const tab = '[role="tab"]';
 
 const styles = stylex.create({
   root: {
@@ -36,6 +39,8 @@ export type TabsProps = ElementProps<
 
 export function Tabs(props: TabsProps) {
   const [uncontrolled, setUncontrolled] = createSignal(untrack(() => props.defaultValue) ?? null);
+  const loop = () => props.loop ?? true;
+  const activateTabWithKeyboard = () => props.activateTabWithKeyboard ?? true;
   const behaviour = createBehaviour(tabs, () => ({
     value: props.value === undefined ? uncontrolled() : props.value,
     onValueChange: (value: string | null) => {
@@ -43,10 +48,10 @@ export function Tabs(props: TabsProps) {
       props.onChange?.(value);
     },
     orientation: props.orientation,
-    activation:
-      props.activateTabWithKeyboard === false ? ("manual" as const) : ("automatic" as const),
-    loop: props.loop,
+    activation: activateTabWithKeyboard() ? ("automatic" as const) : ("manual" as const),
+    loop: loop(),
   }));
+  const valueOfTab = new WeakMap<Element, () => string>();
   const { root } = behaviour.bind(
     createParts(
       "Tabs",
@@ -70,9 +75,17 @@ export function Tabs(props: TabsProps) {
         value={{
           behaviour,
           baseId: () => (typeof props.id === "string" ? props.id : undefined),
-          orientation: () => props.orientation ?? "horizontal",
-          loop: () => props.loop ?? true,
-          activateTabWithKeyboard: () => props.activateTabWithKeyboard ?? true,
+          valueOfTab,
+          onListKeyDown: (event) =>
+            stepOverDisabled(event, {
+              items: tab,
+              loop: loop(),
+              activate: (focused) => {
+                const value = valueOfTab.get(focused);
+                if (activateTabWithKeyboard() && value !== undefined)
+                  behaviour.api.setValue(value());
+              },
+            }),
           allowTabDeactivation: () => props.allowTabDeactivation ?? false,
           keepMounted: () => props.keepMounted ?? true,
         }}

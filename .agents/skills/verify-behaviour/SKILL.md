@@ -66,7 +66,7 @@ It stops only the process this checkout launched and never removes `.verify-play
 | Covered code | What the script assumes about it |
 | --- | --- |
 | `packages/core/src/headless.ts` | It is the only file that loads the SDK, and `bindSlot` gives each bound part the slot's attributes, which include `data-slot`. |
-| `packages/core/src/Tabs.tsx`, `packages/core/src/TabsList.tsx`, `packages/core/src/TabsTab.tsx`, `packages/core/src/TabsPanel.tsx`, `packages/core/src/tabs-context.ts` and `packages/core/src/tabs-keyboard.ts` | The list has role `tablist`, a tab role `tab` and a `label` part, a panel role `tabpanel`. A selected tab has `aria-selected="true"` and the one `tabindex="0"`. `stepOverDisabledTabs` moves past a disabled tab. |
+| `packages/core/src/Tabs.tsx`, `packages/core/src/TabsList.tsx`, `packages/core/src/TabsTab.tsx`, `packages/core/src/TabsPanel.tsx`, `packages/core/src/tabs-context.ts` and `packages/core/src/step-over-disabled.ts` | The list has role `tablist`, a tab role `tab` and a `label` part, a panel role `tabpanel`. A selected tab has `aria-selected="true"` and the one `tabindex="0"`. `stepOverDisabled` moves past a disabled tab. |
 | `packages/core/build-pipeline.mjs`: `BEHAVIOUR_SDK_LAYER` | It names the layer the SDK's style elements open with. |
 | `apps/playground/src/sections/TabsSection.tsx` | It renders the lists `Account`, `Manual vertical`, `Vertical`, `Optional` and `Controlled`, with the tabs, disabled tabs and props that `tabsSetups` describes, and one panel, `Members panel`, with a `display` style prop. |
 | `apps/playground/tests/support/tabs.ts` | It holds `keyboardTable`, `tabsSetups`, `tabList`, `tabNamed`, `startAt`, `stateOf` and `sdkStyles`, which the script and `apps/playground/tests/tabs.test.ts` share. |
@@ -75,7 +75,7 @@ It stops only the process this checkout launched and never removes `.verify-play
 | `scripts/browser-engines.mjs` and `scripts/expected-values.ts` | The engines, and the computed value of a token in the engine that runs. |
 | `@ui-sdk/core`, `@ui-sdk/solid`, `solid-js`, `@solidjs/web` and `playwright` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `e1fe171`. Run `git diff e1fe171 -- packages/core/src/headless.ts packages/core/src/Tabs.tsx packages/core/src/TabsList.tsx packages/core/src/TabsTab.tsx packages/core/src/TabsPanel.tsx packages/core/src/tabs-context.ts packages/core/src/tabs-keyboard.ts packages/core/build-pipeline.mjs apps/playground/src/sections/TabsSection.tsx apps/playground/tests/support/tabs.ts .agents/skills/verify-behaviour/scripts/drive.mjs .agents/skills/verify-playground/scripts scripts/browser-engines.mjs scripts/expected-values.ts pnpm-workspace.yaml`. If it shows changes, read them against the table and the feature file before you trust a pass.
+Last confirmed against commit `e1fe171`. Run `git diff e1fe171 -- packages/core/src/headless.ts packages/core/src/Tabs.tsx packages/core/src/TabsList.tsx packages/core/src/TabsTab.tsx packages/core/src/TabsPanel.tsx packages/core/src/tabs-context.ts packages/core/src/step-over-disabled.ts packages/core/build-pipeline.mjs apps/playground/src/sections/TabsSection.tsx apps/playground/tests/support/tabs.ts .agents/skills/verify-behaviour/scripts/drive.mjs .agents/skills/verify-playground/scripts scripts/browser-engines.mjs scripts/expected-values.ts pnpm-workspace.yaml`. If it shows changes, read them against the table and the feature file before you trust a pass.
 
 ## What this skill does not cover
 

@@ -87,6 +87,7 @@ export function TabsTab(props: TabsTabProps) {
           get id() {
             return partId(tabs.baseId(), "tab", props.value);
           },
+          ref: (tab: HTMLButtonElement) => tabs.valueOfTab.set(tab, () => props.value),
           onClick: (event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
             if (!tabs.allowTabDeactivation()) return;
             if (tabs.behaviour.api.getValue() !== props.value) return;
