@@ -1,8 +1,19 @@
-import { existsSync, globSync, readFileSync } from "node:fs";
+import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
-import { commentsIn, descendants, parseAll, parseText, ts } from "../scripts/syntax";
+import {
+  commentsIn,
+  descendants,
+  parse,
+  parseAll,
+  parseText,
+  parseWithoutLibrariesOrImports,
+  sharedSettings,
+  staticPropertyName,
+  ts,
+} from "../scripts/syntax";
 import { pnpmSettings } from "../scripts/pnpm-settings";
 import {
   type Manifest,
@@ -50,8 +61,10 @@ const typeScriptApi = /^typescript(?:\/|$)/;
 const typeScriptApiHome = "scripts/syntax/";
 const typeScriptApiEntry = "scripts/syntax.ts";
 const typeScriptApiList = "scripts/syntax/ast.ts";
+const typeScriptProjectOpener = "scripts/syntax/program.ts";
+const sharedSettingsFile = "tsconfig.base.json";
+const optionsOfTheParseOnlyProject = ["allowJs", "noLib", "noResolve"];
 const pnpmSettingsReader = "scripts/pnpm-settings.ts";
-const syntaxModuleImport = /(?:^|\/)syntax(?:\.ts)?$/;
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
 
@@ -119,39 +132,83 @@ test("every dependency version comes from the catalog or the workspace", () => {
   expect(violations).toEqual([]);
 });
 
-test("every package with TypeScript sources inherits the shared compiler settings", () => {
-  const violations = packages.flatMap(({ path, directory }) => {
-    const hasSources = globSync("src/**/*.{ts,tsx}", { cwd: directory }).length > 0;
-    if (!hasSources) return [];
+type ProjectSettings = { extends?: string; compilerOptions?: Record<string, unknown> };
 
-    const tsconfigPath = join(directory, "tsconfig.json");
-    if (!existsSync(tsconfigPath)) {
-      return [
-        `${path}: add a tsconfig.json that extends tsconfig.base.json at the repository root.`,
-      ];
-    }
+const sharedOptions = Object.keys(
+  (JSON.parse(readFileSync(join(repositoryRoot, sharedSettingsFile), "utf8")) as ProjectSettings)
+    .compilerOptions ?? {},
+);
 
-    const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf8")) as {
-      extends?: string;
-      compilerOptions?: Record<string, unknown>;
-    };
-    const problems: string[] = [];
-    if (!tsconfig.extends?.endsWith("tsconfig.base.json")) {
-      problems.push(
-        `${path}: tsconfig.json must extend tsconfig.base.json at the repository root.`,
-      );
-    }
-    for (const option of ["jsx", "jsxImportSource", "strict"]) {
-      if (tsconfig.compilerOptions && option in tsconfig.compilerOptions) {
-        problems.push(
-          `${path}: tsconfig.json sets "${option}". Remove it; tsconfig.base.json owns that option.`,
-        );
-      }
-    }
-    return problems;
+function optionsTheSharedSettingsOwn(where: string, options: object): string[] {
+  return Object.keys(options)
+    .filter((option) => sharedOptions.includes(option))
+    .map(
+      (option) => `${where} sets "${option}". Remove it; ${sharedSettingsFile} owns that option.`,
+    );
+}
+
+test(`every package with TypeScript sources has a tsconfig.json, and every tsconfig.json extends ${sharedSettingsFile} and sets no option it sets`, () => {
+  const withoutProject = packages
+    .filter(
+      ({ directory }) =>
+        globSync("src/**/*.{ts,tsx}", { cwd: directory }).length > 0 &&
+        !existsSync(join(directory, "tsconfig.json")),
+    )
+    .map(
+      ({ path }) =>
+        `${path}: add a tsconfig.json that extends ${sharedSettingsFile} at the repository root.`,
+    );
+  const projects = globSync("**/tsconfig.json", {
+    cwd: repositoryRoot,
+    exclude: outsideGeneratedOrInstalled,
+  });
+  const violations = projects.flatMap((path) => {
+    const project = JSON.parse(readFileSync(join(repositoryRoot, path), "utf8")) as ProjectSettings;
+    return [
+      ...(project.extends?.endsWith(sharedSettingsFile)
+        ? []
+        : [`${path} must extend ${sharedSettingsFile} at the repository root.`]),
+      ...optionsTheSharedSettingsOwn(path, project.compilerOptions ?? {}),
+    ];
   });
 
-  expect(violations).toEqual([]);
+  expect(sharedOptions.length).toBeGreaterThan(0);
+  expect(projects.length).toBeGreaterThan(packages.length / 2);
+  expect([...withoutProject, ...violations]).toEqual([]);
+});
+
+function hasProperty(name: string): (property: ts.ObjectLiteralElementLike) => boolean {
+  return (property) => staticPropertyName(property) === name;
+}
+
+test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFile} and sets no option it sets, and the parse-only project adds ${optionsOfTheParseOnlyProject.join(", ")}`, () => {
+  const source = parse(join(repositoryRoot, typeScriptProjectOpener));
+  const nodes = descendants(source);
+  const settingsWritten = nodes
+    .filter(ts.isObjectLiteralExpression)
+    .filter(({ properties }) => properties.some(hasProperty("compilerOptions")));
+  const withoutTheSharedSettings = settingsWritten.filter(
+    ({ properties }) =>
+      !properties.some(
+        (property) =>
+          hasProperty("extends")(property) &&
+          ts.isPropertyAssignment(property) &&
+          property.initializer.getText() === "sharedSettings",
+      ),
+  );
+  const optionsOfEachProject = nodes
+    .filter(ts.isCallExpression)
+    .filter(({ expression }) => expression.getText() === "openProject")
+    .map((call) => call.arguments[1]?.getText());
+
+  expect(sharedSettings).toBe(join(repositoryRoot, sharedSettingsFile));
+  expect(settingsWritten.length).toBeGreaterThan(0);
+  expect(withoutTheSharedSettings.map((settings) => settings.getText())).toEqual([]);
+  expect(optionsOfEachProject).toEqual(["parseWithoutLibrariesOrImports", "{}"]);
+  expect(Object.keys(parseWithoutLibrariesOrImports)).toEqual(optionsOfTheParseOnlyProject);
+  expect(
+    optionsTheSharedSettingsOwn(typeScriptProjectOpener, parseWithoutLibrariesOrImports),
+  ).toEqual([]);
 });
 
 test("a library has no runtime dependency, and names as a peer, or as a library of this repository in any dependency list, only what its kind allows", () => {
@@ -277,59 +334,44 @@ function typeScriptApiNames(): string[] {
   );
 }
 
-function importsTsFromTheSyntaxModule(source: ts.SourceFile): boolean {
-  return source.statements.some(
-    (statement) =>
-      ts.isImportDeclaration(statement) &&
-      ts.isStringLiteral(statement.moduleSpecifier) &&
-      syntaxModuleImport.test(statement.moduleSpecifier.text) &&
-      statement.importClause?.namedBindings !== undefined &&
-      ts.isNamedImports(statement.importClause.namedBindings) &&
-      statement.importClause.namedBindings.elements.some((element) => element.name.text === "ts"),
-  );
-}
-
-function tsMembersNamedIn(source: ts.SourceFile): { member: string; position: number }[] {
+function tsMembersNamedIn(source: ts.SourceFile): string[] {
   return descendants(source).flatMap((node) => {
     if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
-      return node.expression.text === "ts"
-        ? [{ member: node.name.text, position: node.getStart() }]
-        : [];
+      return node.expression.text === "ts" ? [node.name.text] : [];
     }
     if (ts.isQualifiedName(node) && ts.isIdentifier(node.left)) {
-      return node.left.text === "ts"
-        ? [{ member: node.right.text, position: node.getStart() }]
-        : [];
+      return node.left.text === "ts" ? [node.right.text] : [];
     }
     return [];
   });
 }
 
-test(`${typeScriptApiList} lists exactly the members of ts the repository names: none missing for a file outside ${typeScriptApiHome}, none unused`, () => {
+test(`${typeScriptApiList} lists no member of ts that no file names`, () => {
   const listed = typeScriptApiNames();
-  const everySource = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
-  const named = new Set(everySource.flatMap(tsMembersNamedIn).map(({ member }) => member));
+  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
+  const named = new Set(sources.flatMap(tsMembersNamedIn));
   const unused = listed
     .filter((name) => !named.has(name))
     .map(
       (name) =>
         `${typeScriptApiList}: no file names ts.${name}; remove it from the list, so the list stays what a TypeScript upgrade has to keep working.`,
     );
-  const files = scriptFiles.filter((file) => !file.startsWith(typeScriptApiHome));
-  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
-  const missing = files.flatMap((file, index) =>
-    importsTsFromTheSyntaxModule(sources[index])
-      ? tsMembersNamedIn(sources[index])
-          .filter(({ member }) => !listed.includes(member))
-          .map(
-            ({ member, position }) =>
-              `${file}:${lineOf(sources[index], position)}: ts.${member} is not in ${typeScriptApiList}. Add it there under its TypeScript 7 name, so the next rename is one alias in that list.`,
-          )
-      : [],
-  );
 
   expect(listed.length).toBeGreaterThan(10);
-  expect([...missing, ...unused]).toEqual([]);
+  expect(unused).toEqual([]);
+});
+
+test("parse gives a file's text as this process first read it, and does not see the file rewritten afterwards", () => {
+  const directory = mkdtempSync(join(tmpdir(), "syntax-"));
+  const file = join(directory, "rewritten.ts");
+
+  writeFileSync(file, "const first = 1;\n");
+  const firstRead = parse(file).getText();
+  writeFileSync(file, "const second = 2;\n");
+  const secondRead = parse(file).getText();
+  rmSync(directory, { recursive: true });
+
+  expect([firstRead, secondRead]).toEqual(["const first = 1;\n", "const first = 1;\n"]);
 });
 
 function pathsOfTheWorkspaceFile(file: string, source: ts.SourceFile): string[] {

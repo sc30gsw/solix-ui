@@ -1,6 +1,6 @@
 import { resolve, sep } from "node:path";
-import type { Node, SourceFile } from "typescript/unstable/ast";
-import { API, type Checker, type CompilerOptions } from "typescript/unstable/sync";
+import { API, type CompilerOptions } from "typescript/unstable/sync";
+import type { Checker, Node, SourceFile } from "./ast.ts";
 
 export type Program = {
   sourceFile: (file: string) => SourceFile | undefined;
@@ -8,8 +8,8 @@ export type Program = {
   dispose: () => void;
 };
 
-const sharedSettings = resolve(import.meta.dirname, "../../tsconfig.base.json");
-const parseWithoutLibrariesOrImports: CompilerOptions = {
+export const sharedSettings = resolve(import.meta.dirname, "../../tsconfig.base.json");
+export const parseWithoutLibrariesOrImports: CompilerOptions = {
   allowJs: true,
   noLib: true,
   noResolve: true,
@@ -38,10 +38,7 @@ function virtualPath(name: string): string {
   return normalised(resolve(import.meta.dirname, `virtual-${virtualCount}-${name}`));
 }
 
-function openProject(
-  rootFiles: readonly string[],
-  compilerOptions: CompilerOptions,
-): { sourceFile: (file: string) => SourceFile | undefined; checker: Checker; dispose: () => void } {
+function openProject(rootFiles: readonly string[], compilerOptions: CompilerOptions): Program {
   const config = virtualPath("tsconfig.json");
   virtualFiles.set(
     config,

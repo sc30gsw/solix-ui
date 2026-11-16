@@ -4,6 +4,8 @@ export {
   parse,
   parseAll,
   parseText,
+  parseWithoutLibrariesOrImports,
+  sharedSettings,
   stringLiteralTypesOf,
   type Program,
 } from "./syntax/program.ts";
