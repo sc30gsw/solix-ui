@@ -1,6 +1,7 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
 import {
@@ -16,7 +17,9 @@ import {
 } from "../scripts/syntax";
 import { pnpmSettings } from "../scripts/pnpm-settings";
 import {
+  type ExportTarget,
   type Manifest,
+  installedVp,
   libraryNames,
   libraryPackages,
   outsideGeneratedOrInstalled,
@@ -49,6 +52,7 @@ const allowedForPrimitives = ["solid-js"];
 const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name ?? ""];
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
+const packAnswerTimeout = 30_000;
 const webStandardsOnly =
   "A library is built on web standards and has no runtime dependency: it names Solid, StyleX and the primitives package as peers. Use a platform feature or a fallback written in this repository.";
 
@@ -233,6 +237,57 @@ test("a library has no runtime dependency, and names as a peer, or as a library 
         .map(
           (name) =>
             `${path}: package "${manifest.name}" names "${name}", which ${kind} may not. It may name only ${allowed.join(", ")}.`,
+        ),
+    ];
+  });
+
+  expect(libraryPackages.length).toBeGreaterThan(1);
+  expect(violations).toEqual([]);
+});
+
+function exportedFiles(target: ExportTarget | undefined): string[] {
+  if (target === undefined || target === null) return [];
+  if (typeof target === "string") return [target.replace(/^\.\//, "")];
+  return Object.values(target).flatMap(exportedFiles);
+}
+
+function packedFiles(directory: string): string[] {
+  const answer = execFileSync(installedVp, ["pm", "pack", "--json", "--", "--dry-run"], {
+    cwd: directory,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: packAnswerTimeout,
+  });
+  const packed: unknown = JSON.parse(answer);
+  const files =
+    typeof packed === "object" && packed !== null && "files" in packed ? packed.files : undefined;
+  if (!Array.isArray(files)) {
+    throw new Error(`${directory}: the pack listed no files. It answered: ${answer}`);
+  }
+  return files.map((file: { path: string }) => file.path);
+}
+
+function filesBeside(directory: string, exported: string[]): string[] {
+  const folders = new Set(exported.flatMap((file) => file.split("/").slice(0, 1)));
+  return [...folders].flatMap((folder) =>
+    globSync(`${folder}/**`, { cwd: directory, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(directory, join(entry.parentPath, entry.name)).split(sep).join("/")),
+  );
+}
+
+test("a library exports a file, and its packed tarball holds every file its exports name and every file in their folders", () => {
+  const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
+    const exported = [...new Set(exportedFiles(manifest.exports))];
+    const needed = [...new Set([...exported, ...filesBeside(directory, exported)])];
+    const packed = packedFiles(directory);
+    return [
+      ...(exported.length === 0 ? [`${path}: package "${manifest.name}" exports no file.`] : []),
+      ...needed
+        .filter((file) => !packed.includes(file))
+        .map(
+          (file) =>
+            `${path}: the packed tarball of "${manifest.name}" leaves out ${file}, which "exports" names or which sits in the folder of a file they name.`,
         ),
     ];
   });

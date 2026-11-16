@@ -2,23 +2,15 @@ import { join } from "node:path";
 import type { Locator, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { stylesheet as libraryStylesheet } from "../../../packages/core/tests/built-library";
+import { installedVp } from "../../../scripts/repository";
 import { computed, inEveryEngine, serveApp } from "../../../tests/support/served-app";
 
 const port = 4327;
 const appDirectory = join(import.meta.dirname, "..");
-const repositoryRoot = join(appDirectory, "../..");
 const url = serveApp({
   directory: appDirectory,
   port,
-  command: [
-    join(repositoryRoot, "node_modules/.bin/vp"),
-    "preview",
-    "--host",
-    "127.0.0.1",
-    "--port",
-    String(port),
-    "--strictPort",
-  ],
+  command: [installedVp, "preview", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
 });
 const arrangements: [label: string, libraryLast: boolean][] = [
   ["as the bundle orders them", false],
