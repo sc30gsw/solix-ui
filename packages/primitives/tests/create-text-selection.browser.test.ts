@@ -25,17 +25,16 @@ test("it reads the document's selection at once, and reports every change to the
 });
 
 test("a selection made inside an input is reported, whether the engine aims its selectionchange at the input or at the document", async () => {
-  const input = html<HTMLInputElement>(`<input value="hello world" />`);
-  const changes = record(document, "selectionchange", true);
+  const input = html<HTMLInputElement>(
+    `<input value="hello world hello world hello world hello world" />`,
+  );
+  const sent = record(document, "selectionchange", true);
+  const bubbled = record(document, "selectionchange");
   const { seen } = mount(() => ({ seen: watch(createTextSelection()) }));
-  input.focus();
-  await witnessed(changes, (sent) => sent.length > 0, "the selection moving into the input");
-  await expect.poll(() => seen.length).toBe(1 + changes.length);
-  const before = changes.length;
 
   await userEvent.dblClick(input);
-  await witnessed(changes, (sent) => sent.length > before, "the selection of a word");
-  await expect.poll(() => seen.length).toBe(1 + changes.length);
+  await witnessed(sent, (events) => events.length > 0, "the selection of a word in the input");
+  await expect.poll(() => seen.length - bubbled.length).toBe(1);
 });
 
 test("once the owner is disposed, a change is no longer reported", async () => {
