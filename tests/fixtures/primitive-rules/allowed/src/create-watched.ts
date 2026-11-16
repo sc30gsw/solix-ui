@@ -5,7 +5,9 @@ import { observe } from "../../../../../packages/primitives/src/internal-dom-obs
 import type { BrowserValue, MaybeAccessor } from "../../../../../packages/primitives/src/types";
 
 function matches(text: string): number {
-  return lookUp(window, "matchMedia")?.call(window, text).matches ? 1 : 0;
+  const { scrollY } = window;
+  const focused = document["activeElement"];
+  return lookUp(window, "matchMedia")?.call(window, text).matches && focused ? scrollY : 0;
 }
 
 export function createWatched(query: MaybeAccessor<string>): { value: BrowserValue<number> } {

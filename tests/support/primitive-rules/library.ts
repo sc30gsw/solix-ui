@@ -9,7 +9,9 @@ import {
   fileOf,
   firstLine,
   importsOf,
+  isDomLibraryFile,
   isPackageFile,
+  memberDeclarations,
   nameOf,
   openProgram,
   type Program,
@@ -185,6 +187,17 @@ export function isFromSolid(declaration: ts.Node, names: readonly string[]): boo
 
 export function refersTo(library: Library, node: ts.Node, declared: Declared): boolean {
   return declarationsOf(library.compiled, node).some((found) => isDeclared(found, declared));
+}
+
+export function refersToDomMember(
+  library: Library,
+  node: ts.Node,
+  matches: (declaration: ts.Node) => boolean,
+  program: Program = library.compiled,
+): boolean {
+  return memberDeclarations(program, node).some(
+    (declaration) => isDomLibraryFile(fileOf(declaration)) && matches(declaration),
+  );
 }
 
 export function callsTo(library: Library, node: ts.Node, declared: Declared): boolean {

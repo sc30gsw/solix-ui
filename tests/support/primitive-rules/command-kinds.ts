@@ -18,6 +18,6 @@ const commandKinds: Rule = (library) =>
 
 export const commandKindsRule: PrimitiveRule = {
   description:
-    "no function typed StateCommandBody reaches a global declared only in lib.dom, through any function it calls",
+    "no function typed StateCommandBody reaches a global declared only in lib.dom, through any function, method or accessor it refers to",
   rule: commandKinds,
 };

@@ -39,11 +39,11 @@ const liveOptions: Rule = (library) =>
       .filter((node) => callsTo(library, node, optionReader) && !isReadLive(library, node))
       .map(
         (node) =>
-          `${at(module, node)}: ${node.getText()}: this module calls a helper that takes a ${configRole}, so read a live option inside an argument typed ${comparedByValueRoles.join(" or ")}, which the helper compares with sameValue, or inside a function that a browser-only function calls later, such as an event listener. Read once where it attaches, the option would be frozen.`,
+          `${at(module, node)}: ${node.getText()}: this module calls a helper that takes a ${configRole}, so read a live option inside an argument typed ${comparedByValueRoles.join(" or ")}, which the helper compares with sameValue, or inside a function nested in a browser-only function, such as an event listener. Read once where it attaches, the option would be frozen.`,
       );
   });
 
 export const liveOptionsRule: PrimitiveRule = {
-  description: `a public primitive that calls a helper taking a ${configRole} reads its live options only inside an argument typed ${comparedByValueRoles.join(" or ")}, or inside a function a browser-only function calls later`,
+  description: `a public primitive that calls a helper taking a ${configRole} reads its live options only inside an argument typed ${comparedByValueRoles.join(" or ")}, or inside a function nested in a browser-only function`,
   rule: liveOptions,
 };

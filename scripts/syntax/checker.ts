@@ -22,6 +22,7 @@ const libraryDirectory = String.raw`[\\/]node_modules[\\/]@typescript[\\/]typesc
 const defaultLibraryFile = new RegExp(String.raw`${libraryDirectory}lib\.[^\\/]+\.d\.ts$`);
 const domLibraryFile = new RegExp(String.raw`${libraryDirectory}lib\.dom(?:\.[a-z]+)*\.d\.ts$`);
 const globalObject = "globalThis";
+const reflectiveRead = "get";
 
 export function isPackageFile(file: string): boolean {
   return packageFile.test(file);
@@ -86,6 +87,73 @@ export function declarationsOf(program: Program, node: ts.Node): ts.Node[] {
     ...declarationsOfSymbol(symbolOf(program, node)),
     ...declarationsOfSymbol(contextualMember(program, node)),
   ];
+}
+
+function propertyDeclarations(program: Program, owner: ts.Node, names: string[]): ts.Node[] {
+  const { checker } = program;
+  const type = checker.getTypeAtLocation(owner);
+  const present = type && checker.getNonNullableType(type);
+  const apparent = present && (checker.getApparentType(present) ?? present);
+  if (!apparent) return [];
+  return names.flatMap((name) => declarationsOfSymbol(checker.getPropertyOfType(apparent, name)));
+}
+
+function boundNames(program: Program, element: ts.Node): string[] {
+  if (!ts.isBindingElement(element)) return [];
+  const name = element.propertyName ?? element.name;
+  if (!name) return [];
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return [name.text];
+  return ts.isComputedPropertyName(name) ? stringsIn(program, name.expression) : [];
+}
+
+function takesAKeyOfAnother(declaration: ts.Node): boolean {
+  if (!ts.isFunctionDeclaration(declaration)) return false;
+  const named = declaration.parameters[1]?.type;
+  if (!named || !ts.isTypeReferenceNode(named) || !ts.isIdentifier(named.typeName)) return false;
+  const key = named.typeName.text;
+  return (declaration.typeParameters ?? []).some(
+    (parameter) =>
+      parameter.name.text === key &&
+      parameter.constraint !== undefined &&
+      ts.isTypeOperatorNode(parameter.constraint) &&
+      parameter.constraint.operator === ts.SyntaxKind.KeyOfKeyword,
+  );
+}
+
+function readsByName(declaration: ts.Node): boolean {
+  return (
+    ts.isFunctionDeclaration(declaration) &&
+    declaration.name?.text === reflectiveRead &&
+    isDefaultLibraryFile(fileOf(declaration))
+  );
+}
+
+function namesAMemberOfItsFirstArgument(program: Program, call: ts.CallExpression): boolean {
+  if (call.arguments.length < 2) return false;
+  const callee = ts.isPropertyAccessExpression(call.expression)
+    ? call.expression.name
+    : call.expression;
+  return declarationsOf(program, callee).some(
+    (declaration) => takesAKeyOfAnother(declaration) || readsByName(declaration),
+  );
+}
+
+export function memberDeclarations(program: Program, node: ts.Node): ts.Node[] {
+  if (ts.isPropertyAccessExpression(node)) return declarationsOf(program, node.name);
+  if (ts.isElementAccessExpression(node)) {
+    return propertyDeclarations(
+      program,
+      node.expression,
+      stringsIn(program, node.argumentExpression),
+    );
+  }
+  if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+    return propertyDeclarations(program, node.parent, boundNames(program, node));
+  }
+  if (ts.isCallExpression(node) && namesAMemberOfItsFirstArgument(program, node)) {
+    return propertyDeclarations(program, node.arguments[0], stringsIn(program, node.arguments[1]));
+  }
+  return isValueReference(node) ? declarationsOf(program, node) : [];
 }
 
 export function isBrowserOnlyGlobal(program: Program, node: ts.Node): node is ts.Identifier {
@@ -187,19 +255,38 @@ export function constructedClass(program: Program, node: ts.Node): ClassRef[] {
 }
 
 export function constructorClasses(program: Program, node: ts.Node): ClassRef[] {
-  if (!ts.isExpression(node)) return [];
-  const type = program.checker.getTypeAtLocation(node);
-  if (!type) return [];
-  return program.checker
-    .getSignaturesOfType(type, SignatureKind.Construct)
-    .flatMap((signature) => classOf(program.checker.getReturnTypeOfSignature(signature)));
+  if (!ts.isExpression(node) && !ts.isBindingElement(node)) return [];
+  const { checker } = program;
+  const type = checker.getTypeAtLocation(node);
+  const present = type && checker.getNonNullableType(type);
+  if (!present) return [];
+  return checker
+    .getSignaturesOfType(present, SignatureKind.Construct)
+    .flatMap((signature) => classOf(checker.getReturnTypeOfSignature(signature)));
 }
 
-function followed(declaration: ts.Node): ts.Node | undefined {
-  if (isPackageFile(fileOf(declaration))) return undefined;
-  if (ts.isFunctionDeclaration(declaration)) return declaration.body ? declaration : undefined;
-  if (ts.isVariableDeclaration(declaration)) return declaration.initializer;
-  return undefined;
+function runsWithItsClass(member: ts.Node): boolean {
+  return (
+    ts.isConstructorDeclaration(member) ||
+    ts.isPropertyDeclaration(member) ||
+    ts.isClassStaticBlockDeclaration(member)
+  );
+}
+
+function followed(declaration: ts.Node): ts.Node[] {
+  if (isPackageFile(fileOf(declaration))) return [];
+  if (
+    ts.isFunctionDeclaration(declaration) ||
+    ts.isMethodDeclaration(declaration) ||
+    ts.isGetAccessorDeclaration(declaration) ||
+    ts.isSetAccessorDeclaration(declaration)
+  ) {
+    return declaration.body ? [declaration] : [];
+  }
+  if (ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration)) {
+    return declaration.initializer ? [declaration.initializer] : [];
+  }
+  return ts.isClassLikeDeclaration(declaration) ? declaration.members.filter(runsWithItsClass) : [];
 }
 
 export function reachedFrom(
@@ -213,14 +300,12 @@ export function reachedFrom(
   const visit = (node: ts.Node): void => {
     if (nodes.has(node) || prune(node)) return;
     nodes.add(node);
-    if (isValueReference(node)) {
-      for (const declaration of declarationsOf(program, node)) {
-        const body = followed(declaration);
-        if (body && !functions.has(declaration)) {
-          functions.add(declaration);
-          queue.push(body);
-        }
-      }
+    for (const declaration of memberDeclarations(program, node)) {
+      if (functions.has(declaration)) continue;
+      const bodies = followed(declaration);
+      if (bodies.length === 0) continue;
+      functions.add(declaration);
+      queue.push(...bodies);
     }
     node.forEachChild(visit);
   };

@@ -1,18 +1,9 @@
-import {
-  declarationsOf,
-  descendants,
-  fileOf,
-  findAncestor,
-  firstLine,
-  isDomLibraryFile,
-  nameOf,
-  ts,
-} from "../../../scripts/syntax";
+import { descendants, findAncestor, firstLine, nameOf, ts } from "../../../scripts/syntax";
 import {
   browserTests,
-  calleeName,
   type Library,
   type PrimitiveRule,
+  refersToDomMember,
   type Rule,
   testAt,
 } from "./library";
@@ -51,17 +42,17 @@ function waitsByItself(library: Library, node: ts.Node): boolean {
   if (ts.isBinaryExpression(node) && countOperators.includes(node.operatorToken.kind)) {
     return isCount(node.left) && isAsserted(node);
   }
-  if (!ts.isCallExpression(node)) return false;
-  const callee = calleeName(node.expression);
   if (
-    declarationsOf(library.compiledTests, callee).some(
-      (declaration) =>
-        isDomLibraryFile(fileOf(declaration)) && timers.includes(nameOf(declaration)),
+    refersToDomMember(
+      library,
+      node,
+      (declaration) => timers.includes(nameOf(declaration)),
+      library.compiledTests,
     )
   ) {
     return true;
   }
-  if (!ts.isPropertyAccessExpression(node.expression)) return false;
+  if (!ts.isCallExpression(node) || !ts.isPropertyAccessExpression(node.expression)) return false;
   if (!countComparisons.includes(node.expression.name.text)) return false;
   const asserted = node.expression.expression;
   return ts.isCallExpression(asserted) && isCount(asserted.arguments[0]);
@@ -79,6 +70,6 @@ const browserTestWaits: Rule = (library) =>
 
 export const browserTestWaitsRule: PrimitiveRule = {
   description:
-    "a browser test writes no timeout number, calls no timer however it is reached, and asserts no count of recorded events with greater-than",
+    "a browser test writes no timeout property whose value is a number literal, refers in its own file to no setTimeout or setInterval of the DOM, by any name, and asserts no .length with a greater-than comparison",
   rule: browserTestWaits,
 };

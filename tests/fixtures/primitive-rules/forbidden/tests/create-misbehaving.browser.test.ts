@@ -1,4 +1,5 @@
 import { expect, test } from "vite-plus/test";
+import { lookUp } from "../../../../../packages/primitives/src/internal-browser-api";
 import "./support/browser-harness";
 
 test("waits by itself", async () => {
@@ -9,4 +10,9 @@ test("waits by itself", async () => {
   await new Promise((resolve) => window.setTimeout(resolve, 100));
   expect(seen.length).toBeGreaterThanOrEqual(1);
   expect(seen.length >= 1).toBe(true);
+  const { setTimeout: later, setInterval } = window;
+  Reflect.apply(setTimeout, window, [() => undefined, 100]);
+  window["setTimeout"](() => undefined, 100);
+  const schedule = lookUp(window, "setTimeout");
+  expect([later, setInterval, schedule]).toHaveLength(3);
 });

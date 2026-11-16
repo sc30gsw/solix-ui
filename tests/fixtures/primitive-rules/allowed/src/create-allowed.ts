@@ -9,13 +9,17 @@ const limits = { lowest: 0, names: ["a"] } as const;
 
 export type AllowedOptions = { max?: MaybeAccessor<number>; defaultLabel?: ReadOnce<string> };
 
+function typed<T>(found: unknown): T {
+  return found as T;
+}
+
 export function createAllowed(
   initialValue: ReadOnce<number>,
   element: HTMLElement,
   options?: AllowedOptions,
 ) {
   const initial = accessUntracked(initialValue);
-  const label = accessUntracked(options?.defaultLabel);
+  const label = typed<string | undefined>(accessUntracked(options?.defaultLabel));
   const value = createValue(initial);
   const items = [...(accessUntracked(initialValue) > 0 ? [initial] : limits.names)];
   const copy = (options: { max: number }) => ({ ...options });

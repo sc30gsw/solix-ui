@@ -10,6 +10,7 @@ export {
   isDomLibraryFile,
   isGlobalObject,
   isPackageFile,
+  memberDeclarations,
   parameterAliases,
   reachedFrom,
   returnsAlias,

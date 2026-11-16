@@ -1,13 +1,5 @@
 import { join, relative } from "node:path";
-import {
-  declarationsOf,
-  descendants,
-  importsOf,
-  isDomLibraryFile,
-  fileOf,
-  nameOf,
-  ts,
-} from "../../../scripts/syntax";
+import { descendants, importsOf, nameOf, ts } from "../../../scripts/syntax";
 import { repositoryRoot } from "../workspace";
 import {
   at,
@@ -17,6 +9,7 @@ import {
   type PrimitiveRule,
   publicModules,
   reaches,
+  refersToDomMember,
   type Rule,
   testNamed,
 } from "./library";
@@ -27,13 +20,10 @@ const accessibilityModule = "./support/accessibility";
 const axeAssertion = "expectNoAxeViolations";
 
 export const focusMovesRule = forbidOutside({
-  description: `nothing but ${focusMover.name} in ${focusMover.file} refers to the DOM's focus method`,
+  description: `nothing but ${focusMover.name} in ${focusMover.file} refers to the DOM's focus method, however the member is named`,
   home: { file: focusMover.file, fn: focusMover.name },
   find: (library, node) =>
-    ts.isPropertyAccessExpression(node) &&
-    declarationsOf(library.compiled, node.name).some(
-      (declaration) => isDomLibraryFile(fileOf(declaration)) && nameOf(declaration) === focusMethod,
-    ),
+    refersToDomMember(library, node, (declaration) => nameOf(declaration) === focusMethod),
   advice: `move focus with ${focusMover.name} from ${focusMover.file}, which confirms the element took it and which the accessibility rule follows.`,
 });
 

@@ -192,7 +192,8 @@ function isPropertyName(node: ts.Node): boolean {
       ts.isPropertyDeclaration(parent) ||
       ts.isPropertySignatureDeclaration(parent) ||
       ts.isMethodDeclaration(parent)) &&
-      parent.name === node)
+      parent.name === node) ||
+    (ts.isBindingElement(parent) && parent.propertyName === node)
   );
 }
 

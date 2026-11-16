@@ -2,13 +2,19 @@ import {
   declarationsOf,
   fileOf,
   isDefaultLibraryFile,
-  isDomLibraryFile,
   isValueReference,
   nameOf,
   stringsIn,
   ts,
 } from "../../../scripts/syntax";
-import { calleeName, callsTo, forbidOutside, type Library, refersTo } from "./library";
+import {
+  calleeName,
+  callsTo,
+  forbidOutside,
+  type Library,
+  refersTo,
+  refersToDomMember,
+} from "./library";
 
 const listenerModule = "internal-listener.ts";
 const rawListen = { file: listenerModule, name: "listen" };
@@ -19,28 +25,12 @@ const eventHandlerType = /^\(\(this: [A-Za-z]+, ev: [A-Za-z]+\) => any\) \| null
 const writersByName = ["set", "defineProperty"];
 const objectAssign = "assign";
 
-function isDomMember(
-  library: Library,
-  node: ts.Node,
-  matches: (declaration: ts.Node) => boolean,
-): boolean {
-  return declarationsOf(library.compiled, node).some(
-    (declaration) => isDomLibraryFile(fileOf(declaration)) && matches(declaration),
-  );
-}
-
 function isEventHandler(declaration: ts.Node): boolean {
   return (
     ts.isPropertySignatureDeclaration(declaration) &&
     eventHandlerProperty.test(nameOf(declaration)) &&
     eventHandlerType.test(declaration.type?.getText() ?? "")
   );
-}
-
-function memberName(node: ts.Node): ts.Node | undefined {
-  if (ts.isPropertyAccessExpression(node)) return node.name;
-  if (ts.isElementAccessExpression(node)) return node.argumentExpression;
-  return undefined;
 }
 
 function fixesItsOwnSettings(library: Library, node: ts.Node): boolean {
@@ -55,15 +45,13 @@ function fixesItsOwnSettings(library: Library, node: ts.Node): boolean {
 }
 
 export const listenerRolesRule = forbidOutside({
-  description: `only ${listenerModule} names listen or the DOM's addEventListener and removeEventListener, and a primitive builds listener settings only from options it was given`,
+  description: `only ${listenerModule} refers to listen or to the DOM's addEventListener and removeEventListener, however the member is named, and outside it no call of listenerSettings leaves its options out or writes them as a literal`,
   home: { file: listenerModule },
   find: (library, node) => {
-    if (isValueReference(node)) return refersTo(library, node, rawListen);
+    if (isValueReference(node) && refersTo(library, node, rawListen)) return true;
     if (fixesItsOwnSettings(library, node)) return true;
-    const member = memberName(node);
-    return (
-      member !== undefined &&
-      isDomMember(library, member, (declaration) => domMethods.includes(nameOf(declaration)))
+    return refersToDomMember(library, node, (declaration) =>
+      domMethods.includes(nameOf(declaration)),
     );
   },
   advice: `listen through ${listenerModule}: watchEvents to read state in the capture phase, handleEvent to act after Solid's delegated handlers, or listenAsAsked with settings built from the ListenerOptions a consumer gave, so each listener is removed with the capture it was added with.`,
@@ -96,13 +84,9 @@ function writesAHandlerByName(library: Library, node: ts.Node): boolean {
 }
 
 export const eventHandlerPropertiesRule = forbidOutside({
-  description: "no source reads or writes an on<event> handler property of the DOM",
-  find: (library, node) => {
-    const member = memberName(node);
-    return (
-      (member !== undefined && isDomMember(library, member, isEventHandler)) ||
-      writesAHandlerByName(library, node)
-    );
-  },
+  description:
+    "no source refers to an on<event> handler property of the DOM, however the member is named, or writes one by name through Reflect.set, defineProperty or Object.assign",
+  find: (library, node) =>
+    refersToDomMember(library, node, isEventHandler) || writesAHandlerByName(library, node),
   advice: `an on<event> property holds one handler that any other code replaces, and the leak check cannot see it. Listen through ${listenerModule}.`,
 });
