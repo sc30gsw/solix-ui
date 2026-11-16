@@ -36,9 +36,9 @@ A consumer's `onClick` runs after the SDK already selected, or cannot stop it. A
 | `apps/playground/tests/behaviour-seam.test.ts` | It holds, in a browser, what the server renderer cannot show: a handler given to a tab after the first render reaches it; every tab of the controlled list stays the element it was, and an element passed as a section is created once, across a click, an arrow key and a handler given to the list later; tabs in a shadow root keep focus and their arrow keys; the ids `partId` makes from generated values can be referenced; and the page holds no style but the SDK's one `<style>` element, in a layer the library's stylesheet ordered first. |
 | `tests/support` | It builds the library and the app in production mode before any test. |
 | `vite.config.ts` | It sets the test include globs, the global setup and the Solid plugin. |
-| `@ui-sdk/core`, `@ui-sdk/solid`, `solid-js`, `@solidjs/web`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
+| `@ui-sdk/core`, `@ui-sdk/solid`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `5019c44`. Run `git diff 5019c44 -- packages/core/src/headless.ts packages/core/src/parts.ts packages/core/src/style-props.ts packages/core/tests/headless.test.tsx apps/playground/tests/behaviour-seam.test.ts tests/support vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `951be12`. Run `git diff 951be12 -- packages/core/src/headless.ts packages/core/src/parts.ts packages/core/src/style-props.ts packages/core/tests/headless.test.tsx apps/playground/tests/behaviour-seam.test.ts tests/support vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 

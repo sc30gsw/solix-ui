@@ -51,9 +51,9 @@ It does if it edits any of these:
 | `scripts/expected-values.ts`: `lookOf` | It reads the properties that `button.test.ts` compares between the `Unstyled` button and the `Plain button`. |
 | `tests/library-conventions.test.ts` | It requires every component to type its props as `ElementProps` or `PolymorphicProps`, imported from `./parts`, with `typeof styles` as the Styles API type argument, to write its own props as inline type literals, to call `createParts` once and keep every member of its own props type off the root, to spread `root` on the element it returns, which is the element `ElementProps` names or the `dynamic()` element `component` picks, to spread each `part("<name>")` inline on an intrinsic element, and to write no `class` or `style` by hand. |
 | `vite.config.ts` | It sets the test include globs, the global setup, and the Solid plugin. |
-| `solid-js`, `@solidjs/web` and `@solidjs/vite-plugin` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins, they decide how a `class` value becomes a class attribute. |
+| `solid-js`, `@solidjs/web`, `@solidjs/compiler` and `@solidjs/vite-plugin` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins, they decide how a `class` value becomes a class attribute. |
 
-Last confirmed against commit `5019c44`. Run `git diff 5019c44 -- packages/core apps/playground tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs scripts/expected-values.ts tests/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `951be12`. Run `git diff 951be12 -- packages/core apps/playground tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs scripts/expected-values.ts tests/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 
