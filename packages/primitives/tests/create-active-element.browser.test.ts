@@ -115,6 +115,6 @@ test("once the owner is disposed, focus is no longer followed", async () => {
 
   unmount();
   first.focus();
-  await witnessed(() => focused.length > 0, "the focusin");
+  await witnessed(focused, (seen) => seen.length > 0, "the focusin");
   expect(active()).toBe(document.body);
 });

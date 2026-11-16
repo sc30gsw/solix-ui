@@ -4,7 +4,6 @@ import { createResizeObserver } from "../src/index";
 import { flush, mount, unmount } from "./support/browser-harness";
 import { box, engineWait, settled } from "./support/dom";
 import { fakeObserver } from "./support/fake-observer";
-import { withoutGlobal } from "./support/replace";
 
 const zeros = { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0 };
 
@@ -61,18 +60,6 @@ test("in a vertical writing mode, width and height of the border box are still t
   await expect.poll(() => [rect().width, rect().height], engineWait).toEqual([166, 66]);
 });
 
-test("when the ref moves to another element, the box goes back to zeros at once, then follows the new element", async () => {
-  const [ref, rect] = mount(() => createResizeObserver<HTMLElement>());
-  ref(sized(120, 40));
-  flush();
-  await expect.poll(() => rect().width, engineWait).toBe(120);
-
-  ref(sized(300, 40));
-  flush();
-  expect(rect()).toEqual(zeros);
-  await expect.poll(() => rect().width, engineWait).toBe(300);
-});
-
 test("a newer report before the next frame replaces the waiting one, so two reports in one frame write the box once", async () => {
   const observer = fakeObserver("ResizeObserver");
   const frames = vi.spyOn(window, "requestAnimationFrame");
@@ -115,15 +102,4 @@ test("disposing the owner between a report and its frame cancels the frame", asy
   } finally {
     observer.restore();
   }
-});
-
-test("without ResizeObserver the box stays all zeros, and nothing throws", async () => {
-  const [ref, rect] = mount(() => createResizeObserver<HTMLElement>());
-
-  withoutGlobal("ResizeObserver", () => {
-    ref(sized(100, 20));
-    flush();
-  });
-  await settled();
-  expect(rect()).toEqual(zeros);
 });

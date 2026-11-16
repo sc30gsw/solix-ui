@@ -13,11 +13,11 @@ test("it reads the document's selection at once, and reports every change to the
   expect(selection()).toBe(document.getSelection());
 
   document.getSelection()?.selectAllChildren(text);
-  await witnessed(() => changes.length > 0, "the selection change");
+  await witnessed(changes, (seen) => seen.length > 0, "the selection change");
   await expect.poll(() => seen.length).toBe(1 + changes.length);
   const afterSelecting = changes.length;
   document.getSelection()?.removeAllRanges();
-  await witnessed(() => changes.length > afterSelecting, "the second selection change");
+  await witnessed(changes, (seen) => seen.length > afterSelecting, "the second selection change");
   await expect.poll(() => seen.length).toBe(1 + changes.length);
   expect(new Set(seen)).toEqual(new Set([document.getSelection()]));
   expect(selection()?.type).toBe("None");
@@ -30,7 +30,7 @@ test("once the owner is disposed, a change is no longer reported", async () => {
 
   unmount();
   document.getSelection()?.selectAllChildren(text);
-  await witnessed(() => changes.length > 0, "the selection change");
+  await witnessed(changes, (seen) => seen.length > 0, "the selection change");
   expect(seen.length).toBe(1);
   document.getSelection()?.removeAllRanges();
 });

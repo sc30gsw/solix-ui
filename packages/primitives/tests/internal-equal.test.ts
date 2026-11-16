@@ -21,7 +21,7 @@ test("sameKeys compares two objects key by key with Object.is, an absent key aga
   expect(sameKeys({ value: {} }, { value: {} })).toBe(false);
 });
 
-test("sameValue compares plain objects and arrays by value, symbol keys included, and anything else by identity", () => {
+test("sameValue compares plain objects and arrays by value, symbol keys included, and anything else by identity, and an absent key differs from one set to undefined", () => {
   const key = Symbol("key");
   const element = {};
   const signal = new AbortController().signal;

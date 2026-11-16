@@ -1,11 +1,13 @@
 import { type Accessor, createRoot, createSignal } from "solid-js";
 import { describe, expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
+import { replaced } from "./support/replace";
 import type { BrowserValuePrimitive, ElementPrimitive } from "../fixtures/primitive-kinds";
 import { startCase } from "../fixtures/server-cases";
 import * as primitives from "../src/index";
 import { attachmentsDuring, flush, mount, record, unmount } from "./support/browser-harness";
-import { box, button, nextTask, press, settled, witnessed } from "./support/dom";
+import { observers } from "./support/browser-resources";
+import { box, button, controlFor, nextTask, press, settled, witnessed } from "./support/dom";
 
 type Contracted = {
   ref: primitives.RefSetter<HTMLElement>;
@@ -22,60 +24,31 @@ type Contract<K extends ElementPrimitive> = {
 
 const ping = "solix-ping";
 
-function controlObserver<T>(
-  observe: (element: Element, seen: T[]) => { disconnect: () => void },
-  element: Element,
-): { seen: T[]; disconnect: () => void } {
-  const seen: T[] = [];
-  const observer = observe(element, seen);
-  return { seen, disconnect: () => observer.disconnect() };
-}
-
-function resizeControl(element: Element) {
-  return controlObserver<ResizeObserverEntry>((target, seen) => {
-    const observer = new ResizeObserver((entries) => seen.push(...entries));
-    observer.observe(target);
-    return observer;
-  }, element);
-}
-
-function intersectionControl(element: Element) {
-  return controlObserver<IntersectionObserverEntry>((target, seen) => {
-    const observer = new IntersectionObserver((entries) => seen.push(...entries));
-    observer.observe(target);
-    return observer;
-  }, element);
-}
-
-function mutationControl(element: Element) {
-  return controlObserver<MutationRecord>((target, seen) => {
-    const observer = new MutationObserver((records) => seen.push(...records));
-    observer.observe(target, { childList: true });
-    return observer;
-  }, element);
-}
-
 async function resizes(element: HTMLElement, width: () => number): Promise<boolean> {
   const expected = Math.round(element.getBoundingClientRect().width) + 7;
-  const control = resizeControl(element);
+  const control = controlFor("ResizeObserver", element);
   const reports = control.seen.length;
   element.style.boxSizing = "border-box";
   element.style.width = `${expected}px`;
-  await witnessed(() => control.seen.length > reports, "the resize");
+  await witnessed(control.seen, (seen) => seen.length > reports, "the resize");
   control.disconnect();
   await settled();
   return width() === expected;
 }
 
+function inView(seen: readonly IntersectionObserverEntry[]): boolean {
+  return seen.at(-1)?.isIntersecting === true;
+}
+
 async function seesItLeave(element: HTMLElement, inside: () => boolean): Promise<boolean> {
-  const control = intersectionControl(element);
-  await witnessed(() => control.seen.at(-1)?.isIntersecting === true, "the element in view");
+  const control = controlFor("IntersectionObserver", element);
+  await witnessed(control.seen, inView, "the element in view");
   const before = inside();
   element.hidden = true;
-  await witnessed(() => control.seen.at(-1)?.isIntersecting === false, "the element leaving");
+  await witnessed(control.seen, (seen) => !inView(seen), "the element leaving");
   const after = inside();
   element.hidden = false;
-  await witnessed(() => control.seen.at(-1)?.isIntersecting === true, "the element back in view");
+  await witnessed(control.seen, inView, "the element back in view");
   control.disconnect();
   return before && !after;
 }
@@ -151,7 +124,7 @@ const contracts: { [K in ElementPrimitive]: Contract<K> } = {
           outside.focus();
           const entered = record(element, "focusin", true);
           element.querySelector("button")?.focus();
-          await witnessed(() => entered.length > 0, "the focusin");
+          await witnessed(entered, (seen) => seen.length > 0, "the focusin");
           const acted = within.focused();
           outside.focus();
           outside.remove();
@@ -175,7 +148,7 @@ const contracts: { [K in ElementPrimitive]: Contract<K> } = {
           await userEvent.hover(away);
           const entered = record(element, "mouseenter");
           await userEvent.hover(element);
-          await witnessed(() => entered.length > 0, "the mouseenter");
+          await witnessed(entered, (seen) => seen.length > 0, "the mouseenter");
           const acted = hover.hovered();
           await userEvent.hover(away);
           away.remove();
@@ -227,9 +200,9 @@ const contracts: { [K in ElementPrimitive]: Contract<K> } = {
         ),
         actsOn: async (element) => {
           targets.length = 0;
-          const control = mutationControl(element);
+          const control = controlFor("MutationObserver", element, { childList: true });
           element.append(document.createElement("span"));
-          await witnessed(() => control.seen.length > 0, "the mutation");
+          await witnessed(control.seen, (seen) => seen.length > 0, "the mutation");
           control.disconnect();
           return targets.includes(element);
         },
@@ -308,6 +281,21 @@ describe.each(Object.keys(contracts) as ElementPrimitive[])("%s", (name) => {
       expect(read?.()).toEqual(expected);
     },
   );
+
+  test("with every observer class missing, it attaches without a throw and a value keeps its initial value", async () => {
+    await userEvent.hover(box("away"));
+    const restores = observers.map((observer) => replaced(window, observer, undefined));
+    try {
+      const { ref, read } = mounted();
+      ref(element("first"));
+      flush();
+      await settled();
+
+      expect(read?.()).toEqual(initialOf(name));
+    } finally {
+      for (const restore of restores) restore();
+    }
+  });
 
   test("the attachment is removed when the owner is disposed", async () => {
     const { ref, actsOn } = mounted();

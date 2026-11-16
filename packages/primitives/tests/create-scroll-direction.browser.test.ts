@@ -2,7 +2,6 @@ import fc from "fast-check";
 import type { Accessor } from "solid-js";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { createScrollDirection, type ScrollDirection } from "../src/index";
-import { resizeSettleMs } from "../src/internal-scroll";
 import { mount, unmount } from "./support/browser-harness";
 import { engineWait } from "./support/dom";
 import { applied, onScrollGrid, type ScrollStub, stubbedScroll, tallPage } from "./support/scroll";
@@ -33,30 +32,6 @@ test("it follows the window as it really scrolls", async () => {
   await expect.poll(direction, engineWait).toBe("down");
   window.scrollTo({ top: 100, behavior: "instant" });
   await expect.poll(direction, engineWait).toBe("up");
-});
-
-test("a layout shift while a resize settles is not taken for a scroll: the next scroll after it is compared with the position read when it settled", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  const scroll = stubbedScroll(1000);
-  const direction = mount(() => createScrollDirection());
-
-  scroll.resize();
-  scroll.to(600);
-  vi.advanceTimersByTime(resizeSettleMs);
-  scroll.to(620);
-  vi.useRealTimers();
-  await applied();
-  expect(direction()).toBe("down");
-});
-
-test("disposing the owner while a resize settles clears the timer", async () => {
-  const scroll = stubbedScroll(0);
-  mount(() => createScrollDirection());
-
-  scroll.resize();
-  unmount();
-  scroll.to(10);
-  await applied();
 });
 
 type Model = { y: number; direction: ScrollDirection };

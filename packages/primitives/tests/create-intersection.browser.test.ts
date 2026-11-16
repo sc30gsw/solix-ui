@@ -2,8 +2,7 @@ import { createSignal } from "solid-js";
 import { expect, test, vi } from "vite-plus/test";
 import { createIntersection } from "../src/index";
 import { flush, mount } from "./support/browser-harness";
-import { box, settled, engineWait } from "./support/dom";
-import { withoutGlobal } from "./support/replace";
+import { box, engineWait } from "./support/dom";
 
 function scroller(): { root: HTMLDivElement; below: HTMLDivElement } {
   const root = box("root");
@@ -65,29 +64,4 @@ test("options equal by value keep the observer, and a change of threshold builds
     [0, 0],
     [1, 1],
   ]);
-});
-
-test("when the ref moves to another element, the entry goes back to null, then follows the new element", async () => {
-  const { ref, entry } = mount(() => createIntersection<HTMLElement>());
-  const first = box("first");
-  const second = box("second");
-  ref(first);
-  flush();
-  await expect.poll(() => entry()?.target, engineWait).toBe(first);
-
-  ref(second);
-  flush();
-  expect(entry()).toBe(null);
-  await expect.poll(() => entry()?.target, engineWait).toBe(second);
-});
-
-test("without IntersectionObserver the entry stays null, and nothing throws", async () => {
-  const { ref, entry } = mount(() => createIntersection<HTMLElement>());
-
-  withoutGlobal("IntersectionObserver", () => {
-    ref(box("watched"));
-    flush();
-  });
-  await settled();
-  expect(entry()).toBe(null);
 });

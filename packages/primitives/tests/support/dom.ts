@@ -48,8 +48,38 @@ export async function reported(check: () => boolean, what: string): Promise<void
   }
 }
 
-export async function witnessed(control: () => boolean, what: string): Promise<void> {
-  await reported(control, `${what} to a control`);
+export async function witnessed<T>(
+  control: readonly T[],
+  sees: (seen: readonly T[]) => boolean,
+  what: string,
+): Promise<void> {
+  await reported(() => sees(control), `${what} to a control`);
+}
+
+type ObservedBy = {
+  ResizeObserver: ResizeObserverEntry;
+  IntersectionObserver: IntersectionObserverEntry;
+  MutationObserver: MutationRecord;
+};
+
+type ControlObserver<T> = new (callback: (entries: T[]) => void) => {
+  observe(target: Element, init?: object): void;
+  disconnect(): void;
+};
+
+export function controlFor<N extends keyof ObservedBy>(
+  name: N,
+  element: Element,
+  init?: object,
+): { seen: ObservedBy[N][]; disconnect: () => void } {
+  const seen: ObservedBy[N][] = [];
+  const classes: Record<string, unknown> = Object.fromEntries(
+    Object.entries({ ResizeObserver, IntersectionObserver, MutationObserver }),
+  );
+  const Observer = classes[name] as ControlObserver<ObservedBy[N]>;
+  const observer = new Observer((entries) => seen.push(...entries));
+  observer.observe(element, init);
+  return { seen, disconnect: () => observer.disconnect() };
 }
 
 export function settled(): Promise<void> {

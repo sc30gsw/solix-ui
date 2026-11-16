@@ -5,16 +5,14 @@ import { inEveryEngine, openPage, type OpenPage } from "./support/playground";
 
 const url = inject("playgroundUrl");
 const probe = "output[data-hydration-probe]";
-const engineWait = { timeout: 5_000 };
+const revealWait = { timeout: 5_000 };
 const headroomCalls = '[data-case-calls="createHeadroom"]';
 
 type Revealed = { expected: string; restore: () => Promise<unknown> };
 
-function scrolledTo(page: Page, y: number): Promise<void> {
-  return page.evaluate(async (top) => {
-    window.scrollTo({ top, behavior: "instant" });
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  }, y);
+async function scrolledTo(page: Page, y: number): Promise<void> {
+  await page.evaluate((top) => window.scrollTo({ top, behavior: "instant" }), y);
+  await page.waitForFunction((top) => Math.round(window.scrollY) === top, y, revealWait);
 }
 
 function region(page: Page, name: string) {
@@ -198,7 +196,7 @@ async function scrollCommandsWhileLoading(browser: Browser): Promise<string[]> {
   }
 }
 
-test("the server renders the regions and lines the page shows, and a probe after each primitive", async () => {
+test("the server renders the regions and lines the page shows, and probes the client has not claimed yet", async () => {
   const html = await (await fetch(url)).text();
 
   expect(html).toMatch(/<div[^>]*class="region"[^>]*>A region that counts presses outside it/);
@@ -237,7 +235,7 @@ inEveryEngine((browser) => {
       }
     });
 
-    test("each value a primitive returns reads, while the page hydrates, what the server's markup shows", async () => {
+    test("each value its server case reads gives, while the page hydrates, what the server's markup shows", async () => {
       const html = await (await fetch(url)).text();
       const shown = shownInMarkup(html);
 
@@ -250,14 +248,14 @@ inEveryEngine((browser) => {
       }
     });
 
-    test("each value only the browser knows then reads the browser's value", async () => {
+    test("each BrowserValue then reads the browser's value", async () => {
       const { page } = opened;
 
       for (const [name, revealed] of Object.entries<(page: Page) => Promise<Revealed>>(reveal)) {
         const { expected, restore } = await revealed(page);
         try {
           await expect
-            .poll(() => page.locator(`[data-case-value="${name}"]`).textContent(), engineWait)
+            .poll(() => page.locator(`[data-case-value="${name}"]`).textContent(), revealWait)
             .toBe(expected);
         } finally {
           await restore();

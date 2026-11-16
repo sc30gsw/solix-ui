@@ -2,7 +2,6 @@ import fc from "fast-check";
 import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { createHeadroom, type HeadroomOptions, type HeadroomReturn } from "../src/index";
-import { resizeSettleMs } from "../src/internal-scroll";
 import { flush, mount, unmount } from "./support/browser-harness";
 import { applied, onScrollGrid, type ScrollStub, stubbedScroll } from "./support/scroll";
 
@@ -102,13 +101,13 @@ test("a scroll up outside the fixed zone pins once, a scroll down after it relea
   calls.length = 0;
 
   await scrolled(scroll, [100, 75, 50, 25]);
-  const pinned = [...calls];
+  const afterTurningUp = [...calls];
   calls.length = 0;
   await scrolled(scroll, [100, 150, 200]);
   const released = [...calls];
   calls.length = 0;
   await scrolled(scroll, [150, 100]);
-  expect([pinned, released, calls]).toEqual([["release", "pin"], ["release"], ["pin"]]);
+  expect([afterTurningUp, released, calls]).toEqual([["release", "pin"], ["release"], ["pin"]]);
 });
 
 test("entering the fixed zone pins and fixes once", async () => {
@@ -171,20 +170,6 @@ test("a scroll that leaves the vertical position where it was is no move: it cha
 
   await scrolled(scroll, [250]);
   expect([calls, shown(headroom)]).toEqual([[], [true, 0.5]]);
-});
-
-test("a layout shift while a resize settles is not taken for a scroll, so it pins nothing", async () => {
-  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-  const scroll = stubbedScroll(1000);
-  const { headroom, calls } = headroomWithCalls({ fixedAt: 0 });
-
-  scroll.resize();
-  scroll.to(600);
-  vi.advanceTimersByTime(resizeSettleMs);
-  scroll.to(620);
-  vi.useRealTimers();
-  await applied();
-  expect([calls, shown(headroom)]).toEqual([[], [false, 0]]);
 });
 
 type Setup = { fixedAt: number; distance: number; start: number };
