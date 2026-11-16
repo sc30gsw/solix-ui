@@ -67,6 +67,10 @@ function prereleaseIdentifier(version: string): string {
   return String(semver.prerelease(version)?.[0]);
 }
 
+function carriesTheIdentifierOf(pinned: string, { version }: Published): boolean {
+  return prereleaseIdentifier(version) === prereleaseIdentifier(pinned);
+}
+
 function isOnTheVersionOf(pinned: string, { version }: Published): boolean {
   return (
     semver.major(version) === semver.major(pinned) &&
@@ -87,13 +91,15 @@ const stableChannel: Channel = {
 };
 const prereleasePinChannel: Channel = {
   describe:
-    "its newest stable release, or the newest prerelease of the version it pins; while it has no stable release, its newest prerelease of any version that carries the identifier of the pin, such as beta",
+    "its newest stable release, or the newest prerelease of the version it pins that carries the identifier of the pin, such as beta; while it has no stable release, its newest prerelease of any version that carries that identifier",
   versions: (published, { pinned }) =>
     published.some(isStable)
-      ? published.filter((release) => isStable(release) || isOnTheVersionOf(pinned, release))
-      : published.filter(
-          ({ version }) => prereleaseIdentifier(version) === prereleaseIdentifier(pinned),
-        ),
+      ? published.filter(
+          (release) =>
+            isStable(release) ||
+            (isOnTheVersionOf(pinned, release) && carriesTheIdentifierOf(pinned, release)),
+        )
+      : published.filter((release) => carriesTheIdentifierOf(pinned, release)),
 };
 const solidChannel: Channel = {
   describe: `the newest Solid ${solidMajor} release, stable once a stable ${solidMajor}.x is old enough to install`,

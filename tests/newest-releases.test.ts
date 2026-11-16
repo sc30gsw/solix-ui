@@ -254,11 +254,12 @@ test("while @solidjs/web has no stable Solid 2 yet, the canary takes the newest 
   expect(newestSolidRelease(lagging, policy, now)).toBe("2.0.0-rc.23");
 });
 
-test("a prerelease pin with no channel of its own is behind a newer prerelease of the version it pins, and behind that version once it is stable", () => {
+test("a prerelease pin with no channel of its own is behind a newer prerelease of the version it pins that carries the pin's own identifier, and behind that version once it is stable", () => {
   const betas: Release[] = [
     ["0.9.0", 99],
     ["1.0.0-beta.3", 50],
     ["1.0.0-beta.9", 20],
+    ["1.0.0-canary.12", 15],
     ["1.1.0-beta.1", 10],
   ];
 
