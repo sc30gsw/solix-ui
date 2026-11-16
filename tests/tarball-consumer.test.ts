@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
+  globSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -11,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { pnpmSettings, workspaceFile } from "../scripts/pnpm-settings";
@@ -21,8 +22,12 @@ import { browserType, enginesToVerify } from "../scripts/browser-engines.mjs";
 import { sharedSettings } from "../scripts/syntax";
 import { type RunningServer, startServer } from "./support/server-process";
 import {
+  type ExportTarget,
+  type Manifest,
   componentLibraries,
+  installedVp,
   libraryPackages,
+  packageManagerAnswerTimeout,
   repositoryRoot,
   rootManifest,
 } from "./support/workspace";
@@ -54,7 +59,16 @@ const servers: [label: string, port: number, command: string[]][] = [
   ],
 ];
 
+type Packed = {
+  path: string;
+  directory: string;
+  manifest: Manifest;
+  tarball: string;
+  files: string[];
+};
+
 let app: string;
+let packed: Packed[] = [];
 let clientModulesWithButtonOnly: string[] = [];
 
 function run(command: string, args: string[], directory: string): string {
@@ -116,19 +130,54 @@ function typeErrors(): string {
   }
 }
 
-function packInto(destination: string, directory: string): string {
-  const [tarball] = run("pnpm", ["pack", "--pack-destination", destination], directory)
-    .split("\n")
-    .filter((line) => line.endsWith(".tgz"));
-  return tarball;
+function packInto(destination: string, directory: string): Pick<Packed, "tarball" | "files"> {
+  const answer = execFileSync(
+    installedVp,
+    ["pm", "pack", "--json", "--pack-destination", destination],
+    {
+      cwd: directory,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: packageManagerAnswerTimeout,
+    },
+  );
+  const result: unknown = JSON.parse(answer);
+  const filename =
+    typeof result === "object" && result !== null && "filename" in result
+      ? result.filename
+      : undefined;
+  const files =
+    typeof result === "object" && result !== null && "files" in result ? result.files : undefined;
+  if (typeof filename !== "string" || !Array.isArray(files)) {
+    throw new Error(
+      `${directory}: the pack named no tarball or listed no files. It answered: ${answer}`,
+    );
+  }
+  return { tarball: filename, files: files.map((file: { path: string }) => file.path) };
+}
+
+function exportedFiles(target: ExportTarget | undefined): string[] {
+  if (target === undefined || target === null) return [];
+  if (typeof target === "string") return [target.replace(/^\.\//, "")];
+  return Object.values(target).flatMap(exportedFiles);
+}
+
+function filesBeside(directory: string, exported: string[]): string[] {
+  const folders = new Set(exported.flatMap((file) => file.split("/").slice(0, 1)));
+  return [...folders].flatMap((folder) =>
+    globSync(`${folder}/**`, { cwd: directory, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(directory, join(entry.parentPath, entry.name)).split(sep).join("/")),
+  );
 }
 
 beforeAll(() => {
   const { catalog } = pnpmSettings();
   app = mkdtempSync(join(tmpdir(), "tarball-consumer-"));
-  const tarballs = libraryPackages.map(({ directory, manifest }): [string, string] => [
+  packed = libraryPackages.map((library) => ({ ...library, ...packInto(app, library.directory) }));
+  const tarballs = packed.map(({ directory, manifest, tarball }): [string, string] => [
     manifest.name ?? directory,
-    `file:${packInto(app, directory)}`,
+    `file:${tarball}`,
   ]);
   const versionOf = (name: string) => catalog[name];
   mkdirSync(join(app, "src"));
@@ -215,6 +264,25 @@ test("a consumer that names every library by its packed tarball gets one copy of
   for (const name of fromOutsideTheRepository) {
     expect(installed(name).version, name).toBe(catalog[name]);
   }
+});
+
+test("every library exports a file, and the tarball the consumer installs holds every file its exports name and every file in their folders", () => {
+  const violations = packed.flatMap(({ path, directory, manifest, files }) => {
+    const exported = [...new Set(exportedFiles(manifest.exports))];
+    const needed = [...new Set([...exported, ...filesBeside(directory, exported)])];
+    return [
+      ...(exported.length === 0 ? [`${path}: package "${manifest.name}" exports no file.`] : []),
+      ...needed
+        .filter((file) => !files.includes(file))
+        .map(
+          (file) =>
+            `${path}: the packed tarball of "${manifest.name}" leaves out ${file}, which "exports" names or which sits in the folder of a file they name.`,
+        ),
+    ];
+  });
+
+  expect(packed.length).toBeGreaterThan(1);
+  expect(violations).toEqual([]);
 });
 
 test("the consumer's Vite configuration sets nothing but the Solid plugin: no dependency optimisation, no StyleX plugin, no alias", () => {

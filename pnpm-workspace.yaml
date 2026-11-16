@@ -8,8 +8,10 @@ catalog:
   "@babel/core": ^8.1.2
   "@babel/plugin-syntax-jsx": ^8.0.1
   "@babel/preset-typescript": ^8.0.7
+  "@solidjs/compiler": 2.0.0-rc.22
+  "@solidjs/signals": 2.0.0-rc.22
   "@solidjs/vite-plugin": 3.0.0-next.57
-  "@solidjs/web": 2.0.0-rc.21
+  "@solidjs/web": 2.0.0-rc.22
   "@stylexjs/babel-plugin": 0.19.2
   "@stylexjs/stylex": 0.19.2
   "@stylexjs/unplugin": 0.19.2
@@ -24,12 +26,14 @@ catalog:
   playwright: 1.65.1
   postcss: 8.5.33
   semver: 7.8.6
-  solid-js: 2.0.0-rc.21
+  solid-js: 2.0.0-rc.22
   solid2-agent-kit: 0.26.1
   typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   vite-plus: 1.6.0
 overrides:
+  "@solidjs/compiler": "catalog:"
+  "@solidjs/signals": "catalog:"
   vite@*: "catalog:"
 peerDependencyRules:
   allowAny:

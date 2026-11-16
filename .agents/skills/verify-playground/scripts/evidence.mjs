@@ -11,6 +11,9 @@ const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { evidenceDirectory, evidenceReports, fullReportFile, recordingFile, runDirectory, summaryFile } =
   await repositoryModule("scripts/evidence-summary.mjs");
+const { stopWith } = await repositoryModule("scripts/stop-process.mjs");
+const { installedVersions, listed } = await repositoryModule("scripts/repository.ts");
+const { solidPackages } = await repositoryModule("scripts/newest-releases.ts");
 const vp = join(root, "node_modules/.bin/vp");
 const output = join(root, evidenceDirectory);
 
@@ -32,10 +35,10 @@ const journeys = [
 ];
 
 function mustPass(label, command, args) {
-  const result = spawnSync(command, args, { cwd: root, encoding: "utf8" });
+  const result = spawnSync(command, args, { cwd: root, encoding: "utf8", maxBuffer: Infinity });
   if (result.status !== 0) {
-    process.stderr.write(`${result.stdout}${result.stderr}\n${label} failed. No evidence was recorded.\n`);
-    process.exit(1);
+    const cause = result.error ? `${result.error.message}\n` : "";
+    stopWith(`${result.stdout}${result.stderr}\n${cause}${label} failed. No evidence was recorded.\n`);
   }
   return result.stdout;
 }
@@ -68,8 +71,7 @@ try {
   spawnSync(join(scripts, "cleanup.sh"), [], { cwd: root, stdio: "inherit" });
 }
 if (failed.length > 0) {
-  process.stderr.write(`Journeys failed: ${failed.join(", ")}. No evidence was recorded.\n`);
-  process.exit(1);
+  stopWith(`Journeys failed: ${failed.join(", ")}. No evidence was recorded.\n`);
 }
 
 rmSync(output, { recursive: true, force: true });
@@ -105,13 +107,21 @@ const commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: root
 const uncommitted = execFileSync("git", ["status", "--porcelain"], { cwd: root, encoding: "utf8" }).trim();
 const recordedFrom = uncommitted === "" ? `\`${commit}\`` : `\`${commit}\` with uncommitted changes`;
 
-const app = "apps/playground";
+const installedSolid = installedVersions(solidPackages);
+const solidVersions = solidPackages
+  .map((name) => {
+    const versions = [
+      ...new Set(installedSolid.filter((each) => each.name === name).map(({ version }) => version)),
+    ];
+    return `${name} ${versions.length === 0 ? "not installed" : listed(versions)}`;
+  })
+  .join(", ");
 const lib = "packages/core";
 const { fullReport, summary } = evidenceReports({
   facts: [
     ["Recorded", `${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`],
     ["Source", recordedFrom],
-    ["Solid", `solid-js ${installedVersion(app, "solid-js")}, @solidjs/web ${installedVersion(app, "@solidjs/web")}`],
+    ["Solid", solidVersions],
     ["StyleX", `@stylexjs/stylex ${installedVersion(lib, "@stylexjs/stylex")}`],
     ["Vite+", `vite-plus ${installedVersion(".", "vite-plus")}`],
     ["Browser engines", browserEngines],

@@ -1,4 +1,5 @@
 import semver from "semver";
+import { listed } from "./repository.ts";
 
 export const heldBackFile = "scripts/held-back-releases.json";
 export const packageManagerPinName = "packageManager";
@@ -109,6 +110,8 @@ const solidChannel: Channel = {
 export const channels: Record<string, Channel> = {
   "solid-js": solidChannel,
   "@solidjs/web": solidChannel,
+  "@solidjs/compiler": solidChannel,
+  "@solidjs/signals": solidChannel,
   "@solidjs/vite-plugin": {
     describe: "its newest release on the major it pins, tagged or not",
     versions: (published, { pinned }) =>
@@ -416,7 +419,7 @@ export function newestSolidRelease(
     .find(({ version }) => solidPeersAccept(documents, version));
   if (release === undefined) {
     throw new Error(
-      `No Solid ${solidMajor} release is published for ${solidPackages.join(" and ")} alike, old enough to install and accepted by their peer ranges.`,
+      `No Solid ${solidMajor} release is published for ${listed(solidPackages)} alike, old enough to install and accepted by their peer ranges.`,
     );
   }
   return release.version;

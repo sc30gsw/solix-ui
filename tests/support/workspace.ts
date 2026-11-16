@@ -3,7 +3,17 @@ import { dirname, join, sep } from "node:path";
 import { manifestAt, repositoryRoot } from "../../scripts/repository";
 
 export { workspaceFile } from "../../scripts/pnpm-settings";
-export { type Manifest, repositoryRoot, rootManifest } from "../../scripts/repository";
+export {
+  type ExportTarget,
+  type Installed,
+  type Manifest,
+  installedVersions,
+  installedVp,
+  listed,
+  packageManagerAnswerTimeout,
+  repositoryRoot,
+  rootManifest,
+} from "../../scripts/repository";
 
 export const primitivesDirectory = join(repositoryRoot, "packages/primitives");
 
