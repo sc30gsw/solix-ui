@@ -50,6 +50,7 @@ test("the settings are the workspace file's own: the user's pnpm config and pnpm
 
   expect(readPnpmSettings(checkout)).toEqual({
     catalog: { "@solidjs/web": "2.0.0-rc.21", "solid-js": "2.0.0-rc.21" },
+    overrides: {},
     minimumReleaseAge: undefined,
     minimumReleaseAgeStrict: false,
     minimumReleaseAgeExclude: [],

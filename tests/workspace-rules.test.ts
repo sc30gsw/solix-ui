@@ -16,14 +16,16 @@ import {
   ts,
 } from "../scripts/syntax";
 import { solidPackages } from "../scripts/newest-releases";
-import { pnpmSettings } from "../scripts/pnpm-settings";
+import { type PnpmSettings, pnpmSettings } from "../scripts/pnpm-settings";
 import {
   type ExportTarget,
+  type Installed,
   type Manifest,
   installedVersions,
   installedVp,
   libraryNames,
   libraryPackages,
+  listed,
   outsideGeneratedOrInstalled,
   packageManagerAnswerTimeout,
   packages,
@@ -55,6 +57,7 @@ const allowedForPrimitives = ["solid-js"];
 const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name ?? ""];
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
+const catalogReference = "catalog:";
 const webStandardsOnly =
   "A library is built on web standards and has no runtime dependency: it names Solid, StyleX and the primitives package as peers. Use a platform feature or a fallback written in this repository.";
 
@@ -128,7 +131,7 @@ test("no script calls Vite or a replaced tool directly", () => {
 test("every dependency version comes from the catalog or the workspace", () => {
   const violations = packages.flatMap(({ path, manifest }) =>
     installedDependencies(manifest)
-      .filter(([, version]) => version !== "catalog:" && !version.startsWith("workspace:"))
+      .filter(([, version]) => version !== catalogReference && !version.startsWith("workspace:"))
       .map(
         ([name, version]) =>
           `${path}: "${name}" is pinned to "${version}". Add it to the catalog in pnpm-workspace.yaml and write "catalog:" here.`,
@@ -526,8 +529,36 @@ test("source code carries no comment except a doc comment on a public API", () =
   expect(comments, "Remove the comment and say it with a name, a constant or a test.").toEqual([]);
 });
 
-test("every package of a Solid release is installed at the version the catalog pins, wherever it is installed", () => {
-  const { catalog } = pnpmSettings();
+function installAdvice(
+  name: string,
+  { catalog, overrides }: PnpmSettings,
+  installed: readonly Installed[],
+): string {
+  if (catalog[name] === undefined) {
+    return `Pin it in the catalog in ${workspaceFile} and override it there with "${catalogReference}", so a package that brings it in cannot hold a different release.`;
+  }
+  const askers = [
+    ...(overrides[name] === catalogReference ? [`the overrides of ${workspaceFile}`] : []),
+    ...packages
+      .filter(({ manifest }) =>
+        installedDependencies(manifest).some(
+          ([dependency, version]) => dependency === name && version === catalogReference,
+        ),
+      )
+      .map(({ path }) => path),
+  ];
+  const atTheCatalog = installed.some(
+    (each) => each.name === name && each.version === catalog[name],
+  );
+  if (overrides[name] === catalogReference || (askers.length > 0 && !atTheCatalog)) {
+    return `It is asked for with "${catalogReference}" in ${listed(askers)}, so the install does not follow the catalog: run \`vp install\` so the lockfile and the install take the catalog's version.`;
+  }
+  return `Override it in ${workspaceFile} with "${catalogReference}", so a package that brings it in cannot hold a different release.`;
+}
+
+test("every package on the Solid 2 channel is pinned to one release and installed only at it", () => {
+  const settings = pnpmSettings();
+  const { catalog } = settings;
   const installed = installedVersions(solidPackages);
   const [first = ""] = solidPackages;
   const violations = [
@@ -535,7 +566,7 @@ test("every package of a Solid release is installed at the version the catalog p
       .filter((name) => catalog[name] !== catalog[first])
       .map(
         (name) =>
-          `${workspaceFile}: pin ${name} to ${catalog[first] ?? "the release"} ${first} is pinned to, not ${catalog[name] ?? "nothing"}: the packages of a Solid release move together.`,
+          `${workspaceFile}: pin ${name} to ${catalog[first] ?? "a release"}, the release ${first} is pinned to, not ${catalog[name] ?? "nothing"}: the packages of a Solid release move together.`,
       ),
     ...solidPackages
       .filter((name) => !installed.some((each) => each.name === name))
@@ -544,7 +575,7 @@ test("every package of a Solid release is installed at the version the catalog p
       .filter(({ name, version }) => version !== catalog[name])
       .map(
         ({ name, version }) =>
-          `${name} is installed at ${version}, not ${catalog[name] ?? "a version"} the catalog in ${workspaceFile} pins. Pin it in the catalog and override it there with "catalog:", so a package that brings it in cannot hold an older release.`,
+          `${name} is installed at ${version}, not ${catalog[name] ?? "a version"}, which the catalog in ${workspaceFile} pins. ${installAdvice(name, settings, installed)}`,
       ),
   ];
 

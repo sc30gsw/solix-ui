@@ -9,6 +9,7 @@ export const workspaceFile = "pnpm-workspace.yaml";
 
 export type PnpmSettings = {
   catalog: Record<string, string>;
+  overrides: Record<string, string>;
   minimumReleaseAge: number | undefined;
   minimumReleaseAgeStrict: boolean;
   minimumReleaseAgeExclude: string[];
@@ -17,6 +18,7 @@ export type PnpmSettings = {
 
 export type RawSettings = {
   catalog?: Record<string, string>;
+  overrides?: Record<string, string>;
   minimumReleaseAge?: number;
   minimumReleaseAgeStrict?: boolean;
   minimumReleaseAgeExclude?: string[] | null;
@@ -45,6 +47,7 @@ export function settingsFrom(raw: RawSettings): PnpmSettings {
   }
   return {
     catalog: raw.catalog,
+    overrides: raw.overrides ?? {},
     minimumReleaseAge: raw.minimumReleaseAge,
     minimumReleaseAgeStrict: raw.minimumReleaseAgeStrict ?? false,
     minimumReleaseAgeExclude: raw.minimumReleaseAgeExclude ?? [],
