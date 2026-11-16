@@ -137,7 +137,7 @@ export function readOn<T, R extends EventTarget, C = undefined>(
     if (!resolved) return;
     const deliverRead = () => deliver(read(resolved, config));
     deliverRead();
-    keep(watchEvents(resolved, types, deliverRead, { ...options, ownEventsOnly: true }));
+    keep(watchEvents(resolved, types, deliverRead, options));
   };
 }
 

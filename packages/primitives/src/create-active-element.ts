@@ -25,9 +25,9 @@ type ActiveElementConfig = { deep: boolean; watchRemovals: boolean };
 /**
  * The element that has focus in the document, `document.activeElement`, or the body when nothing
  * has. It is read again on every `focusin` and `focusout`, in the capture phase, so a widget that
- * stops their propagation does not hide them, and on a `blur` with no element taking focus, as
- * when the window loses it. Its loading value is `null`, and so is its value where the document
- * leaves `activeElement` out.
+ * stops their propagation does not hide them, and on the window's own `blur`, as when focus moves
+ * into a frame. Its loading value is `null`, and so is its value where the document leaves
+ * `activeElement` out.
  *
  * Both options are live, and a change to a different value reads the element again. Where the
  * browser has no `MutationObserver`, removals are not watched.
@@ -60,11 +60,7 @@ export function createActiveElement(options?: ActiveElementOptions): BrowserValu
       keep(() => removals.stop());
       read();
       keep(watchEvents(page, ["focusin", "focusout"], read));
-      keep(
-        watchEvents(window, ["blur"], (event) => {
-          if (event.relatedTarget === null) read();
-        }),
-      );
+      keep(watchEvents(window, ["blur"], read));
     },
     {
       loadingValue: null,

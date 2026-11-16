@@ -1,4 +1,3 @@
-import { isWindow } from "./internal-node";
 import type { ListenerOptions } from "./types";
 
 type EventMapOf<T> = T extends Window
@@ -69,27 +68,19 @@ export function disposeAll(disposers: readonly (() => void)[]): () => void {
   };
 }
 
-function isAimedAt(event: Event, target: EventTarget): boolean {
-  if (event.target === target) return true;
-  return isWindow(target) && event.target === Reflect.get(target, "document");
-}
-
-export type WatchOptions = { passive?: boolean; ownEventsOnly?: boolean };
-
 export function watchEvents<T extends EventTarget, K extends string>(
   target: T,
   types: readonly K[],
   listener: (event: EventOf<T, K>) => void,
-  options?: WatchOptions,
+  options?: { passive?: boolean },
 ): () => void {
-  const aimedOnly = options?.ownEventsOnly === true || isWindow(target);
   return disposeAll(
     types.map((type) =>
       listen<T, K>(
         target,
         { ...listenerSettings(type, true), passive: options?.passive },
         listener,
-        (event) => !aimedOnly || isAimedAt(event, target),
+        (event) => event.bubbles || event.target === target,
       ),
     ),
   );

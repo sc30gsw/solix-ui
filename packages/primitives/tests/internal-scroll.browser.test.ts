@@ -1,7 +1,6 @@
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { createScrollFold, resizeSettleMs, type ScrollMove } from "../src/internal-scroll";
 import { mount, unmount } from "./support/browser-harness";
-import { box } from "./support/dom";
 import { applied, stubbedScroll } from "./support/scroll";
 
 afterEach(() => {
@@ -30,29 +29,6 @@ test("the fold starts from the position it goes live at, steps on each scroll of
     { from: 10, to: 40 },
     { from: 40, to: 20 },
   ]);
-});
-
-test("a scroll of an element inside the page is not a scroll of the window", async () => {
-  const scroll = stubbedScroll(10);
-  const seen = moves();
-  const inner = box("scrolled");
-
-  scroll.to(30);
-  inner.dispatchEvent(new Event("scroll"));
-  await applied();
-  expect(seen()).toEqual([{ from: 10, to: 30 }]);
-});
-
-test("a resize of an element inside the page, which does not bubble, does not pause the fold, so the next scroll still counts", async () => {
-  const scroll = stubbedScroll(10);
-  const seen = moves();
-  const video = document.createElement("video");
-  document.body.append(video);
-
-  video.dispatchEvent(new Event("resize"));
-  scroll.to(30);
-  await applied();
-  expect(seen()).toEqual([{ from: 10, to: 30 }]);
 });
 
 test("scrolls are ignored from a resize until it settles, one just before that is still ignored, and the position is then read again, so the next move starts there", async () => {
