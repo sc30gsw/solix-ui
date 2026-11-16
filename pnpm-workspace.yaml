@@ -23,7 +23,7 @@ catalog:
   postcss: 8.5.33
   semver: 7.8.6
   solid-js: 2.0.0-rc.21
-  solid2-agent-kit: 0.26.0
+  solid2-agent-kit: 0.26.1
   typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   vite-plus: 1.6.0

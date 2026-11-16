@@ -228,8 +228,8 @@ catalogs:
       specifier: 2.0.0-rc.21
       version: 2.0.0-rc.21
     solid2-agent-kit:
-      specifier: 0.26.0
-      version: 0.26.0
+      specifier: 0.26.1
+      version: 0.26.1
     typescript:
       specifier: 7.0.2
       version: 7.0.2
@@ -285,7 +285,7 @@ importers:
         version: 2.0.0-rc.21
       solid2-agent-kit:
         specifier: 'catalog:'
-        version: 0.26.0
+        version: 0.26.1
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1780,8 +1780,8 @@ packages:
     resolution: {integrity: sha512-0Z8/qiJKnK6A2g8QspGthwxR0W8WauMOD2/LQtNmxBT8gpZkKaXmo/fdek/+cB+84w4HYejWJixSAn4fcAI0Uw==}
     engines: {node: '>=22.12.0'}
 
-  solid2-agent-kit@0.26.0:
-    resolution: {integrity: sha512-ZLbi2IUtYbeE2ohYXqRuCSRSi802uiDH0+3FnLMAF5eSSRr3RBbFVLZFENxM+xVjj3np3xO0ajEIjsh0OeoOVA==}
+  solid2-agent-kit@0.26.1:
+    resolution: {integrity: sha512-YKWh0M250CLquHuV0thcc0z1WtBsRLkSGOYEQfqr8O5L3uocF2KSBD7rekskUwsZ771NwaUfyDG78CX2WroC2A==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -3051,7 +3051,7 @@ snapshots:
       seroval: 1.7.0
       seroval-plugins: 1.7.0(seroval@1.7.0)
 
-  solid2-agent-kit@0.26.0: {}
+  solid2-agent-kit@0.26.1: {}
 
   source-map-js@1.2.2: {}
 
