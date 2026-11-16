@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { createActiveElement } from "../src/index";
-import { flush, mount, record, unmount } from "./support/browser-harness";
-import { box, button, engineWait, witnessed } from "./support/dom";
+import { flush, mount, record, unmount, watch } from "./support/browser-harness";
+import { box, button, engineWait, nextTask, tab, witnessed } from "./support/dom";
 import { replaced, withoutGlobal } from "./support/replace";
 
 function shadowHost(): { host: HTMLDivElement; inner: HTMLButtonElement } {
@@ -26,6 +26,20 @@ test("it reads the focused element at once, the body when nothing has focus, and
   await expect.poll(active, engineWait).toBe(second);
   second.blur();
   await expect.poll(active, engineWait).toBe(document.body);
+});
+
+test("one Tab reports the element that took focus, and not the body between the two", async () => {
+  const first = button("first");
+  const second = button("second");
+  first.focus();
+  const { seen } = mount(() => ({ seen: watch(createActiveElement()) }));
+  const arrived = record(second, "focusin");
+
+  await tab();
+  await witnessed(arrived, (events) => events.length > 0, "focus arriving on the second element");
+  await nextTask();
+  flush();
+  expect(seen).toEqual([first, second]);
 });
 
 test("a blur with no element taking focus reads it again, even when the focusout is stopped", async () => {

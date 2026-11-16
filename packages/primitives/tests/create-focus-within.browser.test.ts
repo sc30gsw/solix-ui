@@ -1,7 +1,8 @@
 import { expect, test } from "vite-plus/test";
 import { createFocusWithin, type FocusWithinOptions } from "../src/index";
-import { flush, mount } from "./support/browser-harness";
-import { attached, box, button, nextTask, reported } from "./support/dom";
+import { flush, mount, record } from "./support/browser-harness";
+import { attached, box, button, nextTask, reported, tab, witnessed } from "./support/dom";
+import { replaced } from "./support/replace";
 
 function region(): {
   element: HTMLDivElement;
@@ -45,6 +46,59 @@ test("focus entering calls onFocus once, moving inside calls nothing, and leavin
   outside.focus();
   await nextTask();
   expect([inside, within.focused()]).toEqual([true, false]);
+  expect(calls).toEqual(["focus focusin", "blur focusout"]);
+});
+
+test("a Tab from one element inside to the next calls nothing", async () => {
+  const { element, first, second } = region();
+  const { within, calls } = withCalls();
+  within.ref(element);
+  flush();
+  first.focus();
+  await nextTask();
+  const arrived = record(second, "focusin");
+
+  await tab();
+  await witnessed(arrived, (seen) => seen.length > 0, "focus arriving on the second element");
+  await nextTask();
+  expect({ calls, focused: within.focused() }).toEqual({
+    calls: ["focus focusin"],
+    focused: true,
+  });
+});
+
+test("a focusout that names an element inside as the next one calls nothing, in an engine where nothing is focused in the microtask after it", async () => {
+  const { element, first, second } = region();
+  const { within, calls } = withCalls();
+  within.ref(element);
+  flush();
+  first.focus();
+  await nextTask();
+
+  const restore = replaced(element, "matches", () => false);
+  try {
+    first.dispatchEvent(
+      new FocusEvent("focusout", { bubbles: true, composed: true, relatedTarget: second }),
+    );
+    await nextTask();
+  } finally {
+    restore();
+  }
+  expect({ calls, focused: within.focused() }).toEqual({
+    calls: ["focus focusin"],
+    focused: true,
+  });
+});
+
+test("focus leaving to an element outside calls onBlur before the code that moved it returns", () => {
+  const { element, first } = region();
+  const outside = button("outside");
+  const { within, calls } = withCalls();
+  within.ref(element);
+  flush();
+
+  first.focus();
+  outside.focus();
   expect(calls).toEqual(["focus focusin", "blur focusout"]);
 });
 
@@ -138,7 +192,7 @@ test.each(removals)(
 );
 
 test.each(removals)(
-  "removing the focused element and focusing another inside in the same task calls nothing, in $engine",
+  "removing the focused element and focusing another inside before the code returns calls nothing, in $engine",
   async ({ remove }) => {
     const { element, first, second } = region();
     const { within, calls } = withCalls();
@@ -155,6 +209,22 @@ test.each(removals)(
     expect({ calls, focused: within.focused() }).toEqual({ calls: [], focused: true });
   },
 );
+
+test("in a shadow root, removing the focused element makes it false and calls onBlur once, in an engine that sends no focusout for the removal", async () => {
+  const root = box("host").attachShadow({ mode: "open" });
+  const element = attached(document.createElement("div"), root);
+  const inner = button("inner", element);
+  const { within, calls } = withCalls();
+  within.ref(element);
+  flush();
+  inner.focus();
+  await nextTask();
+  calls.length = 0;
+
+  silencingFocusout(() => inner.remove());
+  await reported(() => !within.focused(), "focus leaving the removed element");
+  expect(calls).toEqual(["blur without an event"]);
+});
 
 test("onBlur gets the browser's focusout where it sent one, and no event where the element lost focus without one", async () => {
   const { element, first } = region();
