@@ -1,6 +1,6 @@
 # Roadmap
 
-Solix UI is a component library for Solid 2.0, styled with StyleX. This page says what will come before v1.0 and what will come after it.
+Solix UI is a component library for Solid 2.0, styled with StyleX. This page says what will come before v1.0, what will come after it, and which choices wait on purpose.
 
 ## v1.0
 
@@ -47,3 +47,15 @@ These will follow v1.0:
 - Code highlighting.
 - A navigation progress bar.
 - A scheduler.
+
+## Revisits
+
+A revisit is a choice deferred on purpose. Each one says why not now and gives a condition. The weekly `Newest releases` workflow evaluates every condition against the npm registry and fails, naming the revisit, once one is met.
+
+### ReactiveScript
+
+`@reactivescript/compiler` and `@reactivescript/runtime` make a Solid language whose compiler refuses reactive mistakes.
+
+- Why not now: It is experimental: 0.x, first published 2026-11-09, with breaking changes promised until Solid 2.0 is final. Compiled `.rx` adds a runtime package that every consumer would install. It does not fit the library's Babel and StyleX build or its TypeScript 7 rules.
+- When it is reconsidered: for the playground first, not the library source.
+- Condition: a stable release old enough to install under the repository's `minimumReleaseAge` exists for `solid-js@^2.0.0` and `@reactivescript/compiler@>=1.0.0`.
