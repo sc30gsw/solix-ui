@@ -5,99 +5,23 @@ import {
   LIBRARY_CASCADE_LAYER,
 } from "../../../packages/core/build-pipeline.mjs";
 import { computed, inEveryEngine, openPage, type OpenPage } from "./support/playground";
-import { sdkStyles, startAt, stateOf, tabList, tabNamed, tabsRegion } from "./support/tabs";
+import {
+  account,
+  keyboardTable,
+  manual,
+  optional,
+  sdkStyles,
+  startAt,
+  stateOf,
+  tabList,
+  tabNamed,
+  tabsRegion,
+  vertical,
+} from "./support/tabs";
 
 const url = inject("playgroundUrl");
 const axeSource = join(import.meta.dirname, "../../../node_modules/axe-core/axe.min.js");
 const wcag22LevelAOrAA = /^wcag2\d?a{1,2}$/;
-
-type KeyboardCase = {
-  list: string;
-  direction?: "rtl";
-  start: string;
-  keys: string[];
-  focused: string;
-  selected: string;
-};
-
-const account = "Account";
-const manual = "Manual vertical";
-const vertical = "Vertical";
-const optional = "Optional";
-const keyboardTable: KeyboardCase[] = [
-  {
-    list: account,
-    start: "Overview",
-    keys: ["ArrowRight"],
-    focused: "Members",
-    selected: "Members",
-  },
-  {
-    list: account,
-    start: "Members",
-    keys: ["ArrowLeft"],
-    focused: "Overview",
-    selected: "Overview",
-  },
-  {
-    list: account,
-    start: "Overview",
-    keys: ["ArrowLeft"],
-    focused: "Settings",
-    selected: "Settings",
-  },
-  {
-    list: account,
-    start: "Settings",
-    keys: ["ArrowRight"],
-    focused: "Overview",
-    selected: "Overview",
-  },
-  { list: account, start: "Members", keys: ["Home"], focused: "Overview", selected: "Overview" },
-  { list: account, start: "Overview", keys: ["End"], focused: "Settings", selected: "Settings" },
-  { list: account, start: "Members", keys: ["ArrowDown"], focused: "Members", selected: "Members" },
-  { list: account, start: "Members", keys: ["ArrowUp"], focused: "Members", selected: "Members" },
-  {
-    list: account,
-    start: "Overview",
-    keys: ["ArrowRight", "ArrowRight"],
-    focused: "Settings",
-    selected: "Settings",
-  },
-  {
-    list: account,
-    direction: "rtl",
-    start: "Overview",
-    keys: ["ArrowLeft"],
-    focused: "Members",
-    selected: "Members",
-  },
-  {
-    list: account,
-    direction: "rtl",
-    start: "Members",
-    keys: ["ArrowRight"],
-    focused: "Overview",
-    selected: "Overview",
-  },
-  { list: manual, start: "Two", keys: ["ArrowDown"], focused: "Three", selected: "Two" },
-  { list: manual, start: "Two", keys: ["ArrowDown", "Enter"], focused: "Three", selected: "Three" },
-  { list: manual, start: "Two", keys: ["ArrowUp", " "], focused: "One", selected: "One" },
-  { list: manual, start: "Three", keys: ["ArrowDown"], focused: "Three", selected: "Three" },
-  { list: manual, start: "One", keys: ["ArrowUp"], focused: "One", selected: "One" },
-  { list: manual, start: "Two", keys: ["ArrowRight"], focused: "Two", selected: "Two" },
-  { list: manual, start: "Two", keys: ["Home"], focused: "One", selected: "Two" },
-  { list: manual, start: "Two", keys: ["End"], focused: "Three", selected: "Two" },
-  { list: vertical, start: "Beta", keys: ["ArrowUp"], focused: "Alpha", selected: "Alpha" },
-  { list: vertical, start: "Alpha", keys: ["ArrowUp"], focused: "Gamma", selected: "Gamma" },
-  { list: vertical, start: "Gamma", keys: ["ArrowDown"], focused: "Alpha", selected: "Alpha" },
-  { list: vertical, start: "Alpha", keys: ["ArrowDown"], focused: "Beta", selected: "Beta" },
-  { list: vertical, start: "Beta", keys: ["ArrowLeft"], focused: "Beta", selected: "Beta" },
-  { list: optional, start: "Files", keys: ["Home"], focused: "Notes", selected: "Notes" },
-  { list: optional, start: "Notes", keys: ["End"], focused: "Files", selected: "Files" },
-  { list: optional, start: "Files", keys: ["ArrowRight"], focused: "Notes", selected: "Notes" },
-  { list: optional, start: "Notes", keys: ["ArrowLeft"], focused: "Files", selected: "Files" },
-];
 
 inEveryEngine((browser) => {
   describe("Tabs before any script runs", () => {
@@ -118,8 +42,13 @@ inEveryEngine((browser) => {
         selected: "Overview",
         focused: null,
         shown: ["Overview panel"],
+        tabStops: ["Overview"],
       });
-      expect(await stateOf(page, optional)).toEqual({ selected: null, focused: null, shown: [] });
+      expect(await stateOf(page, optional)).toMatchObject({
+        selected: null,
+        focused: null,
+        shown: [],
+      });
       expect(await page.getByText("Members panel").getAttribute("class")).toContain("sx-display");
       expect(await sdkStyles(page, BEHAVIOUR_SDK_LAYER)).toEqual([]);
     });
@@ -167,6 +96,7 @@ inEveryEngine((browser) => {
         selected: "Members",
         focused: "Members",
         shown: ["Members panel"],
+        tabStops: ["Members"],
       });
       expect(await members.getAttribute("id")).toBe("account-tab-members");
       expect(await members.getAttribute("aria-controls")).toBe("account-panel-members");

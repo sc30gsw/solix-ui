@@ -86,10 +86,11 @@ export function TabsTab(props: TabsTabProps) {
             const base = tabs.baseId();
             return base === undefined ? undefined : `${base}-tab-${props.value}`;
           },
-          onClick: (event: MouseEvent) => {
+          onClick: (event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
             if (!tabs.allowTabDeactivation()) return;
             if (tabs.behaviour.api.getValue() !== props.value) return;
             event.preventDefault();
+            event.currentTarget.focus({ preventScroll: true });
             tabs.behaviour.api.setValue(null);
           },
         },
