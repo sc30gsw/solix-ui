@@ -11,6 +11,9 @@ export type Manifest = {
   devEngines?: Record<string, unknown>;
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  bundledDependencies?: string[] | boolean;
+  bundleDependencies?: string[] | boolean;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
 };

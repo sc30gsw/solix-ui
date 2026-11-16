@@ -13,7 +13,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { BEHAVIOUR_SDK_LAYER } from "../packages/core/build-pipeline.mjs";
 import { pnpmSettings, workspaceFile } from "../scripts/pnpm-settings";
+import { allowedRuntimeDependencies } from "../scripts/runtime-dependencies";
 import { stateOf, tabNamed } from "../apps/playground/tests/support/tabs";
 import { inEveryEngine } from "./support/served-app";
 import { type RunningServer, startServer } from "./support/server-process";
@@ -30,7 +32,9 @@ const fixtures = join(repositoryRoot, "tests/fixtures/tarball-consumer");
 const builtServerPort = 4323;
 const developmentServerPort = 4324;
 const installAndBuildTimeout = 240_000;
-const sdk = /ui-sdk|data-slot/;
+const fromOutsideTheRepository = allowedRuntimeDependencies().flatMap(({ dependency, seam }) =>
+  seam === undefined ? [] : [dependency],
+);
 const settingsAConsumerWrites = ["plugins"];
 const servers: [label: string, port: number, command: string[]][] = [
   ["the built server in plain Node", builtServerPort, ["node", "dist/server/node.js"]],
@@ -150,13 +154,15 @@ test("a consumer installed from the packed tarball gets the SDK as a dependency 
   };
   const { catalog } = pnpmSettings();
 
+  expect(fromOutsideTheRepository).not.toEqual([]);
   expect(
     Object.keys({ ...consumer.dependencies, ...consumer.devDependencies }).filter((name) =>
-      name.startsWith("@ui-sdk/"),
+      fromOutsideTheRepository.includes(name),
     ),
   ).toEqual([]);
-  expect(installed("@ui-sdk/core").version).toBe(catalog["@ui-sdk/core"]);
-  expect(installed("@ui-sdk/solid").version).toBe(catalog["@ui-sdk/solid"]);
+  for (const name of fromOutsideTheRepository) {
+    expect(installed(name).version, name).toBe(catalog[name]);
+  }
 });
 
 test("the consumer's Vite configuration sets nothing but the Solid plugin: no dependency optimisation, no StyleX plugin, no alias", () => {
@@ -169,8 +175,8 @@ test("the consumer's Vite configuration sets nothing but the Solid plugin: no de
 
 test("a consumer that renders only a Button ships none of the SDK, and one that renders Tabs ships it", () => {
   expect(clientWithButtonOnly.length).toBeGreaterThan(0);
-  expect(sdk.test(clientWithButtonOnly)).toBe(false);
-  expect(sdk.test(clientScripts())).toBe(true);
+  expect(clientWithButtonOnly.includes(BEHAVIOUR_SDK_LAYER)).toBe(false);
+  expect(clientScripts().includes(BEHAVIOUR_SDK_LAYER)).toBe(true);
 });
 
 inEveryEngine((browser) => {

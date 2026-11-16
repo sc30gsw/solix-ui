@@ -2,6 +2,7 @@ import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
+import { allowedRuntimeDependencies, loads } from "../scripts/runtime-dependencies";
 import { tokenValues } from "../scripts/tokens";
 import {
   calledDeclaration,
@@ -46,8 +47,10 @@ const builtLibraryFile = "packages/core/tests/built-library.ts";
 const fixturesFile = "packages/core/tests/fixtures.ts";
 const testDirectory = "tests";
 const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
-const behaviourSdk = /^@ui-sdk\//;
-const behaviourSeam = "packages/core/src/headless.ts";
+const importedThroughASeam = allowedRuntimeDependencies().flatMap(({ dependency, seam }) =>
+  seam === undefined ? [] : [{ dependency, seam }],
+);
+const seams = [...new Set(importedThroughASeam.map(({ seam }) => seam))];
 const behaviourType = "Behaviour";
 const behaviourBinder = "bind";
 
@@ -92,7 +95,7 @@ function bindsABehaviour(call: ts.CallExpression): boolean {
   return (
     declared !== undefined &&
     member !== undefined &&
-    relativePath(fileOf(declared)) === behaviourSeam &&
+    seams.includes(relativePath(fileOf(declared))) &&
     ts.isPropertySignatureDeclaration(member) &&
     member.name.getText() === behaviourBinder &&
     findAncestor(member, ts.isTypeAliasDeclaration)?.name.text === behaviourType
@@ -477,7 +480,7 @@ function problemsWith({ name, file, source }: Component): string[] {
     consumer?.getText() !== "props"
   ) {
     report(
-      `call ${partsHelper} once, in a statement of the component's own body, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}, or as \`const { ${rootBinding}, ${partBinding} } = behaviour.${behaviourBinder}(${partsHelper}(...), { ... })\` with a behaviour from ${behaviourSeam}, so each bound part takes its slot there and none inline in JSX.`,
+      `call ${partsHelper} once, in a statement of the component's own body, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}, or as \`const { ${rootBinding}, ${partBinding} } = behaviour.${behaviourBinder}(${partsHelper}(...), { ... })\` with a behaviour from ${seams.join(" or ")}, so each bound part takes its slot there and none inline in JSX.`,
     );
     return problems;
   }
@@ -532,42 +535,56 @@ test("every component is written the one way: one function, and its root and eve
   expect([...components.flatMap(problemsWith), ...boundElsewhere]).toEqual([]);
 });
 
-function behaviourSdkImports(file: string, source: ts.SourceFile): string[] {
+function loadsOutsideTheSeam(file: string, source: ts.SourceFile): string[] {
   return descendants(source).flatMap((node) => {
     const specifier = moduleSpecifierOf(node);
-    return specifier && ts.isStringLiteralLikeNode(specifier) && behaviourSdk.test(specifier.text)
-      ? [
-          `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText().split("\n")[0]} loads the behaviour SDK. Only ${behaviourSeam} imports it; take the behaviour from createBehaviour there.`,
-        ]
-      : [];
+    if (!specifier || !ts.isStringLiteralLikeNode(specifier)) return [];
+    return importedThroughASeam
+      .filter(({ dependency, seam }) => loads(dependency, specifier.text) && file !== seam)
+      .map(
+        ({ dependency, seam }) =>
+          `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText().split("\n")[0]} loads ${dependency}. Only ${seam} imports it; take what you need from that module.`,
+      );
   });
 }
 
-test(`no file but ${behaviourSeam} loads @ui-sdk, by an import, an export, a dynamic import, a require or an import type`, () => {
-  const files = scriptFiles.filter((file) => file !== behaviourSeam);
-  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
-  const violations = files.flatMap((file, index) => behaviourSdkImports(file, sources[index]));
-  const flagged = behaviourSdkImports(
+test("no file but its seam loads a runtime dependency the allow-list names with one, by an import, an export, a dynamic import, a require or an import type", () => {
+  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
+  const violations = scriptFiles.flatMap((file, index) =>
+    loadsOutsideTheSeam(file, sources[index]),
+  );
+  const [{ dependency }] = importedThroughASeam;
+  const flagged = loadsOutsideTheSeam(
     "packages/core/src/Elsewhere.tsx",
     parseText(
       [
-        'import { tabs } from "@ui-sdk/core/tabs";',
-        'import type { Primitive } from "@ui-sdk/core";',
-        'export { usePrimitive } from "@ui-sdk/solid/primitive";',
-        'const later = await import("@ui-sdk/solid");',
-        'const required = require("@ui-sdk/core");',
-        'type Handle = import("@ui-sdk/solid/primitive").PrimitiveHandle<never>;',
+        `import { tabs } from "${dependency}/tabs";`,
+        `import type { Primitive } from "${dependency}";`,
+        `export { usePrimitive } from "${dependency}/primitive";`,
+        `const later = await import("${dependency}");`,
+        `const required = require("${dependency}");`,
+        `type Handle = import("${dependency}/primitive").PrimitiveHandle<never>;`,
         'import { createBehaviour } from "./headless";',
-        'const named = "@ui-sdk/core";',
+        `const named = "${dependency}";`,
+        `import { other } from "${dependency}-and-more";`,
       ].join("\n"),
       ".tsx",
     ),
   ).map((violation) => /^[^:]+:(\d+):/.exec(violation)?.[1]);
 
-  expect(scriptFiles).toContain(behaviourSeam);
-  expect(
-    behaviourSdkImports(behaviourSeam, parse(join(repositoryRoot, behaviourSeam))),
-  ).not.toEqual([]);
+  for (const { dependency: imported, seam } of importedThroughASeam) {
+    expect(
+      descendants(parse(join(repositoryRoot, seam))).some((node) => {
+        const specifier = moduleSpecifierOf(node);
+        return (
+          specifier !== undefined &&
+          ts.isStringLiteralLikeNode(specifier) &&
+          loads(imported, specifier.text)
+        );
+      }),
+      `${seam} imports ${imported}`,
+    ).toBe(true);
+  }
   expect(violations).toEqual([]);
   expect(flagged).toEqual(["1", "2", "3", "4", "5", "6"]);
 });
