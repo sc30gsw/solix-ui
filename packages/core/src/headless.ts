@@ -122,7 +122,12 @@ type PassesChildrenThrough<Root> = "children" extends keyof Root
     : true
   : false;
 
-type RendersItsChildrenItself<Root> = PassesChildrenThrough<Root> extends true ? never : unknown;
+type RendersItsChildrenItself<Root> =
+  PassesChildrenThrough<Root> extends true
+    ? {
+        readonly "bind takes no root that passes children through: keep children off the root in createParts and render them yourself": never;
+      }
+    : unknown;
 
 export type Behaviour<P extends Primitive> = {
   readonly api: TypesOf<P>["api"];
