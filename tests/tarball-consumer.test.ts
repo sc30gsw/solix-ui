@@ -16,6 +16,7 @@ import { join, relative, resolve, sep } from "node:path";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { pnpmSettings, workspaceFile } from "../scripts/pnpm-settings";
+import { solidPackages } from "../scripts/newest-releases";
 import { allowedRuntimeDependencyNames } from "../scripts/runtime-dependencies";
 import { stateOf, tabNamed } from "../apps/playground/tests/support/tabs";
 import { browserType, enginesToVerify } from "../scripts/browser-engines.mjs";
@@ -25,6 +26,7 @@ import {
   type ExportTarget,
   type Manifest,
   componentLibraries,
+  installedVersions,
   installedVp,
   libraryPackages,
   packageManagerAnswerTimeout,
@@ -214,11 +216,16 @@ beforeAll(() => {
       include: ["src"],
     }),
   );
+  const pinnedWithTheRuntime = Object.fromEntries(
+    solidPackages.map((name) => [name, versionOf(name)]),
+  );
   writeFileSync(
     join(app, workspaceFile),
     [
       "overrides:",
-      `  vite@*: "${versionOf("vite")}"`,
+      ...Object.entries({ "vite@*": versionOf("vite"), ...pinnedWithTheRuntime }).map(
+        ([name, version]) => `  ${JSON.stringify(name)}: ${JSON.stringify(version)}`,
+      ),
       "peerDependencyRules:",
       "  allowAny:",
       "    - vite",
@@ -264,6 +271,18 @@ test("a consumer that names every library by its packed tarball gets one copy of
   for (const name of fromOutsideTheRepository) {
     expect(installed(name).version, name).toBe(catalog[name]);
   }
+});
+
+test("the consumer installs every package on the Solid 2 channel, and each only at the release the catalog pins, wherever it is in the install", () => {
+  const { catalog } = pnpmSettings();
+  const installed = installedVersions(solidPackages, app);
+
+  expect(solidPackages.filter((name) => !installed.some((each) => each.name === name))).toEqual([]);
+  expect(
+    installed
+      .filter(({ name, version }) => version !== catalog[name])
+      .map(({ name, version }) => `${name} ${version}, not ${catalog[name] ?? "a pinned release"}`),
+  ).toEqual([]);
 });
 
 test("every library exports a file, and the tarball the consumer installs holds every file its exports name and every file in their folders", () => {
