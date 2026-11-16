@@ -284,7 +284,7 @@ function runtimeDependencyProblems(
   ];
 }
 
-test(`a library has no runtime dependency, in any list that installs with it, but a package from outside the repository that ${runtimeDependencyList} allows with a reason, pinned to one exact version, with the seam that imports it`, () => {
+test(`a library has no runtime dependency, in any list that installs with it, but a package from outside the repository that ${runtimeDependencyList} allows with a reason, pinned to one exact version, naming an existing file as its seam`, () => {
   const library = { path: "packages/a/package.json", manifest: { name: "a" } };
   const withB = (list: Partial<Manifest>) => ({ ...library, manifest: { name: "a", ...list } });
   const dependsOnB = withB({ dependencies: { b: "catalog:" } });

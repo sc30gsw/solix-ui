@@ -3,7 +3,7 @@
     "library": "@solix/core",
     "dependency": "@ui-sdk/core",
     "seam": "packages/core/src/headless.ts",
-    "reason": "Keyboard, focus, selection and ARIA for composite widgets, Tabs first, in three engines, instead of writing them here."
+    "reason": "Keyboard, focus, selection and ARIA for composite widgets, in three engines, instead of writing them here."
   },
   {
     "library": "@solix/core",

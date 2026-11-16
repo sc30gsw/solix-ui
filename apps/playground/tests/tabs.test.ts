@@ -213,7 +213,7 @@ inEveryEngine((browser) => {
       expect(await edges(selectedOf(vertical))).toEqual({ under: "none", inlineEnd: "2px" });
     });
 
-    test("a list wider than its container wraps, so every tab of every list lies inside a narrow container, in either direction", async () => {
+    test("a list wider than its container wraps, so every tab of every list outside a shadow root lies inside a narrow container, in either direction", async () => {
       const narrow = await browser().newPage();
       await narrow.goto(url, { waitUntil: "networkidle" });
       const outside = await narrow.locator(tabsRegion).evaluate((region) => {
