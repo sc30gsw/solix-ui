@@ -19,7 +19,7 @@ A part bound to a slot is given three sets of props: the consumer's and the styl
 
 Bound to the SDK's real tabs slots through `bind`, each part keeps exactly our classes and style, takes the slot's role, takes our id where we gave one and the SDK's where we did not, with the panel labelled by whichever id the tab has, and a click reaches the component's handler and then selects through the SDK unless the component prevented the default or the tab is disabled.
 
-The type of `bind` takes a slot for the root and for each part the styles name, with the props that slot needs. It refuses a part the styles do not name, a slot the behaviour does not have, a slot given without the props it needs, and a component's own props that carry a `class` or a `style`, which the part would drop.
+The type of `bind` takes a slot for the root and for each part the styles name, with the props that slot needs. It refuses a part the styles do not name, a slot the behaviour does not have, a slot given without the props it needs, a component's own props that carry a `class` or a `style`, which the part would drop, and parts whose root still takes `children`, so a component renders its children itself and an attribute the SDK changes never re-creates them. While the names of the handlers stay the same, a bound part keeps the same handlers object, so a selection changes no element in a list.
 
 ## The harm when it breaks
 
@@ -33,12 +33,12 @@ A consumer's `onClick` runs after the SDK already selected, or cannot stop it. A
 | `packages/core/src/parts.ts`: `createParts`, `rootPart` | `createParts` returns `{ root, part }` and knows nothing of a behaviour. `bind` takes the root's props from `root` and another part's from `part(name)`. |
 | `packages/core/src/style-props.ts`: `withConsumerStyle` | It puts its first argument's declarations before the second's, as an object or as a string, and leaves out a declaration whose value is `undefined` or `null`. `bindSlot` gives it the SDK's style first and ours second. |
 | `packages/core/tests/headless.test.tsx` | The check. Its first test draws three sets of props and a stand-in slot. Its third binds a probe component to the SDK's tabs slots and renders it with Solid's server renderer from `packages/core/dist`. Its last holds the type of `bind`, which `vp check` evaluates. |
-| `apps/playground/tests/behaviour-seam.test.ts` | It holds, in a browser, what the server renderer cannot show: a handler given to a tab after the first render reaches it, the ids `partId` makes from generated values can be referenced, and the SDK's one `<style>` element sits in a layer the library's stylesheet ordered first. |
+| `apps/playground/tests/behaviour-seam.test.ts` | It holds, in a browser, what the server renderer cannot show: a handler given to a tab after the first render reaches it; every tab of the controlled list stays the element it was, and an element passed as a section is created once, across a click, an arrow key and a handler given to the list later; tabs in a shadow root keep focus and their arrow keys; the ids `partId` makes from generated values can be referenced; and the page holds no style but the SDK's one `<style>` element, in a layer the library's stylesheet ordered first. |
 | `tests/support` | It builds the library and the app in production mode before any test. |
 | `vite.config.ts` | It sets the test include globs, the global setup and the Solid plugin. |
 | `@ui-sdk/core`, `@ui-sdk/solid`, `solid-js`, `@solidjs/web`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `5b7ad94`. Run `git diff 5b7ad94 -- packages/core/src/headless.ts packages/core/src/parts.ts packages/core/src/style-props.ts packages/core/tests/headless.test.tsx apps/playground/tests/behaviour-seam.test.ts tests/support vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `5019c44`. Run `git diff 5019c44 -- packages/core/src/headless.ts packages/core/src/parts.ts packages/core/src/style-props.ts packages/core/tests/headless.test.tsx apps/playground/tests/behaviour-seam.test.ts tests/support vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 
@@ -59,7 +59,7 @@ No model checker or verifier runs on a Solid component or on the SDK, so this is
 - 300 draws per run against the SDK's `root`, `list`, `tab` and `panel` slots: a consumer class and id on the root, a component id on the tab, the tab disabled or not, and a component click handler that prevents the default or not.
 - A symbol key of ours does not break the binding.
 - Fifteen shapes of what is given to `bind`: eleven maps, four it takes and seven it refuses, and four roots, two it takes and two that still take `children`, which it refuses. Each is given as a type, so the answer is the same for a map written inline and for one held in a constant.
-- In each installed engine, one handler given after the first render and 25 generated sets of tab values.
+- In each installed engine, one handler given after the first render, the identity of every tab of one list across three changes, the arrow keys in a shadow root, and 25 generated sets of tab values.
 
 ## What a pass does not cover
 

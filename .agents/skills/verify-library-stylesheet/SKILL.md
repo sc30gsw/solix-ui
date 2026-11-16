@@ -37,7 +37,7 @@ It does if it edits any of these:
 | `@stylexjs/babel-plugin`, `@stylexjs/stylex` and `@ui-sdk/core` in the catalog in `pnpm-workspace.yaml` | Each at the version the catalog pins. The SDK's module path and function name in `behaviourSdkHiddenRule` hold for that version. |
 | `@babel/core`, `@babel/plugin-syntax-jsx`, `@babel/preset-typescript` and `postcss` in the catalog in `pnpm-workspace.yaml` | `@babel/core` runs the build pipeline with `@babel/preset-typescript`, and with `@babel/plugin-syntax-jsx` for a `.tsx` file, and `postcss` parses the stylesheet in the tests, at the versions the catalog pins. |
 
-Last confirmed against commit `5b7ad94`. Run `git diff 5b7ad94 -- packages/core apps/playground/tests tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `5019c44`. Run `git diff 5019c44 -- packages/core apps/playground/tests tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 
