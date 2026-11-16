@@ -14,11 +14,23 @@ const styles = stylex.create({
     borderBlockEndColor: tokens["--solix-color-primary"],
     borderBlockEndStyle: {
       default: "none",
-      "[data-selected]": "solid",
+      "[data-selected]": {
+        default: "solid",
+        '[data-orientation="vertical"]': "none",
+      },
     },
     borderBlockEndWidth: "0.125rem",
     borderBlockStartWidth: 0,
-    borderInlineWidth: 0,
+    borderInlineEndColor: tokens["--solix-color-primary"],
+    borderInlineEndStyle: {
+      default: "none",
+      "[data-selected]": {
+        default: "none",
+        '[data-orientation="vertical"]': "solid",
+      },
+    },
+    borderInlineEndWidth: "0.125rem",
+    borderInlineStartWidth: 0,
     color: {
       default: tokens["--solix-color-text"],
       "[data-selected]": tokens["--solix-color-primary"],
@@ -44,10 +56,20 @@ const styles = stylex.create({
     outlineWidth: "0.125rem",
     paddingBlockEnd: {
       default: "0.5rem",
-      "[data-selected]": "0.375rem",
+      "[data-selected]": {
+        default: "0.375rem",
+        '[data-orientation="vertical"]': "0.5rem",
+      },
     },
     paddingBlockStart: "0.5rem",
-    paddingInline: tokens["--solix-spacing-md"],
+    paddingInlineEnd: {
+      default: tokens["--solix-spacing-md"],
+      "[data-selected]": {
+        default: tokens["--solix-spacing-md"],
+        '[data-orientation="vertical"]': `calc(${tokens["--solix-spacing-md"]} - 0.125rem)`,
+      },
+    },
+    paddingInlineStart: tokens["--solix-spacing-md"],
     transitionDuration: "120ms",
     transitionProperty: {
       default: "color",

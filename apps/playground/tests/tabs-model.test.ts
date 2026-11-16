@@ -9,7 +9,7 @@ function setupOf(list: string) {
 }
 
 test.each(keyboardTable)(
-  "the model agrees with the keyboard table: in $list, from $start the keys $keys focus $focused and select $selected",
+  "the model agrees with the keyboard table: in $list, from $start, after the keys $keys $selected is selected and focus is on $focused",
   ({ list, start, keys, focused, selected }) => {
     const setup = setupOf(list);
     const started: TabsModel = { selected: start, focused: start };

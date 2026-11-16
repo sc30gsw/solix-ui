@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { Page } from "playwright";
+import type { Locator } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
@@ -176,6 +176,47 @@ inEveryEngine((browser) => {
       expect(await orientations(vertical)).toEqual({ aria: "vertical", data: ["vertical"] });
     });
 
+    test("a horizontal list and its selected tab draw their edge under the tabs, and a vertical list and its selected tab draw it at their inline end", async () => {
+      const { page } = opened;
+      const edges = (element: Locator) =>
+        element.evaluate((node) => {
+          const style = getComputedStyle(node);
+          const drawn = (lineStyle: string, width: string) =>
+            lineStyle === "none" || lineStyle === "hidden" || width === "0px" ? "none" : width;
+          return {
+            under: drawn(style.borderBottomStyle, style.borderBottomWidth),
+            inlineEnd: drawn(style.borderInlineEndStyle, style.borderInlineEndWidth),
+          };
+        });
+      const selectedOf = (list: string) =>
+        tabList(page, list).locator('[role="tab"][aria-selected="true"]');
+
+      expect(await edges(tabList(page, account))).toEqual({ under: "1px", inlineEnd: "none" });
+      expect(await edges(selectedOf(account))).toEqual({ under: "2px", inlineEnd: "none" });
+      expect(await edges(tabList(page, vertical))).toEqual({ under: "none", inlineEnd: "1px" });
+      expect(await edges(selectedOf(vertical))).toEqual({ under: "none", inlineEnd: "2px" });
+    });
+
+    test("a list wider than its container wraps, so every tab of every list lies inside a narrow container, in either direction", async () => {
+      const narrow = await browser().newPage();
+      await narrow.goto(url, { waitUntil: "networkidle" });
+      const outside = await narrow.locator(tabsRegion).evaluate((region) => {
+        if (!(region instanceof HTMLElement)) return ["the region is no HTML element"];
+        region.style.width = "12rem";
+        const { left: start, right: end } = region.getBoundingClientRect();
+        return [...region.querySelectorAll('[role="tab"]')]
+          .filter((tab) => {
+            const { left, right } = tab.getBoundingClientRect();
+            return left < start || right > end;
+          })
+          .map((tab) => tab.textContent);
+      });
+
+      await narrow.close();
+
+      expect(outside).toEqual([]);
+    });
+
     test("the Tab key enters a tab list at its selected tab and leaves it for the panel, which is focusable", async () => {
       const { page } = opened;
       await tabNamed(page, manual, "Two").click();
@@ -330,46 +371,32 @@ inEveryEngine((browser) => {
       expect(found.violations).toEqual([]);
     });
 
-    test("hydration and every interaction above report no console error or warning", () => {
-      expect(opened.consoleProblems).toEqual([]);
-    });
-  });
-
-  describe("Tabs under the keyboard, from every state a list can reach", () => {
-    let page: Page;
-
-    beforeAll(async () => {
-      page = await browser().newPage();
-      await page.goto(url, { waitUntil: "networkidle" });
-    });
-
-    afterAll(async () => {
-      await page.close();
-    });
-
     test.each(tabsSetups.flatMap(singleSteps))(
-      "in $list, with $from.selected selected and focus on $from.focused, $key selects $to.selected and focuses $to.focused",
-      async ({ list, from, key, to }) => {
-        const setup = tabsSetups.find((candidate) => candidate.list === list) ?? tabsSetups[0];
-        const { selected, focused } = await stateOf(page, list);
+      "in $setup.list, with $from.selected selected and focus on $from.focused, after $key $to.selected is selected and focus is on $to.focused",
+      async ({ setup, from, key, to }) => {
+        const { list } = setup;
+        const { selected, focused } = await stateOf(opened.page, list);
         for (const action of pathBetween(setup, { selected, focused }, from)) {
-          if ("click" in action) await tabNamed(page, list, action.click).click();
-          else await page.keyboard.press(action.key);
+          if ("click" in action) await tabNamed(opened.page, list, action.click).click();
+          else await opened.page.keyboard.press(action.key);
         }
-        await expect.poll(() => stateOf(page, list)).toMatchObject(from);
+        await expect.poll(() => stateOf(opened.page, list)).toMatchObject(from);
 
-        await page.keyboard.press(key);
+        await opened.page.keyboard.press(key);
 
         await expect
-          .poll(() => stateOf(page, list))
+          .poll(() => stateOf(opened.page, list))
           .toMatchObject({ ...to, shown: to.selected === null ? [] : [panelOf(to.selected)] });
-        const { tabStops } = await stateOf(page, list);
+        const { tabStops } = await stateOf(opened.page, list);
         expect(tabStops, "the list has one tab stop").toHaveLength(1);
         if (to.selected !== null) {
           expect(tabStops, "the tab stop is the selected tab").toEqual([to.selected]);
         }
       },
     );
+    test("hydration and every interaction above report no console error or warning", () => {
+      expect(opened.consoleProblems).toEqual([]);
+    });
   });
 
   describe("Tabs for a user who asks for less motion or forced colours", () => {

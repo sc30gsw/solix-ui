@@ -87,7 +87,7 @@ export function pathBetween(setup: TabsSetup, from: TabsModel, to: TabsModel): A
   );
 }
 
-export type SingleStep = { list: string; from: TabsModel; key: Key; to: TabsModel };
+export type SingleStep = { setup: TabsSetup; from: TabsModel; key: Key; to: TabsModel };
 
 export function singleSteps(setup: TabsSetup): SingleStep[] {
   const states: TabsModel[] = [{ selected: setup.initial, focused: null }];
@@ -99,7 +99,5 @@ export function singleSteps(setup: TabsSetup): SingleStep[] {
   }
   return states
     .filter(({ focused }) => focused !== null)
-    .flatMap((from) =>
-      keys.map((key) => ({ list: setup.list, from, key, to: afterKey(setup, from, key) })),
-    );
+    .flatMap((from) => keys.map((key) => ({ setup, from, key, to: afterKey(setup, from, key) })));
 }

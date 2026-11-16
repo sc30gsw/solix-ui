@@ -305,6 +305,7 @@ const journeys = {
     observe("manual, down arrow from Two: selected tab", moved.selected, "Two");
     const activated = await press("Enter", "Manual vertical", "Press Enter. Three is selected.", "manual-enter");
     observe("manual, Enter on Three: selected tab", activated.selected, "Three");
+    observe("manual, Enter on Three: the selected tab's edge at its inline end, and under it", `${await style(tabNamed(page, "Manual vertical", "Three"), "border-inline-end-style")} ${await style(tabNamed(page, "Manual vertical", "Three"), "border-bottom-style")}`, "solid none");
     const stopped = await press("ArrowDown", "Manual vertical", "Press the down arrow on the last tab. This list does not wrap, so focus stays on Three.", "manual-no-wrap");
     observe("manual, down arrow on the last tab: focused tab", stopped.focused, "Three");
 
