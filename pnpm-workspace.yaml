@@ -9,6 +9,7 @@ catalog:
   "@babel/plugin-syntax-jsx": ^8.0.1
   "@babel/preset-typescript": ^8.0.7
   "@solidjs/compiler": 2.0.0-rc.22
+  "@solidjs/signals": 2.0.0-rc.22
   "@solidjs/vite-plugin": 3.0.0-next.57
   "@solidjs/web": 2.0.0-rc.22
   "@stylexjs/babel-plugin": 0.19.2
@@ -30,6 +31,7 @@ catalog:
   vite-plus: 1.6.0
 overrides:
   "@solidjs/compiler": "catalog:"
+  "@solidjs/signals": "catalog:"
   vite@*: "catalog:"
 peerDependencyRules:
   allowAny:

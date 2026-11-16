@@ -95,6 +95,7 @@ export const channels: Record<string, Channel> = {
   "solid-js": solidChannel,
   "@solidjs/web": solidChannel,
   "@solidjs/compiler": solidChannel,
+  "@solidjs/signals": solidChannel,
   "@solidjs/vite-plugin": {
     describe: "its newest release on the major it pins, tagged or not",
     versions: (published, { pinned }) =>
