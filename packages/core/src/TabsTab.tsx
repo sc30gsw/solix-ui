@@ -1,6 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { Show } from "solid-js";
+import { partId } from "./headless";
 import { createParts, type ElementProps } from "./parts";
 import { useTabs } from "./tabs-context";
 import { tokens } from "./tokens.stylex";
@@ -73,18 +74,18 @@ export type TabsTabProps = ElementProps<
 
 export function TabsTab(props: TabsTabProps) {
   const tabs = useTabs("Tabs.Tab");
-  const { root, part } = createParts(
-    "TabsTab",
-    styles,
-    props,
-    tabs.behaviour.parts({
-      root: [
-        "tab",
-        () => ({ value: props.value, disabled: props.disabled === true || props.disabled === "" }),
-        {
+  const { root, part } = tabs.behaviour.bind(
+    createParts("TabsTab", styles, props, "value", "leftSection", "rightSection", "children"),
+    {
+      root: {
+        slot: "tab",
+        props: () => ({
+          value: props.value,
+          disabled: props.disabled === true || props.disabled === "",
+        }),
+        own: {
           get id() {
-            const base = tabs.baseId();
-            return base === undefined ? undefined : `${base}-tab-${props.value}`;
+            return partId(tabs.baseId(), "tab", props.value);
           },
           onClick: (event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
             if (!tabs.allowTabDeactivation()) return;
@@ -94,12 +95,8 @@ export function TabsTab(props: TabsTabProps) {
             tabs.behaviour.api.setValue(null);
           },
         },
-      ],
-    }),
-    "value",
-    "leftSection",
-    "rightSection",
-    "children",
+      },
+    },
   );
   return (
     <button {...root}>

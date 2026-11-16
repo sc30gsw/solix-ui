@@ -47,20 +47,22 @@ export function Tabs(props: TabsProps) {
       props.activateTabWithKeyboard === false ? ("manual" as const) : ("automatic" as const),
     loop: props.loop,
   }));
-  const { root } = createParts(
-    "Tabs",
-    styles,
-    props,
-    behaviour.parts({ root: "root" }),
-    "value",
-    "defaultValue",
-    "onChange",
-    "orientation",
-    "loop",
-    "activateTabWithKeyboard",
-    "allowTabDeactivation",
-    "keepMounted",
-    "children",
+  const { root } = behaviour.bind(
+    createParts(
+      "Tabs",
+      styles,
+      props,
+      "value",
+      "defaultValue",
+      "onChange",
+      "orientation",
+      "loop",
+      "activateTabWithKeyboard",
+      "allowTabDeactivation",
+      "keepMounted",
+      "children",
+    ),
+    { root: { slot: "root" } },
   );
   return (
     <div {...root}>

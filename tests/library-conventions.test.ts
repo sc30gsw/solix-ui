@@ -4,8 +4,12 @@ import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
 import {
+  calledDeclaration,
   descendants,
   exportsOf,
+  fileOf,
+  findAncestor,
+  openProgram,
   parse,
   parseAll,
   parseText,
@@ -44,6 +48,8 @@ const testDirectory = "tests";
 const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
 const behaviourSdk = /^@ui-sdk\//;
 const behaviourSeam = "packages/core/src/headless.ts";
+const behaviourType = "Behaviour";
+const behaviourBinder = "bind";
 
 const libraries = componentLibraries.map(({ directory, manifest }) => ({
   name: manifest.name ?? directory,
@@ -58,6 +64,17 @@ function relativePath(file: string): string {
   return relative(repositoryRoot, file);
 }
 
+const librarySourceFiles = libraries.flatMap(({ source }) =>
+  globSync("**/*.{ts,tsx}", { cwd: source }).map((entry) => join(source, entry)),
+);
+const librarySources = openProgram(librarySourceFiles);
+
+function typedSource(file: string): ts.SourceFile {
+  const source = librarySources.sourceFile(file);
+  if (!source) throw new Error(`${relativePath(file)}: TypeScript could not read this file.`);
+  return source;
+}
+
 const components: Component[] = libraries.flatMap(({ source }) =>
   readdirSync(source)
     .filter((entry) => componentFile.test(entry))
@@ -65,9 +82,28 @@ const components: Component[] = libraries.flatMap(({ source }) =>
     .map((entry) => ({
       name: basename(entry, ".tsx"),
       file: join(source, entry),
-      source: parse(join(source, entry)),
+      source: typedSource(join(source, entry)),
     })),
 );
+
+function bindsABehaviour(call: ts.CallExpression): boolean {
+  const declared = calledDeclaration(librarySources, call);
+  const member = declared?.parent;
+  return (
+    declared !== undefined &&
+    member !== undefined &&
+    relativePath(fileOf(declared)) === behaviourSeam &&
+    ts.isPropertySignatureDeclaration(member) &&
+    member.name.getText() === behaviourBinder &&
+    findAncestor(member, ts.isTypeAliasDeclaration)?.name.text === behaviourType
+  );
+}
+
+function behaviourBindings(node: ts.Node): ts.CallExpression[] {
+  return descendants(node).filter(
+    (found): found is ts.CallExpression => ts.isCallExpression(found) && bindsABehaviour(found),
+  );
+}
 
 function exportedNames(source: ts.SourceFile): string[] {
   const { functions, types, others } = exportsOf(source);
@@ -411,7 +447,15 @@ function problemsWith({ name, file, source }: Component): string[] {
 
   const calls = callsOf(fn, partsHelper);
   const [call] = calls;
-  const declaration = call?.parent;
+  const holder = call?.parent;
+  const binding =
+    holder !== undefined &&
+    ts.isCallExpression(holder) &&
+    holder.arguments[0] === call &&
+    bindsABehaviour(holder)
+      ? holder
+      : undefined;
+  const declaration = (binding ?? call)?.parent;
   const bound =
     declaration !== undefined &&
     ts.isVariableDeclaration(declaration) &&
@@ -433,9 +477,14 @@ function problemsWith({ name, file, source }: Component): string[] {
     consumer?.getText() !== "props"
   ) {
     report(
-      `call ${partsHelper} once, in a statement of the component's own body, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}; a behaviour for the parts goes before the kept keys, so each bound part takes its slot there and never inline in JSX.`,
+      `call ${partsHelper} once, in a statement of the component's own body, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}, or as \`const { ${rootBinding}, ${partBinding} } = behaviour.${behaviourBinder}(${partsHelper}(...), { ... })\` with a behaviour from ${behaviourSeam}, so each bound part takes its slot there and none inline in JSX.`,
     );
     return problems;
+  }
+  for (const stray of behaviourBindings(source).filter((found) => found !== binding)) {
+    report(
+      `give ${stray.expression.getText()} the component's one ${partsHelper} call as its first argument, written there, and bind every part in that one call: line ${source.getLineAndCharacterOfPosition(stray.getStart()).line + 1} binds something else.`,
+    );
   }
 
   return [
@@ -468,8 +517,19 @@ test("the library has components to check", () => {
   expect(components.length).toBeGreaterThan(1);
 });
 
-test("every component is written the one way: one function, and its root and every other part from one createParts call", () => {
-  expect(components.flatMap(problemsWith)).toEqual([]);
+test("every component is written the one way: one function, and its root and every other part from one createParts call, which a behaviour binds only as the first argument of its bind", () => {
+  const componentFiles = components.map(({ file }) => file);
+  const boundElsewhere = librarySourceFiles
+    .filter((file) => !componentFiles.includes(file))
+    .flatMap((file) =>
+      behaviourBindings(typedSource(file)).map(
+        (call) =>
+          `${relativePath(file)}: ${call.getText().split("\n")[0]} binds a behaviour outside a component. Only a component binds one, to its own ${partsHelper} call.`,
+      ),
+    );
+
+  expect(components.filter(({ source }) => behaviourBindings(source).length > 0)).not.toEqual([]);
+  expect([...components.flatMap(problemsWith), ...boundElsewhere]).toEqual([]);
 });
 
 function behaviourSdkImports(file: string, source: ts.SourceFile): string[] {
@@ -477,7 +537,7 @@ function behaviourSdkImports(file: string, source: ts.SourceFile): string[] {
     const specifier = moduleSpecifierOf(node);
     return specifier && ts.isStringLiteralLikeNode(specifier) && behaviourSdk.test(specifier.text)
       ? [
-          `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText().split("\n")[0]} loads the behaviour SDK. Only ${behaviourSeam} does; take the behaviour from createBehaviour there, so the SDK's next change is an edit in one file.`,
+          `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText().split("\n")[0]} loads the behaviour SDK. Only ${behaviourSeam} imports it; take the behaviour from createBehaviour there.`,
         ]
       : [];
   });

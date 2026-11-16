@@ -128,9 +128,13 @@ function readsByName(declaration: ts.Node): boolean {
   );
 }
 
+export function calledDeclaration(program: Program, call: ts.CallExpression): ts.Node | undefined {
+  return program.checker.getResolvedSignature(call)?.declaration?.resolve();
+}
+
 function namesAMemberOfItsFirstArgument(program: Program, call: ts.CallExpression): boolean {
   if (call.arguments.length < 2) return false;
-  const called = program.checker.getResolvedSignature(call)?.declaration?.resolve();
+  const called = calledDeclaration(program, call);
   return called !== undefined && (takesAKeyOfAnother(called) || readsByName(called));
 }
 

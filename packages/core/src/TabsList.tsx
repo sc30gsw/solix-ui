@@ -25,24 +25,18 @@ export type TabsListProps = ElementProps<"div", typeof styles>;
 
 export function TabsList(props: TabsListProps) {
   const tabs = useTabs("Tabs.List");
-  const { root } = createParts(
-    "TabsList",
-    styles,
-    props,
-    tabs.behaviour.parts({
-      root: [
-        "list",
-        () => ({}),
-        {
-          onKeyDown: (event: KeyboardEvent & { currentTarget: HTMLElement }) =>
-            stepOverDisabledTabs(event, {
-              orientation: tabs.orientation(),
-              loop: tabs.loop(),
-              selects: tabs.activateTabWithKeyboard(),
-            }),
-        },
-      ],
-    }),
-  );
+  const { root } = tabs.behaviour.bind(createParts("TabsList", styles, props), {
+    root: {
+      slot: "list",
+      own: {
+        onKeyDown: (event: KeyboardEvent & { currentTarget: HTMLElement }) =>
+          stepOverDisabledTabs(event, {
+            orientation: tabs.orientation(),
+            loop: tabs.loop(),
+            selects: tabs.activateTabWithKeyboard(),
+          }),
+      },
+    },
+  });
   return <div {...root} />;
 }

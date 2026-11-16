@@ -1,5 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { Show } from "solid-js";
+import { partId } from "./headless";
 import { createParts, type ElementProps } from "./parts";
 import { useTabs } from "./tabs-context";
 import { tokens } from "./tokens.stylex";
@@ -20,25 +21,19 @@ export type TabsPanelProps = ElementProps<
 
 export function TabsPanel(props: TabsPanelProps) {
   const tabs = useTabs("Tabs.Panel");
-  const { root } = createParts(
-    "TabsPanel",
-    styles,
-    props,
-    tabs.behaviour.parts({
-      root: [
-        "panel",
-        () => ({ value: props.value, keepMounted: true }),
-        {
+  const { root } = tabs.behaviour.bind(
+    createParts("TabsPanel", styles, props, "value", "keepMounted", "children"),
+    {
+      root: {
+        slot: "panel",
+        props: () => ({ value: props.value, keepMounted: true }),
+        own: {
           get id() {
-            const base = tabs.baseId();
-            return base === undefined ? undefined : `${base}-panel-${props.value}`;
+            return partId(tabs.baseId(), "panel", props.value);
           },
         },
-      ],
-    }),
-    "value",
-    "keepMounted",
-    "children",
+      },
+    },
   );
   const isShown = () => tabs.behaviour.present("panel", () => ({ value: props.value }));
   return (

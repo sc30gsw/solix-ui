@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { createComponent, renderToString } from "@solidjs/web";
 import type { CompiledStyles } from "@stylexjs/stylex";
 import fc from "fast-check";
-import { expect, test } from "vite-plus/test";
+import { expect, expectTypeOf, test } from "vite-plus/test";
 import type * as Headless from "../src/headless";
 import type * as Parts from "../src/parts";
 import { dist } from "./built-library";
@@ -179,32 +179,34 @@ function Probe(props: ProbeProps) {
     value: null,
     onValueChange: (value: string | null) => props.onChange(value),
   }));
-  const { root, part } = createParts(
-    "Probe",
-    compiled,
-    props,
-    behaviour.parts({
-      root: "root",
-      list: "list",
-      tab: [
-        "tab",
-        () => ({ value: "one", disabled: props.disabled }),
-        {
+  const { root, part } = behaviour.bind(
+    createParts(
+      "Probe",
+      compiled,
+      props,
+      "tabId",
+      "disabled",
+      "preventsClick",
+      "onChange",
+      "calls",
+      "capture",
+    ),
+    {
+      root: { slot: "root" },
+      list: { slot: "list" },
+      tab: {
+        slot: "tab",
+        props: () => ({ value: "one", disabled: props.disabled }),
+        own: {
           id: props.tabId,
           onClick: (handled: Handled) => {
             props.calls.push("component");
             if (props.preventsClick) handled.preventDefault();
           },
         },
-      ],
-      panel: ["panel", () => ({ value: "one", keepMounted: true })],
-    }),
-    "tabId",
-    "disabled",
-    "preventsClick",
-    "onChange",
-    "calls",
-    "capture",
+      },
+      panel: { slot: "panel", props: () => ({ value: "one", keepMounted: true }) },
+    },
   );
   props.capture(part("tab"));
   return (
@@ -271,10 +273,18 @@ test("bound to the SDK's tabs slots, each part keeps exactly our classes and our
   );
 });
 
-test("createParts refuses a behaviour that binds a part its styles do not name", () => {
-  const { root } = compiled;
+type Bind = Headless.Behaviour<typeof tabs>["bind"];
+type ProbeParts = { root: object; part: (name: "list" | "tab" | "panel") => object };
+type Binds<Slots> = Bind extends (parts: ProbeParts, slots: Slots) => unknown ? true : false;
 
-  expect(() => createParts("Probe", { root }, {}, { tab: (ours) => ours })).toThrow(
-    "Probe: its behaviour binds tab, which its styles do not name as a part.",
-  );
+test("bind takes, in its type, a slot for the root and for each part the styles name, with the props that slot needs, and refuses a part the styles do not name, a slot the behaviour does not have, and a slot given without the props it needs", () => {
+  expectTypeOf<Binds<{ root: { slot: "root" } }>>().toEqualTypeOf<true>();
+  expectTypeOf<Binds<{ list: { slot: "list" } }>>().toEqualTypeOf<true>();
+  expectTypeOf<
+    Binds<{ tab: { slot: "tab"; props: () => { value: string } } }>
+  >().toEqualTypeOf<true>();
+  expectTypeOf<Binds<{ lst: { slot: "list" } }>>().toEqualTypeOf<false>();
+  expectTypeOf<Binds<{ root: { slot: "root" }; lst: { slot: "list" } }>>().toEqualTypeOf<false>();
+  expectTypeOf<Binds<{ list: { slot: "nonsense" } }>>().toEqualTypeOf<false>();
+  expectTypeOf<Binds<{ tab: { slot: "tab" } }>>().toEqualTypeOf<false>();
 });
