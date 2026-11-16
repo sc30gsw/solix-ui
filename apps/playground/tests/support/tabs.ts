@@ -129,6 +129,21 @@ export function stateOf(page: Page, list: string): Promise<TabsState> {
   });
 }
 
+export function activeAndSelected(
+  page: Page,
+  list: string,
+): Promise<{ active: number[]; selected: number[] }> {
+  return tabList(page, list).evaluate((node) => {
+    const tabs = [...node.querySelectorAll('[role="tab"]')];
+    const indexesWhere = (holds: (tab: Element) => boolean) =>
+      tabs.flatMap((tab, index) => (holds(tab) ? [index] : []));
+    return {
+      active: indexesWhere((tab) => tab.hasAttribute("data-active")),
+      selected: indexesWhere((tab) => tab.getAttribute("aria-selected") === "true"),
+    };
+  });
+}
+
 export async function startAt(page: Page, list: string, name: string): Promise<void> {
   const tab = tabNamed(page, list, name);
   if ((await stateOf(page, list)).selected === name) await tab.focus();

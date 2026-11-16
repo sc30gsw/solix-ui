@@ -2,7 +2,14 @@ import fc from "fast-check";
 import type { Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
 import { inEveryEngine } from "./support/playground";
-import { panelOf, stateOf, tabNamed, type TabsSetup, tabsSetups } from "./support/tabs";
+import {
+  activeAndSelected,
+  panelOf,
+  stateOf,
+  tabNamed,
+  type TabsSetup,
+  tabsSetups,
+} from "./support/tabs";
 import { afterKey, afterPressOn, type Key, keys, type TabsModel } from "./support/tabs-model";
 
 const url = inject("playgroundUrl");
@@ -25,6 +32,11 @@ async function expectAgreement(model: Model, { page }: Real): Promise<void> {
       focused: model.focused,
       shown: model.selected === null ? [] : [panelOf(model.selected)],
     });
+  const { active, selected } = await activeAndSelected(page, list);
+  expect(
+    active,
+    "the tabs that carry data-active are the ones whose aria-selected is true",
+  ).toEqual(selected);
   const { tabStops } = await stateOf(page, list);
   expect(tabStops, "the list has one tab stop").toHaveLength(1);
   if (model.selected !== null) {
@@ -78,7 +90,7 @@ const steps = [
 ];
 
 inEveryEngine((browser) => {
-  test("for every generated sequence of clicks and keys on a list of tabs, the selected tab, the focused tab, the panel shown and the one tab stop agree with a model of that list", async () => {
+  test("for every generated sequence of clicks and keys on a list of tabs, the selected tab, the focused tab, the panel shown and the one tab stop agree with a model of that list, and the selected tab alone carries data-active", async () => {
     const page = await browser().newPage();
 
     await fc.assert(

@@ -82,6 +82,7 @@ export function Tabs(props: TabsProps) {
       <TabsContext
         value={{
           behaviour,
+          selected: value,
           baseId: () => (typeof props.id === "string" ? props.id : undefined),
           steps,
           allowTabDeactivation: () => props.allowTabDeactivation ?? false,

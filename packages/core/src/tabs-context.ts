@@ -6,6 +6,7 @@ export type TabsOrientation = "horizontal" | "vertical";
 
 export type TabsContextValue = {
   behaviour: Behaviour<typeof tabs>;
+  selected: () => string | null;
   baseId: () => string | undefined;
   steps: SteppedList<string>;
   allowTabDeactivation: () => boolean;

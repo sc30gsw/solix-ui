@@ -110,6 +110,9 @@ export function TabsTab(props: TabsTabProps) {
           get id() {
             return partId(tabs.baseId(), "tab", props.value);
           },
+          get "data-active"() {
+            return tabs.selected() === props.value ? "" : undefined;
+          },
           ref: tabs.steps.item(() => props.value),
           onClick: (event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
             if (!tabs.allowTabDeactivation()) return;
