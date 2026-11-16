@@ -1,10 +1,9 @@
 import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
-import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
 import { tokenValues } from "../scripts/tokens";
-import { descendants, exportsOf, parse } from "./support/syntax";
+import { descendants, exportsOf, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
 import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
@@ -173,19 +172,12 @@ function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
       : [ownProps];
   const literalMembers = members.filter(ts.isTypeLiteralNode).flatMap((literal) => literal.members);
   return {
-    names: literalMembers.flatMap((member) =>
-      member.name && (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name))
-        ? [member.name.text]
-        : [],
-    ),
+    names: literalMembers.flatMap((member) => staticPropertyName(member) ?? []),
     unread: [
       ...members.filter(
         (member) => !ts.isTypeLiteralNode(member) && member.getText() !== displayPropsRefused,
       ),
-      ...literalMembers.filter(
-        (member) =>
-          !member.name || (!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name)),
-      ),
+      ...literalMembers.filter((member) => staticPropertyName(member) === undefined),
     ].map((member) => member.getText()),
   };
 }
@@ -250,7 +242,7 @@ function polymorphicDefault(
   declaration: ts.FunctionDeclaration | ts.TypeAliasDeclaration,
 ): string | undefined {
   const [parameter] = declaration.typeParameters ?? [];
-  const fallback = parameter?.default;
+  const fallback = parameter?.defaultType;
   return fallback && ts.isLiteralTypeNode(fallback) && ts.isStringLiteral(fallback.literal)
     ? fallback.literal.text
     : undefined;
@@ -331,7 +323,11 @@ function partProblems(fn: ts.FunctionDeclaration): string[] {
       );
       return problems;
     }
-    const tag = holder.parent.parent.tagName.getText();
+    const element = holder.parent.parent;
+    const tag =
+      ts.isJsxOpeningElement(element) || ts.isJsxSelfClosingElement(element)
+        ? element.tagName.getText()
+        : element.getText();
     if (!intrinsicElement.test(tag)) {
       problems.push(
         `spread {...${call.getText()}} on an element such as <div>, not on <${tag}>: a part is one element of the component's own markup.`,
@@ -469,8 +465,9 @@ test("no source file of the library but parts.ts calls stylex.attrs or stylex.pr
       .filter((entry) => entry !== partsModule)
       .map((entry) => join(source, entry)),
   );
-  const violations = files.flatMap((file) =>
-    stylexRuntimeCalls(parse(file)).map(
+  const sources = parseAll(files);
+  const violations = files.flatMap((file, index) =>
+    stylexRuntimeCalls(sources[index]).map(
       (callee) =>
         `${relativePath(file)}: call no ${callee}. ${partsHelper} in ${partsHelperFile} gives each part the classes of its ${stylesVariable} entry, and no other file calls the StyleX runtime.`,
     ),
@@ -564,7 +561,7 @@ function listsOfStylePropsIn(file: string, names: string[]): { line: number; lis
         ? (node.arguments ?? [])
         : [];
     const listed = items.flatMap((item) =>
-      ts.isStringLiteralLike(item) && names.includes(item.text) ? [item.text] : [],
+      ts.isStringLiteralLikeNode(item) && names.includes(item.text) ? [item.text] : [],
     );
     if (listed.length < 2) return [];
     return [{ line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, listed }];
@@ -628,19 +625,14 @@ function mappedOverTheLibrary(literal: ts.ObjectLiteralExpression, source: ts.So
 }
 
 function componentListsIn(
-  file: string,
+  source: ts.SourceFile,
   names: string[],
 ): { line: number; listed: string[]; kind: string }[] {
-  const source = parse(file);
   return descendants(source).flatMap((node) => {
     const listed = ts.isArrayLiteralExpression(node)
-      ? node.elements.flatMap((item) => (ts.isStringLiteralLike(item) ? [item.text] : []))
+      ? node.elements.flatMap((item) => (ts.isStringLiteralLikeNode(item) ? [item.text] : []))
       : ts.isObjectLiteralExpression(node) && !mappedOverTheLibrary(node, source)
-        ? node.properties.flatMap((property) =>
-            property.name && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
-              ? [property.name.text]
-              : [],
-          )
+        ? node.properties.flatMap((property) => staticPropertyName(property) ?? [])
         : [];
     if (listed.length === 0 || listed.some((text) => !names.includes(text))) return [];
     return [
@@ -656,8 +648,9 @@ function componentListsIn(
 test("no array or object in a test file lists the components by hand, unless the object is typed as a mapped type over the keys of the library's exports", () => {
   const names = components.map(({ name }) => name);
   const testFiles = scriptFiles.filter((file) => file.split("/").includes(testDirectory));
-  const violations = testFiles.flatMap((file) =>
-    componentListsIn(join(repositoryRoot, file), names).map(
+  const sources = parseAll(testFiles.map((file) => join(repositoryRoot, file)));
+  const violations = testFiles.flatMap((file, index) =>
+    componentListsIn(sources[index], names).map(
       ({ line, listed, kind }) =>
         `${file}:${line}: this ${kind} lists the components ${listed.join(", ")} by hand. Read the components from the build with builtComponents in ${builtLibraryFile}, and write a per-component table as a mapped type over the library's exports, as fixtures does in ${fixturesFile}, so a flag in it says what sets the ones a test picks out apart.`,
     ),

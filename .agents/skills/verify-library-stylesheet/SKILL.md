@@ -27,14 +27,15 @@ It does if it edits any of these:
 | `packages/core/tests/cascade-layers.ts` | It lists the layers nested in a layer in the order the cascade ranks them, for both tests. |
 | `packages/core/tests/build-output.test.ts` | It reads `packages/core/dist/styles.css` and the built components through `packages/core/tests/built-library.ts`, reads the built `dist/style-prop-table.js`, and parses the stylesheet with PostCSS. Which property a shorthand sets comes from `longhandsSetBy`, written from the CSS specification for horizontal, left-to-right text: `margin`, `padding`, their `-inline` and `-block` forms, `inset` and `background`. |
 | `tests/support` | It runs `vp run -r build` in production mode before any test, which is what writes `packages/core/dist`. |
+| `scripts/syntax.ts` and `scripts/syntax` | `build-output.test.ts` parses the built `dist/style-prop-table.js` with it, to find any import that stays at run time. |
 | `packages/core/tests/built-library.ts` | It lists the components that `packages/core/dist` holds, and reads `dist/styles.css` as `stylesheet` and each built component as `builtSource(name)`. |
 | `apps/playground/tests/consumer.test.ts` and `apps/playground/tests/box.test.ts` | `consumer.test.ts` checks that the app's own rule comes before the library layer in the bundle, and `box.test.ts` checks the cascade in each installed engine. |
 | `scripts/browser-engines.mjs` | It lists the engines the browser tests run on. |
 | `vite.config.ts` | It sets the test include globs and the global setup. |
 | `@stylexjs/babel-plugin` and `@stylexjs/stylex` in the catalog in `pnpm-workspace.yaml` | Both at the version the catalog pins. |
-| `@babel/core`, `@babel/preset-typescript` and `postcss` in the catalog in `pnpm-workspace.yaml` | `@babel/core` and `@babel/preset-typescript` run the build pipeline, and `postcss` parses the stylesheet in the tests, at the versions the catalog pins. |
+| `@babel/core`, `@babel/plugin-syntax-jsx`, `@babel/preset-typescript` and `postcss` in the catalog in `pnpm-workspace.yaml` | `@babel/core` runs the build pipeline with `@babel/preset-typescript`, and with `@babel/plugin-syntax-jsx` for a `.tsx` file, and `postcss` parses the stylesheet in the tests, at the versions the catalog pins. |
 
-Last confirmed against commit `e7aea22`. Run `git diff e7aea22 -- packages/core apps/playground/tests tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `84dd171`. Run `git diff 84dd171 -- packages/core apps/playground/tests tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 

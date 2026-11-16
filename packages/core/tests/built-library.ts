@@ -2,10 +2,10 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createComponent, renderToString } from "@solidjs/web";
 import type { Component } from "solid-js";
-import ts from "typescript";
 import type * as Library from "../src/index";
 import type * as Parts from "../src/parts";
 import type * as StableClass from "../src/stable-class";
+import { parse, staticPropertyName, ts } from "../../../scripts/syntax";
 
 export type ConsumerProps = Record<string, unknown>;
 
@@ -50,19 +50,13 @@ export function renderBuilt(name: string, props: ConsumerProps): string {
 }
 
 function keyOf(property: ts.ObjectLiteralElementLike, where: string): string {
-  const name = property.name;
-  if (name && (ts.isIdentifier(name) || ts.isStringLiteral(name))) return name.text;
+  const name = staticPropertyName(property);
+  if (name !== undefined) return name;
   throw new Error(`${where}: write every key of the compiled styles as a name or a string.`);
 }
 
 function compiledStylesOf(name: string, where: string): ts.ObjectLiteralExpression {
-  const source = ts.createSourceFile(
-    where,
-    builtSource(name),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JSX,
-  );
+  const source = parse(join(dist, `${name}.jsx`));
   const initializer = source.statements
     .filter(ts.isVariableStatement)
     .flatMap((statement) => [...statement.declarationList.declarations])

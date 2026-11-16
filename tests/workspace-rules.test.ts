@@ -1,10 +1,21 @@
-import { existsSync, globSync, readFileSync } from "node:fs";
+import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import semver from "semver";
-import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import {
-  catalogVersions,
+  commentsIn,
+  descendants,
+  parse,
+  parseAll,
+  parseText,
+  parseWithoutLibrariesOrImports,
+  sharedSettings,
+  staticPropertyName,
+  ts,
+} from "../scripts/syntax";
+import { pnpmSettings } from "../scripts/pnpm-settings";
+import {
   type Manifest,
   libraryNames,
   libraryPackages,
@@ -46,6 +57,16 @@ const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
 const namesNodeVersion = /node-version["']?\s*:/;
 const namesNodeVersionFile = /node-version-file["']?\s*:\s*(.*?)\s*$/;
 const namesRunner = /runs-on["']?\s*:/;
+const typeScriptApi = /^typescript(?:\/|$)/;
+const typeScriptApiHome = "scripts/syntax/";
+const typeScriptApiEntry = "scripts/syntax.ts";
+const typeScriptApiList = "scripts/syntax/ast.ts";
+const typeScriptProjectOpener = "scripts/syntax/program.ts";
+const sharedSettingsFile = "tsconfig.base.json";
+const optionsOfTheParseOnlyProject = ["allowJs", "noLib", "noResolve"];
+const pnpmSettingsReader = "scripts/pnpm-settings.ts";
+const jobHeader = /^ {2}[\w-]+:$/;
+const jobTimeout = /^ {4}timeout-minutes: \d+$/;
 
 function installedDependencies(manifest: Manifest): [string, string][] {
   return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });
@@ -56,7 +77,7 @@ function lowestMajorOf(range: string): number | undefined {
 }
 
 function nodeRangeAndLowestMajor(): [string, number] {
-  const range = rootManifest.engines?.node;
+  const range = rootManifest().engines?.node;
   const major =
     range === undefined || semver.validRange(range) === "*" ? undefined : lowestMajorOf(range);
   if (range === undefined || major === undefined)
@@ -111,39 +132,83 @@ test("every dependency version comes from the catalog or the workspace", () => {
   expect(violations).toEqual([]);
 });
 
-test("every package with TypeScript sources inherits the shared compiler settings", () => {
-  const violations = packages.flatMap(({ path, directory }) => {
-    const hasSources = globSync("src/**/*.{ts,tsx}", { cwd: directory }).length > 0;
-    if (!hasSources) return [];
+type ProjectSettings = { extends?: string; compilerOptions?: Record<string, unknown> };
 
-    const tsconfigPath = join(directory, "tsconfig.json");
-    if (!existsSync(tsconfigPath)) {
-      return [
-        `${path}: add a tsconfig.json that extends tsconfig.base.json at the repository root.`,
-      ];
-    }
+const sharedOptions = Object.keys(
+  (JSON.parse(readFileSync(join(repositoryRoot, sharedSettingsFile), "utf8")) as ProjectSettings)
+    .compilerOptions ?? {},
+);
 
-    const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf8")) as {
-      extends?: string;
-      compilerOptions?: Record<string, unknown>;
-    };
-    const problems: string[] = [];
-    if (!tsconfig.extends?.endsWith("tsconfig.base.json")) {
-      problems.push(
-        `${path}: tsconfig.json must extend tsconfig.base.json at the repository root.`,
-      );
-    }
-    for (const option of ["jsx", "jsxImportSource", "strict"]) {
-      if (tsconfig.compilerOptions && option in tsconfig.compilerOptions) {
-        problems.push(
-          `${path}: tsconfig.json sets "${option}". Remove it; tsconfig.base.json owns that option.`,
-        );
-      }
-    }
-    return problems;
+function optionsTheSharedSettingsOwn(where: string, options: object): string[] {
+  return Object.keys(options)
+    .filter((option) => sharedOptions.includes(option))
+    .map(
+      (option) => `${where} sets "${option}". Remove it; ${sharedSettingsFile} owns that option.`,
+    );
+}
+
+test(`every package with TypeScript sources has a tsconfig.json, and every tsconfig*.json but ${sharedSettingsFile} extends it and sets no option it sets`, () => {
+  const withoutProject = packages
+    .filter(
+      ({ directory }) =>
+        globSync("src/**/*.{ts,tsx}", { cwd: directory }).length > 0 &&
+        !existsSync(join(directory, "tsconfig.json")),
+    )
+    .map(
+      ({ path }) =>
+        `${path}: add a tsconfig.json that extends ${sharedSettingsFile} at the repository root.`,
+    );
+  const projects = globSync("**/tsconfig*.json", {
+    cwd: repositoryRoot,
+    exclude: outsideGeneratedOrInstalled,
+  }).filter((path) => path !== sharedSettingsFile);
+  const violations = projects.flatMap((path) => {
+    const project = JSON.parse(readFileSync(join(repositoryRoot, path), "utf8")) as ProjectSettings;
+    return [
+      ...(project.extends?.endsWith(sharedSettingsFile)
+        ? []
+        : [`${path} must extend ${sharedSettingsFile} at the repository root.`]),
+      ...optionsTheSharedSettingsOwn(path, project.compilerOptions ?? {}),
+    ];
   });
 
-  expect(violations).toEqual([]);
+  expect(sharedOptions.length).toBeGreaterThan(0);
+  expect(projects.length).toBeGreaterThan(packages.length / 2);
+  expect([...withoutProject, ...violations]).toEqual([]);
+});
+
+function hasProperty(name: string): (property: ts.ObjectLiteralElementLike) => boolean {
+  return (property) => staticPropertyName(property) === name;
+}
+
+test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFile} and sets no option it sets, and the parse-only project adds ${optionsOfTheParseOnlyProject.join(", ")}`, () => {
+  const source = parse(join(repositoryRoot, typeScriptProjectOpener));
+  const nodes = descendants(source);
+  const settingsWritten = nodes
+    .filter(ts.isObjectLiteralExpression)
+    .filter(({ properties }) => properties.some(hasProperty("compilerOptions")));
+  const withoutTheSharedSettings = settingsWritten.filter(
+    ({ properties }) =>
+      !properties.some(
+        (property) =>
+          hasProperty("extends")(property) &&
+          ts.isPropertyAssignment(property) &&
+          property.initializer.getText() === "sharedSettings",
+      ),
+  );
+  const optionsOfEachProject = nodes
+    .filter(ts.isCallExpression)
+    .filter(({ expression }) => expression.getText() === "openProject")
+    .map((call) => call.arguments[1]?.getText());
+
+  expect(sharedSettings).toBe(join(repositoryRoot, sharedSettingsFile));
+  expect(settingsWritten.length).toBeGreaterThan(0);
+  expect(withoutTheSharedSettings.map((settings) => settings.getText())).toEqual([]);
+  expect(optionsOfEachProject).toEqual(["parseWithoutLibrariesOrImports", "{}"]);
+  expect(Object.keys(parseWithoutLibrariesOrImports)).toEqual(optionsOfTheParseOnlyProject);
+  expect(
+    optionsTheSharedSettingsOwn(typeScriptProjectOpener, parseWithoutLibrariesOrImports),
+  ).toEqual([]);
 });
 
 test("a library has no runtime dependency, and names as a peer, or as a library of this repository in any dependency list, only what its kind allows", () => {
@@ -197,37 +262,215 @@ test("a library names another library of this repository as a workspace:^ peer, 
   expect(violations).toEqual([]);
 });
 
-function commentsOtherThanDocComments(file: string): string[] {
-  const text = readFileSync(join(repositoryRoot, file), "utf8");
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-  const found = new Map<number, string>();
-  const collect = (node: ts.Node): void => {
-    const ranges = [
-      ...(ts.getLeadingCommentRanges(text, node.getFullStart()) ?? []),
-      ...(ts.getTrailingCommentRanges(text, node.getEnd()) ?? []),
-    ];
-    for (const range of ranges) {
-      const comment = text.slice(range.pos, range.end);
-      if (!comment.startsWith("/**")) {
-        const line = source.getLineAndCharacterOfPosition(range.pos).line + 1;
-        found.set(range.pos, `${file}:${line}: ${comment.split("\n")[0]}`);
-      }
-    }
-    for (const child of node.getChildren(source)) collect(child);
-  };
-  collect(source);
-  return [...found.values()];
+function lineOf(source: ts.SourceFile, position: number): number {
+  return source.getLineAndCharacterOfPosition(position).line + 1;
 }
 
+function commentsOtherThanDocComments(file: string, source: ts.SourceFile): string[] {
+  return commentsIn(source)
+    .filter(({ text }) => !text.startsWith("/**"))
+    .map(({ pos, text }) => `${file}:${lineOf(source, pos)}: ${text.split("\n")[0]}`);
+}
+
+function moduleSpecifierOf(node: ts.Node): ts.Node | undefined {
+  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
+  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
+    return node.argument.literal;
+  const loadsAModule =
+    ts.isCallExpression(node) &&
+    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+      node.expression.getText() === "require");
+  return loadsAModule ? node.arguments[0] : undefined;
+}
+
+function typeScriptApiImports(file: string, source: ts.SourceFile): string[] {
+  return descendants(source).flatMap((node) => {
+    const specifier = moduleSpecifierOf(node);
+    return specifier && ts.isStringLiteralLikeNode(specifier) && typeScriptApi.test(specifier.text)
+      ? [
+          `${file}:${lineOf(source, node.getStart())}: ${node.getText().split("\n")[0]} imports the TypeScript API. Import it from ${typeScriptApiEntry}.`,
+        ]
+      : [];
+  });
+}
+
+test(`no file outside ${typeScriptApiHome} imports the TypeScript API`, () => {
+  const files = scriptFiles.filter((file) => !file.startsWith(typeScriptApiHome));
+  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
+  const violations = files.flatMap((file, index) => typeScriptApiImports(file, sources[index]));
+
+  expect(files.length).toBeGreaterThan(10);
+  expect(violations).toEqual([]);
+});
+
+test("the TypeScript API rule flags each way a file can load typescript, and an import of the syntax module passes", () => {
+  const file = "tests/typescript-api-imports.ts";
+  const lines = [
+    'import ts from "typescript";',
+    'import { API } from "typescript/unstable/sync";',
+    'export { SyntaxKind } from "typescript/unstable/ast";',
+    'const later = await import("typescript");',
+    'const required = require("typescript");',
+    'type Tree = import("typescript/unstable/ast").Node;',
+    'import { parse } from "../scripts/syntax";',
+    'const named = "typescript";',
+  ];
+  const source = parseText(lines.join("\n"), ".ts");
+  const flagged = typeScriptApiImports(file, source).map(
+    (violation) => /^[^:]+:(\d+):/.exec(violation)?.[1],
+  );
+
+  expect(flagged).toEqual(["1", "2", "3", "4", "5", "6"]);
+});
+
+function typeScriptApiNames(): string[] {
+  const [list] = parseAll([join(repositoryRoot, typeScriptApiList)]);
+  return list.statements.flatMap((statement) =>
+    ts.isExportDeclaration(statement) &&
+    statement.exportClause &&
+    ts.isNamedExports(statement.exportClause)
+      ? statement.exportClause.elements.map((element) => element.name.text)
+      : [],
+  );
+}
+
+function tsMembersNamedIn(source: ts.SourceFile): string[] {
+  return descendants(source).flatMap((node) => {
+    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+      return node.expression.text === "ts" ? [node.name.text] : [];
+    }
+    if (ts.isQualifiedName(node) && ts.isIdentifier(node.left)) {
+      return node.left.text === "ts" ? [node.right.text] : [];
+    }
+    return [];
+  });
+}
+
+test(`${typeScriptApiList} lists no member of ts that no file names`, () => {
+  const listed = typeScriptApiNames();
+  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
+  const named = new Set(sources.flatMap(tsMembersNamedIn));
+  const unused = listed
+    .filter((name) => !named.has(name))
+    .map(
+      (name) =>
+        `${typeScriptApiList}: no file names ts.${name}; remove it from the list, so the list stays what a TypeScript upgrade has to keep working.`,
+    );
+
+  expect(listed.length).toBeGreaterThan(10);
+  expect(unused).toEqual([]);
+});
+
+test("parse gives a file's text as this process first read it, and does not see the file rewritten afterwards", () => {
+  const directory = mkdtempSync(join(tmpdir(), "syntax-"));
+  const file = join(directory, "rewritten.ts");
+
+  writeFileSync(file, "const first = 1;\n");
+  const firstRead = parse(file).getText();
+  writeFileSync(file, "const second = 2;\n");
+  const secondRead = parse(file).getText();
+  rmSync(directory, { recursive: true });
+
+  expect([firstRead, secondRead]).toEqual(["const first = 1;\n", "const first = 1;\n"]);
+});
+
+function pathsOfTheWorkspaceFile(file: string, source: ts.SourceFile): string[] {
+  return descendants(source).flatMap((node) =>
+    ts.isStringLiteralLikeNode(node) &&
+    (node.text === workspaceFile || node.text.endsWith(`/${workspaceFile}`))
+      ? [
+          `${file}:${lineOf(source, node.getStart())}: ${node.getText()} writes the path of ${workspaceFile}. Take its settings from pnpmSettings() in ${pnpmSettingsReader}, which asks pnpm, so no second parser can disagree with pnpm.`,
+        ]
+      : [],
+  );
+}
+
+test(`no script or test but ${pnpmSettingsReader} writes the path of ${workspaceFile} as a string`, () => {
+  const files = scriptFiles.filter((file) => file !== pnpmSettingsReader);
+  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
+  const violations = files.flatMap((file, index) => pathsOfTheWorkspaceFile(file, sources[index]));
+  const flagged = pathsOfTheWorkspaceFile(
+    "tests/a-second-parser.ts",
+    parseText(
+      [
+        'const file = "../pnpm-workspace.yaml";',
+        'const text = readFileSync(join(repositoryRoot, "pnpm-workspace.yaml"), "utf8");',
+        "const quoted = `pnpm-workspace.yaml`;",
+        'const message = "set minimumReleaseAge in pnpm-workspace.yaml";',
+      ].join("\n"),
+      ".ts",
+    ),
+  ).map((violation) => /^[^:]+:(\d+):/.exec(violation)?.[1]);
+
+  expect(scriptFiles).toContain(pnpmSettingsReader);
+  expect(violations).toEqual([]);
+  expect(flagged).toEqual(["1", "2", "3"]);
+});
+
+test("commentsIn finds each comment, and nothing inside a regular expression, a template, a string or JSX text", () => {
+  const source = parseText(
+    [
+      "const a = 1 /* in binary */ + 2;",
+      "const re = /\\/\\/not-a-comment/g; // trailing",
+      "const t = `x ${a /* in template */} // not`;",
+      'const s = "// not a comment";',
+      "function f(/* param */ p: number) { return p; }",
+      'const el = <div /* attr */ class="x">{/* jsx */}// jsx text not comment</div>;',
+      "type T = { /* in type */ k: string };",
+      "const o = { k: 1, /* after comma */ };",
+      "const div = a / 2 / 1; // after division",
+      "label: for (;;) { break label; /* after break */ }",
+      "export {}; // eof",
+    ].join("\n"),
+    ".tsx",
+  );
+
+  expect(commentsIn(source).map(({ text }) => text)).toEqual([
+    "/* in binary */",
+    "// trailing",
+    "/* in template */",
+    "/* param */",
+    "/* attr */",
+    "/* jsx */",
+    "/* in type */",
+    "/* after comma */",
+    "// after division",
+    "/* after break */",
+    "// eof",
+  ]);
+});
+
+test("every workflow job sets timeout-minutes, so a hung step ends", () => {
+  const violations = workflowFiles.flatMap((file) => {
+    const lines = readFileSync(join(repositoryRoot, file), "utf8").split("\n");
+    const jobsAt = lines.indexOf("jobs:");
+    const starts = lines.flatMap((line, index) =>
+      index > jobsAt && jobHeader.test(line) ? [index] : [],
+    );
+    return starts.flatMap((start, position) => {
+      const block = lines.slice(start + 1, starts[position + 1] ?? lines.length);
+      return block.some((line) => jobTimeout.test(line))
+        ? []
+        : [`${file}: give the job ${lines[start].trim()} a timeout-minutes.`];
+    });
+  });
+
+  expect(workflowFiles.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
 test("source code carries no comment except a doc comment on a public API", () => {
-  const comments = scriptFiles.flatMap(commentsOtherThanDocComments);
+  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
+  const comments = scriptFiles.flatMap((file, index) =>
+    commentsOtherThanDocComments(file, sources[index]),
+  );
 
   expect(scriptFiles.length).toBeGreaterThan(10);
   expect(comments, "Remove the comment and say it with a name, a constant or a test.").toEqual([]);
 });
 
 test("every peer range of a library package accepts the version the catalog pins", () => {
-  const catalog = catalogVersions();
+  const { catalog } = pnpmSettings();
   const violations = libraryPackages.flatMap(({ path, manifest }) =>
     Object.entries(manifest.peerDependencies ?? {}).flatMap(([name, range]) => {
       if (libraryNames.includes(name)) return [];
@@ -254,7 +497,7 @@ test("the project is MIT-licensed in its licence text, its root manifest and eve
         `${path}: set "license" to "${projectLicence}", not "${manifest.license}".`,
     );
 
-  expect(rootManifest.license, `package.json: set "license" to "${projectLicence}"`).toBe(
+  expect(rootManifest().license, `package.json: set "license" to "${projectLicence}"`).toBe(
     projectLicence,
   );
   expect(licenceText.split("\n")[0], `LICENSE: start with "${projectLicence} License"`).toBe(
@@ -294,7 +537,7 @@ test("in every workflow, each node-version-file is package.json, no line names n
 });
 
 test("no .node-version, .nvmrc or .tool-versions file, devEngines.runtime or engines.node outside package.json exists, and @types/node shares the lowest major of engines.node", () => {
-  const typesRange = catalogVersions()["@types/node"] ?? "";
+  const typesRange = pnpmSettings().catalog["@types/node"] ?? "";
   const writtenAgain = [
     ...globSync(nodeVersionFilesThatCompete, {
       cwd: repositoryRoot,

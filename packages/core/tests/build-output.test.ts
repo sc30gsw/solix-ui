@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import postcss from "postcss";
-import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import {
   LIBRARY_CASCADE_LAYER,
@@ -14,6 +13,7 @@ import {
   stylePropNames,
 } from "../src/style-prop-table";
 import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
+import { parse, ts } from "../../../scripts/syntax";
 import { enclosingAtRules, inStylePropLayer, nestedLayerOrder } from "./cascade-layers";
 
 const stylesheet = builtStylesheet.trim();
@@ -318,13 +318,7 @@ test("every rule of a shorthand style prop, at every breakpoint, comes before ev
 
 test("the built style-prop table imports nothing, so build.mjs can load it in plain Node", () => {
   const file = join(dist, builtStylePropTable);
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(file, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JS,
-  );
+  const source = parse(file);
   const imports: string[] = [];
   const visit = (node: ts.Node): void => {
     const loadsAModule =
@@ -334,7 +328,7 @@ test("the built style-prop table imports nothing, so build.mjs can load it in pl
         (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
           node.expression.getText(source) === "require"));
     if (loadsAModule) imports.push(node.getText(source));
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(source);
 

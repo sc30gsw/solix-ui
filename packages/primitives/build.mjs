@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const sourceDirectory = join(packageRoot, "src");
 const outputDirectory = join(packageRoot, "dist");
-const typesStripped = [[presetTypescript, { onlyRemoveTypeImports: true }]];
+const typesStripped = [presetTypescript];
 const relativeSpecifier = /^\.{1,2}\//;
 const sourceExtension = /\.ts$/;
 const outputExtension = ".js";

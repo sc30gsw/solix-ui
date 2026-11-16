@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import ts from "typescript";
 import { expect, test } from "vite-plus/test";
 import { tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
+import { parse, ts } from "../../../scripts/syntax";
 
 type Minimum = { ratio: number; criterion: string };
 type Conditional = Map<string, ts.Expression>;
@@ -98,13 +98,7 @@ function blocksIn(name: string, style: ts.ObjectLiteralExpression): Block[] {
 }
 
 function stylexBlocks(file: string): Block[] {
-  const source = ts.createSourceFile(
-    file,
-    readFileSync(join(repositoryRoot, file), "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const source = parse(join(repositoryRoot, file));
   const blocks: Block[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node) && node.expression.getText() === "stylex.create") {
@@ -117,7 +111,7 @@ function stylexBlocks(file: string): Block[] {
         }
       }
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   visit(source);
   return blocks;

@@ -39,6 +39,7 @@ It does if it edits any of these:
 | `packages/core/tests/component-contract.test.tsx` | The library classes each part starts with come from `compiledClassesOf`, and the custom properties an override may name from the `@property` registrations in `stylesheet`. Its generated values come from `packages/core/tests/arbitraries.ts`, and the props it builds from them from `packages/core/tests/consumer-props.ts`. It reads markup with `packages/core/tests/markup.ts`. |
 | `packages/core/tests/box.test.tsx` | It holds the fixed `Box` cases. |
 | `tests/support` | It runs `vp run -r build` in production mode before any test, which is what produces `packages/core/dist`, and then starts the built playground once and gives the browser tests its URL as `playgroundUrl`. |
+| `scripts/syntax.ts` and `scripts/syntax` | `compiledClassesOf` in `built-library.ts` parses each built component with it, to read the class names each part compiles to. |
 | `apps/playground/tests/consumer.test.ts`, `apps/playground/tests/button.test.ts` and `apps/playground/tests/disclosure.test.ts` | `consumer.test.ts` drives the `Emphasise` button and the `Follows` disclosure in a browser and checks that each component's `ref` receives its root element. `button.test.ts` compares the `Unstyled` button with the `Plain button` the library does not style. |
 | `apps/playground/src/sections` | In `ChangingPropsSection.tsx`, the `Emphasise` button switches the class `danger` and `aria-pressed` on itself, the class `outlined` on the `Follows` disclosure, and the class `danger` on its summary through `classes.summary`. One of each component takes `ref={refOf("<Component>")}`, which marks the node it receives with `data-ref`. |
 | `scripts/browser-engines.mjs` | It lists the engines the browser tests run on. |
@@ -47,7 +48,7 @@ It does if it edits any of these:
 | `vite.config.ts` | It sets the test include globs, the global setup, and the Solid plugin. |
 | `solid-js`, `@solidjs/web` and `@solidjs/vite-plugin` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins, they decide how a `class` value becomes a class attribute. |
 
-Last confirmed against commit `e7aea22`. Run `git diff e7aea22 -- packages/core apps/playground tests/support scripts/browser-engines.mjs scripts/expected-values.ts tests/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `e7aea22`. Run `git diff e7aea22 -- packages/core apps/playground tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs scripts/expected-values.ts tests/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 

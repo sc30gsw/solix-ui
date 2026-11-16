@@ -2,9 +2,12 @@ packages:
   - packages/*
   - apps/*
 catalogMode: strict
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
 catalog:
-  "@babel/core": ^7.26.8
-  "@babel/preset-typescript": ^7.26.0
+  "@babel/core": ^8.1.2
+  "@babel/plugin-syntax-jsx": ^8.0.1
+  "@babel/preset-typescript": ^8.0.7
   "@solidjs/vite-plugin": 3.0.0-next.57
   "@solidjs/web": 2.0.0-rc.21
   "@stylexjs/babel-plugin": 0.19.2
@@ -16,12 +19,12 @@ catalog:
   axe-core: 4.14.0
   fast-check: 4.10.2
   modern-web-guidance: 1.0.0
-  playwright: 1.63.0
+  playwright: 1.65.1
   postcss: 8.5.33
-  semver: 7.8.5
+  semver: 7.8.6
   solid-js: 2.0.0-rc.21
-  solid2-agent-kit: 0.25.0
-  typescript: ^6.0.3
+  solid2-agent-kit: 0.26.1
+  typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   vite-plus: 1.6.0
 overrides:
@@ -31,3 +34,14 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: "*"
+permissions:
+  "@solidjs/web":
+    skills:
+      - server-components
+  solid-js:
+    skills:
+      - solid-2.0
+      - solid-2.0-cheatsheet
+      - reactivity-diagnostics
+  modern-web-guidance:
+    skills: false

@@ -1,0 +1,10 @@
+{
+  "@solidjs/web": {
+    "server-components": "c4cefe0447f2f552190f92293b766879f4d2d61a2735c7ea70c8a0dd8e7d5045"
+  },
+  "solid-js": {
+    "reactivity-diagnostics": "0f16dccc25fda5346da0674d0e21d81a5e8b4032100e3143c99da4a97340f5c7",
+    "solid-2.0": "cf2bb9ac1648b310d106b7824536352e55ff11980f1dd6b7c544aa9f17756b8a",
+    "solid-2.0-cheatsheet": "55165627aa95b4c3c189413c8804b67988fdfb525bc95e051dc9d9505313981f"
+  }
+}
