@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { repositoryRoot } from "./repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
@@ -22,7 +24,9 @@ export type RawSettings = {
 };
 
 const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
-let read: PnpmSettings | undefined;
+const pnpmAnswerTimeout = 30_000;
+const settingFromTheEnvironment = /^p?npm_config_/i;
+let cached: PnpmSettings | undefined;
 
 function approvedSkillsIn(permissions: RawSettings["permissions"]): Record<string, string[]> {
   return Object.fromEntries(
@@ -50,22 +54,92 @@ export function settingsFrom(raw: RawSettings): PnpmSettings {
   };
 }
 
-export function readPnpmSettings(): PnpmSettings {
-  return settingsFrom(
-    JSON.parse(
-      execFileSync(
-        existsSync(installedVp) ? installedVp : "vp",
-        ["pm", "config", "list", "--json"],
-        {
-          cwd: repositoryRoot,
-          encoding: "utf8",
-        },
-      ),
-    ) as RawSettings,
+function withoutSettings(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(environment).filter(([name]) => !settingFromTheEnvironment.test(name)),
   );
 }
 
+function pnpmAnswer(directory: string, vp: string): string {
+  const noUserConfig = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
+  try {
+    return execFileSync(vp, ["pm", "config", "list", "--json"], {
+      cwd: directory,
+      encoding: "utf8",
+      env: { ...withoutSettings(process.env), XDG_CONFIG_HOME: noUserConfig },
+      timeout: pnpmAnswerTimeout,
+    });
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    if (code === "ENOENT") {
+      throw new Error(
+        `${workspaceFile} is read through pnpm, which ${vp} starts, and that is neither installed here nor on PATH. Install Vite+, then run \`vp install\`.`,
+        { cause: error },
+      );
+    }
+    if (code === "ETIMEDOUT") {
+      throw new Error(
+        `${vp} pm config list gave no answer in ${pnpmAnswerTimeout / 1000} seconds.`,
+        { cause: error },
+      );
+    }
+    throw error;
+  } finally {
+    rmSync(noUserConfig, { recursive: true });
+  }
+}
+
+export function readPnpmSettings(
+  directory: string = repositoryRoot,
+  vp: string = existsSync(installedVp) ? installedVp : "vp",
+): PnpmSettings {
+  return settingsFrom(JSON.parse(pnpmAnswer(directory, vp)) as RawSettings);
+}
+
 export function pnpmSettings(): PnpmSettings {
-  read ??= readPnpmSettings();
-  return read;
+  cached ??= readPnpmSettings();
+  return cached;
+}
+
+function withCatalogVersions(
+  workspace: string,
+  catalog: Record<string, string>,
+  versions: Record<string, string>,
+): string {
+  const lines = workspace.split("\n");
+  for (const [name, version] of Object.entries(versions)) {
+    const current = catalog[name];
+    const written = [`  ${name}: ${current}`, `  "${name}": ${current}`];
+    const matches = lines.flatMap((line, index) => (written.includes(line) ? [index] : []));
+    if (current === undefined || matches.length !== 1) {
+      throw new Error(`${name}: the catalog does not hold it as one line ${written[0]}.`);
+    }
+    lines[matches[0]] = lines[matches[0]].replace(`: ${current}`, `: ${version}`);
+  }
+  return lines.join("\n");
+}
+
+export function rewriteCatalog(
+  versions: Record<string, string>,
+  directory: string = repositoryRoot,
+): void {
+  const path = join(directory, workspaceFile);
+  const before = readPnpmSettings(directory).catalog;
+  const original = readFileSync(path, "utf8");
+  let pnpmReportsTheChange = false;
+  writeFileSync(path, withCatalogVersions(original, before, versions));
+  cached = undefined;
+  try {
+    pnpmReportsTheChange = isDeepStrictEqual(readPnpmSettings(directory).catalog, {
+      ...before,
+      ...versions,
+    });
+  } finally {
+    if (!pnpmReportsTheChange) writeFileSync(path, original);
+  }
+  if (!pnpmReportsTheChange) {
+    throw new Error(
+      `${workspaceFile}: after the edit pnpm does not report exactly ${Object.keys(versions).join(" and ")} changed; it was undone.`,
+    );
+  }
 }

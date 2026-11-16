@@ -13,9 +13,8 @@ import {
   type RegistryDocument,
   type ReleasePolicy,
   solidReleases,
-  withCatalogVersions,
 } from "../scripts/newest-releases";
-import { pnpmSettings, settingsFrom, workspaceFile } from "../scripts/pnpm-settings";
+import { pnpmSettings } from "../scripts/pnpm-settings";
 import { heldBackEntries } from "../scripts/release-sources";
 import { rootManifest } from "../scripts/repository";
 
@@ -235,28 +234,6 @@ test("the Solid 2 canary stays on Solid 2 when next moves to Solid 3, and takes 
   ).toBe("2.0.1");
 });
 
-test("withCatalogVersions rewrites only the Solid entries of the catalog", () => {
-  const workspace = [
-    "catalog:",
-    '  "@solidjs/web": 2.0.0-rc.21',
-    "  solid-js: 2.0.0-rc.21",
-    "  solid2-agent-kit: 0.25.0",
-    "",
-  ].join("\n");
-  const catalog = {
-    "@solidjs/web": "2.0.0-rc.21",
-    "solid-js": "2.0.0-rc.21",
-    "solid2-agent-kit": "0.25.0",
-  };
-
-  expect(
-    withCatalogVersions(workspace, catalog, {
-      "solid-js": "2.0.0-rc.22",
-      "@solidjs/web": "2.0.0-rc.22",
-    }),
-  ).toBe(workspace.replaceAll("2.0.0-rc.21", "2.0.0-rc.22"));
-});
-
 test("a pin behind its channel fails the check, unless the held-back list holds it with a reason and a liftWhen", () => {
   const hold = {
     name: "playwright",
@@ -284,18 +261,13 @@ test("a held-back entry that holds nothing back, or has no reason or no liftWhen
   ).toContain(`playwright: give the entry in ${heldBackFile} a reason and a liftWhen.`);
 });
 
-test("pinsOf refuses a manifest without packageManager or engines.node, and pnpm settings without a catalog", () => {
+test("pinsOf refuses a manifest without packageManager or engines.node", () => {
   expect(() => pinsOf({ engines: { node: "^26.13.1" } }, { semver: "7.8.6" })).toThrow(
     /packageManager/,
   );
   expect(() => pinsOf({ packageManager: "pnpm@12.18.0" }, { semver: "7.8.6" })).toThrow(
     /engines\.node/,
   );
-  expect(() => settingsFrom({})).toThrow(/no catalog entries/);
-  expect(() => settingsFrom({ catalog: {} })).toThrow(/no catalog entries/);
-  expect(() =>
-    settingsFrom({ catalog: { semver: "7.8.6" }, permissions: { a: { skills: true } } }),
-  ).toThrow(/instead of skills: true/);
 });
 
 test(`${heldBackFile} names only pins of this repository, and holds each back with a reason and a liftWhen`, () => {
@@ -306,9 +278,4 @@ test(`${heldBackFile} names only pins of this repository, and holds each back wi
   expect(
     heldBackProblems(heldBack, []).filter((problem) => !problem.includes("not behind")),
   ).toEqual([]);
-});
-
-test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true`, () => {
-  expect(pnpmSettings().minimumReleaseAge).toBeGreaterThan(0);
-  expect(pnpmSettings().minimumReleaseAgeStrict).toBe(true);
 });

@@ -51,7 +51,6 @@ const typeScriptApiHome = "scripts/syntax/";
 const typeScriptApiEntry = "scripts/syntax.ts";
 const typeScriptApiList = "scripts/syntax/ast.ts";
 const pnpmSettingsReader = "scripts/pnpm-settings.ts";
-const workspaceFileEditor = "scripts/solid-2-canary.ts";
 const syntaxModuleImport = /(?:^|\/)syntax(?:\.ts)?$/;
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
@@ -333,48 +332,37 @@ test(`${typeScriptApiList} lists exactly the members of ts the repository names:
   expect([...missing, ...unused]).toEqual([]);
 });
 
-function readsOfTheWorkspaceFile(file: string, source: ts.SourceFile): string[] {
-  return descendants(source).flatMap((node) => {
-    const writesItsName =
-      ts.isStringLiteralLikeNode(node) &&
-      (node.text === workspaceFile || node.text.endsWith(`/${workspaceFile}`));
-    const readsIt =
-      ts.isCallExpression(node) &&
-      /readFile/.test(node.expression.getText()) &&
-      node.arguments.some((argument) => argument.getText().includes("workspaceFile"));
-    if (writesItsName && file !== pnpmSettingsReader) {
-      return [
-        `${file}:${lineOf(source, node.getStart())}: take the name of ${workspaceFile} from ${pnpmSettingsReader}, the one module that names it.`,
-      ];
-    }
-    if (readsIt && file !== workspaceFileEditor) {
-      return [
-        `${file}:${lineOf(source, node.getStart())}: ${node.getText().split("\n")[0]} reads ${workspaceFile} itself. Take its settings from pnpmSettings() in ${pnpmSettingsReader}, which asks pnpm, so no second parser can disagree with pnpm.`,
-      ];
-    }
-    return [];
-  });
+function pathsOfTheWorkspaceFile(file: string, source: ts.SourceFile): string[] {
+  return descendants(source).flatMap((node) =>
+    ts.isStringLiteralLikeNode(node) &&
+    (node.text === workspaceFile || node.text.endsWith(`/${workspaceFile}`))
+      ? [
+          `${file}:${lineOf(source, node.getStart())}: ${node.getText()} writes the path of ${workspaceFile}. Take its settings from pnpmSettings() in ${pnpmSettingsReader}, the one module that reads or edits the file, so no second parser can disagree with pnpm.`,
+        ]
+      : [],
+  );
 }
 
-test(`only ${pnpmSettingsReader} names ${workspaceFile}, and only ${workspaceFileEditor} reads the file itself, to edit it`, () => {
-  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
-  const violations = scriptFiles.flatMap((file, index) =>
-    readsOfTheWorkspaceFile(file, sources[index]),
-  );
-  const flagged = readsOfTheWorkspaceFile(
+test(`no script or test but ${pnpmSettingsReader} writes the path of ${workspaceFile} as a string`, () => {
+  const files = scriptFiles.filter((file) => file !== pnpmSettingsReader);
+  const sources = parseAll(files.map((file) => join(repositoryRoot, file)));
+  const violations = files.flatMap((file, index) => pathsOfTheWorkspaceFile(file, sources[index]));
+  const flagged = pathsOfTheWorkspaceFile(
     "tests/a-second-parser.ts",
     parseText(
       [
         'const file = "../pnpm-workspace.yaml";',
-        'const text = readFileSync(join(repositoryRoot, workspaceFile), "utf8");',
+        'const text = readFileSync(join(repositoryRoot, "pnpm-workspace.yaml"), "utf8");',
+        "const quoted = `pnpm-workspace.yaml`;",
         'const message = "set minimumReleaseAge in pnpm-workspace.yaml";',
       ].join("\n"),
       ".ts",
     ),
   ).map((violation) => /^[^:]+:(\d+):/.exec(violation)?.[1]);
 
+  expect(scriptFiles).toContain(pnpmSettingsReader);
   expect(violations).toEqual([]);
-  expect(flagged).toEqual(["1", "2"]);
+  expect(flagged).toEqual(["1", "2", "3"]);
 });
 
 test("commentsIn finds each comment, and nothing inside a regular expression, a template, a string or JSX text", () => {

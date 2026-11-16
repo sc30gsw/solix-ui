@@ -328,21 +328,3 @@ export function newestSolidRelease(
   }
   return version;
 }
-
-export function withCatalogVersions(
-  workspace: string,
-  catalog: Record<string, string>,
-  versions: Record<string, string>,
-): string {
-  const lines = workspace.split("\n");
-  for (const [name, version] of Object.entries(versions)) {
-    const current = catalog[name];
-    const written = [`  ${name}: ${current}`, `  "${name}": ${current}`];
-    const matches = lines.flatMap((line, index) => (written.includes(line) ? [index] : []));
-    if (current === undefined || matches.length !== 1) {
-      throw new Error(`${name}: the catalog does not hold it as one line ${written[0]}.`);
-    }
-    lines[matches[0]] = lines[matches[0]].replace(`: ${current}`, `: ${version}`);
-  }
-  return lines.join("\n");
-}
