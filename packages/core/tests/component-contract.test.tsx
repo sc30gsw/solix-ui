@@ -36,7 +36,14 @@ import {
   stylePropPropsOf,
   styleWritten,
 } from "./consumer-props";
-import { components, fixtures, polymorphicComponents, render, type TakesDisplay } from "./fixtures";
+import {
+  components,
+  fixtures,
+  polymorphicComponents,
+  readsInOneRender,
+  render,
+  type TakesDisplay,
+} from "./fixtures";
 import {
   classesOf,
   declarationsIn,
@@ -139,6 +146,20 @@ test.each(builtComponents)(
     for (const element of elements) {
       for (const part of partsOn(name, element)) expectCompiledClassesFirst(name, part, element);
     }
+  },
+);
+
+test.each(components)(
+  "%s reads each prop of its type that takes an element once in a server render of its fixture, so an element a consumer passes is created once",
+  (name, { rendersElementProp, props }) => {
+    const rendered = Object.entries(rendersElementProp)
+      .filter(([, renders]) => renders)
+      .map(([prop]) => prop);
+
+    expect(Object.keys(props), "the fixture gives each such prop").toEqual(
+      expect.arrayContaining(rendered),
+    );
+    for (const prop of rendered) expect(readsInOneRender(name, prop), prop).toBe(1);
   },
 );
 

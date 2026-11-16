@@ -89,7 +89,9 @@ export function TabsSection() {
 
       <Tabs value={controlled()} onChange={(value) => setControlled(value)}>
         <Tabs.List aria-label="Controlled">
-          <Tabs.Tab value="inbox">Inbox</Tabs.Tab>
+          <Tabs.Tab value="inbox" leftSection={<span>In</span>}>
+            <span>Inbox</span>
+          </Tabs.Tab>
           <Tabs.Tab
             value="drafts"
             {...(countsHovers()

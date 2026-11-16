@@ -1,3 +1,4 @@
+import type { JSX } from "@solidjs/web";
 import { expect } from "vite-plus/test";
 import type * as Library from "../src/index";
 import type { DisplayPropName } from "../src/style-prop-table";
@@ -21,12 +22,23 @@ type Polymorphic<Component> = "component" extends keyof PropsOf<Component> ? tru
 
 type ComponentName = keyof typeof Library;
 
+type TakesAnything<Value> = 0 extends 1 & Value ? true : false;
+
+type ElementValued<Props> = {
+  [Key in keyof Props]-?: TakesAnything<Props[Key]> extends true
+    ? never
+    : JSX.Element extends Props[Key]
+      ? Key
+      : never;
+}[keyof Props];
+
 type Fixture<Component> = {
   within?: ComponentName;
   tag: string;
   booleanAttribute: string;
   takesDisplay: TakesDisplay<PropsOf<Component>>;
   polymorphic: Polymorphic<Component>;
+  rendersElementProp: Record<ElementValued<PropsOf<Component>>, boolean>;
   props: PropsOf<Component>;
 };
 
@@ -38,6 +50,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "hidden",
     takesDisplay: true,
     polymorphic: true,
+    rendersElementProp: { children: true },
     props: { children: "Content" },
   },
   Button: {
@@ -45,6 +58,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "disabled",
     takesDisplay: true,
     polymorphic: true,
+    rendersElementProp: { children: true },
     props: { children: "Label" },
   },
   Disclosure: {
@@ -52,6 +66,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "open",
     takesDisplay: true,
     polymorphic: false,
+    rendersElementProp: { children: true },
     props: { label: "Label", children: "Content" },
   },
   Modal: {
@@ -59,6 +74,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "hidden",
     takesDisplay: false,
     polymorphic: false,
+    rendersElementProp: { children: true },
     props: { label: "Label", opened: false, children: "Content" },
   },
   Tabs: {
@@ -66,6 +82,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "hidden",
     takesDisplay: true,
     polymorphic: false,
+    rendersElementProp: { children: true },
     props: { children: "Content" },
   },
   TabsList: {
@@ -74,6 +91,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "hidden",
     takesDisplay: true,
     polymorphic: false,
+    rendersElementProp: { children: true },
     props: { children: "Content" },
   },
   TabsPanel: {
@@ -82,6 +100,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "inert",
     takesDisplay: true,
     polymorphic: false,
+    rendersElementProp: { children: true },
     props: { value: "first", children: "Content" },
   },
   TabsTab: {
@@ -90,6 +109,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "disabled",
     takesDisplay: true,
     polymorphic: false,
+    rendersElementProp: { children: true, leftSection: true, rightSection: true },
     props: { value: "first", leftSection: "Left", rightSection: "Right", children: "Label" },
   },
   TextInput: {
@@ -97,6 +117,7 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     booleanAttribute: "disabled",
     takesDisplay: true,
     polymorphic: false,
+    rendersElementProp: { children: false },
     props: {},
   },
 };
@@ -121,17 +142,23 @@ function attributesNamed(html: string, props: readonly string[]): string[] {
   );
 }
 
-export function render(name: string, props: ConsumerProps = {}): string {
+function fixtureOf(name: string): { within?: ComponentName; props: ConsumerProps } {
   if (!isComponentName(name)) {
     throw new Error(`packages/core/tests/fixtures.ts: add a fixture for ${name}.`);
   }
-  const { within, props: fixtureProps }: { within?: ComponentName; props: ConsumerProps } =
-    fixtures[name];
-  const given = { ...fixtureProps, ...props };
-  const html =
-    within === undefined
-      ? renderBuilt(name, given)
-      : renderBuiltWithin(within, fixtures[within].props, name, given);
+  return fixtures[name];
+}
+
+function renderGiven(name: string, given: ConsumerProps): string {
+  const { within } = fixtureOf(name);
+  return within === undefined
+    ? renderBuilt(name, given)
+    : renderBuiltWithin(within, fixtures[within].props, name, given);
+}
+
+export function render(name: string, props: ConsumerProps = {}): string {
+  const { props: fixtureProps } = fixtureOf(name);
+  const html = renderGiven(name, { ...fixtureProps, ...props });
   expect(
     attributesNamed(
       html,
@@ -144,4 +171,20 @@ export function render(name: string, props: ConsumerProps = {}): string {
     "no prop that createParts handles, but class and style, reaches an element as an attribute",
   ).toEqual([]);
   return html;
+}
+
+export function readsInOneRender(name: string, prop: string): number {
+  const { props } = fixtureOf(name);
+  let reads = 0;
+  renderGiven(
+    name,
+    Object.defineProperty({ ...props }, prop, {
+      enumerable: true,
+      get() {
+        reads += 1;
+        return props[prop];
+      },
+    }),
+  );
+  return reads;
 }
