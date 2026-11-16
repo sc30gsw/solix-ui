@@ -32,8 +32,8 @@ A consumer's `onClick` runs after the SDK already selected, or cannot stop it. A
 | `packages/core/src/headless.ts`: `bindSlot`, `createBehaviour`, `Behaviour`, `partId` | `bindSlot(styled, component, slot)` calls `slot` once with the attributes and merges what it returns. It reads the names of the handlers each time the part's props are read, so a handler added later is merged too, and returns the same handlers object while the names are unchanged. `createBehaviour` wraps the SDK's `usePrimitive`, and its `bind` takes the parts `createParts` returned and calls `bindSlot` once for each part in its map, with the SDK's slot getter. |
 | `packages/core/src/parts.ts`: `createParts`, `rootPart` | `createParts` returns `{ root, part }` and knows nothing of a behaviour. `bind` takes the root's props from `root` and another part's from `part(name)`. |
 | `packages/core/src/style-props.ts`: `withConsumerStyle` | It puts its first argument's declarations before the second's, as an object or as a string, and leaves out a declaration whose value is `undefined` or `null`. `bindSlot` gives it the SDK's style first and ours second. |
-| `packages/core/tests/headless.test.tsx` | The check. Its first test draws three sets of props and a stand-in slot. Its third binds a probe component to the SDK's tabs slots and renders it with Solid's server renderer from `packages/core/dist`. Its last holds the type of `bind`, which `vp check` evaluates. |
-| `apps/playground/tests/behaviour-seam.test.ts` | It holds, in a browser, what the server renderer cannot show: a handler given to a tab after the first render reaches it; every tab of the controlled list stays the element it was, and an element passed as a section is created once, across a click, an arrow key and a handler given to the list later; tabs in a shadow root keep focus and their arrow keys; the ids `partId` makes from generated values can be referenced; and the page holds no style but the SDK's one `<style>` element, in a layer the library's stylesheet ordered first. |
+| `packages/core/tests/headless.test.tsx` | The check. Its first test draws three sets of props and a stand-in slot. Another binds a probe component to the SDK's tabs slots and renders it with Solid's server renderer from `packages/core/dist`. The tests whose names start `bind takes` or `bind refuses` hold the type of `bind`, which `vp check` evaluates. |
+| `apps/playground/tests/behaviour-seam.test.ts` | It holds, in a browser, what the server renderer cannot show: a handler given to a tab after the first render reaches it; every tab of the controlled list stays the element it was, and an element passed as a section is created once, across a click, an arrow key and a handler given to the list later; tabs in a shadow root keep focus and their arrow keys; and the ids `partId` makes from generated values can be referenced. |
 | `tests/support` | It builds the library and the app in production mode before any test. |
 | `vite.config.ts` | It sets the test include globs, the global setup and the Solid plugin. |
 | `@ui-sdk/core`, `@ui-sdk/solid`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
@@ -51,22 +51,22 @@ The first evaluates the type test. The second takes about ten seconds with one e
 
 ## The tool and why
 
-No model checker or verifier runs on a Solid component or on the SDK, so this is not a proof. The merge order is a pure function of three objects, so the first test generates the objects and a stand-in for the slot with fast-check and checks the function on the real code. The third test generates our props and the tab's slot props and checks the same order against the SDK itself, rendered on the server. What `bind` refuses is a fact about a type, so the compiler checks it.
+No model checker or verifier runs on a Solid component or on the SDK, so this is not a proof. The merge order is a pure function of three objects, so the first test generates the objects and a stand-in for the slot with fast-check and checks the function on the real code. The test against the SDK's slots generates our props and the tab's slot props and checks the same order against the SDK itself, rendered on the server. What `bind` refuses is a fact about a type, so the compiler checks it.
 
 ## What a pass covers
 
-- 300 draws per run of the stand-in test. Each of the three sources may give an id, a ref, a class, a style as an object or a string, any of four attributes, and any of `onClick`, `onKeyDown` and `onFocus`, each a plain function or a bound pair, each preventing the default or not.
-- 300 draws per run against the SDK's `root`, `list`, `tab` and `panel` slots: a consumer class and id on the root, a component id on the tab, the tab disabled or not, and a component click handler that prevents the default or not.
+- `generatedRuns` draws per run of the stand-in test, as `headless.test.tsx` sets it. Each of the three sources may give an id, a ref, a class, a style as an object or a string, any of four attributes, and any of `onClick`, `onKeyDown` and `onFocus`, each a plain function or a bound pair, each preventing the default or not.
+- As many draws per run against the SDK's `root`, `list`, `tab` and `panel` slots: a consumer class and id on the root, a component id on the tab, the tab disabled or not, and a component click handler that prevents the default or not.
 - A symbol key of ours does not break the binding.
-- Fifteen shapes of what is given to `bind`: eleven maps, four it takes and seven it refuses, and four roots, two it takes and two that still take `children`, which it refuses. Each is given as a type, so the answer is the same for a map written inline and for one held in a constant.
-- In each installed engine, one handler given after the first render, the identity of every tab of one list across three changes, the arrow keys in a shadow root, and 25 generated sets of tab values.
+- Each shape of what is given to `bind` that those type tests list: maps it takes and maps it refuses, and roots it takes and roots that still take `children`, which it refuses. Each is given as a type, so the answer is the same for a map written inline and for one held in a constant.
+- In each installed engine, one handler given after the first render, the identity of every tab of one list across a click, an arrow key and a handler given later, the arrow keys in a shadow root, and `generatedRuns` generated sets of tab values, as `behaviour-seam.test.ts` sets it.
 
 ## What a pass does not cover
 
 - Handlers and refs of the generated props in a browser. The stand-in test calls merged handlers with a stand-in event, and the SDK test calls the tab's click handler directly in Node. `behaviour-seam.test.ts` holds one handler given after the first render; `consumer.test.ts` each root's ref.
 - A ref given after the first render. `bindSlot` reads the refs once, when it binds.
 - An SDK slot whose attributes include a style. No tabs slot has one, so the style order is checked against the stand-in only.
-- A part repeated inside one component, such as an option rendered from data. `bind` binds each part of its map once, and no component binds one per item yet.
+- A part repeated inside one component, such as an option rendered from data. `bind` binds each part of its map once, and no component binds one per item.
 - The selection of `Tabs`. `.agents/skills/verify-behaviour-protocol` covers that.
 - Firefox and WebKit where they are not installed.
 

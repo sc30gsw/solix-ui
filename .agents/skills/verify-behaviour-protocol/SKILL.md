@@ -13,7 +13,7 @@ Each behaviour component has one row here. The next one adds a row, a setups mod
 
 | Component | Covered code | Setups the playground renders | Model | Checks |
 | --- | --- | --- | --- | --- |
-| `Tabs` | `packages/core/src/Tabs*.tsx`, `packages/core/src/tabs-context.ts`, `packages/core/src/step-over-disabled.ts`; `apps/playground/src/sections/TabsSection.tsx`, which renders every entry of `tabsSetups` as a set of tabs whose list is named for the entry, with the entry's direction as `dir` and each panel's text from `panelOf`; and `apps/playground/tests/support/tabs.ts`, whose `keyboardTable` is the tabs pattern written by hand and whose `stateOf` reads the selected tab, the focused tab and the tabs with `tabindex` 0 by their index in the list, names them from the setups module, and reads the panels displayed | `apps/playground/src/sections/tabs-setups.ts` | `apps/playground/tests/support/roving-list-model.ts`, given each setup through `rovingListOf` in `apps/playground/tests/support/tabs.ts` | `apps/playground/tests/roving-list-model.test.ts`, `apps/playground/tests/tabs-protocol.test.ts` and the single steps in `apps/playground/tests/tabs.test.ts` |
+| `Tabs` | `packages/core/src/Tabs*.tsx`, `packages/core/src/tabs-context.ts`; `apps/playground/src/sections/TabsSection.tsx`, which renders every entry of `tabsSetups` as a set of tabs whose list is named for the entry, with the entry's direction as `dir` and each panel's text from `panelOf`; and `apps/playground/tests/support/tabs.ts`, whose `keyboardTable` is the tabs pattern written by hand and whose `stateOf` reads the selected tab, the focused tab and the tabs with `tabindex` 0 by their index in the list, names them from the setups module, and reads the panels displayed | `apps/playground/src/sections/tabs-setups.ts` | `apps/playground/tests/support/roving-list-model.ts`, given each setup through `rovingListOf` in `apps/playground/tests/support/tabs.ts` | `apps/playground/tests/roving-list-model.test.ts`, `apps/playground/tests/tabs-protocol.test.ts` and the single steps in `apps/playground/tests/tabs.test.ts` |
 
 **The selection of Tabs.** The model of a list holds two facts, the selected tab and the focused tab. It knows the list's tabs and which are disabled, its orientation, its direction, whether it wraps, whether an arrow selects, and whether a click on the selected tab selects none.
 
@@ -61,13 +61,13 @@ No model checker runs on a Solid component or on the SDK, so this is not a proof
 ## What a pass covers
 
 - Every row of the keyboard table against the model.
-- Every key of ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Home, End, Enter and Space from every state the model can reach, in each of the five lists `tabsSetups` describes, per engine. The lists differ in every fact the model holds: a disabled tab in the middle, at the end and at both ends, vertical and horizontal, left to right and right to left, wrapping and not, selecting on an arrow and not, and able to select none.
-- 15 generated sequences per engine per run, of up to twelve actions, each starting from a fresh page load on one of the five lists.
+- Every key of `keys` in `roving-list-model.ts` from every state the model can reach, in each list `tabsSetups` describes, per engine. The lists differ in every fact the model holds: a disabled tab in the middle, at the end and at both ends, vertical and horizontal, left to right and right to left, wrapping and not, selecting on an arrow and not, and able to select none.
+- `generatedRuns` generated sequences per engine per run, of up to `longestSequence` actions, as `tabs-protocol.test.ts` sets them, each starting from a fresh page load on one list of `tabsSetups`.
 
 ## What a pass does not cover
 
 - A click on a disabled tab, which moves focus differently in each engine. `apps/playground/tests/tabs.test.ts` checks that it selects nothing.
-- The lists `Controlled`, `Held`, `Generated` and the one in a shadow root, which are not in `tabsSetups`. Tests of their own in `apps/playground/tests/tabs.test.ts` hold a controlled value, a value the app never changes, and tabs and panels that mount later, and one in `apps/playground/tests/behaviour-seam.test.ts` the arrow keys in a shadow root.
+- The lists the section writes by hand, outside `tabsSetups`. Tests of their own in `apps/playground/tests/tabs.test.ts` hold a controlled value, a value the app never changes, and tabs and panels that mount later, and one in `apps/playground/tests/behaviour-seam.test.ts` the arrow keys in a shadow root.
 - The Tab key. A test of its own in `apps/playground/tests/tabs.test.ts` holds where it puts focus.
 - Which tab is the tab stop while none is selected. The checks require one tab stop and do not say which.
 - A list whose own direction differs from its tabs', and a list that changes its orientation or direction while the page is open.

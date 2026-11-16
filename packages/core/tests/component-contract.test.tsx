@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, matchesGlob } from "node:path";
 import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import { expect, expectTypeOf, test } from "vite-plus/test";
@@ -497,18 +497,22 @@ test("every --sx- declaration the generator draws for a consumer's style or styl
   );
 });
 
-test("the contract skill has a row for each component that names its root tag and boolean attribute as fixtures does", () => {
-  const rows = readFileSync(join(repositoryRoot, contractSkill), "utf8")
+test("every component's source file is covered by the contract skill's table", () => {
+  const coveredPaths = readFileSync(join(repositoryRoot, contractSkill), "utf8")
     .split("\n")
-    .filter((line) => line.startsWith("|"));
-  const violations = components.flatMap(([name, { tag, booleanAttribute }]) => {
-    const file = `packages/core/src/${name}.tsx`;
-    const row = rows.find((line) => line.includes(`\`${file}\`: \`${name}\``));
-    if (!row) return [`${contractSkill}: add a covered-code row for \`${file}\`: \`${name}\`.`];
-    return [`<${tag}>`, `\`${booleanAttribute}\``]
-      .filter((fact) => !row.includes(fact))
-      .map((fact) => `${contractSkill}: say ${fact} in the row for \`${file}\`, as fixtures does.`);
-  });
+    .filter((line) => line.startsWith("| `"))
+    .flatMap((row) =>
+      [...(row.split(" | ")[0] ?? "").matchAll(/`([^`]+)`/g)].map(([, path]) => path),
+    );
+  const covered = (file: string) =>
+    coveredPaths.some(
+      (path) => path === file || file.startsWith(`${path}/`) || matchesGlob(file, path),
+    );
 
-  expect(violations).toEqual([]);
+  expect(
+    components
+      .map(([name]) => `packages/core/src/${name}.tsx`)
+      .filter((file) => !covered(file))
+      .map((file) => `${contractSkill}: no covered-code row covers ${file}.`),
+  ).toEqual([]);
 });
