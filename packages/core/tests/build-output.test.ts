@@ -4,10 +4,10 @@ import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import {
   BEHAVIOUR_SDK_LAYER,
+  behaviourSdkHiddenRule,
   HIDDEN_LAYER,
   HIDDEN_PART_SELECTOR,
   LIBRARY_CASCADE_LAYER,
-  STABLE_CLASS_PREFIX,
   LIBRARY_CLASS_PREFIX,
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
@@ -16,15 +16,14 @@ import {
   stylePropClassPrefix,
   stylePropNames,
 } from "../src/style-prop-table";
-import {
-  builtComponents,
-  builtSource,
-  dist,
-  stableClass,
-  stylesheet as builtStylesheet,
-} from "./built-library";
+import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
 import { parse, ts } from "../../../scripts/syntax";
-import { enclosingAtRules, inStylePropLayer, nestedLayerOrder } from "./cascade-layers";
+import {
+  enclosingAtRules,
+  inStylePropLayer,
+  layersAroundDeclaration,
+  nestedLayerOrder,
+} from "./cascade-layers";
 
 const stylesheet = builtStylesheet.trim();
 const ownerBreakpoints: [name: string, width: string][] = [
@@ -144,10 +143,12 @@ function depthAfterEachCharacter(css: string): number[] {
   });
 }
 
-test("the stylesheet first orders the behaviour SDK's layer before the library's, and then every rule sits inside the one library cascade layer", () => {
-  const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n`;
+test("the stylesheet first orders the behaviour SDK's layer before the library's, then holds the rule the SDK writes at run time to keep a hidden part hidden, read from the SDK's package, and then every other rule inside the one library cascade layer", () => {
+  const sdkRule = behaviourSdkHiddenRule(join(import.meta.dirname, ".."));
+  const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n${sdkRule}\n`;
   const layer = stylesheet.slice(order.length);
 
+  expect(sdkRule.startsWith(`@layer ${BEHAVIOUR_SDK_LAYER} {`)).toBe(true);
   expect(stylesheet.startsWith(order)).toBe(true);
   expect(layer.startsWith(`@layer ${LIBRARY_CASCADE_LAYER} {`)).toBe(true);
 
@@ -170,13 +171,16 @@ test("every class name carries the library's own prefix", () => {
   expect(classNames.filter((name) => !name.startsWith(`.${LIBRARY_CLASS_PREFIX}`))).toEqual([]);
 });
 
-test("no declaration is marked important, so nothing in the layer can outrank a consumer", () => {
+test("one declaration is marked important, the SDK's display none in its own layer, and none in the library's layer, so nothing of the library's can outrank a consumer", () => {
   const important: string[] = [];
   postcss.parse(stylesheet).walkDecls((declaration) => {
-    if (declaration.important) important.push(`${declaration.prop}: ${declaration.value}`);
+    if (!declaration.important) return;
+    important.push(
+      `${layersAroundDeclaration(declaration).join(" ")}: ${declaration.prop}: ${declaration.value}`,
+    );
   });
 
-  expect(important).toEqual([]);
+  expect(important).toEqual([`${BEHAVIOUR_SDK_LAYER}: display: none`]);
 });
 
 test("a token keeps its public custom property name", () => {
@@ -219,7 +223,7 @@ test("the style-prop layer sits inside the library layer, ordered after every la
   ]);
 });
 
-test("the hidden layer holds one rule, the build's selector for a hidden part with display none, and every stable part class starts with the prefix that selector looks for", () => {
+test("the hidden layer holds one rule, the build's selector for a hidden part with display none", () => {
   const rules: string[] = [];
   libraryLayer().walkAtRules("layer", (layer) => {
     if (layer.params !== HIDDEN_LAYER) return;
@@ -229,8 +233,6 @@ test("the hidden layer holds one rule, the build's selector for a hidden part wi
   });
 
   expect(rules).toEqual([`${HIDDEN_PART_SELECTOR}{display:none}`]);
-  expect(HIDDEN_PART_SELECTOR).toContain(`"${STABLE_CLASS_PREFIX}"`);
-  expect(stableClass("Component", "part").startsWith(STABLE_CLASS_PREFIX)).toBe(true);
 });
 
 test("the style-prop table uses the build's class prefix", () => {

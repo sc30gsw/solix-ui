@@ -1,7 +1,9 @@
 import fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
+import { join } from "node:path";
 import {
   BEHAVIOUR_SDK_LAYER,
+  behaviourSdkHiddenRule,
   LIBRARY_CASCADE_LAYER,
 } from "../../../packages/core/build-pipeline.mjs";
 import {
@@ -11,10 +13,11 @@ import {
   type OpenPage,
   scriptModes,
 } from "./support/playground";
-import { elementsNamedBy, sdkStyles, stateOf, tabList, tabNamed } from "./support/tabs";
+import { elementsNamedBy, stateOf, stylesAddedToThePage, tabList, tabNamed } from "./support/tabs";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 25;
+const sdkHiddenRule = behaviourSdkHiddenRule(join(import.meta.dirname, "../../../packages/core"));
 const generated = "Generated";
 const tabValues = fc.uniqueArray(
   fc.oneof(
@@ -46,7 +49,7 @@ inEveryEngine((browser) => {
       );
     });
 
-    test("the SDK adds no style element before a script runs and one after, in its own layer, whose one declaration is important and hides a hidden slot, and the library's stylesheet has ordered that layer before its own", async () => {
+    test("the page holds no style element and no adopted style sheet before a script runs, and after it only the one style element the SDK adds, which holds exactly the rule the library's stylesheet carries from the SDK's package in the layer it orders before its own", async () => {
       const layersOfLinkedSheets = await opened.page.evaluate(() =>
         [...document.styleSheets]
           .filter((sheet) => sheet.ownerNode instanceof HTMLLinkElement)
@@ -58,13 +61,13 @@ inEveryEngine((browser) => {
           ),
       );
 
-      expect(await sdkStyles(opened.page, BEHAVIOUR_SDK_LAYER)).toEqual(
-        javaScriptEnabled
-          ? [
-              `@layer ${BEHAVIOUR_SDK_LAYER} { :where([data-slot][hidden]:not([hidden="until-found"])) { display: none !important } }`,
-            ]
-          : [],
-      );
+      const plain = await browser().newContext({ javaScriptEnabled });
+      const page = await plain.newPage();
+      await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
+      const styles = await stylesAddedToThePage(page);
+      await plain.close();
+
+      expect(styles).toEqual(javaScriptEnabled ? [sdkHiddenRule] : []);
       expect([...new Set(layersOfLinkedSheets)]).toEqual([
         BEHAVIOUR_SDK_LAYER,
         LIBRARY_CASCADE_LAYER,

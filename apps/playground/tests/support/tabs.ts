@@ -9,6 +9,7 @@ import {
 
 export {
   account,
+  displayedByTheApp,
   manual,
   optional,
   panelOf,
@@ -150,14 +151,13 @@ export async function startAt(page: Page, list: string, name: string): Promise<v
   else await tab.click();
 }
 
-export function sdkStyles(page: Page, layer: string): Promise<string[]> {
-  return page.evaluate(
-    (opening) =>
-      [...document.querySelectorAll("style")]
-        .map((style) => style.textContent ?? "")
-        .filter((css) => css.startsWith(opening)),
-    `@layer ${layer} {`,
-  );
+export function stylesAddedToThePage(page: Page): Promise<string[]> {
+  return page.evaluate(() => [
+    ...[...document.querySelectorAll("style")].map((style) => style.textContent ?? ""),
+    ...document.adoptedStyleSheets.flatMap((sheet) =>
+      [...sheet.cssRules].map((rule) => rule.cssText),
+    ),
+  ]);
 }
 
 export type Named = { tab: string[][]; panel: string[][] };

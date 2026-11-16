@@ -12,9 +12,9 @@ const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
 const { baseKey, breakpointWidths, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
-const { stableClass } = await repositoryModule("packages/core/src/stable-class.ts");
-const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX, STABLE_CLASS_PREFIX } = await repositoryModule("packages/core/build-pipeline.mjs");
-const { account, keyboardTable, manual, panelOf, sdkStyles, startAt, stateOf, tabList, tabNamed, tabsRegion } =
+const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
+const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { account, displayedByTheApp, keyboardTable, manual, panelOf, startAt, stateOf, stylesAddedToThePage, tabList, tabNamed, tabsRegion } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
 const state = join(root, ".verify-playground");
 const pixelsPerMediaQueryEm = 16;
@@ -32,7 +32,6 @@ const writtenAtRunTime = (page, region, classOfTheLibrary) =>
         partStyles: [...new Set(parts.map((part) => part.getAttribute("style") ?? ""))].sort().join(" | "),
         htmlStyle: document.documentElement.getAttribute("style") ?? "",
         inert: document.querySelectorAll("[inert]").length,
-        adoptedSheets: document.adoptedStyleSheets.length,
         partsWithAForeignClass: parts.filter((part) => [...part.classList].some((name) => !ours.test(name))).length,
       };
     },
@@ -366,18 +365,18 @@ const journeys = {
   },
   "tabs-run-time-writes": async ({ page, observe, shot }) => {
     const region = page.locator(tabsRegion);
-    const classOfTheLibrary = `^(?:${LIBRARY_CLASS_PREFIX}|${STABLE_CLASS_PREFIX})`;
+    const classOfTheLibraryOrTheApp = `^(?:${LIBRARY_CLASS_PREFIX}|${stableClassPrefix}|${displayedByTheApp.class}$)`;
     const styleOfTheOneStyleProp = `--${stylePropClass("display", baseKey)}:flex`;
     const observeWrites = async (when) => {
-      const styles = await sdkStyles(page, BEHAVIOUR_SDK_LAYER);
-      const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibrary);
-      observe(`${when}: style elements the SDK added`, styles.length, 1);
+      const styles = await stylesAddedToThePage(page);
+      const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibraryOrTheApp);
+      observe(`${when}: style elements and adopted rules on the page`, styles.length, 1);
+      observe(`${when}: the one style is in the SDK's layer`, styles.every((css) => css.startsWith(`@layer ${BEHAVIOUR_SDK_LAYER} {`)), true);
       observe(`${when}: important declarations in them`, styles.join("").match(/!\s*important/g)?.length ?? 0, 1);
-      observe(`${when}: style attributes on the parts`, written.partStyles, ` | ${styleOfTheOneStyleProp}`);
+      observe(`${when}: style attributes on the parts`, written.partStyles, ["", styleOfTheOneStyleProp, displayedByTheApp.style].sort().join(" | "));
       observe(`${when}: style attribute on the html element`, written.htmlStyle, "");
       observe(`${when}: inert elements`, written.inert, 0);
-      observe(`${when}: adopted style sheets`, written.adoptedSheets, 0);
-      observe(`${when}: parts that carry a class the library did not give`, written.partsWithAForeignClass, 0);
+      observe(`${when}: parts that carry a class neither the library nor the app gave`, written.partsWithAForeignClass, 0);
     };
     await region.scrollIntoViewIfNeeded();
     await shot("tabs", "Open the page and scroll to the section named Tabs.", region);

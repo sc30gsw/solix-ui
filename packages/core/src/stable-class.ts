@@ -1,3 +1,5 @@
+export const stableClassPrefix = "solix-";
+
 export function stableClass(component: string, part: string): string {
-  return `solix-${component}-${part}`;
+  return `${stableClassPrefix}${component}-${part}`;
 }

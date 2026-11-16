@@ -6,6 +6,7 @@ import { rootPart, stableClass } from "../../../packages/core/tests/built-librar
 import { computed, inEveryEngine, openPage, type OpenPage } from "./support/playground";
 import {
   account,
+  displayedByTheApp,
   elementsNamedBy,
   manual,
   optional,
@@ -35,7 +36,7 @@ inEveryEngine((browser) => {
       await opened.close();
     });
 
-    test("arrive with the default tab selected, its panel shown and every other panel hidden, a panel that a style prop gives a display included, by the library's own stylesheet", async () => {
+    test("arrive with the default tab selected, its panel shown and every other panel hidden, by the library's own stylesheet, a panel that a style prop, the consumer's style or the consumer's class gives a display included", async () => {
       const { page } = opened;
 
       expect(await stateOf(page, account)).toEqual({
@@ -51,6 +52,13 @@ inEveryEngine((browser) => {
       });
       expect(await page.getByText("Members panel").getAttribute("class")).toContain(
         stylePropClass("display", baseKey),
+      );
+      expect(await stateOf(page, "Held")).toMatchObject({ shown: ["Kept panel"] });
+      expect(await page.getByText("Styled panel").getAttribute("style")).toBe(
+        displayedByTheApp.style,
+      );
+      expect(await page.getByText("Classed panel").getAttribute("class")).toContain(
+        displayedByTheApp.class,
       );
     });
   });

@@ -19,6 +19,8 @@ export type TabsSetup = {
   tabs: TabSetup[];
 };
 
+export const displayedByTheApp = { style: "display:grid", class: "shown-as-grid" };
+
 export const account = "Account";
 export const manual = "Manual vertical";
 export const vertical = "Vertical";

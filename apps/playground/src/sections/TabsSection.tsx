@@ -2,7 +2,7 @@ import { render } from "@solidjs/web";
 import { Box, Button, Tabs, TextInput } from "@solix/core";
 import { createSignal, For, Show } from "solid-js";
 import { refOf } from "../ref-of";
-import { panelOf, tabsSetups, valueOf } from "./tabs-setups";
+import { displayedByTheApp, panelOf, tabsSetups, valueOf } from "./tabs-setups";
 
 function tabValuesIn(text: string): string[] | undefined {
   try {
@@ -151,9 +151,17 @@ export function TabsSection() {
         <Tabs.List aria-label="Held">
           <Tabs.Tab value="kept">Kept</Tabs.Tab>
           <Tabs.Tab value="asked">Asked</Tabs.Tab>
+          <Tabs.Tab value="styled">Styled</Tabs.Tab>
+          <Tabs.Tab value="classed">Classed</Tabs.Tab>
         </Tabs.List>
         <Tabs.Panel value="kept">Kept panel</Tabs.Panel>
         <Tabs.Panel value="asked">Asked panel</Tabs.Panel>
+        <Tabs.Panel value="styled" style={displayedByTheApp.style}>
+          Styled panel
+        </Tabs.Panel>
+        <Tabs.Panel value="classed" class={displayedByTheApp.class}>
+          Classed panel
+        </Tabs.Panel>
       </Tabs>
       <output aria-label="Held requests">{heldRequests()}</output>
 
