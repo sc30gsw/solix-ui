@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
+import { installedVp } from "../../../scripts/repository";
 
-const repositoryRoot = join(import.meta.dirname, "../../..");
 const appDirectory = join(import.meta.dirname, "..");
 const port = 4320;
 const url = `http://127.0.0.1:${port}/`;
@@ -49,7 +49,7 @@ beforeAll(async () => {
     `port ${port} already answers, so this run would test a server it did not start. Stop the process that holds the port.`,
   ).toBe(false);
   devServer = spawn(
-    join(repositoryRoot, "node_modules/.bin/vp"),
+    installedVp,
     ["dev", "--force", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
     {
       cwd: appDirectory,

@@ -2,11 +2,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const repositoryRoot = join(import.meta.dirname, "..");
+export const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
+
+export type ExportTarget = string | null | ExportTarget[] | { [condition: string]: ExportTarget };
 
 export type Manifest = {
   name?: string;
   license?: string;
-  exports?: unknown;
+  exports?: ExportTarget;
   engines?: Record<string, string>;
   packageManager?: string;
   devEngines?: Record<string, unknown>;

@@ -17,7 +17,9 @@ import {
 } from "../scripts/syntax";
 import { pnpmSettings } from "../scripts/pnpm-settings";
 import {
+  type ExportTarget,
   type Manifest,
+  installedVp,
   libraryNames,
   libraryPackages,
   outsideGeneratedOrInstalled,
@@ -50,7 +52,7 @@ const allowedForPrimitives = ["solid-js"];
 const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name ?? ""];
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
-const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
+const packAnswerTimeout = 30_000;
 const webStandardsOnly =
   "A library is built on web standards and has no runtime dependency: it names Solid, StyleX and the primitives package as peers. Use a platform feature or a fallback written in this repository.";
 
@@ -243,24 +245,29 @@ test("a library has no runtime dependency, and names as a peer, or as a library 
   expect(violations).toEqual([]);
 });
 
-function exportedFiles(exports: unknown): string[] {
-  if (typeof exports === "string") return [exports.replace(/^\.\//, "")];
-  if (typeof exports !== "object" || exports === null) return [];
-  return Object.values(exports).flatMap(exportedFiles);
+function exportedFiles(target: ExportTarget | undefined): string[] {
+  if (target === undefined || target === null) return [];
+  if (typeof target === "string") return [target.replace(/^\.\//, "")];
+  return Object.values(target).flatMap(exportedFiles);
 }
 
 function packedFiles(directory: string): string[] {
-  const packed: { files: { path: string }[] } = JSON.parse(
-    execFileSync(installedVp, ["pm", "pack", "--json", "--", "--dry-run"], {
-      cwd: directory,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }),
-  );
-  return packed.files.map(({ path }) => path);
+  const answer = execFileSync(installedVp, ["pm", "pack", "--json", "--", "--dry-run"], {
+    cwd: directory,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: packAnswerTimeout,
+  });
+  const packed: unknown = JSON.parse(answer);
+  const files =
+    typeof packed === "object" && packed !== null && "files" in packed ? packed.files : undefined;
+  if (!Array.isArray(files)) {
+    throw new Error(`${directory}: the pack listed no files. It answered: ${answer}`);
+  }
+  return files.map((file: { path: string }) => file.path);
 }
 
-test("a library's packed tarball holds every file its exports name", () => {
+test("a library exports a file, and its packed tarball holds every file its exports name", () => {
   const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
     const exported = [...new Set(exportedFiles(manifest.exports))];
     const packed = packedFiles(directory);
@@ -270,7 +277,7 @@ test("a library's packed tarball holds every file its exports name", () => {
         .filter((file) => !packed.includes(file))
         .map(
           (file) =>
-            `${path}: the packed tarball of "${manifest.name}" leaves out ${file}, which "exports" names. Git ignores it, so name its folder in "files".`,
+            `${path}: the packed tarball of "${manifest.name}" leaves out ${file}, which "exports" names.`,
         ),
     ];
   });
