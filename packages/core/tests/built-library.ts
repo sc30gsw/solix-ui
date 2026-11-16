@@ -49,6 +49,18 @@ function builtNamed(name: string): Component<ConsumerProps> {
   return built as Component<ConsumerProps>;
 }
 
+export type Carried = { carrier: string; member: string };
+
+export const carriedComponents: Record<string, Carried> = Object.fromEntries(
+  builtComponents.flatMap((carrier) =>
+    Object.entries(builtNamed(carrier)).flatMap(([member, carried]) =>
+      builtComponents
+        .filter((name) => name !== carrier && builtByName[name] === carried)
+        .map((name): [string, Carried] => [name, { carrier, member }]),
+    ),
+  ),
+);
+
 export function renderBuilt(name: string, props: ConsumerProps): string {
   return renderToString(() => createComponent(builtNamed(name), props));
 }

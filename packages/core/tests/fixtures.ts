@@ -2,7 +2,13 @@ import type { JSX } from "@solidjs/web";
 import { expect } from "vite-plus/test";
 import type * as Library from "../src/index";
 import type { DisplayPropName } from "../src/style-prop-table";
-import { type ConsumerProps, handledKeys, renderBuilt, renderBuiltWithin } from "./built-library";
+import {
+  carriedComponents,
+  type ConsumerProps,
+  handledKeys,
+  renderBuilt,
+  renderBuiltWithin,
+} from "./built-library";
 import { elementsOf } from "./markup";
 
 type PropsOf<Component> = Component extends (props: infer Props) => unknown ? Props : never;
@@ -33,7 +39,6 @@ type ElementValued<Props> = {
 }[keyof Props];
 
 type Fixture<Component> = {
-  within?: ComponentName;
   tag: string;
   booleanAttribute: string;
   takesDisplay: TakesDisplay<PropsOf<Component>>;
@@ -86,7 +91,6 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     props: { children: "Content" },
   },
   TabsList: {
-    within: "Tabs",
     tag: "div",
     booleanAttribute: "hidden",
     takesDisplay: true,
@@ -95,7 +99,6 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     props: { children: "Content" },
   },
   TabsPanel: {
-    within: "Tabs",
     tag: "div",
     booleanAttribute: "inert",
     takesDisplay: true,
@@ -104,7 +107,6 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     props: { value: "first", children: "Content" },
   },
   TabsTab: {
-    within: "Tabs",
     tag: "button",
     booleanAttribute: "disabled",
     takesDisplay: true,
@@ -142,7 +144,7 @@ function attributesNamed(html: string, props: readonly string[]): string[] {
   );
 }
 
-function fixtureOf(name: string): { within?: ComponentName; props: ConsumerProps } {
+function fixtureOf(name: string): { props: ConsumerProps } {
   if (!isComponentName(name)) {
     throw new Error(`packages/core/tests/fixtures.ts: add a fixture for ${name}.`);
   }
@@ -150,10 +152,10 @@ function fixtureOf(name: string): { within?: ComponentName; props: ConsumerProps
 }
 
 function renderGiven(name: string, given: ConsumerProps): string {
-  const { within } = fixtureOf(name);
-  return within === undefined
+  const carrier = carriedComponents[name]?.carrier;
+  return carrier === undefined
     ? renderBuilt(name, given)
-    : renderBuiltWithin(within, fixtures[within].props, name, given);
+    : renderBuiltWithin(carrier, fixtureOf(carrier).props, name, given);
 }
 
 export function render(name: string, props: ConsumerProps = {}): string {

@@ -18,8 +18,10 @@ import {
 } from "./arbitraries";
 import {
   builtComponents,
+  carriedComponents,
   compiledClassesOf,
   library,
+  renderBuilt,
   rootPart,
   stableClass,
   stylesheet,
@@ -148,6 +150,18 @@ test.each(builtComponents)(
     }
   },
 );
+
+test("a component that another export carries as a static member is exported under the carrier's name followed by the member's, and rendered outside its carrier it throws an error that names the carrier", () => {
+  const carried = Object.entries(carriedComponents);
+
+  expect(carried).not.toEqual([]);
+  for (const [name, { carrier, member }] of carried) {
+    expect(name).toBe(`${carrier}${member}`);
+    expect(() => renderBuilt(name, {}), name).toThrow(
+      new RegExp(`must be rendered inside ${carrier}\\.$`),
+    );
+  }
+});
 
 test.each(components)(
   "%s reads each prop of its type that takes an element once in a server render of its fixture, so an element a consumer passes is created once",

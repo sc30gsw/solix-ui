@@ -2,6 +2,7 @@ import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
+import { carriedComponents } from "../packages/core/tests/built-library";
 import { allowedRuntimeDependencies, loads } from "../scripts/runtime-dependencies";
 import { tokenValues } from "../scripts/tokens";
 import {
@@ -671,12 +672,11 @@ function kebabCase(name: string): string {
   return name.replace(/(?<=[a-z0-9])(?=[A-Z])/g, "-").toLowerCase();
 }
 
-test("every component is described by a feature file, its own or that of the component whose name its own starts with", () => {
+test("every component is described by a feature file, its own or that of the export that carries it as a static member", () => {
   const features = readdirSync(featureDirectory);
   const violations = components.flatMap(({ name }) => {
-    const described = components
-      .filter((other) => name.startsWith(other.name))
-      .map((other) => kebabCase(other.name));
+    const carrier = carriedComponents[name]?.carrier;
+    const described = [name, ...(carrier === undefined ? [] : [carrier])].map(kebabCase);
     return features.some((feature) =>
       described.some((kebab) => feature === `${kebab}.md` || feature.startsWith(`${kebab}-`)),
     )
