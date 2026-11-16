@@ -28,9 +28,8 @@ function isEnabled(element: HTMLElement): boolean {
 }
 
 /**
- * The behaviour layer moves focus onto a disabled tab. When the tab a key leads to is disabled,
- * this moves focus to the next enabled tab the same way instead, selects it where arrow keys
- * select, and prevents the default so the behaviour layer leaves the key alone.
+ * The SDK keeps a disabled tab focusable and moves focus onto it. This moves past it first, the way
+ * the key points, and prevents the default so the SDK leaves the key alone.
  */
 export function stepOverDisabledTabs(
   event: KeyboardEvent & { currentTarget: HTMLElement },

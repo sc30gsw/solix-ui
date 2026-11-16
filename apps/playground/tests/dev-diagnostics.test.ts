@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
+import { account, optional, tabNamed } from "./support/tabs";
 
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const appDirectory = join(import.meta.dirname, "..");
@@ -93,18 +94,10 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     await page.getByRole("textbox", { name: "Email" }).fill("someone@example.com");
     await page.getByText("A region that counts presses outside it").click();
     await page.getByRole("heading", { name: "Primitives" }).click();
-    await page
-      .getByRole("tablist", { name: "Account", exact: true })
-      .getByRole("tab")
-      .last()
-      .click();
+    await tabNamed(page, account, "Settings").click();
     await page.keyboard.press("ArrowRight");
     await page.getByText("Overview panel").waitFor({ state: "visible" });
-    await page
-      .getByRole("tablist", { name: "Optional", exact: true })
-      .getByRole("tab")
-      .nth(1)
-      .click();
+    await tabNamed(page, optional, "Notes").click();
     await page.getByText("Notes panel").waitFor({ state: "visible" });
   });
 

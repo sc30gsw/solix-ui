@@ -49,14 +49,6 @@ function behaviourStyleUnderOurs(behaviour: unknown, ours: Style): Style {
   return { ...behaviour, ...ours };
 }
 
-/**
- * Gives a part the props of the behaviour slot it is bound to. `ours` holds what the consumer and
- * the styles give the part, `own` what its component adds, and `slot` returns what the behaviour
- * gives an element with these attributes. An event reaches the consumer's handler, then the
- * component's, then the behaviour's, and stops at the first that prevents its default. A ref
- * receives the element in the same order. The id is the consumer's, else the component's, else the
- * behaviour's. The class is ours alone, and a declaration of the behaviour's style gives way to ours.
- */
 export function bindSlot(
   ours: PartProps,
   own: PartProps,

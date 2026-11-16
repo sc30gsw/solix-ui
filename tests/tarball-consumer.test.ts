@@ -14,6 +14,7 @@ import { join } from "node:path";
 import type { Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { pnpmSettings, workspaceFile } from "../scripts/pnpm-settings";
+import { stateOf, tabNamed } from "../apps/playground/tests/support/tabs";
 import { inEveryEngine } from "./support/served-app";
 import { type RunningServer, startServer } from "./support/server-process";
 import { repositoryRoot, rootManifest } from "./support/workspace";
@@ -176,26 +177,18 @@ inEveryEngine((browser) => {
     });
 
     test("the consumer's Tabs arrive rendered, hydrate, and select by click and by arrow key, with no console error or warning", async () => {
-      const list = page.getByRole("tablist", { name: "Consumer" });
-      const selected = () => list.locator('[aria-selected="true"]').textContent();
-      const shown = async () => {
-        const panels = await page.getByRole("tabpanel").allTextContents();
-        return panels.join();
-      };
+      const state = () => stateOf(page, "Consumer");
 
       expect(await (await fetch(server.url)).text()).toContain('role="tablist"');
-      expect(await selected()).toBe("One");
-      expect(await shown()).toBe("One panel");
+      expect(await state()).toMatchObject({ selected: "One", shown: ["One panel"] });
 
-      await list.getByRole("tab", { name: "Two" }).click();
+      await tabNamed(page, "Consumer", "Two").click();
 
-      await expect.poll(selected).toBe("Two");
-      expect(await shown()).toBe("Two panel");
+      await expect.poll(state).toMatchObject({ selected: "Two", shown: ["Two panel"] });
 
       await page.keyboard.press("ArrowRight");
 
-      await expect.poll(selected).toBe("One");
-      expect(await shown()).toBe("One panel");
+      await expect.poll(state).toMatchObject({ selected: "One", shown: ["One panel"] });
       expect(problems).toEqual([]);
     });
   });
