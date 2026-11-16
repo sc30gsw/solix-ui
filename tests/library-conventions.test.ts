@@ -585,7 +585,11 @@ function resolvesOutsideTheSeam(file: string): string[] {
       return [`${where(node)} loads a module it names at run time. Name it with a string literal.`];
     }
     const resolved = symbolOf(librarySources, specifier)?.declarations?.[0]?.resolve();
-    if (resolved === undefined) return [];
+    if (resolved === undefined) {
+      return [
+        `${where(node)} names a module that resolves to no file, so nothing tells which package it loads. Import a module the library's program resolves, from a package its manifest names.`,
+      ];
+    }
     const resolvedFile = realpathSync(fileOf(resolved));
     return seamDependencies
       .filter(
@@ -599,7 +603,7 @@ function resolvesOutsideTheSeam(file: string): string[] {
   });
 }
 
-test("no source of a library but its seam loads a module that resolves inside a runtime dependency the allow-list names with one, however the specifier is spelt, and no source of a library loads a module it names at run time", () => {
+test("every module a source of a library loads resolves to a file, no source but its seam loads one that resolves inside a runtime dependency the allow-list names with one, however the specifier is spelt, and no source of a library loads a module it names at run time", () => {
   expect(librarySourceFiles.flatMap(resolvesOutsideTheSeam)).toEqual([]);
 });
 
