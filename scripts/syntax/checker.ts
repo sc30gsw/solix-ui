@@ -129,13 +129,9 @@ function readsByName(declaration: ts.Node): boolean {
 }
 
 function namesAMemberOfItsFirstArgument(program: Program, call: ts.CallExpression): boolean {
-  if (call.arguments.length < 2) return false;
-  const callee = ts.isPropertyAccessExpression(call.expression)
-    ? call.expression.name
-    : call.expression;
-  return declarationsOf(program, callee).some(
-    (declaration) => takesAKeyOfAnother(declaration) || readsByName(declaration),
-  );
+  if (call.arguments.length < 2 || ts.isSpreadElement(call.arguments[0])) return false;
+  const called = program.checker.getResolvedSignature(call)?.declaration?.resolve();
+  return called !== undefined && (takesAKeyOfAnother(called) || readsByName(called));
 }
 
 export function memberDeclarations(program: Program, node: ts.Node): ts.Node[] {

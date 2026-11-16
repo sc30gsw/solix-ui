@@ -14,5 +14,9 @@ test("waits by itself", async () => {
   Reflect.apply(setTimeout, window, [() => undefined, 100]);
   window["setTimeout"](() => undefined, 100);
   const schedule = lookUp(window, "setTimeout");
+  Reflect["get"](window, "setInterval");
+  (0, lookUp)(window, "setInterval");
+  const read = Reflect.get;
+  read(window, "setTimeout");
   expect([later, setInterval, schedule]).toHaveLength(3);
 });

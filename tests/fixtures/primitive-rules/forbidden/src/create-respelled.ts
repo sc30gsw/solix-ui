@@ -8,6 +8,12 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
     const { focus } = element;
     browserMethod(element, "focus")?.();
     Reflect.get(element, "focus");
+    Reflect["get"](element, "focus");
+    (0, Reflect.get)(element, "focus");
+    const read = Reflect.get;
+    read(element, "focus");
+    const { get: bound } = Reflect;
+    bound(element, "focus");
     Reflect.apply(element.focus, element, []);
     browserMethod(window, "addEventListener")?.("resize", listener);
     const { removeEventListener: stop } = window;

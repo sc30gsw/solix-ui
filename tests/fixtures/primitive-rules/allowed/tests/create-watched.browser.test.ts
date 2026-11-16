@@ -15,3 +15,7 @@ export const computedWait = { timeout: 2 * engineTimeout };
 export function nextFrame(): Promise<number> {
   return new Promise((resolve) => requestAnimationFrame(resolve));
 }
+
+const spread = [window, "setTimeout"] as const;
+
+export const spreadArguments: unknown = Reflect.get(...spread);
