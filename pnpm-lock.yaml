@@ -363,6 +363,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@solix/primitives':
+        specifier: workspace:*
+        version: link:../primitives
       '@ui-sdk/core':
         specifier: 'catalog:'
         version: 0.1.0-beta.5

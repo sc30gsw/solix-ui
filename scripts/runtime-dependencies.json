@@ -1,6 +1,11 @@
 [
   {
     "library": "@solix/core",
+    "dependency": "@solix/primitives",
+    "reason": "State that a consumer may own is written once: createUncontrolled there holds the selected tab of Tabs, whether the app controls it or not."
+  },
+  {
+    "library": "@solix/core",
     "dependency": "@ui-sdk/core",
     "reason": "The behaviour of composite widgets: keyboard, focus, selection, popups and ARIA in three engines, which the library no longer writes itself. Only packages/core/src/headless.ts imports it."
   },

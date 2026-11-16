@@ -17,9 +17,15 @@ import { pnpmSettings, workspaceFile } from "../scripts/pnpm-settings";
 import { stateOf, tabNamed } from "../apps/playground/tests/support/tabs";
 import { inEveryEngine } from "./support/served-app";
 import { type RunningServer, startServer } from "./support/server-process";
-import { repositoryRoot, rootManifest } from "./support/workspace";
+import {
+  componentLibraries,
+  libraryPackages,
+  repositoryRoot,
+  rootManifest,
+} from "./support/workspace";
 
-const library = join(repositoryRoot, "packages/core");
+const [library] = componentLibraries;
+const libraryName = library.manifest.name ?? "";
 const fixtures = join(repositoryRoot, "tests/fixtures/tarball-consumer");
 const builtServerPort = 4323;
 const developmentServerPort = 4324;
@@ -68,12 +74,20 @@ function buildWith(appSource: string): void {
   run(join(app, "node_modules/.bin/vp"), ["build"], app);
 }
 
+function packInto(destination: string, directory: string): string {
+  const [tarball] = run("pnpm", ["pack", "--pack-destination", destination], directory)
+    .split("\n")
+    .filter((line) => line.endsWith(".tgz"));
+  return tarball;
+}
+
 beforeAll(() => {
   const { catalog } = pnpmSettings();
   app = mkdtempSync(join(tmpdir(), "tarball-consumer-"));
-  const [tarball] = run("pnpm", ["pack", "--pack-destination", app], library)
-    .split("\n")
-    .filter((line) => line.endsWith(".tgz"));
+  const tarballs = libraryPackages.map(({ directory, manifest }): [string, string] => [
+    manifest.name ?? directory,
+    `file:${packInto(app, directory)}`,
+  ]);
   const versionOf = (name: string) => catalog[name];
   mkdirSync(join(app, "src"));
   copyFileSync(join(fixtures, "vite.config.ts"), join(app, "vite.config.ts"));
@@ -86,7 +100,7 @@ beforeAll(() => {
       packageManager: rootManifest().packageManager,
       dependencies: {
         "@solidjs/web": versionOf("@solidjs/web"),
-        "@solix/core": `file:${tarball}`,
+        ...Object.fromEntries(tarballs.filter(([name]) => name === libraryName)),
         "@stylexjs/stylex": versionOf("@stylexjs/stylex"),
         "solid-js": versionOf("solid-js"),
       },
@@ -102,6 +116,9 @@ beforeAll(() => {
     [
       "overrides:",
       `  vite@*: "${versionOf("vite")}"`,
+      ...tarballs
+        .filter(([name]) => name !== libraryName)
+        .map(([name, tarball]) => `  "${name}": "${tarball}"`),
       "peerDependencyRules:",
       "  allowAny:",
       "    - vite",
@@ -119,7 +136,10 @@ afterAll(() => {
 });
 
 test("a consumer installed from the packed tarball gets the SDK as a dependency of the library, resolved to the version the catalog pins, and lists none of it itself", () => {
-  const besideTheLibrary = join(realpathSync(join(app, "node_modules/@solix/core")), "../..");
+  const besideTheLibrary = join(
+    realpathSync(join(app, "node_modules", libraryName)),
+    ...libraryName.split("/").map(() => ".."),
+  );
   const installed = (name: string) =>
     JSON.parse(readFileSync(join(besideTheLibrary, name, "package.json"), "utf8")) as {
       version: string;

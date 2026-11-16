@@ -23,6 +23,7 @@
     "build": "node build.mjs"
   },
   "dependencies": {
+    "@solix/primitives": "workspace:*",
     "@ui-sdk/core": "catalog:",
     "@ui-sdk/solid": "catalog:"
   },

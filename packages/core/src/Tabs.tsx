@@ -1,5 +1,5 @@
+import { createUncontrolled } from "@solix/primitives";
 import * as stylex from "@stylexjs/stylex";
-import { createSignal, untrack } from "solid-js";
 import { createBehaviour, tabs } from "./headless";
 import { createParts, type ElementProps } from "./parts";
 import { stepOverDisabled } from "./step-over-disabled";
@@ -38,15 +38,17 @@ export type TabsProps = ElementProps<
 >;
 
 export function Tabs(props: TabsProps) {
-  const [uncontrolled, setUncontrolled] = createSignal(untrack(() => props.defaultValue) ?? null);
+  const [value, setValue] = createUncontrolled<string | null>({
+    value: () => props.value,
+    defaultValue: () => props.defaultValue,
+    finalValue: null,
+    onChange: (selected) => props.onChange?.(selected),
+  });
   const loop = () => props.loop ?? true;
   const activateTabWithKeyboard = () => props.activateTabWithKeyboard ?? true;
   const behaviour = createBehaviour(tabs, () => ({
-    value: props.value === undefined ? uncontrolled() : props.value,
-    onValueChange: (value: string | null) => {
-      setUncontrolled(value);
-      props.onChange?.(value);
-    },
+    value: value(),
+    onValueChange: (selected: string | null) => setValue(selected),
     orientation: props.orientation,
     activation: activateTabWithKeyboard() ? ("automatic" as const) : ("manual" as const),
     loop: loop(),
@@ -81,9 +83,9 @@ export function Tabs(props: TabsProps) {
               items: tab,
               loop: loop(),
               activate: (focused) => {
-                const value = valueOfTab.get(focused);
-                if (activateTabWithKeyboard() && value !== undefined)
-                  behaviour.api.setValue(value());
+                const valueOf = valueOfTab.get(focused);
+                if (activateTabWithKeyboard() && valueOf !== undefined)
+                  behaviour.api.setValue(valueOf());
               },
             }),
           allowTabDeactivation: () => props.allowTabDeactivation ?? false,

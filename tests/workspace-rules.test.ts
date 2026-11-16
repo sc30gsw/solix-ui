@@ -52,7 +52,7 @@ const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
 const runtimeDependencyList = "scripts/runtime-dependencies.json";
 const webStandardsOnly =
-  "A library is built on web standards: it names Solid, StyleX and the primitives package as peers, and has a runtime dependency only where the owner decided on one. Use a platform feature or a fallback written in this repository, or record the decision in that list with its reason.";
+  "A library is built on web standards: it names Solid and StyleX as peers, and has a runtime dependency only where the owner decided on one. Use a platform feature or a fallback written in this repository, or record the decision in that list with its reason.";
 
 const nodeVersionHome = "package.json";
 const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
@@ -222,6 +222,7 @@ function runtimeDependencyProblems(
 ): string[] {
   const entryFor = (library: string | undefined, dependency: string) =>
     allowed.find((entry) => entry.library === library && entry.dependency === dependency);
+  const ownLibraries = libraries.map(({ manifest }) => manifest.name);
   return [
     ...libraries.flatMap(({ path, manifest }) =>
       Object.keys(manifest.dependencies ?? {})
@@ -231,35 +232,46 @@ function runtimeDependencyProblems(
             `${path}: package "${manifest.name}" has the runtime dependency "${name}", which ${runtimeDependencyList} does not allow. ${webStandardsOnly}`,
         ),
     ),
-    ...allowed.flatMap(({ library, dependency, reason }) => [
-      ...(reason?.trim()
-        ? []
-        : [
-            `${runtimeDependencyList}: give "${dependency}" of "${library}" a reason, the decision that allows it.`,
-          ]),
-      ...(libraries.some(
-        ({ manifest }) => manifest.name === library && dependency in (manifest.dependencies ?? {}),
-      )
-        ? []
-        : [
-            `${runtimeDependencyList}: remove "${dependency}" of "${library}", which that package does not depend on.`,
-          ]),
-      ...(semver.valid(catalog[dependency] ?? "") === null
-        ? [
-            `${workspaceFile}: pin "${dependency}" to one exact version in the catalog, not "${catalog[dependency]}": a consumer installs the version this repository verified.`,
-          ]
-        : []),
-    ]),
+    ...allowed.flatMap(({ library, dependency, reason }) => {
+      const written = libraries.find(({ manifest }) => manifest.name === library)?.manifest
+        .dependencies?.[dependency];
+      return [
+        ...(reason?.trim()
+          ? []
+          : [
+              `${runtimeDependencyList}: give "${dependency}" of "${library}" a reason, the decision that allows it.`,
+            ]),
+        ...(written === undefined
+          ? [
+              `${runtimeDependencyList}: remove "${dependency}" of "${library}", which that package does not depend on.`,
+            ]
+          : []),
+        ...(ownLibraries.includes(dependency)
+          ? written === undefined || written === ownLibraryLink
+            ? []
+            : [
+                `${library}: write the dependency "${dependency}" as "${ownLibraryLink}", not "${written}", so publishing pins the version this workspace built and verified.`,
+              ]
+          : semver.valid(catalog[dependency] ?? "") === null
+            ? [
+                `${workspaceFile}: pin "${dependency}" to one exact version in the catalog, not "${catalog[dependency]}": a consumer installs the version this repository verified.`,
+              ]
+            : []),
+      ];
+    }),
   ];
 }
 
-test(`a library has no runtime dependency but one ${runtimeDependencyList} allows with a reason, each pinned to one exact version`, () => {
+test(`a library has no runtime dependency but one ${runtimeDependencyList} allows with a reason, a library of this repository written ${ownLibraryLink} and any other pinned to one exact version`, () => {
   const allowed: AllowedRuntimeDependency[] = JSON.parse(
     readFileSync(join(repositoryRoot, runtimeDependencyList), "utf8"),
   );
   const library = { path: "packages/a/package.json", manifest: { name: "a" } };
   const dependsOnB = { ...library, manifest: { name: "a", dependencies: { b: "catalog:" } } };
   const entry = { library: "a", dependency: "b", reason: "A decision." };
+  const own = { path: "packages/b/package.json", manifest: { name: "b" } };
+  const linksB = { ...library, manifest: { name: "a", dependencies: { b: "workspace:*" } } };
+  const rangesB = { ...library, manifest: { name: "a", dependencies: { b: "workspace:^" } } };
 
   expect(runtimeDependencyProblems(libraryPackages, allowed, pnpmSettings().catalog)).toEqual([]);
   expect(runtimeDependencyProblems([dependsOnB], [entry], { b: "1.0.0-beta.1" })).toEqual([]);
@@ -274,6 +286,10 @@ test(`a library has no runtime dependency but one ${runtimeDependencyList} allow
   ]);
   expect(runtimeDependencyProblems([dependsOnB], [entry], { b: "^1.0.0" })).toEqual([
     expect.stringContaining('pin "b" to one exact version'),
+  ]);
+  expect(runtimeDependencyProblems([linksB, own], [entry], {})).toEqual([]);
+  expect(runtimeDependencyProblems([rangesB, own], [entry], {})).toEqual([
+    expect.stringContaining('write the dependency "b" as "workspace:*"'),
   ]);
 });
 
