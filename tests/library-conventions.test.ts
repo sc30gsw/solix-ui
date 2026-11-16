@@ -1,4 +1,4 @@
-import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
@@ -11,12 +11,14 @@ import {
   exportsOf,
   fileOf,
   findAncestor,
+  firstLine,
   memberDeclarations,
   openProgram,
   parse,
   parseAll,
   parseText,
   staticPropertyName,
+  symbolOf,
   ts,
 } from "../scripts/syntax";
 import { moduleSpecifierOf } from "./support/module-specifiers";
@@ -56,6 +58,7 @@ const behaviourBinder = "bind";
 
 const libraries = componentLibraries.map(({ directory, manifest }) => ({
   name: manifest.name ?? directory,
+  directory,
   source: join(directory, "src"),
 }));
 
@@ -560,6 +563,45 @@ function loadsOutsideTheSeam(file: string, source: ts.SourceFile): string[] {
       );
   });
 }
+
+function packageDirectoryOf(library: string, dependency: string): string {
+  const owner = libraries.find(({ name }) => name === library);
+  if (!owner) throw new Error(`${library}: no component library of this repository has this name.`);
+  return realpathSync(join(owner.directory, "node_modules", dependency));
+}
+
+const seamDependencies = importedThroughASeam.map((entry) => ({
+  ...entry,
+  directory: packageDirectoryOf(entry.library, entry.dependency),
+}));
+
+function resolvesOutsideTheSeam(file: string): string[] {
+  const source = typedSource(file);
+  const where = (node: ts.Node) => `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)}`;
+  return descendants(source).flatMap((node) => {
+    const specifier = moduleSpecifierOf(node);
+    if (specifier === undefined) return [];
+    if (!ts.isStringLiteralLikeNode(specifier)) {
+      return [`${where(node)} loads a module it names at run time. Name it with a string literal.`];
+    }
+    const resolved = symbolOf(librarySources, specifier)?.declarations?.[0]?.resolve();
+    if (resolved === undefined) return [];
+    const resolvedFile = realpathSync(fileOf(resolved));
+    return seamDependencies
+      .filter(
+        ({ directory, seam }) =>
+          resolvedFile.startsWith(`${directory}/`) && relativePath(file) !== seam,
+      )
+      .map(
+        ({ dependency, seam, directory }) =>
+          `${where(node)} resolves to ${relative(directory, resolvedFile)} of ${dependency}. Only ${seam} loads it; take what you need from that module.`,
+      );
+  });
+}
+
+test("no source of a library but its seam loads a module that resolves inside a runtime dependency the allow-list names with one, however the specifier is spelt, and no source of a library loads a module it names at run time", () => {
+  expect(librarySourceFiles.flatMap(resolvesOutsideTheSeam)).toEqual([]);
+});
 
 test("no file but its seam loads a runtime dependency the allow-list names with one, by an import, an export, a dynamic import, a require or an import type", () => {
   const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
