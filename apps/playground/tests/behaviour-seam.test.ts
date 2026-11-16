@@ -1,5 +1,4 @@
 import fc from "fast-check";
-import type { Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import {
   BEHAVIOUR_SDK_LAYER,
@@ -12,7 +11,7 @@ import {
   type OpenPage,
   scriptModes,
 } from "./support/playground";
-import { sdkStyles, tabList, tabNamed } from "./support/tabs";
+import { elementsNamedBy, sdkStyles, tabNamed } from "./support/tabs";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 25;
@@ -25,28 +24,6 @@ const tabValues = fc.uniqueArray(
   ),
   { minLength: 1, maxLength: 5 },
 );
-
-type Named = { tab: string[][]; panel: string[][] };
-
-function elementsNamedBy(page: Page, list: string): Promise<Named[]> {
-  return tabList(page, list).evaluate((node) => {
-    const tabs = [...node.querySelectorAll('[role="tab"]')];
-    const panels = [...(node.parentElement?.querySelectorAll(':scope > [role="tabpanel"]') ?? [])];
-    const named = (from: Element | undefined, attribute: string, wanted: Element | undefined) =>
-      (from?.getAttribute(attribute) ?? "")
-        .split(/[\t\n\f\r ]+/)
-        .filter((id) => id !== "")
-        .map((id) =>
-          [...document.querySelectorAll("[id]")]
-            .filter((element) => element.id === id)
-            .map((element) => (element === wanted ? "its own" : element.outerHTML)),
-        );
-    return tabs.map((tab, index) => ({
-      tab: named(tab, "aria-controls", panels[index]),
-      panel: named(panels[index], "aria-labelledby", tab),
-    }));
-  });
-}
 
 inEveryEngine((browser) => {
   describe.each(scriptModes)("with scripts %s", (_, javaScriptEnabled) => {

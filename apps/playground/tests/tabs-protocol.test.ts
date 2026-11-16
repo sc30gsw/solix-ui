@@ -2,38 +2,18 @@ import fc from "fast-check";
 import type { Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
 import { inEveryEngine } from "./support/playground";
-import { stateOf, tabNamed, type TabsSetup, tabsSetups } from "./support/tabs";
+import { panelOf, stateOf, tabNamed, type TabsSetup, tabsSetups } from "./support/tabs";
+import { afterKey, afterPressOn, type Key, keys, type TabsModel } from "./support/tabs-model";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 15;
 const longestSequence = 12;
-const moves = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"] as const;
-const presses = ["Enter", "Space"] as const;
-
-type Move = (typeof moves)[number];
-type Model = { setup: TabsSetup; selected: string | null; focused: string | null };
+type Model = TabsModel & { setup: TabsSetup };
 type Real = { page: Page };
 
-function destinationOf({ tabs, orientation, loop }: TabsSetup, from: number, key: Move): number {
-  const [forward, backward] =
-    orientation === "vertical" ? ["ArrowDown", "ArrowUp"] : ["ArrowRight", "ArrowLeft"];
-  const isEnabled = (index: number) => tabs[index]?.disabled === false;
-  if (key === "Home") return tabs.findIndex(({ disabled }) => !disabled);
-  if (key === "End") return tabs.findLastIndex(({ disabled }) => !disabled);
-  if (key !== forward && key !== backward) return from;
-  const step = key === forward ? 1 : -1;
-  for (let walked = 1; walked < tabs.length; walked += 1) {
-    const reached = from + walked * step;
-    const index = loop ? (reached + tabs.length) % tabs.length : reached;
-    if (index < 0 || index >= tabs.length) return from;
-    if (isEnabled(index)) return index;
-  }
-  return from;
-}
-
-function pressOn(model: Model, name: string): void {
-  model.selected = model.setup.deselects && model.selected === name ? null : name;
-  model.focused = name;
+function become(model: Model, next: TabsModel): void {
+  model.selected = next.selected;
+  model.focused = next.focused;
 }
 
 async function expectAgreement(model: Model, { page }: Real): Promise<void> {
@@ -43,7 +23,7 @@ async function expectAgreement(model: Model, { page }: Real): Promise<void> {
     .toMatchObject({
       selected: model.selected,
       focused: model.focused,
-      shown: model.selected === null ? [] : [`${model.selected} panel`],
+      shown: model.selected === null ? [] : [panelOf(model.selected)],
     });
   const { tabStops } = await stateOf(page, list);
   expect(tabStops, "the list has one tab stop").toHaveLength(1);
@@ -73,47 +53,28 @@ class ClickTab extends Step {
   async act(model: Model, { page }: Real) {
     const { name } = this.tab(model);
     await tabNamed(page, model.setup.list, name).click();
-    pressOn(model, name);
+    become(model, afterPressOn(model.setup, model, name));
   }
   toString = () => `click the enabled tab at position ${this.position}, counted round the list`;
 }
 
-class PressMove extends Step {
-  readonly key: Move;
-  constructor(key: Move) {
-    super();
-    this.key = key;
-  }
-  check = (model: Model) => model.focused !== null;
-  async act(model: Model, { page }: Real) {
-    const { setup } = model;
-    const from = setup.tabs.findIndex(({ name }) => name === model.focused);
-    const to = setup.tabs[destinationOf(setup, from, this.key)].name;
-    await page.keyboard.press(this.key);
-    if (setup.selectsOnArrow && to !== model.focused) model.selected = to;
-    model.focused = to;
-  }
-  toString = () => `press ${this.key}`;
-}
-
-class PressToSelect extends Step {
-  readonly key: (typeof presses)[number];
-  constructor(key: (typeof presses)[number]) {
+class PressKey extends Step {
+  readonly key: Key;
+  constructor(key: Key) {
     super();
     this.key = key;
   }
   check = (model: Model) => model.focused !== null;
   async act(model: Model, { page }: Real) {
     await page.keyboard.press(this.key);
-    if (model.focused !== null) pressOn(model, model.focused);
+    become(model, afterKey(model.setup, model, this.key));
   }
   toString = () => `press ${this.key}`;
 }
 
 const steps = [
   fc.nat({ max: 11 }).map((position) => new ClickTab(position)),
-  fc.constantFrom(...moves).map((key) => new PressMove(key)),
-  fc.constantFrom(...presses).map((key) => new PressToSelect(key)),
+  fc.constantFrom(...keys).map((key) => new PressKey(key)),
 ];
 
 inEveryEngine((browser) => {

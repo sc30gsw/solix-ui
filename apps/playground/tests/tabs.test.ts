@@ -1,20 +1,23 @@
 import { join } from "node:path";
+import type { Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
 import { computed, inEveryEngine, openPage, type OpenPage } from "./support/playground";
 import {
   account,
-  keyboardTable,
+  elementsNamedBy,
   manual,
   optional,
-  startAt,
+  panelOf,
   stateOf,
   tabList,
   tabNamed,
   tabsRegion,
+  tabsSetups,
   vertical,
 } from "./support/tabs";
+import { pathBetween, singleSteps } from "./support/tabs-model";
 
 const url = inject("playgroundUrl");
 const axeSource = join(import.meta.dirname, "../../../node_modules/axe-core/axe.min.js");
@@ -110,6 +113,14 @@ inEveryEngine((browser) => {
         );
       await tabNamed(page, optional, "Files").click();
 
+      for (const { list, tabs, keepsHiddenPanels } of tabsSetups) {
+        expect(await controls(list), list).toEqual(
+          tabs.map(({ name, panel }) => {
+            if (panel === undefined) return null;
+            return keepsHiddenPanels || panel.keepMounted ? panelOf(name) : "";
+          }),
+        );
+      }
       expect(
         await tabList(page, account).evaluate((node) =>
           [...node.querySelectorAll('[role="tab"]')].map((tab) =>
@@ -122,8 +133,6 @@ inEveryEngine((browser) => {
         "account-panel-members",
         "account-panel-settings",
       ]);
-      expect(await controls(vertical)).toEqual(["Alpha panel", "Beta panel", "Gamma panel"]);
-      expect(await controls(optional)).toEqual([null, "", "Files panel", null]);
     });
 
     test("a list, its tabs and its panels carry the orientation, and only a vertical list says so to assistive technology", async () => {
@@ -145,25 +154,6 @@ inEveryEngine((browser) => {
       expect(await orientations(account)).toEqual({ aria: null, data: ["horizontal"] });
       expect(await orientations(vertical)).toEqual({ aria: "vertical", data: ["vertical"] });
     });
-
-    test.each(keyboardTable)(
-      "in $list $direction, from $start the keys $keys focus $focused and select $selected",
-      async ({ list, direction, start, keys, focused, selected }) => {
-        const { page } = opened;
-        await tabList(page, list).evaluate(
-          (node, written) => node.setAttribute("dir", written),
-          direction ?? "ltr",
-        );
-        await startAt(page, list, start);
-        expect(await stateOf(page, list)).toMatchObject({ selected: start, focused: start });
-
-        for (const key of keys) await page.keyboard.press(key);
-
-        await expect.poll(() => stateOf(page, list)).toMatchObject({ focused, selected });
-        expect((await stateOf(page, list)).shown).toEqual([`${selected} panel`]);
-        await tabList(page, list).evaluate((node) => node.removeAttribute("dir"));
-      },
-    );
 
     test("the Tab key enters a tab list at its selected tab and leaves it for the panel, which is focusable", async () => {
       const { page } = opened;
@@ -230,6 +220,47 @@ inEveryEngine((browser) => {
       expect(await stateOf(page, "Controlled")).toMatchObject({ selected: null, shown: [] });
     });
 
+    test("a controlled Tabs whose app changes nothing keeps showing the app's value, and tells the app each request", async () => {
+      const { page } = opened;
+      const requests = page.getByRole("status", { name: "Held requests" });
+
+      await tabNamed(page, "Held", "Asked").click();
+
+      await expect.poll(() => requests.textContent()).toBe("1");
+      expect(await stateOf(page, "Held")).toMatchObject({
+        selected: "Kept",
+        shown: ["Kept panel"],
+      });
+
+      await tabNamed(page, "Held", "Kept").focus();
+      await page.keyboard.press("ArrowRight");
+
+      await expect.poll(() => requests.textContent()).toBe("2");
+      expect(await stateOf(page, "Held")).toMatchObject({
+        selected: "Kept",
+        focused: "Asked",
+        shown: ["Kept panel"],
+      });
+    });
+
+    test("a tab names its panel only while the panel is in the page: with the panels unmounted no tab has aria-controls, and mounted again each tab names its own", async () => {
+      const { page } = opened;
+      const mounted = await elementsNamedBy(page, "Generated");
+
+      expect(mounted).not.toEqual([]);
+      expect(mounted).toEqual(mounted.map(() => ({ tab: [["its own"]], panel: [["its own"]] })));
+
+      await page.getByRole("button", { name: "Unmount the panels" }).click();
+
+      await expect
+        .poll(() => elementsNamedBy(page, "Generated"))
+        .toEqual(mounted.map(() => ({ tab: [], panel: [] })));
+
+      await page.getByRole("button", { name: "Mount the panels" }).click();
+
+      await expect.poll(() => elementsNamedBy(page, "Generated")).toEqual(mounted);
+    });
+
     test("axe-core finds no WCAG 2.2 A or AA violation in the Tabs region", async () => {
       const context = await browser().newContext();
       const page = await context.newPage();
@@ -281,6 +312,43 @@ inEveryEngine((browser) => {
     test("hydration and every interaction above report no console error or warning", () => {
       expect(opened.consoleProblems).toEqual([]);
     });
+  });
+
+  describe("Tabs under the keyboard, from every state a list can reach", () => {
+    let page: Page;
+
+    beforeAll(async () => {
+      page = await browser().newPage();
+      await page.goto(url, { waitUntil: "networkidle" });
+    });
+
+    afterAll(async () => {
+      await page.close();
+    });
+
+    test.each(tabsSetups.flatMap(singleSteps))(
+      "in $list, with $from.selected selected and focus on $from.focused, $key selects $to.selected and focuses $to.focused",
+      async ({ list, from, key, to }) => {
+        const setup = tabsSetups.find((candidate) => candidate.list === list) ?? tabsSetups[0];
+        const { selected, focused } = await stateOf(page, list);
+        for (const action of pathBetween(setup, { selected, focused }, from)) {
+          if ("click" in action) await tabNamed(page, list, action.click).click();
+          else await page.keyboard.press(action.key);
+        }
+        await expect.poll(() => stateOf(page, list)).toMatchObject(from);
+
+        await page.keyboard.press(key);
+
+        await expect
+          .poll(() => stateOf(page, list))
+          .toMatchObject({ ...to, shown: to.selected === null ? [] : [panelOf(to.selected)] });
+        const { tabStops } = await stateOf(page, list);
+        expect(tabStops, "the list has one tab stop").toHaveLength(1);
+        if (to.selected !== null) {
+          expect(tabStops, "the tab stop is the selected tab").toEqual([to.selected]);
+        }
+      },
+    );
   });
 
   describe("Tabs for a user who asks for less motion or forced colours", () => {
