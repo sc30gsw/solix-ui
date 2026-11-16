@@ -7,6 +7,8 @@ import type { BrowserValue, MaybeAccessor } from "../../../../../packages/primit
 function matches(text: string): number {
   const { scrollY } = window;
   const focused = document["activeElement"];
+  const spread: [HTMLElement, "focus"] = [document.body, "focus"];
+  void [Reflect.get(...spread), lookUp(...spread)];
   return lookUp(window, "matchMedia")?.call(window, text).matches && focused ? scrollY : 0;
 }
 

@@ -177,6 +177,12 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-respelled.ts", "const { focus } = element"),
     forbiddenAt("src/create-respelled.ts", 'browserMethod(element, "focus")'),
     forbiddenAt("src/create-respelled.ts", 'Reflect.get(element, "focus")'),
+    forbiddenAt("src/create-respelled.ts", 'Reflect["get"](element, "focus")'),
+    forbiddenAt("src/create-respelled.ts", '(0, Reflect.get)(element, "focus")'),
+    forbiddenAt("src/create-respelled.ts", 'read(element, "focus")'),
+    forbiddenAt("src/create-respelled.ts", 'bound(element, "focus")'),
+    forbiddenAt("src/create-respelled.ts", 'pick(element, "focus")'),
+    forbiddenAt("src/create-respelled.ts", 'lookUp(...[element], "focus")'),
     forbiddenAt("src/create-respelled.ts", "Reflect.apply(element.focus"),
   ],
   testsNamedForModules: [
@@ -201,6 +207,17 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
       "tests/create-misbehaving.browser.test.ts",
       'lookUp(window, "setTimeout")',
     ),
+    located(
+      "forbidden",
+      "tests/create-misbehaving.browser.test.ts",
+      'Reflect["get"](window, "setInterval")',
+    ),
+    located(
+      "forbidden",
+      "tests/create-misbehaving.browser.test.ts",
+      '(0, lookUp)(window, "setInterval")',
+    ),
+    located("forbidden", "tests/create-misbehaving.browser.test.ts", 'read(window, "setTimeout")'),
   ],
   accessibilityTests: [forbiddenAt("src/create-modelled.ts")],
   browserTestsUseTheHarness: [
