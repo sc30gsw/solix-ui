@@ -147,7 +147,7 @@ function optionsTheSharedSettingsOwn(where: string, options: object): string[] {
     );
 }
 
-test(`every package with TypeScript sources has a tsconfig.json, and every tsconfig.json extends ${sharedSettingsFile} and sets no option it sets`, () => {
+test(`every package with TypeScript sources has a tsconfig.json, and every tsconfig*.json but ${sharedSettingsFile} extends it and sets no option it sets`, () => {
   const withoutProject = packages
     .filter(
       ({ directory }) =>
