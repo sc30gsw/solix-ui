@@ -17,6 +17,7 @@ const { comparisons, problems } = compareWithNewest({
   ),
   nodeReleases: await nodeReleases(),
   policy: releasePolicy(settings),
+  now: Date.now(),
   heldBack: heldBackEntries(),
 });
 

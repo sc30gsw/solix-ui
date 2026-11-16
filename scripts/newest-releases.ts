@@ -11,16 +11,17 @@ export type RegistryDocument = {
 
 export type NodeRelease = { version: string; lts: string | false };
 
-export type Pin =
-  | { source: "registry"; name: string; registryName: string; pinned: string }
-  | { source: "node"; name: typeof nodePinName; pinned: string };
+type RegistryPin = { source: "registry"; name: string; registryName: string; pinned: string };
+
+export type Pin = RegistryPin | { source: "node"; name: typeof nodePinName; pinned: string };
 
 export type HeldBack = { name: string; reason: string; liftWhen: string };
 
+export type Exclusion = { name: string; version?: string };
+
 export type ReleasePolicy = {
   minimumReleaseAgeMinutes: number;
-  excluded: readonly string[];
-  now: number;
+  excluded: readonly Exclusion[];
 };
 
 type Compared = { pin: Pin; channel: string; newest: string };
@@ -30,36 +31,64 @@ export type PinComparison =
   | (Compared & { status: "behind"; eligible: string })
   | (Compared & { status: "held back"; eligible: string; held: HeldBack })
   | (Compared & { status: "not yet eligible"; eligibleAt: string })
-  | { pin: Pin; channel: string; status: "no release" };
+  | { pin: Pin; channel: string; status: "unknown"; why: string };
 
 export type Report = { comparisons: PinComparison[]; problems: string[] };
 
-type Channel = {
-  describe: string;
-  versions: (published: string[], majors: { pinned: number; nodeLts: number }) => string[];
+type Published = { version: string; eligibleAt: number };
+
+type Releases = {
+  newest: string;
+  eligible: string | undefined;
+  eligibleAt: string | undefined;
 };
 
-type Releases = { newest: string | undefined; eligible: string[] };
+type Unknown = { why: string };
+
+type ChannelContext = { pinned: string; nodeLtsMajor: number | undefined; now: number };
+
+type Channel = {
+  describe: string;
+  versions: (published: readonly Published[], context: ChannelContext) => Published[];
+};
 
 const minute = 60_000;
 const solidMajor = 2;
 const aliasedPackage = /^npm:((?:@[^/@]+\/)?[^@]+)@(.+)$/;
 const packageAndVersion = /^((?:@[^/@]+\/)?[^@]+)@(.+)$/;
 const packageName = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/;
+const nodeChannel = "Node's newest LTS";
+
+function isStable({ version }: Published): boolean {
+  return semver.prerelease(version) === null;
+}
+
+function isOnTheVersionOf(pinned: string, { version }: Published): boolean {
+  return (
+    semver.major(version) === semver.major(pinned) &&
+    semver.minor(version) === semver.minor(pinned) &&
+    semver.patch(version) === semver.patch(pinned)
+  );
+}
+
+function solidLine(published: readonly Published[], now: number): Published[] {
+  const line = published.filter(({ version }) => semver.major(version) === solidMajor);
+  const stable = line.filter(isStable);
+  return stable.some(({ eligibleAt }) => eligibleAt <= now) ? stable : line;
+}
 
 const stableChannel: Channel = {
   describe: "its newest stable release",
-  versions: (published) => published.filter((version) => semver.prerelease(version) === null),
+  versions: (published) => published.filter(isStable),
 };
-function solidLine(published: string[]): string[] {
-  const line = published.filter((version) => semver.major(version) === solidMajor);
-  const stable = line.filter((version) => semver.prerelease(version) === null);
-  return stable.length > 0 ? stable : line;
-}
-
+const prereleasePinChannel: Channel = {
+  describe: "its newest stable release, or the newest prerelease of the version it pins",
+  versions: (published, { pinned }) =>
+    published.filter((release) => isStable(release) || isOnTheVersionOf(pinned, release)),
+};
 const solidChannel: Channel = {
-  describe: `the newest Solid ${solidMajor} release, stable once a stable ${solidMajor}.x exists`,
-  versions: solidLine,
+  describe: `the newest Solid ${solidMajor} release, stable once a stable ${solidMajor}.x is old enough to install`,
+  versions: (published, { now }) => solidLine(published, now),
 };
 
 export const channels: Record<string, Channel> = {
@@ -67,33 +96,33 @@ export const channels: Record<string, Channel> = {
   "@solidjs/web": solidChannel,
   "@solidjs/vite-plugin": {
     describe: "its newest release on the major it pins, tagged or not",
-    versions: (published, majors) =>
-      published.filter((version) => semver.major(version) === majors.pinned),
+    versions: (published, { pinned }) =>
+      published.filter(({ version }) => semver.major(version) === semver.major(pinned)),
   },
   "@types/node": {
     describe: "its newest stable release on the major of Node's newest LTS",
-    versions: (published, majors) =>
-      stableChannel
-        .versions(published, majors)
-        .filter((version) => semver.major(version) === majors.nodeLts),
+    versions: (published, { nodeLtsMajor }) =>
+      published.filter(
+        (release) => isStable(release) && semver.major(release.version) === nodeLtsMajor,
+      ),
   },
 };
-const nodeChannel = "Node's newest LTS";
 
 export const solidPackages = Object.keys(channels).filter(
   (name) => channels[name] === solidChannel,
 );
 
-function channelOf(name: string): Channel {
-  return channels[name] ?? stableChannel;
-}
-
-function publishedVersions(document: RegistryDocument): string[] {
-  return Object.keys(document.versions ?? {}).filter((version) => semver.valid(version) !== null);
+function channelOf({ registryName, pinned }: RegistryPin): Channel {
+  return (
+    channels[registryName] ??
+    (semver.prerelease(pinned) === null ? stableChannel : prereleasePinChannel)
+  );
 }
 
 function lowestVersion(where: string, specifier: string | undefined): string {
-  const version = specifier === undefined ? undefined : semver.minVersion(specifier)?.version;
+  if (specifier === undefined) throw new Error(`${where}: set it to a version or range.`);
+  const version =
+    semver.validRange(specifier) === null ? undefined : semver.minVersion(specifier)?.version;
   if (version === undefined) throw new Error(`${where}: "${specifier}" names no version.`);
   return version;
 }
@@ -134,108 +163,131 @@ export function pinsOf(
   ];
 }
 
-export function isExcluded(
-  registryName: string,
-  version: string,
-  excluded: readonly string[],
-): boolean {
-  return excluded.some((entry) => {
-    const [, name, exact] = packageAndVersion.exec(entry) ?? [undefined, entry, undefined];
-    if (!packageName.test(name ?? "") || (exact !== undefined && semver.valid(exact) === null)) {
+export function exclusionsIn(entries: readonly string[]): Exclusion[] {
+  return entries.map((entry) => {
+    const parts = packageAndVersion.exec(entry);
+    const name = parts ? parts[1] : entry;
+    const version = parts?.[2];
+    if (!packageName.test(name) || (version !== undefined && semver.valid(version) === null)) {
       throw new Error(
         `minimumReleaseAgeExclude: "${entry}" is not a package name or <name>@<exact version>, the only entries this check reads.`,
       );
     }
-    return name === registryName && (exact === undefined || exact === version);
+    return version === undefined ? { name } : { name, version };
   });
 }
 
-function eligibleAt(document: RegistryDocument, version: string, policy: ReleasePolicy): number {
-  return Date.parse(document.time?.[version] ?? "") + policy.minimumReleaseAgeMinutes * minute;
-}
-
-function isEligible(
-  registryName: string,
-  document: RegistryDocument,
-  version: string,
-  policy: ReleasePolicy,
-): boolean {
-  return (
-    isExcluded(registryName, version, policy.excluded) ||
-    eligibleAt(document, version, policy) <= policy.now
+function isExcluded(registryName: string, version: string, policy: ReleasePolicy): boolean {
+  return policy.excluded.some(
+    (exclusion) =>
+      exclusion.name === registryName &&
+      (exclusion.version === undefined || exclusion.version === version),
   );
 }
 
-function releasesAmong(
+function publishedAt(document: RegistryDocument, version: string): number | undefined {
+  const time = document.time?.[version];
+  const at = time === undefined ? Number.NaN : Date.parse(time);
+  return Number.isNaN(at) ? undefined : at;
+}
+
+function publishedIn(
   registryName: string,
   document: RegistryDocument,
-  candidates: string[],
   policy: ReleasePolicy,
-): Releases {
-  const newestFirst = [...candidates].sort(semver.rcompare);
-  return {
-    newest: newestFirst[0],
-    eligible: newestFirst.filter((version) => isEligible(registryName, document, version, policy)),
-  };
+): Published[] | Unknown {
+  const published: Published[] = [];
+  const versions = Object.keys(document.versions ?? {}).filter(
+    (version) => semver.valid(version) !== null,
+  );
+  for (const version of versions) {
+    const at = publishedAt(document, version);
+    if (at === undefined) {
+      return {
+        why: `the registry gives no publish time for ${registryName}@${version}, so its age cannot be told.`,
+      };
+    }
+    const age = isExcluded(registryName, version, policy) ? 0 : policy.minimumReleaseAgeMinutes;
+    published.push({ version, eligibleAt: at + age * minute });
+  }
+  return published;
 }
 
-export function solidReleases(
-  name: string,
-  document: RegistryDocument,
-  policy: ReleasePolicy,
-): Releases {
-  return releasesAmong(name, document, solidLine(publishedVersions(document)), policy);
+function newestFirst(published: readonly Published[]): Published[] {
+  return published.toSorted((left, right) => semver.rcompare(left.version, right.version));
 }
 
-function newestNodeLts(nodeReleases: readonly NodeRelease[]): string | undefined {
-  return nodeReleases
+function releasesAmong(candidates: readonly Published[], now: number): Releases | undefined {
+  const ordered = newestFirst(candidates);
+  const newest = ordered.at(0);
+  return (
+    newest && {
+      newest: newest.version,
+      eligible: ordered.find(({ eligibleAt }) => eligibleAt <= now)?.version,
+      eligibleAt: newest.eligibleAt <= now ? undefined : new Date(newest.eligibleAt).toISOString(),
+    }
+  );
+}
+
+function nodeLtsReleases(nodeReleases: readonly NodeRelease[]): Releases | undefined {
+  const newest = nodeReleases
     .filter(({ lts }) => lts !== false)
     .flatMap(({ version }) => semver.clean(version) ?? [])
-    .sort(semver.rcompare)[0];
+    .toSorted(semver.rcompare)
+    .at(0);
+  return newest === undefined ? undefined : { newest, eligible: newest, eligibleAt: undefined };
+}
+
+function registryReleases(
+  pin: RegistryPin,
+  document: RegistryDocument,
+  policy: ReleasePolicy,
+  context: ChannelContext,
+): Releases | Unknown {
+  const published = publishedIn(pin.registryName, document, policy);
+  if (!Array.isArray(published)) return published;
+  const channel = channelOf(pin);
+  return (
+    releasesAmong(channel.versions(published, context), context.now) ?? {
+      why: `no published release is on its channel (${channel.describe}); check the name and the channel.`,
+    }
+  );
 }
 
 function compared(
   pin: Pin,
   channel: string,
-  newest: string | undefined,
-  eligible: string | undefined,
-  notYetEligibleAt: number | undefined,
+  { newest, eligible, eligibleAt }: Releases,
   held: HeldBack | undefined,
 ): PinComparison {
-  if (newest === undefined) return { pin, channel, status: "no release" };
-  if (semver.lte(newest, pin.pinned)) return { pin, channel, newest, status: "current" };
   if (eligible !== undefined && semver.gt(eligible, pin.pinned)) {
     return held
       ? { pin, channel, newest, status: "held back", eligible, held }
       : { pin, channel, newest, status: "behind", eligible };
   }
-  return {
-    pin,
-    channel,
-    newest,
-    status: "not yet eligible",
-    eligibleAt: new Date(notYetEligibleAt ?? 0).toISOString(),
-  };
+  return eligibleAt !== undefined && semver.gt(newest, pin.pinned)
+    ? { pin, channel, newest, status: "not yet eligible", eligibleAt }
+    : { pin, channel, newest, status: "current" };
 }
 
-export function heldBackProblems(
+export function holdsOfNothing(
   heldBack: readonly HeldBack[],
   comparisons: readonly PinComparison[],
 ): string[] {
-  return [
-    ...heldBack
-      .filter(
-        ({ name }) =>
-          !comparisons.some(({ pin, status }) => pin.name === name && status === "held back"),
-      )
-      .map(
-        ({ name }) =>
-          `${name}: the held-back list holds it, but it is not behind; remove the entry.`,
-      ),
-    ...heldBack
-      .filter(({ reason, liftWhen }) => !reason?.trim() || !liftWhen?.trim())
-      .map(({ name }) => `${name}: give the entry in ${heldBackFile} a reason and a liftWhen.`),
-  ];
+  return heldBack
+    .filter(
+      ({ name }) =>
+        !comparisons.some(({ pin, status }) => pin.name === name && status === "held back"),
+    )
+    .map(
+      ({ name }) => `${name}: the held-back list holds it, but it is not behind; remove the entry.`,
+    );
+}
+
+export function holdsWithoutReason(heldBack: readonly HeldBack[]): string[] {
+  return heldBack
+    .filter(({ reason, liftWhen }) => !reason?.trim() || !liftWhen?.trim())
+    .map(({ name }) => `${name}: give the entry in ${heldBackFile} a reason and a liftWhen.`);
 }
 
 export function compareWithNewest(input: {
@@ -243,52 +295,48 @@ export function compareWithNewest(input: {
   documents: Record<string, RegistryDocument>;
   nodeReleases: readonly NodeRelease[];
   policy: ReleasePolicy;
+  now: number;
   heldBack: readonly HeldBack[];
 }): Report {
-  const nodeLts = newestNodeLts(input.nodeReleases);
-  const nodeLtsMajor = semver.major(nodeLts ?? "0.0.0");
+  const nodeLts = nodeLtsReleases(input.nodeReleases);
+  const nodeLtsMajor = nodeLts && semver.major(nodeLts.newest);
   const comparisons = input.pins.map((pin): PinComparison => {
-    const held = input.heldBack.find(({ name }) => name === pin.name);
-    if (pin.source === "node") return compared(pin, nodeChannel, nodeLts, nodeLts, undefined, held);
-    const document = input.documents[pin.registryName] ?? {};
-    const { newest, eligible } = releasesAmong(
-      pin.registryName,
-      document,
-      channelOf(pin.registryName).versions(publishedVersions(document), {
-        pinned: semver.major(pin.pinned),
-        nodeLts: nodeLtsMajor,
-      }),
-      input.policy,
-    );
-    return compared(
-      pin,
-      channelOf(pin.registryName).describe,
-      newest,
-      eligible[0],
-      newest === undefined ? undefined : eligibleAt(document, newest, input.policy),
-      held,
-    );
+    const channel = pin.source === "node" ? nodeChannel : channelOf(pin).describe;
+    const releases =
+      pin.source === "node"
+        ? (nodeLts ?? { why: "Node's release index lists no LTS release." })
+        : registryReleases(pin, input.documents[pin.registryName] ?? {}, input.policy, {
+            pinned: pin.pinned,
+            nodeLtsMajor,
+            now: input.now,
+          });
+    return "why" in releases
+      ? { pin, channel, status: "unknown", why: releases.why }
+      : compared(
+          pin,
+          channel,
+          releases,
+          input.heldBack.find(({ name }) => name === pin.name),
+        );
   });
   const problems = [
-    ...comparisons.flatMap((comparison) =>
-      comparison.status === "behind"
-        ? [
-            `${comparison.pin.name}: ${comparison.pin.pinned} is behind ${comparison.eligible}, ${comparison.channel} that is old enough to install. Move to it, or hold it back in ${heldBackFile} with a reason and a liftWhen.`,
-          ]
-        : comparison.status === "no release"
-          ? [
-              `${comparison.pin.name}: the registry lists no release for ${comparison.channel}; check the name and the channel.`,
-            ]
-          : [],
-    ),
-    ...heldBackProblems(input.heldBack, comparisons),
+    ...comparisons.flatMap((comparison) => {
+      if (comparison.status === "behind") {
+        return [
+          `${comparison.pin.name}: ${comparison.pin.pinned} is behind ${comparison.eligible}, the newest release it may move to (${comparison.channel}). Move to it, or hold it back in ${heldBackFile} with a reason and a liftWhen.`,
+        ];
+      }
+      return comparison.status === "unknown" ? [`${comparison.pin.name}: ${comparison.why}`] : [];
+    }),
+    ...holdsOfNothing(input.heldBack, comparisons),
+    ...holdsWithoutReason(input.heldBack),
   ];
   return { comparisons, problems };
 }
 
 export function reportTable(comparisons: readonly PinComparison[]): string {
   const rows = comparisons.map((comparison) => {
-    const newest = comparison.status === "no release" ? "?" : comparison.newest;
+    const newest = comparison.status === "unknown" ? "?" : comparison.newest;
     const status =
       comparison.status === "not yet eligible"
         ? `not yet eligible, until ${comparison.eligibleAt}`
@@ -304,27 +352,52 @@ export function reportTable(comparisons: readonly PinComparison[]): string {
   ].join("\n");
 }
 
+function publishedForEachSolidPackage(
+  documents: Record<string, RegistryDocument>,
+  policy: ReleasePolicy,
+): Published[] {
+  const [first = [], ...others] = solidPackages.map((name) => {
+    const published = publishedIn(name, documents[name] ?? {}, policy);
+    if (!Array.isArray(published)) throw new Error(`${name}: ${published.why}`);
+    return published;
+  });
+  return first.flatMap(({ version, eligibleAt }) => {
+    const elsewhere = others.flatMap(
+      (published) => published.find((release) => release.version === version) ?? [],
+    );
+    return elsewhere.length === others.length
+      ? [{ version, eligibleAt: Math.max(eligibleAt, ...elsewhere.map((it) => it.eligibleAt)) }]
+      : [];
+  });
+}
+
+function solidPeersAccept(documents: Record<string, RegistryDocument>, version: string): boolean {
+  return solidPackages.every((name) =>
+    Object.entries(documents[name]?.versions?.[version]?.peerDependencies ?? {})
+      .filter(([peer]) => solidPackages.includes(peer))
+      .every(([peer, range]) => {
+        if (semver.validRange(range) === null) {
+          throw new Error(
+            `${name}@${version}: its peer range "${range}" for ${peer} is not a semver range, so nothing tells whether it accepts ${version}.`,
+          );
+        }
+        return semver.satisfies(version, range, { includePrerelease: true });
+      }),
+  );
+}
+
 export function newestSolidRelease(
   documents: Record<string, RegistryDocument>,
   policy: ReleasePolicy,
+  now: number,
 ): string {
-  const eligibleSets = solidPackages.map(
-    (name) => solidReleases(name, documents[name] ?? {}, policy).eligible,
-  );
-  const together = (eligibleSets[0] ?? []).filter((version) =>
-    eligibleSets.every((eligible) => eligible.includes(version)),
-  );
-  const peersAgree = (version: string) =>
-    solidPackages.every((name) =>
-      Object.entries(documents[name]?.versions?.[version]?.peerDependencies ?? {})
-        .filter(([peer]) => solidPackages.includes(peer))
-        .every(([, range]) => semver.satisfies(version, range, { includePrerelease: true })),
-    );
-  const version = together.find(peersAgree);
-  if (version === undefined) {
+  const release = newestFirst(solidLine(publishedForEachSolidPackage(documents, policy), now))
+    .filter(({ eligibleAt }) => eligibleAt <= now)
+    .find(({ version }) => solidPeersAccept(documents, version));
+  if (release === undefined) {
     throw new Error(
-      `No release of ${solidPackages.join(" and ")} is ${solidChannel.describe}, published for each of them, old enough to install and accepted by their peer ranges.`,
+      `No Solid ${solidMajor} release is published for ${solidPackages.join(" and ")} alike, old enough to install and accepted by their peer ranges.`,
     );
   }
-  return version;
+  return release.version;
 }

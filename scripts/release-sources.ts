@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  exclusionsIn,
   type HeldBack,
   heldBackFile,
   type NodeRelease,
@@ -19,8 +20,7 @@ export function releasePolicy(settings: PnpmSettings): ReleasePolicy {
   }
   return {
     minimumReleaseAgeMinutes: settings.minimumReleaseAge,
-    excluded: settings.minimumReleaseAgeExclude,
-    now: Date.now(),
+    excluded: exclusionsIn(settings.minimumReleaseAgeExclude),
   };
 }
 
