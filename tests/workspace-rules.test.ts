@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -49,6 +50,7 @@ const allowedForPrimitives = ["solid-js"];
 const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name ?? ""];
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
+const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
 const webStandardsOnly =
   "A library is built on web standards and has no runtime dependency: it names Solid, StyleX and the primitives package as peers. Use a platform feature or a fallback written in this repository.";
 
@@ -233,6 +235,42 @@ test("a library has no runtime dependency, and names as a peer, or as a library 
         .map(
           (name) =>
             `${path}: package "${manifest.name}" names "${name}", which ${kind} may not. It may name only ${allowed.join(", ")}.`,
+        ),
+    ];
+  });
+
+  expect(libraryPackages.length).toBeGreaterThan(1);
+  expect(violations).toEqual([]);
+});
+
+function exportedFiles(exports: unknown): string[] {
+  if (typeof exports === "string") return [exports.replace(/^\.\//, "")];
+  if (typeof exports !== "object" || exports === null) return [];
+  return Object.values(exports).flatMap(exportedFiles);
+}
+
+function packedFiles(directory: string): string[] {
+  const packed: { files: { path: string }[] } = JSON.parse(
+    execFileSync(installedVp, ["pm", "pack", "--json", "--", "--dry-run"], {
+      cwd: directory,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
+  );
+  return packed.files.map(({ path }) => path);
+}
+
+test("a library's packed tarball holds every file its exports name", () => {
+  const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
+    const exported = [...new Set(exportedFiles(manifest.exports))];
+    const packed = packedFiles(directory);
+    return [
+      ...(exported.length === 0 ? [`${path}: package "${manifest.name}" exports no file.`] : []),
+      ...exported
+        .filter((file) => !packed.includes(file))
+        .map(
+          (file) =>
+            `${path}: the packed tarball of "${manifest.name}" leaves out ${file}, which "exports" names. Git ignores it, so name its folder in "files".`,
         ),
     ];
   });

@@ -6,6 +6,7 @@ export const repositoryRoot = join(import.meta.dirname, "..");
 export type Manifest = {
   name?: string;
   license?: string;
+  exports?: unknown;
   engines?: Record<string, string>;
   packageManager?: string;
   devEngines?: Record<string, unknown>;
