@@ -1,7 +1,13 @@
 import { expect } from "vite-plus/test";
 import type * as Library from "../src/index";
 import type { DisplayPropName } from "../src/style-prop-table";
-import { type ConsumerProps, handledKeys, renderBuilt } from "./built-library";
+import {
+  carriedComponents,
+  type ConsumerProps,
+  handledKeys,
+  renderBuilt,
+  renderBuiltWithin,
+} from "./built-library";
 import { elementsOf } from "./markup";
 
 type PropsOf<Component> = Component extends (props: infer Props) => unknown ? Props : never;
@@ -74,6 +80,25 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     polymorphic: true,
     props: { children: "Content" },
   },
+  Grid: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    props: {
+      type: "container",
+      breakpoints: { xs: "20em", sm: "30em", md: "40em", lg: "50em", xl: "60em" },
+      gap: { base: "xs", md: "xl" },
+      children: "Content",
+    },
+  },
+  GridCol: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    props: { span: { base: 12, md: 6 }, children: "Content" },
+  },
   Group: {
     tag: "div",
     booleanAttribute: "hidden",
@@ -143,12 +168,23 @@ function attributesNamed(html: string, props: readonly string[]): string[] {
   );
 }
 
-export function render(name: string, props: ConsumerProps = {}): string {
+function fixturePropsOf(name: string): ConsumerProps {
   if (!isComponentName(name)) {
     throw new Error(`packages/core/tests/fixtures.ts: add a fixture for ${name}.`);
   }
-  const fixtureProps: ConsumerProps = fixtures[name].props;
-  const html = renderBuilt(name, { ...fixtureProps, ...props });
+  return fixtures[name].props;
+}
+
+function renderGiven(name: string, given: ConsumerProps): string {
+  const carrier = carriedComponents[name]?.carrier;
+  return carrier === undefined
+    ? renderBuilt(name, given)
+    : renderBuiltWithin(carrier, fixturePropsOf(carrier), name, given);
+}
+
+export function render(name: string, props: ConsumerProps = {}): string {
+  const fixtureProps = fixturePropsOf(name);
+  const html = renderGiven(name, { ...fixtureProps, ...props });
   expect(
     attributesNamed(
       html,

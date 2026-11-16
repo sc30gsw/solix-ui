@@ -7,6 +7,7 @@ import {
   variableNames,
   variableRow,
 } from "../packages/core/src/style-prop-table";
+import { carriedComponents } from "../packages/core/tests/built-library";
 import { tokenValues } from "../scripts/tokens";
 import { descendants, exportsOf, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
 import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
@@ -589,14 +590,21 @@ test("every public token is named --solix-*, is used by a component or the scale
   }
 });
 
-test("every component is described by a feature file", () => {
+function kebabCase(name: string): string {
+  return name.replace(/(?<=[a-z0-9])(?=[A-Z])/g, "-").toLowerCase();
+}
+
+test("every component is described by a feature file, its own or that of the export that carries it as a static member", () => {
   const features = readdirSync(featureDirectory);
   const violations = components.flatMap(({ name }) => {
-    const kebab = name.replace(/(?<=[a-z0-9])(?=[A-Z])/g, "-").toLowerCase();
-    return features.some((feature) => feature === `${kebab}.md` || feature.startsWith(`${kebab}-`))
+    const carrier = carriedComponents[name]?.carrier;
+    const described = [name, ...(carrier === undefined ? [] : [carrier])].map(kebabCase);
+    return features.some((feature) =>
+      described.some((kebab) => feature === `${kebab}.md` || feature.startsWith(`${kebab}-`)),
+    )
       ? []
       : [
-          `${relativePath(featureDirectory)}: add ${kebab}.md describing ${name} for the verify-playground skill.`,
+          `${relativePath(featureDirectory)}: add ${kebabCase(name)}.md describing ${name} for the verify-playground skill.`,
         ];
   });
 

@@ -44,4 +44,5 @@ Each feature file starts with an H1 title and one paragraph describing what the 
 - [Flex](./flex.md) covers each flexbox prop, a responsive direction and gap that switch at md, `rowGap` beating `gap`, and a `Flex` rendered as a list.
 - [Container](./container.md) covers the default and a named maximum width, a fluid container, and the grid strategy's middle column with a child that breaks out of it.
 - [Simple grid](./simple-grid.md) covers columns and spacing that follow the breakpoints, columns that follow a container's width with container queries, a grid nested in another's cell, and columns that fill a row with `minColWidth`.
+- [Grid](./grid.md) covers `Grid.Col` spans that change at md or at a container's width, an offset, an order that changes at md, `auto` and `content` spans, `columns`, `grow`, and the grid's `justify`, `align` and `overflow`.
 - [Server render](./server-render.md) covers the page arriving rendered and styled before any script runs, and the disclosure working with scripts off.

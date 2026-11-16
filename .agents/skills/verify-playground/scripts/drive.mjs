@@ -390,6 +390,42 @@ const journeys = {
     observe("at md: the gap between its columns is lg", await style(media, "column-gap"), expected("--solix-spacing-lg"));
     observe("at md: the grids in containers keep their columns", `${await columnsOf(gridAround("Cell of the narrow container"))} ${await columnsOf(gridAround("Cell of the wide container"))}`, "2 4");
   },
+  grid: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Grid" });
+    const column = (text) => page.getByText(text, { exact: true });
+    const boxOf = (element) => element.evaluate((node) => { const { left, width } = node.getBoundingClientRect(); return { left, width }; });
+    const spanWidth = async (element, span, columns) => {
+      const inner = element.locator("xpath=..");
+      const { width } = await boxOf(inner);
+      const gap = await inner.evaluate((node) => Number.parseFloat(getComputedStyle(node).columnGap));
+      return ((width + gap) * span) / columns - gap;
+    };
+    const near = (actual, wanted) => Math.abs(actual - wanted) <= 1;
+    const half = column("Half from md");
+    await page.setViewportSize({ width: mdWidth - 1, height: 720 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Grid.`, section);
+    observe("below md: Half from md spans all 12 columns", near((await boxOf(half)).width, await spanWidth(half, 12, 12)), true);
+    observe("below md: the gap is xs", await style(half.locator("xpath=.."), "column-gap"), expected("--solix-spacing-xs"));
+    observe("A third spans 4 of 12 columns", near((await boxOf(column("A third"))).width, await spanWidth(column("A third"), 4, 12)), true);
+    const third = await boxOf(column("A third"));
+    const gap = Number.parseFloat(await style(column("A third").locator("xpath=.."), "column-gap"));
+    observe("A third after an offset leaves 4 columns empty before it", near((await boxOf(column("A third after an offset"))).left - (third.left + third.width), (await spanWidth(column("A third"), 4, 12)) + 2 * gap), true);
+    observe("below md: Ordered two comes before Ordered one", (await boxOf(column("Ordered two"))).left < (await boxOf(column("Ordered one"))).left, true);
+    observe("Content column is as wide as its content", await style(column("Content column"), "flex-basis"), "auto");
+    observe("Auto column grows into the rest of its row", await style(column("Auto column"), "flex-grow"), "1");
+    observe("with grow, two columns of 6 out of 24 each fill half the row", near((await boxOf(column("Grows to half"))).width, await spanWidth(column("Grows to half"), 12, 24)), true);
+    observe("justify, align and overflow reach the grid", `${await style(column("Grows to half").locator("xpath=.."), "justify-content")} ${await style(column("Grows to half").locator("xpath=.."), "align-items")} ${await style(column("Grows to half").locator("xpath=../.."), "overflow")}`, "center flex-end hidden");
+    observe("in a 480 pixel container, past 20em, a column spans 6 of 12", near((await boxOf(column("Half of a wide container"))).width, await spanWidth(column("Half of a wide container"), 6, 12)), true);
+    observe("in a 240 pixel container, short of 20em, a column spans 12 of 12", near((await boxOf(column("All of a narrow container"))).width, await spanWidth(column("All of a narrow container"), 12, 12)), true);
+
+    await page.setViewportSize({ width: mdWidth, height: 720 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The first two columns share a row, and the ordered columns swap.`, section);
+    observe("at md: Half from md spans 6 of 12 columns", near((await boxOf(half)).width, await spanWidth(half, 6, 12)), true);
+    observe("at md: the gap is lg", await style(half.locator("xpath=.."), "column-gap"), expected("--solix-spacing-lg"));
+    observe("at md: Ordered one comes before Ordered two", (await boxOf(column("Ordered one"))).left < (await boxOf(column("Ordered two"))).left, true);
+  },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();
     writeFileSync(join(directory, "response.html"), html);

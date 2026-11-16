@@ -5,6 +5,7 @@ import { ContainerSection } from "./sections/ContainerSection";
 import { ChangingPropsSection } from "./sections/ChangingPropsSection";
 import { DisclosureSection } from "./sections/DisclosureSection";
 import { FlexSection } from "./sections/FlexSection";
+import { GridSection } from "./sections/GridSection";
 import { GroupSection } from "./sections/GroupSection";
 import { ModalSection } from "./sections/ModalSection";
 import { PrimitivesSection } from "./sections/PrimitivesSection";
@@ -34,6 +35,7 @@ export default function App() {
       <FlexSection />
       <ContainerSection />
       <SimpleGridSection />
+      <GridSection />
       <PrimitivesSection />
     </main>
   );

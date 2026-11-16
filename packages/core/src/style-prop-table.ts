@@ -130,6 +130,21 @@ export const variableTable = {
     },
     "flex-wrap": { kind: "raw", responsive: true, property: "flex-wrap" },
   },
+  Grid: {
+    "col-align-self": { kind: "raw", responsive: true },
+    "col-flex-basis": { kind: "raw", responsive: true },
+    "col-flex-grow": { kind: "raw", responsive: true },
+    "col-max-width": { kind: "raw", responsive: true },
+    "col-offset": { kind: "raw", responsive: true },
+    "col-order": { kind: "raw", responsive: true },
+    "col-width": { kind: "raw", responsive: true },
+    "grid-align": { kind: "raw", responsive: false },
+    "grid-column-gap": { kind: "length", scale: "spacing", responsive: true },
+    "grid-gap": { kind: "length", scale: "spacing", responsive: true },
+    "grid-justify": { kind: "raw", responsive: false },
+    "grid-overflow": { kind: "raw", responsive: false },
+    "grid-row-gap": { kind: "length", scale: "spacing", responsive: true },
+  },
   Group: {
     "group-align": { kind: "raw", responsive: false },
     "group-child-width": {

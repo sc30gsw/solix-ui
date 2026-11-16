@@ -4,6 +4,8 @@ export { Center, type CenterProps } from "./Center";
 export { Container, type ContainerProps } from "./Container";
 export { Disclosure, type DisclosureProps } from "./Disclosure";
 export { Flex, type FlexProps } from "./Flex";
+export { Grid, type GridProps } from "./Grid";
+export { GridCol, type GridColProps } from "./GridCol";
 export { Group, type GroupProps } from "./Group";
 export { Modal, type ModalProps } from "./Modal";
 export { SimpleGrid, type SimpleGridProps } from "./SimpleGrid";

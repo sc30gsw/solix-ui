@@ -43,6 +43,28 @@ function gridAround(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true }).locator("xpath=..");
 }
 
+type Box = { left: number; width: number };
+
+function boxOf(element: Locator): Promise<Box> {
+  return element.evaluate((node) => {
+    const { left, width } = node.getBoundingClientRect();
+    return { left, width };
+  });
+}
+
+async function spanWidth(column: Locator, span: number, columns: number): Promise<number> {
+  const inner = column.locator("xpath=..");
+  const [{ width }, gap] = await Promise.all([
+    boxOf(inner),
+    inner.evaluate((node) => Number.parseFloat(getComputedStyle(node).columnGap)),
+  ]);
+  return ((width + gap) * span) / columns - gap;
+}
+
+function near(actual: number, wanted: number): boolean {
+  return Math.abs(actual - wanted) <= 1;
+}
+
 function widthOf(element: Locator): Promise<number> {
   return element.evaluate((node) => node.getBoundingClientRect().width);
 }
@@ -232,6 +254,73 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
         (await widthOf(page.getByText("Auto-filled cell", { exact: true }))) >= 160 &&
           (await columnsOf(filled)) > 2,
         "auto-fill makes as many columns of at least 160 pixels as fit",
+      ).toBe(true);
+    },
+  ],
+  [
+    "a Grid gives each column the share of its row that span names, at each breakpoint or container width, after an offset and in the order given, with auto and content spans, columns and grow",
+    async ({ page, expected, fromMd }) => {
+      const column = (text: string) => page.getByText(text, { exact: true });
+      const half = column("Half from md");
+
+      expect(await computed(half.locator("xpath=.."), "column-gap")).toBe(
+        expected(fromMd ? "--solix-spacing-lg" : "--solix-spacing-xs"),
+      );
+      expect(
+        near((await boxOf(half)).width, await spanWidth(half, fromMd ? 6 : 12, 12)),
+        "span 12 below md and 6 from md",
+      ).toBe(true);
+      const third = await boxOf(column("A third"));
+      const offset = await boxOf(column("A third after an offset"));
+      expect(near(third.width, await spanWidth(column("A third"), 4, 12))).toBe(true);
+      expect(
+        near(
+          offset.left - (third.left + third.width),
+          (await spanWidth(column("A third"), 4, 12)) +
+            2 *
+              Number.parseFloat(
+                await computed(column("A third").locator("xpath=.."), "column-gap"),
+              ),
+        ),
+        "an offset of 4 leaves four columns and their gaps empty",
+      ).toBe(true);
+      const [one, two] = await Promise.all([
+        boxOf(column("Ordered one")),
+        boxOf(column("Ordered two")),
+      ]);
+      expect(one.left < two.left, "order puts one first from md, and two first below").toBe(fromMd);
+      const content = column("Content column");
+      expect(await computed(content, "width")).not.toBe(
+        await computed(content.locator("xpath=.."), "width"),
+      );
+      expect(await computed(content, "flex-basis")).toBe("auto");
+      expect(await computed(column("Auto column"), "flex-grow")).toBe("1");
+      const grows = await Promise.all([
+        boxOf(column("Grows to half")),
+        boxOf(column("Grows to the other half")),
+      ]);
+      expect(
+        near(grows[0].width, grows[1].width) &&
+          near(grows[0].width, await spanWidth(column("Grows to half"), 12, 24)),
+        "with grow, two columns of 6 out of 24 fill the row",
+      ).toBe(true);
+      const grown = column("Grows to half").locator("xpath=..");
+      expect(await computed(grown, "justify-content")).toBe("center");
+      expect(await computed(grown, "align-items")).toBe("flex-end");
+      expect(await computed(grown.locator("xpath=.."), "overflow")).toBe("hidden");
+      expect(
+        near(
+          (await boxOf(column("Half of a wide container"))).width,
+          await spanWidth(column("Half of a wide container"), 6, 12),
+        ),
+        "a 480 pixel container is past md, 20em",
+      ).toBe(true);
+      expect(
+        near(
+          (await boxOf(column("All of a narrow container"))).width,
+          await spanWidth(column("All of a narrow container"), 12, 12),
+        ),
+        "a 240 pixel container is short of md",
       ).toBe(true);
     },
   ],

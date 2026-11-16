@@ -32,6 +32,7 @@ const journeys = [
   ["flex", "A Flex sets the flexbox properties it is given, responsive ones at md"],
   ["container", "A Container limits its width, or not when fluid, and lays out a breakout grid"],
   ["simple-grid", "A SimpleGrid takes its columns from its breakpoints or its container's width"],
+  ["grid", "A Grid gives each column the share of its row that span names"],
   ["server-render", "The page is server-rendered and styled without JavaScript"],
 ];
 

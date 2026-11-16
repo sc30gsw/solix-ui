@@ -67,6 +67,17 @@ export function topLevelTags(html: string): string[] {
   return found;
 }
 
+export function memberMarkupOf(html: string, carrierClass: string): string {
+  let rest = html.replaceAll(/<style[^>]*>[^<]*<\/style>/g, "");
+  for (;;) {
+    const [outer] = elementsOf(rest);
+    const carriers =
+      outer !== undefined && classesOf(outer).some((found) => found.startsWith(carrierClass));
+    if (!carriers || topLevelTags(rest).length !== 1) return rest;
+    rest = rest.slice(rest.indexOf(">") + 1, rest.lastIndexOf("</"));
+  }
+}
+
 export function rulesOf(html: string): string[] {
   return [...html.matchAll(/<style[^>]*>([^<]*)<\/style>/g)].map(([, rules]) => rules);
 }

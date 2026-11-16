@@ -5,6 +5,8 @@ import type {
   CenterProps,
   ContainerProps,
   FlexProps,
+  GridColProps,
+  GridProps,
   GroupProps,
   SimpleGridProps,
   SpaceProps,
@@ -455,4 +457,200 @@ test("SimpleGrid: two grids with container queries in one page scope their class
   expect(rules[0]).toContain(`.${scoped[0][0]}{`);
   expect(rules[0]).not.toContain(`.${scoped[1][0]}{`);
   expect(rules[1]).toContain(`.${scoped[1][0]}{`);
+});
+
+function columnIn(grid: GridProps, column: GridColProps): Rendered & { html: string } {
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      ...grid,
+      get children() {
+        return createComponent(library.GridCol, column);
+      },
+    }),
+  );
+  const col = elementCarrying(html, "solix-GridCol-root");
+  return {
+    classes: classesOf(col)
+      .filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`))
+      .sort(),
+    style: Object.fromEntries(declarationsIn(valuesOf(col, "style")[0])),
+    html,
+  };
+}
+
+const basisOf = (share: string) =>
+  `calc((100% + var(--grid-column-gap)) * ${share} - var(--grid-column-gap))`;
+
+test("Grid carries GridCol as Grid.Col", () => {
+  expect(Reflect.get(library.Grid, "Col")).toBe(library.GridCol);
+});
+
+test("Grid: gives justify, align, overflow and its gaps to their variables, and with media queries renders no container part", () => {
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "media",
+      justify: "center",
+      align: "flex-end",
+      overflow: "hidden",
+      gap: { base: "xs", md: "xl" },
+      rowGap: 4,
+      children: "Content",
+    }),
+  );
+  const root = elementCarrying(html, "solix-Grid-root");
+
+  expect(rootElementOf(html)).toEqual(root);
+  expect(rulesOf(html)).toEqual([]);
+  expect(Object.fromEntries(declarationsIn(valuesOf(root, "style")[0]))).toEqual({
+    "--sx-grid-align": "flex-end",
+    "--sx-grid-gap": "var(--solix-spacing-xs)",
+    "--sx-grid-gap-md": "var(--solix-spacing-xl)",
+    "--sx-grid-justify": "center",
+    "--sx-grid-overflow": "hidden",
+    "--sx-grid-row-gap": "0.25rem",
+  });
+});
+
+const columnCases: [what: string, grid: GridProps, column: GridColProps, expected: Rendered][] = [
+  [
+    "spans all 12 columns by default",
+    {},
+    {},
+    {
+      classes: ["sx-col-flex-basis", "sx-col-flex-grow", "sx-col-max-width"],
+      style: {
+        "--sx-col-flex-basis": basisOf("1"),
+        "--sx-col-flex-grow": "0",
+        "--sx-col-max-width": basisOf("1"),
+      },
+    },
+  ],
+  [
+    "takes the share of the grid's columns its span names, at each breakpoint, with a base of 12",
+    { columns: 24 },
+    { span: { md: 6 } },
+    {
+      classes: [
+        "sx-col-flex-basis",
+        "sx-col-flex-basis-md",
+        "sx-col-flex-grow",
+        "sx-col-flex-grow-md",
+        "sx-col-max-width",
+        "sx-col-max-width-md",
+      ],
+      style: {
+        "--sx-col-flex-basis": basisOf("0.5"),
+        "--sx-col-flex-basis-md": basisOf("0.25"),
+        "--sx-col-flex-grow": "0",
+        "--sx-col-flex-grow-md": "0",
+        "--sx-col-max-width": basisOf("0.5"),
+        "--sx-col-max-width-md": basisOf("0.25"),
+      },
+    },
+  ],
+  [
+    "with span auto, grows into the rest of its row",
+    {},
+    { span: "auto" },
+    {
+      classes: ["sx-col-flex-basis", "sx-col-flex-grow", "sx-col-max-width"],
+      style: {
+        "--sx-col-flex-basis": "0rem",
+        "--sx-col-flex-grow": "1",
+        "--sx-col-max-width": "100%",
+      },
+    },
+  ],
+  [
+    "with span content, takes the width of its content",
+    {},
+    { span: "content" },
+    {
+      classes: ["sx-col-flex-basis", "sx-col-flex-grow", "sx-col-max-width", "sx-col-width"],
+      style: {
+        "--sx-col-flex-basis": "auto",
+        "--sx-col-flex-grow": "0",
+        "--sx-col-max-width": "unset",
+        "--sx-col-width": "auto",
+      },
+    },
+  ],
+  [
+    "in a grid that grows, grows and takes up to the whole row",
+    { grow: true },
+    { span: 4 },
+    {
+      classes: ["sx-col-flex-basis", "sx-col-flex-grow", "sx-col-max-width"],
+      style: {
+        "--sx-col-flex-basis": basisOf("0.333333"),
+        "--sx-col-flex-grow": "1",
+        "--sx-col-max-width": "100%",
+      },
+    },
+  ],
+  [
+    "gives offset, order and align to their variables, an offset of 0 as 0",
+    {},
+    { span: 6, offset: { base: 0, lg: 3 }, order: { base: 2, md: 1 }, align: "center" },
+    {
+      classes: [
+        "sx-col-align-self",
+        "sx-col-flex-basis",
+        "sx-col-flex-grow",
+        "sx-col-max-width",
+        "sx-col-offset",
+        "sx-col-offset-lg",
+        "sx-col-order",
+        "sx-col-order-md",
+      ],
+      style: {
+        "--sx-col-align-self": "center",
+        "--sx-col-flex-basis": basisOf("0.5"),
+        "--sx-col-flex-grow": "0",
+        "--sx-col-max-width": basisOf("0.5"),
+        "--sx-col-offset": "0",
+        "--sx-col-offset-lg": "calc((100% + var(--grid-column-gap)) * 0.25)",
+        "--sx-col-order": "2",
+        "--sx-col-order-md": "1",
+      },
+    },
+  ],
+  [
+    "in a grid with container queries and no breakpoints, keeps only its base values",
+    { type: "container" },
+    { span: { base: 12, md: 6 } },
+    {
+      classes: ["sx-col-flex-basis", "sx-col-flex-grow", "sx-col-max-width"],
+      style: {
+        "--sx-col-flex-basis": basisOf("1"),
+        "--sx-col-flex-grow": "0",
+        "--sx-col-max-width": basisOf("1"),
+      },
+    },
+  ],
+];
+
+test.each(columnCases)("GridCol: %s", (_, grid, column, expected) => {
+  const { html, ...rendered } = columnIn(grid, column);
+
+  expect(rendered).toEqual(expected);
+  expect(html).not.toContain("solix-Grid-container");
+});
+
+test("GridCol: in a grid with container queries and breakpoints, keys its values by the grid's container widths, whose rules the grid renders", () => {
+  const { html, classes } = columnIn(
+    {
+      type: "container",
+      breakpoints: { xs: "10em", sm: "15em", md: "20em", lg: "25em", xl: "30em" },
+    },
+    { span: { base: 12, md: 6 } },
+  );
+  const [rules] = rulesOf(html);
+
+  expect(classes).toContain("sx-col-flex-basis-c0-2");
+  expect(rules).toContain("@container solix-grid (min-width: 20em){");
+  expect(rules).toContain(
+    ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}",
+  );
+  expect(classesOf(rootElementOf(html))).toContain("solix-Grid-container");
 });
