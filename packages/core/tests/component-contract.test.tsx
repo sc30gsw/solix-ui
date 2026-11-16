@@ -624,7 +624,7 @@ function containerRuleProblems(name: string, html: string): string[] {
 }
 
 test.each(builtComponents)(
-  "%s starts each style element it renders with the library's layer order, then writes, in the style-prop layer, registrations not inherited and, in ascending container widths, rules that each set a variable's custom property from its own class, for one instance's classes",
+  "%s starts each style element it renders with the library's layer order, then writes, in the container-queries layer, registrations not inherited and, in ascending container widths, rules that each set a variable's custom property from its own class, for one instance's classes",
   (name) => {
     expect(containerRuleProblems(name, render(name))).toEqual([]);
   },
@@ -650,7 +650,7 @@ test.each(builtComponents.filter((name) => containerPart in compiledClassesOf(na
   "%s, whose styles have a container part, renders under its fixture its rules first, if any, and then that part with the root as its only element child",
   (name) => {
     const html = render(name);
-    const withoutRules = html.replaceAll(/<style[^>]*>[^<]*<\/style>/g, "");
+    const withoutRules = html.replace(/^<style[^>]*>[^<]*<\/style>/, "");
     const container = elementCarrying(html, stableClass(name, containerPart));
     const inside = withoutRules.slice(
       withoutRules.indexOf(">") + 1,
