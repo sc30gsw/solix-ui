@@ -94,6 +94,7 @@ const solidChannel: Channel = {
 export const channels: Record<string, Channel> = {
   "solid-js": solidChannel,
   "@solidjs/web": solidChannel,
+  "@solidjs/compiler": solidChannel,
   "@solidjs/vite-plugin": {
     describe: "its newest release on the major it pins, tagged or not",
     versions: (published, { pinned }) =>
@@ -111,6 +112,10 @@ export const channels: Record<string, Channel> = {
 export const solidPackages = Object.keys(channels).filter(
   (name) => channels[name] === solidChannel,
 );
+
+export function listed(names: readonly string[]): string {
+  return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
 
 function channelOf({ registryName, pinned }: RegistryPin): Channel {
   return (
@@ -401,7 +406,7 @@ export function newestSolidRelease(
     .find(({ version }) => solidPeersAccept(documents, version));
   if (release === undefined) {
     throw new Error(
-      `No Solid ${solidMajor} release is published for ${solidPackages.join(" and ")} alike, old enough to install and accepted by their peer ranges.`,
+      `No Solid ${solidMajor} release is published for ${listed(solidPackages)} alike, old enough to install and accepted by their peer ranges.`,
     );
   }
   return release.version;

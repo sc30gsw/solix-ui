@@ -15,6 +15,7 @@ import {
   staticPropertyName,
   ts,
 } from "../scripts/syntax";
+import { solidPackages } from "../scripts/newest-releases";
 import { pnpmSettings } from "../scripts/pnpm-settings";
 import {
   type ExportTarget,
@@ -522,6 +523,45 @@ test("source code carries no comment except a doc comment on a public API", () =
 
   expect(scriptFiles.length).toBeGreaterThan(10);
   expect(comments, "Remove the comment and say it with a name, a constant or a test.").toEqual([]);
+});
+
+type Installed = { name: string; version: string };
+
+function installedVersions(names: readonly string[]): Installed[] {
+  const answer = execFileSync(installedVp, ["why", ...names, "-r", "--json"], {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: packAnswerTimeout,
+  });
+  const installed: unknown = JSON.parse(answer);
+  if (!Array.isArray(installed)) throw new Error(`The package manager answered: ${answer}`);
+  return installed.map(({ name, version }: Installed) => ({ name, version }));
+}
+
+test("every package of a Solid release is installed at the version the catalog pins, wherever it is installed", () => {
+  const { catalog } = pnpmSettings();
+  const installed = installedVersions(solidPackages);
+  const [first = ""] = solidPackages;
+  const violations = [
+    ...solidPackages
+      .filter((name) => catalog[name] !== catalog[first])
+      .map(
+        (name) =>
+          `${workspaceFile}: pin ${name} to ${catalog[first] ?? "the release"} ${first} is pinned to, not ${catalog[name] ?? "nothing"}: the packages of a Solid release move together.`,
+      ),
+    ...solidPackages
+      .filter((name) => !installed.some((each) => each.name === name))
+      .map((name) => `${name} is not installed, so nothing tells which release it is.`),
+    ...installed
+      .filter(({ name, version }) => version !== catalog[name])
+      .map(
+        ({ name, version }) =>
+          `${name} is installed at ${version}, not ${catalog[name] ?? "a version"} the catalog in ${workspaceFile} pins. Pin it in the catalog and override it there with "catalog:", so a package that brings it in cannot hold an older release.`,
+      ),
+  ];
+
+  expect(violations).toEqual([]);
 });
 
 test("every peer range of a library package accepts the version the catalog pins", () => {

@@ -124,6 +124,7 @@ function solidLine(webPeer: (version: string) => string, releases: Release[]) {
     "@solidjs/web": registryDocument(
       releases.map(([version, daysAgo]) => [version, daysAgo, { "solid-js": webPeer(version) }]),
     ),
+    "@solidjs/compiler": registryDocument(releases),
   };
 }
 
@@ -249,6 +250,10 @@ test("while @solidjs/web has no stable Solid 2 yet, the canary takes the newest 
       ["2.0.0", 5],
     ]),
     "@solidjs/web": registryDocument([["2.0.0-rc.23", 9]]),
+    "@solidjs/compiler": registryDocument([
+      ["2.0.0-rc.23", 9],
+      ["2.0.0", 5],
+    ]),
   };
 
   expect(newestSolidRelease(lagging, policy, now)).toBe("2.0.0-rc.23");
@@ -345,6 +350,7 @@ test("the Solid 2 canary takes one release for every Solid package, old enough f
   const webTooYoung = {
     "solid-js": lockstep["@solidjs/web"],
     "@solidjs/web": lockstep["solid-js"],
+    "@solidjs/compiler": lockstep["@solidjs/compiler"],
   };
 
   expect(newestSolidRelease(lockstep, policy, now)).toBe("2.0.0-rc.21");
@@ -372,7 +378,7 @@ test("the Solid 2 canary refuses a peer range it cannot read instead of passing 
     '@solidjs/web@2.0.0-rc.22: its peer range "workspace:^" for solid-js is not a semver range',
   );
   expect(() => newestSolidRelease({}, policy, now)).toThrow(
-    "No Solid 2 release is published for solid-js and @solidjs/web alike, old enough to install and accepted by their peer ranges.",
+    "No Solid 2 release is published for solid-js, @solidjs/web and @solidjs/compiler alike, old enough to install and accepted by their peer ranges.",
   );
 });
 

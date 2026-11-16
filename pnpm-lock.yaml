@@ -241,6 +241,7 @@ catalogs:
       version: 1.6.0
 
 overrides:
+  '@solidjs/compiler': 2.0.0-rc.22
   vite@*: npm:@voidzero-dev/vite-plus-core@1.6.0
 
 importers:
@@ -950,39 +951,39 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
-  '@solidjs/compiler-darwin-arm64@2.0.0-rc.21':
-    resolution: {integrity: sha512-lXLk6GrmidICtHiIyCxDQC+6XqcrI7YMoGffo1wLigdojwNcCsifQfwRvzx0D78ieTU91VwzifmBu8hw1TQ28Q==}
+  '@solidjs/compiler-darwin-arm64@2.0.0-rc.22':
+    resolution: {integrity: sha512-rb4efu3DSBWPqBIQTGHJqgzuUPj/f57kIOaPOxMqWhE3dNBDkBhRJdj8lF34nBJg6euBAnQfZtu+oG4xlnPIrg==}
     cpu: [arm64]
     os: [darwin]
 
-  '@solidjs/compiler-darwin-x64@2.0.0-rc.21':
-    resolution: {integrity: sha512-RKEXt5sXX7qHuYc+EjOdIhvOl+8HohI97GPlLzFN+64k4ywc0dr4Ge3W7RvgdJTwfyZVEolEelq2hw6vbEWQwg==}
+  '@solidjs/compiler-darwin-x64@2.0.0-rc.22':
+    resolution: {integrity: sha512-T71P8cD/vTad6y7KgFCSJRNN7LWPfgzguR8lS4vBnshAb4rNRK/h91+dp/3ZcvTt7U9SCWvvS5g5SKGtD6QRKw==}
     cpu: [x64]
     os: [darwin]
 
-  '@solidjs/compiler-linux-arm64-gnu@2.0.0-rc.21':
-    resolution: {integrity: sha512-rJpzsmhydP13WSqWpBegbRd8NSZrWZkeCGJOfMeisOUzIY3XntA50RDe0+sLNXaekU8PXGeyQCxOxkDlrBbEXQ==}
+  '@solidjs/compiler-linux-arm64-gnu@2.0.0-rc.22':
+    resolution: {integrity: sha512-FvAoVCoA0aan75aRUqyd3eadH6GUgeT8z5jTXkqb46SOoJgRNtuG29qmZoEpuDKTRPDP7OpevraPEKJANNcfaA==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@solidjs/compiler-linux-x64-gnu@2.0.0-rc.21':
-    resolution: {integrity: sha512-lZa593mWtgtOZuWLa54rolQOTp+II9DUznRoJKcGxNzCyhjzqMAGiWOP1fHGmEAdYlbyUqA+CnhwhjcC34WBKQ==}
+  '@solidjs/compiler-linux-x64-gnu@2.0.0-rc.22':
+    resolution: {integrity: sha512-3BbOQAP4twipk0ZjQiTmoqtFLCJtIEvJnjk85DIwlt3Su4QrxC1ogjZhcheCnJRCxhFv/GJG3ePAeyqJSNQJeg==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@solidjs/compiler-wasm32-wasi@2.0.0-rc.21':
-    resolution: {integrity: sha512-gQeaqDoie2wgh8ph2Ti89mFiBthVmq0EWYL5HesI45K5NvvrlvaftZs0Zt3VlVQrvz79A7OLKhHX+2aD6PvnzA==}
+  '@solidjs/compiler-wasm32-wasi@2.0.0-rc.22':
+    resolution: {integrity: sha512-OXXnPmDurDSMsRI8CI2EF/iHVFeclRfm3OHTv9jTJUf9Kjd51LM1WA1QfhEqhme3bhJjpFh9iBJ5lBSpZYraPw==}
     engines: {node: '>=14.0.0'}
 
-  '@solidjs/compiler-win32-x64-msvc@2.0.0-rc.21':
-    resolution: {integrity: sha512-cGNQL/7MF/CudNo1j2C9TEG/wTKZtFuSAQRPhU/UKzlq61oO5tKWLRugGWY4qGZ+K+4iw6CpSAuj4/s0z0POww==}
+  '@solidjs/compiler-win32-x64-msvc@2.0.0-rc.22':
+    resolution: {integrity: sha512-TSHWp7mj4lKOvgE2iYGTSjUUjydwxLd4MjO+fkhe/rLbb7eOm4JDnIqgyuSIxwt8+1X2IsFx4DimZr+C3BE8ag==}
     cpu: [x64]
     os: [win32]
 
-  '@solidjs/compiler@2.0.0-rc.21':
-    resolution: {integrity: sha512-nhI5oCRx+ArUxcJtnesRb7pArO5zhTd/hef2I+dBD10MYwrQNM7ftpDdNVv7fQh/dH5xvqAnpWN4tUhZavo4ng==}
+  '@solidjs/compiler@2.0.0-rc.22':
+    resolution: {integrity: sha512-3C5+sp2tDc/w5c/h8BKPnpNxOOnEhsLTexmvbIaDSTXZGUCxAB/p+p7sEiuCO8TlYXJzpJ1a2x+J8faIO92pPw==}
 
   '@solidjs/signals@2.0.0-rc.22':
     resolution: {integrity: sha512-A+yy1+g8V/YAz9TiRwO+zMZ4+SAUTkYUQBobXBUSk1nFQ9SymDcMghl/VcdZWchx+ITh2RkxL8ePpF6dCXgCSg==}
@@ -2424,43 +2425,43 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
-  '@solidjs/compiler-darwin-arm64@2.0.0-rc.21':
+  '@solidjs/compiler-darwin-arm64@2.0.0-rc.22':
     optional: true
 
-  '@solidjs/compiler-darwin-x64@2.0.0-rc.21':
+  '@solidjs/compiler-darwin-x64@2.0.0-rc.22':
     optional: true
 
-  '@solidjs/compiler-linux-arm64-gnu@2.0.0-rc.21':
+  '@solidjs/compiler-linux-arm64-gnu@2.0.0-rc.22':
     optional: true
 
-  '@solidjs/compiler-linux-x64-gnu@2.0.0-rc.21':
+  '@solidjs/compiler-linux-x64-gnu@2.0.0-rc.22':
     optional: true
 
-  '@solidjs/compiler-wasm32-wasi@2.0.0-rc.21':
+  '@solidjs/compiler-wasm32-wasi@2.0.0-rc.22':
     dependencies:
       '@emnapi/core': 1.11.3
       '@emnapi/runtime': 1.11.3
       '@napi-rs/wasm-runtime': 1.2.7(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
     optional: true
 
-  '@solidjs/compiler-win32-x64-msvc@2.0.0-rc.21':
+  '@solidjs/compiler-win32-x64-msvc@2.0.0-rc.22':
     optional: true
 
-  '@solidjs/compiler@2.0.0-rc.21':
+  '@solidjs/compiler@2.0.0-rc.22':
     optionalDependencies:
-      '@solidjs/compiler-darwin-arm64': 2.0.0-rc.21
-      '@solidjs/compiler-darwin-x64': 2.0.0-rc.21
-      '@solidjs/compiler-linux-arm64-gnu': 2.0.0-rc.21
-      '@solidjs/compiler-linux-x64-gnu': 2.0.0-rc.21
-      '@solidjs/compiler-wasm32-wasi': 2.0.0-rc.21
-      '@solidjs/compiler-win32-x64-msvc': 2.0.0-rc.21
+      '@solidjs/compiler-darwin-arm64': 2.0.0-rc.22
+      '@solidjs/compiler-darwin-x64': 2.0.0-rc.22
+      '@solidjs/compiler-linux-arm64-gnu': 2.0.0-rc.22
+      '@solidjs/compiler-linux-x64-gnu': 2.0.0-rc.22
+      '@solidjs/compiler-wasm32-wasi': 2.0.0-rc.22
+      '@solidjs/compiler-win32-x64-msvc': 2.0.0-rc.22
 
   '@solidjs/signals@2.0.0-rc.22': {}
 
   '@solidjs/vite-plugin@3.0.0-next.57(@babel/core@7.29.13)(@solidjs/web@2.0.0-rc.22(solid-js@2.0.0-rc.22))(@voidzero-dev/vite-plus-core@1.6.0(@types/node@26.6.6)(typescript@7.0.2))(solid-js@2.0.0-rc.22)':
     dependencies:
       '@ampproject/remapping': 2.3.0
-      '@solidjs/compiler': 2.0.0-rc.21
+      '@solidjs/compiler': 2.0.0-rc.22
       '@solidjs/web': 2.0.0-rc.22(solid-js@2.0.0-rc.22)
       magic-string: 0.30.21
       merge-anything: 5.1.7
