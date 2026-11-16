@@ -13,13 +13,13 @@ import {
   type OpenPage,
   scriptModes,
 } from "./support/playground";
+import { pageStyleRules, type PageStyleRule, stylesAddedToThePage } from "./support/page-styles";
 import {
   controlled,
   elementsNamedBy,
   generated,
   inAShadowRoot,
   stateOf,
-  stylesAddedToThePage,
   tabList,
   tabNamed,
 } from "./support/tabs";
@@ -57,29 +57,31 @@ inEveryEngine((browser) => {
       );
     });
 
-    test("the page holds no style element and no adopted style sheet before a script runs, and after it only the one style element the SDK adds, which holds exactly the rule the library's stylesheet carries from the SDK's package in the layer it orders before its own", async () => {
-      const layersOfLinkedSheets = await opened.page.evaluate(() =>
-        [...document.styleSheets]
-          .filter((sheet) => sheet.ownerNode instanceof HTMLLinkElement)
-          .flatMap((sheet) =>
-            [...sheet.cssRules].flatMap((rule) => {
-              if (rule instanceof CSSLayerStatementRule) return [...rule.nameList];
-              return rule instanceof CSSLayerBlockRule ? [rule.name] : [];
-            }),
-          ),
-      );
-
+    test("before a script runs the page adds no style, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the SDK's hidden rule the stylesheet carries, and every important declaration on the page sits in that layer", async () => {
       const plain = await browser().newContext({ javaScriptEnabled });
       const page = await plain.newPage();
       await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
-      const styles = await stylesAddedToThePage(page);
+      const rules = await pageStyleRules(page);
+      const added = await stylesAddedToThePage(page);
       await plain.close();
+      const linkedLayerOrder = rules
+        .filter(({ addedAtRunTime, layers }) => !addedAtRunTime && layers.length > 0)
+        .map(({ layers: [outermost] }) => outermost);
+      const outsideTheSdkLayer = (rule: PageStyleRule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
 
-      expect(styles).toEqual(javaScriptEnabled ? [sdkHiddenRule] : []);
-      expect([...new Set(layersOfLinkedSheets)]).toEqual([
-        BEHAVIOUR_SDK_LAYER,
-        LIBRARY_CASCADE_LAYER,
-      ]);
+      expect(
+        rules
+          .filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule))
+          .map(({ text }) => text),
+      ).toEqual([]);
+      expect(
+        rules
+          .filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule))
+          .map(({ text }) => text),
+      ).toEqual([]);
+      expect(added.includes(sdkHiddenRule)).toBe(javaScriptEnabled);
+      expect(javaScriptEnabled ? [] : added).toEqual([]);
+      expect([...new Set(linkedLayerOrder)]).toEqual([BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER]);
     });
   });
 

@@ -4,6 +4,7 @@ import { parseSync, transformAsync } from "@babel/core";
 import syntaxJsx from "@babel/plugin-syntax-jsx";
 import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
+import postcss from "postcss";
 import { stableClassPrefix } from "./src/stable-class.ts";
 
 export const LIBRARY_CASCADE_LAYER = "solix";
@@ -13,7 +14,7 @@ export const HIDDEN_LAYER = "hidden";
 export const BEHAVIOUR_SDK_LAYER = "ui-sdk";
 export const HIDDEN_PART_SELECTOR = `[hidden]:where([class*="${stableClassPrefix}"]):not([hidden="until-found"])`;
 
-const sdkHiddenRuleSource = {
+export const sdkHiddenRuleSource = {
   dependency: "@ui-sdk/core",
   module: "dist/foundation/platform/style.js",
   writer: "enforceHidden",
@@ -49,9 +50,53 @@ function stringsIn(node) {
   if (Array.isArray(node)) return node.flatMap(stringsIn);
   if (node === null || typeof node !== "object") return [];
   if (node.type === "StringLiteral") return [node.value];
+  if (node.type === "TemplateElement") return [node.value.cooked];
   return Object.entries(node)
     .filter(([key]) => !["loc", "start", "end", "extra", "comments"].includes(key))
     .flatMap(([, value]) => stringsIn(value));
+}
+
+const hiddenDeclaration = { prop: "display", value: "none", important: true };
+
+function asCss(text) {
+  try {
+    return postcss.parse(text);
+  } catch (error) {
+    return error.reason ?? String(error);
+  }
+}
+
+function hiddenRuleProblem(cssTexts) {
+  if (cssTexts.length !== 1) {
+    return `${cssTexts.length} pieces of CSS, ${JSON.stringify(cssTexts)}, not one whole rule`;
+  }
+  const [text] = cssTexts;
+  const parsed = asCss(text);
+  if (typeof parsed === "string") return `${JSON.stringify(text)}, which does not parse: ${parsed}`;
+  const [layer, ...others] = parsed.nodes;
+  if (
+    others.length > 0 ||
+    layer?.type !== "atrule" ||
+    layer.name !== "layer" ||
+    layer.params !== BEHAVIOUR_SDK_LAYER
+  ) {
+    return `${JSON.stringify(text)}, which is not one @layer ${BEHAVIOUR_SDK_LAYER} block and nothing else`;
+  }
+  const [rule, ...otherRules] = layer.nodes ?? [];
+  if (otherRules.length > 0 || rule?.type !== "rule") {
+    return `${JSON.stringify(text)}, which does not hold exactly one rule in @layer ${BEHAVIOUR_SDK_LAYER}`;
+  }
+  const declarations = rule.nodes.map(({ type, prop, value, important }) => ({
+    type,
+    prop,
+    value,
+    important: important === true,
+  }));
+  const wanted = [{ type: "decl", ...hiddenDeclaration }];
+  if (JSON.stringify(declarations) !== JSON.stringify(wanted)) {
+    return `${JSON.stringify(text)}, which declares ${rule.nodes.map((node) => node.toString()).join("; ")}, not only ${hiddenDeclaration.prop}: ${hiddenDeclaration.value} !important`;
+  }
+  return undefined;
 }
 
 export function behaviourSdkHiddenRule(packageRoot) {
@@ -66,15 +111,16 @@ export function behaviourSdkHiddenRule(packageRoot) {
   const written = parsed.program.body.find(
     (statement) => statement.type === "FunctionDeclaration" && statement.id?.name === writer,
   );
-  const rules = stringsIn(written).filter((text) =>
-    text.startsWith(`@layer ${BEHAVIOUR_SDK_LAYER} {`),
-  );
-  if (rules.length !== 1) {
+  const cssTexts = stringsIn(written).filter((text) => /[{}]/.test(text));
+  const problem = written
+    ? hiddenRuleProblem(cssTexts)
+    : `nothing, since the module declares no function of that name`;
+  if (problem !== undefined) {
     throw new Error(
-      `${file}: ${writer} no longer writes one rule in @layer ${BEHAVIOUR_SDK_LAYER}. Read how this version of ${dependency} keeps a hidden part hidden, and point the build at it.`,
+      `${file}: ${writer} writes ${problem}. The build copies one closed @layer ${BEHAVIOUR_SDK_LAYER} block that ${writer} writes, holding one rule that declares only ${hiddenDeclaration.prop}: ${hiddenDeclaration.value} !important. Read how this version of ${dependency} keeps a hidden part hidden, and point the build at it.`,
     );
   }
-  return rules[0];
+  return cssTexts[0];
 }
 
 export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {

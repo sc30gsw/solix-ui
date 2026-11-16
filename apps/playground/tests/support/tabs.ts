@@ -171,15 +171,6 @@ export async function startAt(page: Page, list: string, name: string): Promise<v
   else await tab.click();
 }
 
-export function stylesAddedToThePage(page: Page): Promise<string[]> {
-  return page.evaluate(() => [
-    ...[...document.querySelectorAll("style")].map((style) => style.textContent ?? ""),
-    ...document.adoptedStyleSheets.flatMap((sheet) =>
-      [...sheet.cssRules].map((rule) => rule.cssText),
-    ),
-  ]);
-}
-
 export type Named = { tab: string[][]; panel: string[][] };
 
 export function elementsNamedBy(page: Page, list: string): Promise<Named[]> {

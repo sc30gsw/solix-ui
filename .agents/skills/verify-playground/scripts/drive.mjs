@@ -13,8 +13,9 @@ const { browserType, engineNames, enginesToVerify } = await repositoryModule("sc
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
 const { baseKey, breakpointWidths, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
-const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX } = await repositoryModule("packages/core/build-pipeline.mjs");
-const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, stylesAddedToThePage, tabList, tabNamed, tabsRegion } =
+const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { pageStyleRules, stylesAddedToThePage } = await repositoryModule("apps/playground/tests/support/page-styles.ts");
+const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabsRegion } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
 const state = join(root, ".verify-playground");
 const pixelsPerMediaQueryEm = 16;
@@ -367,12 +368,14 @@ const journeys = {
     const region = page.locator(tabsRegion);
     const classOfTheLibraryOrTheApp = `^(?:${LIBRARY_CLASS_PREFIX}|${stableClassPrefix}|${displayedByTheApp.class}$)`;
     const styleOfTheOneStyleProp = `--${stylePropClass("display", baseKey)}:flex`;
+    const sdkHiddenRule = behaviourSdkHiddenRule(join(root, "packages/core"));
     const observeWrites = async (when) => {
-      const styles = await stylesAddedToThePage(page);
+      const rules = await pageStyleRules(page);
+      const outsideTheSdkLayer = (rule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
       const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibraryOrTheApp);
-      observe(`${when}: style elements and adopted rules on the page`, styles.length, 1);
-      observe(`${when}: the one style is in the SDK's layer`, styles.every((css) => css.startsWith(`@layer ${BEHAVIOUR_SDK_LAYER} {`)), true);
-      observe(`${when}: important declarations in them`, styles.join("").match(/!\s*important/g)?.length ?? 0, 1);
+      observe(`${when}: rules the SDK added outside its layer`, rules.filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
+      observe(`${when}: important declarations outside the SDK's layer`, rules.filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
+      observe(`${when}: the SDK added the hidden rule the library's stylesheet carries`, (await stylesAddedToThePage(page)).includes(sdkHiddenRule), true);
       observe(`${when}: style attributes on the parts`, written.partStyles, ["", styleOfTheOneStyleProp, displayedByTheApp.style].sort().join(" | "));
       observe(`${when}: style attribute on the html element`, written.htmlStyle, "");
       observe(`${when}: inert elements`, written.inert, 0);
