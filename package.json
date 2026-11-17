@@ -16,8 +16,6 @@
     "web-guidance": "DISABLE_TELEMETRY=1 modern-web-guidance"
   },
   "devDependencies": {
-    "@babel/core": "catalog:",
-    "@babel/preset-typescript": "catalog:",
     "@solidjs/vite-plugin": "catalog:",
     "@solidjs/web": "catalog:",
     "@types/node": "catalog:",

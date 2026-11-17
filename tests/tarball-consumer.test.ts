@@ -20,7 +20,7 @@ import { solidPackages } from "#/scripts/newest-releases.ts";
 import { allowedRuntimeDependencyNames } from "#/scripts/runtime-dependencies.ts";
 import { stateOf, tabNamed } from "#/apps/playground/tests/support/tabs.ts";
 import { browserType, enginesToVerify } from "#/scripts/browser-engines.mjs";
-import { subpathPrefix } from "#/scripts/dist-specifiers.ts";
+import { isRelative, subpathPrefix } from "#/scripts/subpath.ts";
 import {
   descendants,
   firstLine,
@@ -347,7 +347,7 @@ describe("installed into a consumer outside the workspace", () => {
           if (specifier.text.startsWith(subpathPrefix)) {
             return [`${where} names a subpath import, which a consumer's tools may not resolve.`];
           }
-          return specifier.text.startsWith(".") &&
+          return isRelative(specifier.text) &&
             !existsSync(resolve(installed, dirname(file), specifier.text))
             ? [`${where} names a file the tarball does not hold.`]
             : [];

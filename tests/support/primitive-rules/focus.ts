@@ -1,5 +1,5 @@
 import { join, relative } from "node:path";
-import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
+import { fileNamedBy } from "#/scripts/subpath.ts";
 import { descendants, importsOf, nameOf, ts } from "#/scripts/syntax.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
@@ -30,12 +30,9 @@ export const focusMovesRule = forbidOutside({
 });
 
 function awaitsTheAxeAssertion(library: Library, test: ts.SourceFile): boolean {
-  const accessibilityModule = subpathSpecifierOf(
-    test.fileName,
-    join(library.testDirectory, accessibilityFile),
-  );
+  const accessibilityModule = join(library.testDirectory, accessibilityFile);
   const imported = importsOf(test)
-    .filter(({ specifier }) => specifier === accessibilityModule)
+    .filter(({ specifier }) => fileNamedBy(test.fileName, specifier) === accessibilityModule)
     .flatMap(({ names }) => names)
     .filter(({ imported: name }) => name === axeAssertion)
     .map(({ local }) => local);

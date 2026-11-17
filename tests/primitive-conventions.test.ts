@@ -7,8 +7,7 @@ import {
   type PrimitiveRuleName,
   publicModules,
 } from "#/tests/support/primitive-rules/index.ts";
-import { subpathTarget } from "#/scripts/dist-specifiers.ts";
-import { packageRootOf } from "#/scripts/subpath-imports.ts";
+import { fileNamedBy, namesAPackage } from "#/scripts/subpath.ts";
 import { importsOf, isTypeOnlyImport, parse, ts } from "#/scripts/syntax.ts";
 import { primitivesPackage, repositoryRoot } from "#/tests/support/workspace.ts";
 
@@ -284,9 +283,9 @@ function bareImportsReachedFrom(entries: readonly string[]): string[] {
     const source = parse(file);
     for (const { specifier, node } of importsOf(source)) {
       if (isTypeOnlyImport(node.importClause)) continue;
-      const target = subpathTarget(specifier, packageRootOf(file));
-      if (target === undefined) bare.add(specifier);
-      else if (existsSync(target)) queue.push(target);
+      const target = fileNamedBy(file, specifier);
+      if (namesAPackage(specifier)) bare.add(specifier);
+      else if (target && existsSync(target)) queue.push(target);
     }
   }
   return [...bare].sort();

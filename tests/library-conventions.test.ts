@@ -14,7 +14,7 @@ import {
   compiledClassesOf,
 } from "#/packages/core/tests/built-library.ts";
 import { allowedRuntimeDependencies, loads } from "#/scripts/runtime-dependencies.ts";
-import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
+import { fileNamedBy } from "#/scripts/subpath.ts";
 import { tokenValues } from "#/scripts/tokens.ts";
 import {
   calledDeclaration,
@@ -245,15 +245,12 @@ type PropsShape = {
 };
 
 function importedFromParts(source: ts.SourceFile, name: string): boolean {
-  const partsImport = subpathSpecifierOf(
-    source.fileName,
-    join(dirname(source.fileName), partsModule),
-  );
+  const partsFile = join(dirname(source.fileName), partsModule);
   return source.statements.some((statement) => {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== partsImport
+      fileNamedBy(source.fileName, statement.moduleSpecifier.text) !== partsFile
     ) {
       return false;
     }
@@ -771,14 +768,20 @@ test("every other source file is the barrel, a StyleX definition, or a kebab-cas
 test("the barrel exports every component and its props type once, in alphabetical order, and nothing else", () => {
   for (const { source } of libraries) {
     const barrel = join(source, "index.ts");
+    const exportLine = (name: string, file: string | undefined) =>
+      `export { ${name}, type ${name}Props } from ${file ? relativePath(file) : "no file"};`;
     const expected = components
       .filter(({ file }) => file.startsWith(source))
       .sort((left, right) => (left.name < right.name ? -1 : 1))
-      .map(
-        ({ name, file }) =>
-          `export { ${name}, type ${name}Props } from "${subpathSpecifierOf(barrel, file)}";`,
-      );
-    const actual = readFileSync(barrel, "utf8").trim().split("\n");
+      .map(({ name, file }) => exportLine(name, file));
+    const actual = readFileSync(barrel, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => {
+        const [, name, specifier] =
+          /^export \{ (\w+), type \1Props \} from "([^"]+)";$/.exec(line) ?? [];
+        return name && specifier ? exportLine(name, fileNamedBy(barrel, specifier)) : line;
+      });
 
     expect(actual, `${relativePath(barrel)}`).toEqual(expected);
   }

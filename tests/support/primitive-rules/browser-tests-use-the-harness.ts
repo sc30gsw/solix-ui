@@ -1,6 +1,7 @@
-import { join } from "node:path";
-import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
+import { join, relative } from "node:path";
+import { fileNamedBy } from "#/scripts/subpath.ts";
 import { importsOf } from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   browserTests,
   type PrimitiveRule,
@@ -15,12 +16,13 @@ const flushName = "flush";
 
 const browserTestsUseTheHarness: Rule = (library) =>
   browserTests(library).flatMap(([file, source]) => {
-    const browserHarness = subpathSpecifierOf(
-      join(library.testDirectory, file),
-      join(library.testDirectory, browserHarnessFile),
-    );
+    const testFile = join(library.testDirectory, file);
+    const harnessFile = join(library.testDirectory, browserHarnessFile);
+    const browserHarness = relative(repositoryRoot, harnessFile);
     const imports = importsOf(source);
-    const harness = imports.some(({ specifier }) => specifier === browserHarness)
+    const harness = imports.some(
+      ({ specifier }) => fileNamedBy(testFile, specifier) === harnessFile,
+    )
       ? []
       : [
           `${testAt(library, file, source)}: import ${browserHarness}, so this file's tests fail on a Solid diagnostic and on a listener, timer or observer left after dispose.`,

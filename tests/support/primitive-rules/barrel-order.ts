@@ -1,5 +1,5 @@
 import { join, relative } from "node:path";
-import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
+import { fileNamedBy } from "#/scripts/subpath.ts";
 import { exportsOf, ts } from "#/scripts/syntax.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
@@ -11,10 +11,13 @@ import {
   typesModule,
 } from "#/tests/support/primitive-rules/library.ts";
 
-function barrelLine(barrel: string, module: Module): string {
+function exportLine(names: readonly string[], file: string | undefined): string {
+  return `export { ${names.join(", ")} } from ${file ? relative(repositoryRoot, file) : "a module that names no file"};`;
+}
+
+function barrelLine(module: Module): string {
   const { functions, types } = exportsOf(module.source);
-  const names = [...functions, ...types.sort().map((type) => `type ${type}`)];
-  return `export { ${names.join(", ")} } from "${subpathSpecifierOf(barrel, module.path)}";`;
+  return exportLine([...functions, ...types.sort().map((type) => `type ${type}`)], module.path);
 }
 
 function barrelLinesIn(barrel: ts.SourceFile): string[] {
@@ -31,7 +34,7 @@ function barrelLinesIn(barrel: ts.SourceFile): string[] {
     const names = statement.exportClause.elements.map((element) =>
       statement.isTypeOnly || element.isTypeOnly ? `type ${element.name.text}` : element.name.text,
     );
-    return `export { ${names.join(", ")} } from "${statement.moduleSpecifier.text}";`;
+    return exportLine(names, fileNamedBy(barrel.fileName, statement.moduleSpecifier.text));
   });
 }
 
@@ -40,7 +43,7 @@ const barrelOrder: Rule = (library) => {
   const barrel = library.modules.find(({ file }) => file === barrelModule);
   const actual = barrel ? barrelLinesIn(barrel.source) : [];
   const barrelFile = join(library.source, barrelModule);
-  const expected = exported.map((module) => barrelLine(barrelFile, module));
+  const expected = exported.map(barrelLine);
   return actual.join("\n") === expected.join("\n")
     ? []
     : [

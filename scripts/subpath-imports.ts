@@ -1,21 +1,26 @@
-import { existsSync, globSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { globSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, relative, sep } from "node:path";
-import { insideOf, subpathPrefix } from "#/scripts/dist-specifiers.ts";
+import { join, relative, sep } from "node:path";
 import { manifestPaths, repositoryRoot, scriptFilesIn } from "#/scripts/repository.ts";
+import {
+  insideOf,
+  namesAPackage,
+  subpathPattern,
+  subpathPatternTarget,
+  subpathSpecifierOf,
+} from "#/scripts/subpath.ts";
 import {
   descendants,
   fileOf,
+  firstLine,
   moduleSpecifierOf,
   openProgram,
   symbolOf,
   ts,
 } from "#/scripts/syntax.ts";
 
-export const subpathImports: Readonly<Record<string, string>> = { [`${subpathPrefix}*`]: "./*" };
-
+const installedPackages = "node_modules";
 const projectSkillScripts = ".agents/skills/*/scripts/**/*.{ts,tsx,mjs,cjs,js}";
-const keyThatPrecedesImports = "type";
 
 type Manifest = Record<string, unknown> & { imports?: Record<string, string> };
 
@@ -36,21 +41,6 @@ export function filesTheRuleCovers(root: string = repositoryRoot): string[] {
     insideOf(realpathSync(join(root, ".agents")), realpathSync(join(root, file))),
   );
   return [...scriptFilesIn(root), ...projectSkills].map((file) => realpathSync(join(root, file)));
-}
-
-export function packageRootOf(file: string): string {
-  const directory = dirname(file);
-  if (existsSync(join(directory, "package.json"))) return directory;
-  if (dirname(directory) === directory)
-    throw new Error(`${file}: no package.json holds this file.`);
-  return packageRootOf(directory);
-}
-
-export function subpathSpecifierOf(importer: string, target: string): string | undefined {
-  const root = packageRootOf(importer);
-  return insideOf(root, target)
-    ? `${subpathPrefix}${relative(root, target).split(sep).join("/")}`
-    : undefined;
 }
 
 function resolvedByNode(file: string, specifier: string): string | undefined {
@@ -75,7 +65,7 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
           {
             file,
             line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-            statement: node.getText().split("\n")[0],
+            statement: firstLine(node),
             specifier: specifier.text,
             start: specifier.getStart(),
             end: specifier.end,
@@ -91,14 +81,6 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
   }
 }
 
-function namesAPackage(specifier: string): boolean {
-  return !/^(?:\.{1,2}\/|\/|#)/.test(specifier) && !URL.canParse(specifier);
-}
-
-function isRepositoryFile(file: string, root: string): boolean {
-  return insideOf(root, file) && !relative(root, file).split(sep).includes("node_modules");
-}
-
 export function misspelt(
   references: readonly ModuleReference[],
   root: string = repositoryRoot,
@@ -108,31 +90,13 @@ export function misspelt(
     if (
       reference.reached === undefined ||
       namesAPackage(reference.specifier) ||
-      !isRepositoryFile(reference.reached, realRoot)
+      !insideOf(realRoot, reference.reached) ||
+      relative(realRoot, reference.reached).split(sep).includes(installedPackages)
     ) {
       return [];
     }
     const wanted = subpathSpecifierOf(reference.file, reference.reached);
     return wanted === undefined || wanted === reference.specifier ? [] : [{ ...reference, wanted }];
-  });
-}
-
-function withSubpathImports(manifest: Manifest): Manifest {
-  const imports = { ...manifest.imports, ...subpathImports };
-  if (JSON.stringify(manifest.imports) === JSON.stringify(imports)) return manifest;
-  const entries = Object.entries(manifest).filter(([key]) => key !== "imports");
-  const at = entries.findIndex(([key]) => key === keyThatPrecedesImports) + 1;
-  return Object.fromEntries([...entries.slice(0, at), ["imports", imports], ...entries.slice(at)]);
-}
-
-function migratedManifests(root: string): string[] {
-  return manifestPaths(root).flatMap((path) => {
-    const file = join(root, path);
-    const manifest = JSON.parse(readFileSync(file, "utf8")) as Manifest;
-    const migrated = withSubpathImports(manifest);
-    if (migrated === manifest) return [];
-    writeFileSync(file, `${JSON.stringify(migrated, null, 2)}\n`);
-    return [file];
   });
 }
 
@@ -146,17 +110,29 @@ function rewritten(text: string, rewrites: readonly Misspelt[]): string {
     );
 }
 
-function migratedSources(root: string): string[] {
+function manifestWrites(root: string): [file: string, text: string][] {
+  return manifestPaths(root).flatMap((path): [string, string][] => {
+    const file = join(root, path);
+    const manifest = JSON.parse(readFileSync(file, "utf8")) as Manifest;
+    if (manifest.imports?.[subpathPattern] === subpathPatternTarget) return [];
+    const imports = { ...manifest.imports, [subpathPattern]: subpathPatternTarget };
+    return [[file, `${JSON.stringify({ ...manifest, imports }, null, 2)}\n`]];
+  });
+}
+
+function sourceWrites(root: string): [file: string, text: string][] {
   const byFile = Map.groupBy(
     misspelt(moduleReferences(filesTheRuleCovers(root)), root),
     ({ file }) => file,
   );
-  for (const [file, rewrites] of byFile) {
-    writeFileSync(file, rewritten(readFileSync(file, "utf8"), rewrites));
-  }
-  return [...byFile.keys()];
+  return [...byFile].map(([file, rewrites]) => [
+    file,
+    rewritten(readFileSync(file, "utf8"), rewrites),
+  ]);
 }
 
 export function migrateToSubpathImports(root: string = repositoryRoot): string[] {
-  return [...migratedManifests(root), ...migratedSources(root)];
+  const writes = [...manifestWrites(root), ...sourceWrites(root)];
+  for (const [file, text] of writes) writeFileSync(file, text);
+  return writes.map(([file]) => file);
 }
