@@ -67,14 +67,21 @@ export function topLevelTags(html: string): string[] {
   return found;
 }
 
+const leadingRules = /^<style[^>]*>[^<]*<\/style>/;
+
+export function withoutLeadingRules(html: string): string {
+  return html.replace(leadingRules, "");
+}
+
 export function memberMarkupOf(html: string, carrierClass: string): string {
-  let rest = html.replaceAll(/<style[^>]*>[^<]*<\/style>/g, "");
+  let rest = html;
   for (;;) {
-    const [outer] = elementsOf(rest);
+    const unwrapped = withoutLeadingRules(rest);
+    const [outer] = elementsOf(unwrapped);
     const carriers =
       outer !== undefined && classesOf(outer).some((found) => found.startsWith(carrierClass));
-    if (!carriers || topLevelTags(rest).length !== 1) return rest;
-    rest = rest.slice(rest.indexOf(">") + 1, rest.lastIndexOf("</"));
+    if (!carriers || topLevelTags(unwrapped).length !== 1) return rest;
+    rest = unwrapped.slice(unwrapped.indexOf(">") + 1, unwrapped.lastIndexOf("</"));
   }
 }
 

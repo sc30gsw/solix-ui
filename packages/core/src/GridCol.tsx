@@ -1,5 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
+import { Show } from "solid-js";
 import { useGrid } from "./grid-context";
 import { createParts, type ElementProps } from "./parts";
 import { variableProperty } from "./style-prop-table";
@@ -47,6 +48,7 @@ function share(part: number, columns: number): string {
 
 export function GridCol(props: GridColProps) {
   const grid = useGrid();
+  const own = grid.container.member();
   const gap = `var(${variableProperty("grid-column-gap")})`;
   const span = (given: GridColProps) => withBase<Span>(given.span, defaultSpan);
   const basis = (given: Span) => {
@@ -81,10 +83,15 @@ export function GridCol(props: GridColProps) {
         "col-width": (given) =>
           eachValue<Span>(span(given), (each) => (each === "content" ? "auto" : undefined)),
       },
-      queries: grid.container,
+      queries: own,
     },
     "offset",
     "span",
   );
-  return <div {...root} />;
+  return (
+    <>
+      <Show when={own.rules()}>{(rules) => <style>{rules()}</style>}</Show>
+      <div {...root} />
+    </>
+  );
 }

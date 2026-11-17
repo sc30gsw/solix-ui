@@ -1,5 +1,4 @@
 import type { JSX } from "@solidjs/web";
-import { createSignal, onCleanup } from "solid-js";
 import {
   baseKey,
   type Breakpoint,
@@ -101,6 +100,7 @@ export type QueryContainer = {
   readonly queries: () => ContainerQueries | undefined;
   readonly report: (used: () => readonly Used[]) => void;
   readonly rules: () => string | undefined;
+  readonly member: () => QueryContainer;
 };
 
 export type ResolvedVariables = ResolvedStyleProps & { readonly used: readonly Used[] };
@@ -289,13 +289,26 @@ function uniqueUsed(used: readonly Used[]): Used[] {
   );
 }
 
+function queryContainer(queries: () => ContainerQueries | undefined): QueryContainer {
+  let reported: () => readonly Used[] = () => [];
+  return {
+    queries,
+    report(used) {
+      reported = used;
+    },
+    rules() {
+      const current = queries();
+      return current && rulesFor(current, uniqueUsed(reported()));
+    },
+    member: () => queryContainer(queries),
+  };
+}
+
 export function createQueryContainer(
   scope: string,
   widths: () => readonly (readonly [key: string, width: string])[] | undefined,
 ): QueryContainer {
-  const reporters: (() => readonly Used[])[] = [];
-  const [reported, setReported] = createSignal(0, { ownedWrite: true });
-  const queries = () => {
+  return queryContainer(() => {
     const given = widths();
     if (given === undefined) return undefined;
     return {
@@ -304,21 +317,5 @@ export function createQueryContainer(
         .filter(([, width]) => containerWidth.test(width))
         .toSorted(([, narrower], [, wider]) => pixelsOf(narrower) - pixelsOf(wider)),
     };
-  };
-  return {
-    queries,
-    report(used) {
-      reporters.push(used);
-      setReported((count) => count + 1);
-      onCleanup(() => {
-        reporters.splice(reporters.indexOf(used), 1);
-        setReported((count) => count + 1);
-      });
-    },
-    rules() {
-      reported();
-      const current = queries();
-      return current && rulesFor(current, uniqueUsed(reporters.flatMap((used) => used())));
-    },
-  };
+  });
 }

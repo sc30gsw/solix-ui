@@ -77,6 +77,7 @@ import {
   rulesOf,
   topLevelTags,
   valuesOf,
+  withoutLeadingRules,
 } from "./markup";
 
 const generatedRuns = 300;
@@ -179,8 +180,8 @@ test.each(builtComponents)(
 
     const partsInOrder = elements.flatMap((element) => partsOn(name, element));
     expect(
-      partsInOrder[0] === containerPart ? partsInOrder.slice(0, 2) : partsOn(name, elements[0]),
-      "the first element is the root, or the container part, with the root the next part",
+      partsInOrder.slice(0, partsInOrder[0] === containerPart ? 2 : 1),
+      "the first part is the root, or the container part, with the root the next part",
     ).toEqual(partsInOrder[0] === containerPart ? [containerPart, rootPart] : [rootPart]);
     expect(
       elements.filter((element) => partsOn(name, element).length > 1),
@@ -640,27 +641,29 @@ test.each(builtComponents)(
     );
 
     expect([0, 2]).toContain(scopes.size);
-    expect(new Set(ruleScopes).size, "each style element reads one copy's scope").toBe(
-      ruleScopes.length,
-    );
+    expect(
+      ruleScopes.filter((scope) => scope === "" || scope.includes(" ")),
+      "each style element reads one copy's scope",
+    ).toEqual([]);
+    expect(new Set(ruleScopes), "the style elements read the copies' scopes").toEqual(scopes);
   },
 );
 
-test.each(builtComponents.filter((name) => containerPart in compiledClassesOf(name)))(
-  "%s, whose styles have a container part, renders under its fixture its rules first, if any, and then that part with the root as its only element child",
+test.each(builtComponents)(
+  "%s renders under its fixture its rules first, if any, and then one element, the root or, when its styles have a container part, that part with the root as its only element child",
   (name) => {
     const html = render(name);
-    const withoutRules = html.replace(/^<style[^>]*>[^<]*<\/style>/, "");
-    const container = elementCarrying(html, stableClass(name, containerPart));
-    const inside = withoutRules.slice(
-      withoutRules.indexOf(">") + 1,
-      withoutRules.lastIndexOf("</"),
-    );
+    const outer = withoutLeadingRules(html);
+    const wrapped = containerPart in compiledClassesOf(name);
+    const first = rootElementOf(outer);
+    const inside = outer.slice(outer.indexOf(">") + 1, outer.lastIndexOf("</"));
 
-    expect(topLevelTags(html).filter((tag) => tag !== "style")).toEqual([container.tag]);
-    expect(html.startsWith("<style") || html.startsWith(`<${container.tag}`)).toBe(true);
-    expect(topLevelTags(inside)).toHaveLength(1);
-    expect(classesOf(rootElementOf(inside))).toContain(stableClass(name, rootPart));
+    expect(topLevelTags(html)).toEqual([...(outer === html ? [] : ["style"]), first.tag]);
+    expect(classesOf(first)).toContain(stableClass(name, wrapped ? containerPart : rootPart));
+    if (wrapped) {
+      expect(topLevelTags(inside)).toHaveLength(1);
+      expect(classesOf(rootElementOf(inside))).toContain(stableClass(name, rootPart));
+    }
   },
 );
 

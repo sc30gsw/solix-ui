@@ -101,12 +101,25 @@ function unwrapped(node: ts.Expression): ts.Expression {
   return ts.isParenthesizedExpression(node) ? unwrapped(node.expression) : node;
 }
 
+function tagOf(node: ts.Node): JsxTag | undefined {
+  if (ts.isJsxElement(node)) return node.openingElement;
+  return ts.isJsxSelfClosingElement(node) ? node : undefined;
+}
+
+function rootAfterItsRules(fragment: ts.JsxFragment): JsxTag[] {
+  const tags = fragment.children.flatMap((child) => tagOf(child) ?? []);
+  const root = tags.at(-1);
+  const intrinsic = (tag: JsxTag) => intrinsicElement.test(tag.tagName.getText());
+  return root && intrinsic(root) && tags.slice(0, -1).every((tag) => !intrinsic(tag)) ? [root] : [];
+}
+
 function returnedRoots(fn: ts.FunctionDeclaration): JsxTag[] {
   return descendants(fn).flatMap((node): JsxTag[] => {
     if (!ts.isReturnStatement(node) || !node.expression) return [];
     const returned = unwrapped(node.expression);
-    if (ts.isJsxElement(returned)) return [returned.openingElement];
-    return ts.isJsxSelfClosingElement(returned) ? [returned] : [];
+    if (ts.isJsxFragment(returned)) return rootAfterItsRules(returned);
+    const tag = tagOf(returned);
+    return tag ? [tag] : [];
   });
 }
 
