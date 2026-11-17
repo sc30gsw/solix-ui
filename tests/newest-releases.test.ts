@@ -1,13 +1,15 @@
 import { expect, test } from "vite-plus/test";
 import {
   compareWithNewest,
+  exactCatalogReleases,
+  exactlyRequiredBy,
   type HeldBack,
   heldBackFile,
   holdsOfNothing,
   holdsWithoutReason,
-  newestSolidRelease,
   type NodeRelease,
   nodePinName,
+  outgrownExemptions,
   packageManagerPinName,
   type Pin,
   pinsOf,
@@ -15,8 +17,7 @@ import {
   type RegistryDocument,
   registryNamesToFetch,
   type ReleasePolicy,
-  solidBuildNames,
-  staleSolidExemptions,
+  unjustifiedExemptions,
 } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
@@ -26,30 +27,10 @@ import {
   untilStableMembers,
 } from "#/scripts/release-sources.ts";
 import { manifestAt, manifestPaths, rootManifest } from "#/scripts/repository.ts";
+import { type Listing, now, policy, registryDocument } from "#/tests/support/registry-fixtures.ts";
 import { expectScheduledJobToRun } from "#/tests/support/weekly-workflow.ts";
 
-const now = Date.parse("2026-11-14T12:00:00Z");
-const day = 24 * 60 * 60_000;
-const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60, excluded: [] };
 const manifest = { packageManager: "pnpm@12.18.0", engines: { node: "^26.13.1" } };
-
-type Release = [version: string, daysAgo: number, peers?: Record<string, string>];
-
-function registryDocument(releases: Release[], unpublished: Release[] = []): RegistryDocument {
-  const at = ([version, daysAgo]: Release) => [
-    version,
-    new Date(now - daysAgo * day).toISOString(),
-  ];
-  return {
-    versions: Object.fromEntries(
-      releases.map(([version, , peers]) => [version, { peerDependencies: peers }]),
-    ),
-    time: {
-      created: "2020-01-01T00:00:00Z",
-      ...Object.fromEntries([...releases, ...unpublished].map(at)),
-    },
-  };
-}
 
 const documents = {
   semver: registryDocument([
@@ -103,7 +84,7 @@ function check(
     pins?: Pin[];
     documents?: Record<string, RegistryDocument>;
     nodeReleases?: NodeRelease[];
-    excluded?: ReleasePolicy["excluded"];
+    exempted?: ReleasePolicy["exempted"];
     heldBack?: HeldBack[];
     untilStablePackages?: string[];
   } = {},
@@ -112,7 +93,7 @@ function check(
     pins: options.pins ?? pins,
     documents: options.documents ?? documents,
     nodeReleases: options.nodeReleases ?? nodeReleases,
-    policy: { ...policy, excluded: options.excluded ?? [] },
+    policy: { ...policy, exempted: options.exempted ?? [] },
     now,
     heldBack: options.heldBack ?? [],
     untilStablePackages: options.untilStablePackages ?? [],
@@ -122,7 +103,7 @@ function check(
 function checkOf(
   name: string,
   pinned: string,
-  releases: Release[],
+  releases: Listing[],
   untilStablePackages: string[] = [],
 ) {
   const report = check({
@@ -139,18 +120,7 @@ function statuses(options: Parameters<typeof check>[0] = {}): Record<string, str
   );
 }
 
-function solidLine(webPeer: (version: string) => string, releases: Release[]) {
-  return {
-    "solid-js": registryDocument(releases),
-    "@solidjs/web": registryDocument(
-      releases.map(([version, daysAgo]) => [version, daysAgo, { "solid-js": webPeer(version) }]),
-    ),
-    "@solidjs/compiler": registryDocument(releases),
-    "@solidjs/signals": registryDocument(releases),
-  };
-}
-
-test("each pin is compared with the newest published release on its own channel, not with a dist-tag", () => {
+test("each pin is compared with the newest published release on its own channel", () => {
   const newest = Object.fromEntries(
     check().comparisons.map((comparison) => [
       comparison.pin.name,
@@ -170,7 +140,7 @@ test("each pin is compared with the newest published release on its own channel,
   });
 });
 
-test("a release younger than the minimum release age is not yet eligible, not behind, unless an exclusion names it", () => {
+test("a release younger than the minimum release age is not yet eligible, not behind, unless an exemption names it", () => {
   const semver = check().comparisons.find(({ pin }) => pin.name === "semver");
 
   expect(semver).toMatchObject({
@@ -178,8 +148,8 @@ test("a release younger than the minimum release age is not yet eligible, not be
     eligibleAt: "2026-11-15T06:00:00.000Z",
   });
   expect(check().problems.join("\n")).not.toContain("semver");
-  expect(statuses({ excluded: [{ name: "semver", version: "7.8.7" }] }).semver).toBe("behind");
-  expect(statuses({ excluded: [{ name: "semver", version: "7.8.5" }] }).semver).toBe(
+  expect(statuses({ exempted: [{ name: "semver", version: "7.8.7" }] }).semver).toBe("behind");
+  expect(statuses({ exempted: [{ name: "semver", version: "7.8.5" }] }).semver).toBe(
     "not yet eligible",
   );
 });
@@ -201,19 +171,19 @@ test("an exemption in minimumReleaseAgeExclude fails the check by name once its 
         ["2.0.1", 0.5],
       ]),
     },
-    excluded: exemptions,
+    exempted: exemptions,
   });
 
   expect(report.problems.filter((problem) => problem.includes("minimumReleaseAgeExclude"))).toEqual(
     [
       "semver@7.8.6: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
       "a-platform-build@2.0.0: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
-      "semver@7.9.0: the registry gives no publish time for it, so nothing tells whether minimumReleaseAgeExclude still needs it.",
-      "a-missing-package@1.0.0: the registry answer holds no document for a-missing-package, so nothing tells whether minimumReleaseAgeExclude still needs it.",
+      "semver@7.9.0: the registry lists no such release. So nothing tells whether minimumReleaseAgeExclude still needs it.",
+      "a-missing-package@1.0.0: the registry answer holds no document for a-missing-package. So nothing tells whether minimumReleaseAgeExclude still needs it.",
     ],
   );
   expect(
-    check({ excluded: [{ name: "semver", version: "7.8.7" }] }).problems.join("\n"),
+    check({ exempted: [{ name: "semver", version: "7.8.7" }] }).problems.join("\n"),
   ).not.toContain("minimumReleaseAgeExclude");
 });
 
@@ -223,7 +193,7 @@ test("the weekly check fetches the registry document of every registry pin and o
     { name: "semver", version: "7.8.7" },
   ];
 
-  expect(registryNamesToFetch(pins, { ...policy, excluded: exemptions })).toEqual([
+  expect(registryNamesToFetch(pins, { ...policy, exempted: exemptions })).toEqual([
     "semver",
     "playwright",
     "solid-js",
@@ -237,18 +207,18 @@ test("the weekly check fetches the registry document of every registry pin and o
 
 test("releasePolicy reads each minimumReleaseAgeExclude entry as <name>@<exact version>, refuses any other, a bare package name included, and accepts this repository's own", () => {
   const settings = { ...pnpmSettings(), minimumReleaseAge: 1440 };
-  const withExclusions = (minimumReleaseAgeExclude: string[]) =>
+  const withExemptions = (minimumReleaseAgeExclude: string[]) =>
     releasePolicy({ ...settings, minimumReleaseAgeExclude });
 
-  expect(withExclusions(["semver@7.8.7", "@types/node@26.6.7"]).excluded).toEqual([
+  expect(withExemptions(["semver@7.8.7", "@types/node@26.6.7"]).exempted).toEqual([
     { name: "semver", version: "7.8.7" },
     { name: "@types/node", version: "26.6.7" },
   ]);
-  expect(() => withExclusions(["semver"])).toThrow(/"semver" is not <name>@<exact version>/);
-  expect(() => withExclusions(["semver@^7"])).toThrow(/"semver@\^7" is not <name>@<exact/);
-  expect(() => withExclusions(["@types/*"])).toThrow(/is not <name>@<exact version>/);
-  expect(() => withExclusions(["semver@7.8.7 || 7.8.8"])).toThrow(/is not <name>@<exact/);
-  expect(() => withExclusions(["semver@v7.8.7"])).toThrow(/is not <name>@<exact/);
+  expect(() => withExemptions(["semver"])).toThrow(/"semver" is not <name>@<exact version>/);
+  expect(() => withExemptions(["semver@^7"])).toThrow(/"semver@\^7" is not <name>@<exact/);
+  expect(() => withExemptions(["@types/*"])).toThrow(/is not <name>@<exact version>/);
+  expect(() => withExemptions(["semver@7.8.7 || 7.8.8"])).toThrow(/is not <name>@<exact/);
+  expect(() => withExemptions(["semver@v7.8.7"])).toThrow(/is not <name>@<exact/);
   expect(() => releasePolicy({ ...settings, minimumReleaseAge: undefined })).toThrow(
     /set minimumReleaseAge/,
   );
@@ -269,13 +239,13 @@ test("each channel finds what is behind: stable, the stable Solid 2 line, the pl
 });
 
 test("the Solid 2 line takes only stable 2.x releases: never a prerelease, and never a Solid 3 release", () => {
-  const releases: Release[] = [
+  const releases: Listing[] = [
     ["2.0.0", 30],
     ["2.0.1", 10],
     ["2.1.0-rc.1", 5],
     ["3.0.0", 5],
   ];
-  const noNewerStable: Release[] = [
+  const noNewerStable: Listing[] = [
     ["2.0.0", 30],
     ["2.1.0-rc.1", 5],
     ["3.0.0-alpha.1", 5],
@@ -290,37 +260,10 @@ test("the Solid 2 line takes only stable 2.x releases: never a prerelease, and n
     status: "current",
     newest: "2.0.0",
   });
-  expect(
-    newestSolidRelease(
-      solidLine(() => "*", noNewerStable),
-      policy,
-      now,
-    ),
-  ).toBe("2.0.0");
-});
-
-test("while @solidjs/web lacks the newest stable Solid 2 release, the canary takes the newest release every Solid package has", () => {
-  const lagging = {
-    "solid-js": registryDocument([
-      ["2.0.0", 9],
-      ["2.0.1", 5],
-    ]),
-    "@solidjs/web": registryDocument([["2.0.0", 9]]),
-    "@solidjs/compiler": registryDocument([
-      ["2.0.0", 9],
-      ["2.0.1", 5],
-    ]),
-    "@solidjs/signals": registryDocument([
-      ["2.0.0", 9],
-      ["2.0.1", 5],
-    ]),
-  };
-
-  expect(newestSolidRelease(lagging, policy, now)).toBe("2.0.0");
 });
 
 test("a prerelease pin with no channel of its own is behind a newer prerelease of the version it pins that carries the pin's own identifier, and behind that version once it is stable", () => {
-  const betas: Release[] = [
+  const betas: Listing[] = [
     ["0.9.0", 99],
     ["1.0.0-beta.3", 50],
     ["1.0.0-beta.9", 20],
@@ -343,7 +286,7 @@ test("a prerelease pin with no channel of its own is behind a newer prerelease o
 });
 
 test("a prerelease pin of a package with no stable release yet is behind its newest prerelease of any version that carries the pin's own identifier, and takes its channel back once a stable release is published", () => {
-  const neverStable: Release[] = [
+  const neverStable: Listing[] = [
     ["2.9.0-stage", 9],
     ["3.0.0-beta.3", 6],
     ["3.0.0-beta.7", 5],
@@ -413,20 +356,20 @@ test("every member of the until-stable channel that the weekly check uses is nam
 });
 
 test("a pin on the until-stable channel is behind the newest release of the major it pins, nightly, beta or release candidate, and follows stable releases once that major has one old enough to install", () => {
-  const nightlies: Release[] = [
+  const nightlies: Listing[] = [
     ["10.7.4", 30],
     ["11.0.0-next-20261020160717", 28],
     ["11.0.0-next-20261105190313", 12],
     ["11.0.0-next-20261116090000", 0.5],
     ["12.0.0-next-20261101000000", 10],
   ];
-  const beforeStable: Release[] = [
+  const beforeStable: Listing[] = [
     ["10.6.7", 7],
     ["11.0.0-beta.3", 4],
     ["11.0.0-rc.0", 2],
     ["11.0.0-rc.1", 0.5],
   ];
-  const afterStable: Release[] = [
+  const afterStable: Listing[] = [
     ...beforeStable,
     ["11.0.0", 2],
     ["11.0.1", 0.5],
@@ -482,9 +425,6 @@ test("a published version with no publish time, or one that is not a date, is a 
   expect(
     check({ pins: pinsOfSemver, documents: { ...documents, semver: notADate } }).problems[0],
   ).toBe("semver: the registry gives no publish time for semver@7.8.6, so its age cannot be told.");
-  expect(() =>
-    newestSolidRelease({ "solid-js": noTime, "@solidjs/web": noTime }, policy, now),
-  ).toThrow("solid-js: the registry gives no publish time for solid-js@7.8.7");
 });
 
 test("a Node release index with no LTS release is a problem for engines.node and for @types/node, whose channel follows it", () => {
@@ -509,166 +449,6 @@ test("a version the registry lists only in time, unpublished, is not counted", (
   const vite = check().comparisons.find(({ pin }) => pin.name === "vite");
 
   expect(vite).toMatchObject({ status: "current", newest: "1.6.0" });
-});
-
-test("the Solid 2 canary takes one release for every Solid package, old enough for each and accepted by their peer ranges", () => {
-  const lockstep = solidLine(
-    (version) => `^${version}`,
-    [
-      ["2.0.0", 20],
-      ["2.0.1", 2],
-    ],
-  );
-  lockstep["solid-js"] = registryDocument([
-    ["2.0.0", 20],
-    ["2.0.1", 0.25],
-  ]);
-  const peerTooNew = solidLine(
-    (version) => (version === "2.0.1" ? "^2.0.2" : "*"),
-    [
-      ["2.0.0", 20],
-      ["2.0.1", 2],
-    ],
-  );
-
-  const webTooYoung = {
-    "solid-js": lockstep["@solidjs/web"],
-    "@solidjs/web": lockstep["solid-js"],
-    "@solidjs/compiler": lockstep["@solidjs/compiler"],
-    "@solidjs/signals": lockstep["@solidjs/signals"],
-  };
-
-  expect(newestSolidRelease(lockstep, policy, now)).toBe("2.0.0");
-  expect(newestSolidRelease(webTooYoung, policy, now)).toBe("2.0.0");
-  expect(newestSolidRelease(peerTooNew, policy, now)).toBe("2.0.0");
-  expect(
-    newestSolidRelease(
-      lockstep,
-      { ...policy, excluded: [{ name: "solid-js", version: "2.0.1" }] },
-      now,
-    ),
-  ).toBe("2.0.1");
-});
-
-test("the Solid 2 canary refuses a peer range it cannot read instead of passing over that release, and says when no release will do", () => {
-  const unreadable = solidLine(
-    (version) => (version === "2.0.1" ? "workspace:^" : "*"),
-    [
-      ["2.0.0", 20],
-      ["2.0.1", 2],
-    ],
-  );
-
-  expect(() => newestSolidRelease(unreadable, policy, now)).toThrow(
-    '@solidjs/web@2.0.1: its peer range "workspace:^" for solid-js is not a semver range',
-  );
-  expect(() => newestSolidRelease({}, policy, now)).toThrow(
-    "solid-js: the registry answer holds no document for it.",
-  );
-  expect(() =>
-    newestSolidRelease(
-      solidLine(() => "*", []),
-      policy,
-      now,
-    ),
-  ).toThrow(
-    "No stable Solid 2 release is published for solid-js, @solidjs/web, @solidjs/compiler and @solidjs/signals alike, with every build they require at that version, old enough to install and accepted by their peer ranges.",
-  );
-});
-
-function withBuilds(releases: Release[], builds: Release[]) {
-  const line = solidLine(() => "*", releases);
-  const compiler = line["@solidjs/compiler"];
-  for (const [version] of releases) {
-    compiler.versions = {
-      ...compiler.versions,
-      [version]: {
-        optionalDependencies: { "a-compiler-build": version, "a-range": `^${version}` },
-      },
-    };
-  }
-  return { ...line, "a-compiler-build": registryDocument(builds) };
-}
-
-test("the Solid 2 canary waits until every build a Solid package requires at that exact version is old enough too, and fails by name when the registry answer holds no document for one", () => {
-  const releases: Release[] = [
-    ["2.0.0", 20],
-    ["2.0.1", 3],
-  ];
-  const buildTooYoung = withBuilds(releases, [
-    ["2.0.0", 20],
-    ["2.0.1", 0.5],
-  ]);
-  const { "a-compiler-build": _dropped, ...noBuildDocument } = buildTooYoung;
-
-  expect(solidBuildNames(buildTooYoung)).toEqual(["a-compiler-build"]);
-  expect(newestSolidRelease(buildTooYoung, policy, now)).toBe("2.0.0");
-  expect(
-    newestSolidRelease(
-      buildTooYoung,
-      { ...policy, excluded: [{ name: "a-compiler-build", version: "2.0.1" }] },
-      now,
-    ),
-  ).toBe("2.0.1");
-  expect(newestSolidRelease(withBuilds(releases, releases), policy, now)).toBe("2.0.1");
-  expect(newestSolidRelease(withBuilds(releases, [["2.0.0", 20]]), policy, now)).toBe("2.0.0");
-  expect(() => newestSolidRelease(noBuildDocument, policy, now)).toThrow(
-    "a-compiler-build: the registry answer holds no document for it.",
-  );
-});
-
-test("before it moves the Solid packages, the canary names each exemption the move would leave stale, and none when it stays on the pinned release", () => {
-  const documents = withBuilds(
-    [
-      ["2.0.0", 20],
-      ["2.0.1", 3],
-    ],
-    [
-      ["2.0.0", 20],
-      ["2.0.1", 3],
-    ],
-  );
-  const exemptions = {
-    ...policy,
-    excluded: [
-      { name: "solid-js", version: "2.0.0" },
-      { name: "a-compiler-build", version: "2.0.0" },
-      { name: "@solidjs/signals", version: "2.0.1" },
-      { name: "semver", version: "7.8.7" },
-    ],
-  };
-  const stale = (name: string) =>
-    `${name}@2.0.0: minimumReleaseAgeExclude exempts it, and the canary would move the Solid packages to 2.0.1, which does not install it. Remove the exemption first: the canary does not edit the list, so that the weekly run never blames Solid for a stale exemption.`;
-
-  expect(staleSolidExemptions(documents, exemptions, "2.0.0", "2.0.1")).toEqual([
-    stale("solid-js"),
-    stale("a-compiler-build"),
-  ]);
-  expect(
-    staleSolidExemptions(
-      documents,
-      { ...policy, excluded: exemptions.excluded.slice(0, 2) },
-      "2.0.0",
-      "2.0.0",
-    ),
-  ).toEqual([]);
-});
-
-test("the Solid 2 canary stays on Solid 2 when next moves to Solid 3, and takes 2.x stable once it is old enough to install", () => {
-  const releases: Release[] = [
-    ["2.0.0-rc.22", 30],
-    ["2.0.0", 20],
-    ["2.0.1", 10],
-    ["3.0.0-alpha.1", 5],
-  ];
-
-  expect(
-    newestSolidRelease(
-      solidLine(() => "*", releases),
-      policy,
-      now,
-    ),
-  ).toBe("2.0.1");
 });
 
 test("a pin behind its channel fails the check, unless the held-back list holds it with a reason and a liftWhen", () => {
@@ -729,13 +509,13 @@ test("the scheduled workflow runs the pin check, which retires exemptions, in a 
   expectScheduledJobToRun("pins", "node scripts/check-newest-releases.ts");
 });
 
-test("a UI SDK pin follows the release the latest dist-tag names, once it is old enough to install: a release ahead of latest is not newer, and a document with no latest tag fails by name", () => {
-  const betas: Release[] = [
+test("a UI SDK pin follows the release the latest dist-tag names, once it is old enough to install: a release ahead of latest is not newer, a pin ahead of latest fails by name, and a document with no latest tag fails by name", () => {
+  const betas: Listing[] = [
     ["0.1.0-beta.5", 3],
     ["0.1.0-beta.6", 2],
     ["0.1.0-beta.7", 1.5],
   ];
-  const tagged = (latest: string, releases: Release[] = betas): RegistryDocument => ({
+  const tagged = (latest: string, releases: Listing[] = betas): RegistryDocument => ({
     ...registryDocument(releases),
     "dist-tags": { latest, beta: "0.1.0-beta.7" },
   });
@@ -755,6 +535,11 @@ test("a UI SDK pin follows the release the latest dist-tag names, once it is old
     status: "current",
     newest: "0.1.0-beta.6",
   });
+  const ahead = sdk("0.1.0-beta.7", tagged("0.1.0-beta.6"));
+  expect(ahead.comparisons[0]).toMatchObject({ status: "ahead", newest: "0.1.0-beta.6" });
+  expect(ahead.problems[0]).toBe(
+    "@ui-sdk/core: 0.1.0-beta.7 is ahead of 0.1.0-beta.6, the newest release on its channel (the release its registry document's latest dist-tag names). Pin 0.1.0-beta.6.",
+  );
   expect(
     sdk(
       "0.1.0-beta.5",
@@ -767,4 +552,103 @@ test("a UI SDK pin follows the release the latest dist-tag names, once it is old
   expect(sdk("0.1.0-beta.5", registryDocument(betas)).problems[0]).toBe(
     "@ui-sdk/core: no published release is on its channel (the release its registry document's latest dist-tag names); check the name and the channel.",
   );
+});
+
+test("on any channel, a pin ahead of the newest release published on it fails by name, whatever that release's age, and a pin whose package has no registry document says so", () => {
+  expect(checkOf("a-package", "2.0.0", [["1.9.0", 10]]).problems[0]).toBe(
+    "a-package: 2.0.0 is ahead of 1.9.0, the newest release on its channel (its newest stable release). Pin 1.9.0.",
+  );
+  expect(checkOf("a-package", "1.9.1", [["1.9.0", 0.25]]).comparison).toMatchObject({
+    status: "ahead",
+  });
+  expect(
+    check({ pins: pinsOf(manifest, { "a-package": "1.0.0" }), documents: {} }).problems[0],
+  ).toBe("a-package: the registry answer holds no document for a-package.");
+});
+
+test("exactlyRequiredBy reads the dependencies and optionalDependencies a manifest names at one exact version, and nothing it names by a range", () => {
+  expect(
+    exactlyRequiredBy({
+      dependencies: { exact: "1.2.3", ranged: "^1.2.3", tagged: "latest" },
+      optionalDependencies: { build: "2.0.0", "loose-build": "~2.0.0" },
+      peerDependencies: { peer: "3.0.0" },
+    }),
+  ).toEqual([
+    { name: "exact", version: "1.2.3" },
+    { name: "build", version: "2.0.0" },
+  ]);
+  expect(exactlyRequiredBy(undefined)).toEqual([]);
+});
+
+test("the releases the catalog pins exactly are its entries pinned to one version, aliased ones under their registry name, without a range and without packageManager", () => {
+  expect(
+    exactCatalogReleases(
+      pinsOf(manifest, {
+        semver: "7.8.6",
+        playwright: "^1.63.0",
+        vite: "npm:@voidzero-dev/vite-plus-core@1.6.0",
+      }),
+    ),
+  ).toEqual([
+    { name: "semver", version: "7.8.6" },
+    { name: "@voidzero-dev/vite-plus-core", version: "1.6.0" },
+  ]);
+});
+
+test("an exemption is unjustified unless the lockfile locks its release and the catalog pins it exactly or a pinned release requires it exactly", () => {
+  const sources = {
+    locked: ["solid-js@2.0.0", "a-build@2.0.0", "a-stray@1.0.0"],
+    pinned: [{ name: "solid-js", version: "2.0.0" }],
+    required: [{ name: "a-build", version: "2.0.0" }],
+  };
+
+  expect(
+    unjustifiedExemptions(
+      [
+        { name: "solid-js", version: "2.0.0" },
+        { name: "a-build", version: "2.0.0" },
+        { name: "a-stray", version: "1.0.0" },
+        { name: "a-build", version: "1.9.0" },
+      ],
+      sources,
+    ),
+  ).toEqual([
+    "minimumReleaseAgeExclude names a-stray@1.0.0, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.",
+    "minimumReleaseAgeExclude names a-build@1.9.0, which pnpm-lock.yaml does not lock, so nothing installs it; remove the entry.",
+    "minimumReleaseAgeExclude names a-build@1.9.0, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.",
+  ]);
+});
+
+test("once the catalog moves a Solid package to a newer release, an exemption still naming the older one is named by the weekly check in publish order and by the exemption rule in any order", () => {
+  const exemption = { name: "solid-js", version: "2.0.0" };
+  const afterTheMove = {
+    locked: ["solid-js@2.0.1"],
+    pinned: [{ name: "solid-js", version: "2.0.1" }],
+    required: [],
+  };
+  const outgrown = (listings: Listing[]) =>
+    outgrownExemptions(
+      { "solid-js": registryDocument(listings) },
+      { ...policy, exempted: [exemption] },
+      now,
+    );
+
+  expect(
+    outgrown([
+      ["2.0.0", 1.5],
+      ["2.0.1", 1],
+    ]),
+  ).toEqual([
+    "solid-js@2.0.0: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
+  ]);
+  expect(
+    outgrown([
+      ["2.0.1", 1],
+      ["2.0.0", 0.5],
+    ]),
+  ).toEqual([]);
+  expect(unjustifiedExemptions([exemption], afterTheMove)).toEqual([
+    "minimumReleaseAgeExclude names solid-js@2.0.0, which pnpm-lock.yaml does not lock, so nothing installs it; remove the entry.",
+    "minimumReleaseAgeExclude names solid-js@2.0.0, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.",
+  ]);
 });

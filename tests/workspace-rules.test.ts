@@ -18,7 +18,15 @@ import {
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
-import { exclusionsIn, pinsOf, solidPackages } from "#/scripts/newest-releases.ts";
+import {
+  exactCatalogReleases,
+  exactlyRequiredBy,
+  exemptionsIn,
+  lockfile,
+  pinsOf,
+  solidPackages,
+  unjustifiedExemptions,
+} from "#/scripts/newest-releases.ts";
 import { type PnpmSettings, pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import { storybookAppManifest } from "#/scripts/release-sources.ts";
 import {
@@ -83,7 +91,6 @@ const sharedSettingsFile = "tsconfig.base.json";
 const optionsOfTheParseOnlyProject = ["allowJs", "noLib", "noResolve"];
 const optionsOfTheTypeCheckedProject = ["allowJs"];
 const pnpmSettingsReader = "scripts/pnpm-settings.ts";
-const lockfile = "pnpm-lock.yaml";
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
 const storybookInterfaceLibrary = "react";
@@ -701,43 +708,27 @@ test("every peer range of a library package accepts the version the catalog pins
 
 test(`every minimumReleaseAgeExclude entry in ${workspaceFile} is a release that ${lockfile} locks, and that the catalog pins exactly or a release it pins lists at that exact version among its dependencies or optionalDependencies`, () => {
   const { catalog, minimumReleaseAgeExclude } = pnpmSettings();
-  const lockedReleases = parseAllDocuments(
-    readFileSync(join(repositoryRoot, lockfile), "utf8"),
-  ).flatMap((document) =>
-    Object.keys((document.toJS() as { packages?: Record<string, unknown> }).packages ?? {}),
+  const locked = parseAllDocuments(readFileSync(join(repositoryRoot, lockfile), "utf8")).flatMap(
+    (document) =>
+      Object.keys((document.toJS() as { packages?: Record<string, unknown> }).packages ?? {}),
   );
-  const exactPins = pinsOf(rootManifest(), catalog).flatMap((pin) =>
-    pin.source === "registry" &&
-    [pin.pinned, `npm:${pin.registryName}@${pin.pinned}`].includes(catalog[pin.name] ?? "")
-      ? [pin]
-      : [],
-  );
-  const pinnedReleases = exactPins.map(({ registryName, pinned }) => `${registryName}@${pinned}`);
-  const requiredReleases = installedVersions(exactPins.map(({ registryName }) => registryName))
-    .filter(({ name, version }) => pinnedReleases.includes(`${name}@${version}`))
-    .flatMap(({ path }) => {
-      const manifest = JSON.parse(readFileSync(join(path, "package.json"), "utf8")) as Manifest;
-      return Object.entries({ ...manifest.dependencies, ...manifest.optionalDependencies })
-        .filter(([, specifier]) => semver.valid(specifier) === specifier)
-        .map(([name, version]) => `${name}@${version}`);
+  const pinned = exactCatalogReleases(pinsOf(rootManifest(), catalog));
+  const required = installedVersions(pinned.map(({ name }) => name))
+    .filter((installed) =>
+      pinned.some(({ name, version }) => name === installed.name && version === installed.version),
+    )
+    .flatMap(({ name, version, path }) => {
+      if (path === undefined) {
+        throw new Error(`${name}@${version}: the package manager gives no path for it.`);
+      }
+      return exactlyRequiredBy(
+        JSON.parse(readFileSync(join(path, "package.json"), "utf8")) as Manifest,
+      );
     });
-  const violations = exclusionsIn(minimumReleaseAgeExclude).flatMap(({ name, version }) => {
-    const release = `${name}@${version}`;
-    return [
-      ...(lockedReleases.includes(release)
-        ? []
-        : [
-            `${workspaceFile}: minimumReleaseAgeExclude names ${release}, which ${lockfile} does not lock, so nothing installs it; remove the entry.`,
-          ]),
-      ...(pinnedReleases.includes(release) || requiredReleases.includes(release)
-        ? []
-        : [
-            `${workspaceFile}: minimumReleaseAgeExclude names ${release}, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.`,
-          ]),
-    ];
-  });
 
-  expect(violations).toEqual([]);
+  expect(
+    unjustifiedExemptions(exemptionsIn(minimumReleaseAgeExclude), { locked, pinned, required }),
+  ).toEqual([]);
 });
 
 test("the project is MIT-licensed in its licence text, its root manifest and every library package", () => {

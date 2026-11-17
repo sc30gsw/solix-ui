@@ -18,7 +18,7 @@ const fixtureFile = "tests/fixtures/registry/2026-11-16.json";
 const revisitJob = "revisits";
 const revisitCheck = "node scripts/check-revisits.ts";
 const now = Date.parse("2026-11-16T22:39:45Z");
-const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60, excluded: [] };
+const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60, exempted: [] };
 
 const registryFixture = JSON.parse(
   readFileSync(join(repositoryRoot, fixtureFile), "utf8"),
@@ -191,7 +191,7 @@ test("a young release that minimumReleaseAgeExclude names counts as old enough",
   const report = evaluateRevisits({
     revisits: [reactiveScript],
     documents: bothButYoung,
-    policy: { ...policy, excluded: [{ name: "@reactivescript/compiler", version: "1.0.0" }] },
+    policy: { ...policy, exempted: [{ name: "@reactivescript/compiler", version: "1.0.0" }] },
     now,
   });
 
@@ -212,7 +212,7 @@ test("a revisit without a condition or a reason is never met and fails the check
     `${roadmapFile}: give the revisit Unexplained a "- Why not now:" reason and a "- Condition:" the weekly check can evaluate.`,
   ]);
   expect(evaluated(registryFixture, [elsewhere]).problems).toEqual([
-    "Elsewhere: the registry answer holds no document for not-in-the-fixture, so nothing tells whether it is published.",
+    "Elsewhere: the registry answer holds no document for not-in-the-fixture.",
   ]);
   expect(evaluated(timeless).problems).toEqual([
     "ReactiveScript: the registry gives no publish time for solid-js@2.0.0, so its age cannot be told.",

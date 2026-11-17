@@ -25,7 +25,7 @@ export function scriptFilesIn(root: string = repositoryRoot): string[] {
   });
 }
 
-export type Installed = { name: string; version: string; path: string };
+export type Installed = { name: string; version: string; path?: string };
 
 export type ExportTarget = string | null | ExportTarget[] | { [condition: string]: ExportTarget };
 
@@ -52,6 +52,10 @@ export function manifestAt(path: string): Manifest {
 
 export function rootManifest(): Manifest {
   return manifestAt("package.json");
+}
+
+export function unique<T>(items: readonly T[]): T[] {
+  return [...new Set(items)];
 }
 
 export function listed(names: readonly string[]): string {
@@ -85,7 +89,7 @@ export function installedVersions(
   names: readonly string[],
   directory: string = repositoryRoot,
 ): Installed[] {
-  return whyInstalled(names, directory).map(({ name, version = "", path = "" }) => ({
+  return whyInstalled(names, directory).map(({ name, version = "", path }) => ({
     name,
     version,
     path,
