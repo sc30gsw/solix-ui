@@ -1,6 +1,7 @@
 import type { JSX } from "@solidjs/web";
 import { expect } from "vite-plus/test";
 import type * as Library from "../src/index";
+import type { StylesApiProps } from "../src/parts";
 import type { DisplayPropName } from "../src/style-prop-table";
 import {
   carriedComponents,
@@ -26,7 +27,13 @@ export type TakesDisplay<Props> =
 
 type Polymorphic<Component> = "component" extends keyof PropsOf<Component> ? true : false;
 
-type ComponentName = keyof typeof Library;
+type ComponentName = {
+  [Name in keyof typeof Library]: keyof StylesApiProps<object> extends keyof PropsOf<
+    (typeof Library)[Name]
+  >
+    ? Name
+    : never;
+}[keyof typeof Library];
 
 type TakesAnything<Value> = 0 extends 1 & Value ? true : false;
 
@@ -49,7 +56,11 @@ type Fixture<Component> = {
 
 const childrenProp = "children";
 
-export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]> } = {
+export const fixtures: {
+  [Name in keyof typeof Library as Name extends ComponentName ? Name : never]: Fixture<
+    (typeof Library)[Name]
+  >;
+} = {
   Box: {
     tag: "div",
     booleanAttribute: "hidden",

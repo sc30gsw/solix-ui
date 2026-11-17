@@ -6,6 +6,7 @@ import {
   behaviourSdkHiddenRule,
   LIBRARY_CASCADE_LAYER,
 } from "../../../packages/core/build-pipeline.mjs";
+import { cascadeLayerOrder } from "../../../packages/core/src/cascade-layers";
 import { rootPart, stableClass, stylesheet } from "../../../packages/core/tests/built-library";
 import {
   computed,
@@ -82,7 +83,7 @@ inEveryEngine((browser) => {
       );
     });
 
-    test("before a script runs the page adds no style, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, and every important declaration on the page sits in that layer", async () => {
+    test("before a script runs the page holds no style but the library's own, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, every rule of the library's own styles sits in the library's layer, and every important declaration on the page sits in the SDK's layer", async () => {
       const plain = await browser().newContext({ javaScriptEnabled });
       const page = await plain.newPage();
       await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
@@ -90,7 +91,10 @@ inEveryEngine((browser) => {
       const added = await stylesAddedToThePage(page);
       await plain.close();
       const linkedLayerOrder = rules
-        .filter(({ addedAtRunTime, layers }) => !addedAtRunTime && layers.length > 0)
+        .filter(
+          ({ addedAtRunTime, addedByTheLibrary, layers }) =>
+            !addedAtRunTime && !addedByTheLibrary && layers.length > 0,
+        )
         .map(({ layers: [outermost] }) => outermost);
       const outsideTheSdkLayer = (rule: PageStyleRule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
 
@@ -99,6 +103,17 @@ inEveryEngine((browser) => {
           .filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule))
           .map(({ text }) => text),
       ).toEqual([]);
+      expect(
+        rules
+          .filter(
+            ({ addedByTheLibrary, layers, text }) =>
+              addedByTheLibrary &&
+              text !== cascadeLayerOrder &&
+              layers[0] !== LIBRARY_CASCADE_LAYER,
+          )
+          .map(({ text }) => text),
+      ).toEqual([]);
+      expect(rules.some(({ addedByTheLibrary }) => addedByTheLibrary)).toBe(true);
       expect(
         rules
           .filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule))

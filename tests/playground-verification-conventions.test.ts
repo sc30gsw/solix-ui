@@ -15,6 +15,7 @@ const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
 const testConfig = "vite.config.ts";
 const setupsModules = "apps/playground/src/sections/*-setups.ts";
 const namesObject = /Names$/;
+const injectedByTheSolidPlugin = "$$";
 const letterOrDigit = /[\p{L}\p{N}]/u;
 const whitespace = /\s/;
 const derivingFunctions = ["panelOf", "valueOf"];
@@ -234,7 +235,11 @@ async function namesTheSetupsHold(): Promise<HeldName[]> {
   const modules = globSync(setupsModules, { cwd: repositoryRoot });
   const held = await Promise.all(
     modules.map(async (module) => {
-      const exported: Record<string, unknown> = await import(join(repositoryRoot, module));
+      const exported = Object.fromEntries(
+        Object.entries(
+          (await import(join(repositoryRoot, module))) as Record<string, unknown>,
+        ).filter(([name]) => !name.startsWith(injectedByTheSolidPlugin)),
+      );
       const listNames = Object.values(exported).flatMap((value) =>
         typeof value === "string" ? [value] : [],
       );

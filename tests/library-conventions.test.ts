@@ -7,6 +7,7 @@ import { allowedRuntimeDependencies, loads } from "../scripts/runtime-dependenci
 import { tokenValues } from "../scripts/tokens";
 import {
   calledDeclaration,
+  constructedClass,
   descendants,
   exportsOf,
   fileOf,
@@ -18,6 +19,7 @@ import {
   parseAll,
   parseText,
   staticPropertyName,
+  stringsIn,
   symbolOf,
   ts,
 } from "../scripts/syntax";
@@ -26,7 +28,7 @@ import { componentLibraries, repositoryRoot, scriptFiles } from "./support/works
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
-  /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
+  /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.tsx?|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
 const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
@@ -666,29 +668,111 @@ test("no source file of the library but parts.ts calls stylex.attrs or stylex.pr
   expect(violations).toEqual([]);
 });
 
-test("every other source file is the barrel, a StyleX definition, or a kebab-case module", () => {
+const libraryStyleModule = "packages/core/src/library-style.tsx";
+const styleElement = "style";
+const styleSheetClass = "CSSStyleSheet";
+const adoptedStyleSheets = "adoptedStyleSheets";
+const elementNameAt: Record<string, number> = { createElement: 0, createElementNS: 1 };
+
+function memberNamed(node: ts.Node): string | undefined {
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  if (ts.isElementAccessExpression(node)) {
+    return stringsIn(librarySources, node.argumentExpression)[0];
+  }
+  return undefined;
+}
+
+function writesAStyle(node: ts.Node): boolean {
+  if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+    return node.tagName.getText() === styleElement;
+  }
+  if (memberNamed(node) === adoptedStyleSheets) return true;
+  if (constructedClass(librarySources, node).some(({ name }) => name === styleSheetClass)) {
+    return true;
+  }
+  if (!ts.isCallExpression(node)) return false;
+  const callee = unwrapped(node.expression);
+  const position = elementNameAt[memberNamed(callee) ?? ""];
+  return (
+    position !== undefined &&
+    stringsIn(librarySources, node.arguments[position]).some(
+      (name) => name.toLowerCase() === styleElement,
+    )
+  );
+}
+
+function styleWritesIn(file: string, source: ts.SourceFile): string[] {
+  return descendants(source)
+    .filter(writesAStyle)
+    .map(
+      (node) =>
+        `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)} writes a style element or a style sheet. Render LibraryStyle from ${libraryStyleModule}, which gives it the nonce of SolixProvider and the library's mark.`,
+    );
+}
+
+test("no source of a library but library-style.tsx renders a <style>, creates a style element or constructs or adopts a style sheet, by any spelling of the element's name the type checker knows as a string", () => {
+  expect(
+    librarySourceFiles
+      .filter((file) => relativePath(file) !== libraryStyleModule)
+      .flatMap((file) => styleWritesIn(file, typedSource(file))),
+  ).toEqual([]);
+  expect(
+    styleWritesIn(libraryStyleModule, typedSource(join(repositoryRoot, libraryStyleModule))),
+  ).toHaveLength(1);
+});
+
+test("every other source file is the barrel, a StyleX definition, or a kebab-case module, with JSX or without", () => {
   const violations = libraries.flatMap(({ source }) =>
     readdirSync(source)
       .filter((entry) => !componentFile.test(entry) && !helperFile.test(entry))
       .map(
         (entry) =>
-          `${relativePath(join(source, entry))}: name it Component.tsx for a component, kebab-case.ts for a module, or name.stylex.ts for StyleX variables.`,
+          `${relativePath(join(source, entry))}: name it Component.tsx for a component, kebab-case.ts or kebab-case.tsx for a module, or name.stylex.ts for StyleX variables.`,
       ),
   );
 
   expect(violations).toEqual([]);
 });
 
-test("the barrel exports every component and its props type once, in alphabetical order, and nothing else", () => {
+const barrelLine = /^export \{ [^}]+ \} from "\.\/([^"]+)";$/;
+
+test("the barrel exports every component and its props type once, and by name what other modules give consumers, one line per module in the order of the module names, and nothing else", () => {
   for (const { source } of libraries) {
+    const where = relativePath(join(source, "index.ts"));
     const names = components
       .filter(({ file }) => file.startsWith(source))
       .map(({ name }) => name)
       .sort();
-    const expected = names.map((name) => `export { ${name}, type ${name}Props } from "./${name}";`);
-    const actual = readFileSync(join(source, "index.ts"), "utf8").trim().split("\n");
+    const lines = readFileSync(join(source, "index.ts"), "utf8").trim().split("\n");
+    const modules = lines.map((line) => barrelLine.exec(line)?.[1]);
+    const notModules = modules.filter(
+      (module) =>
+        module !== undefined &&
+        !names.includes(module) &&
+        !["ts", "tsx"].some(
+          (extension) =>
+            existsSync(join(source, `${module}.${extension}`)) &&
+            helperFile.test(`${module}.${extension}`),
+        ),
+    );
 
-    expect(actual, `${relativePath(join(source, "index.ts"))}`).toEqual(expected);
+    expect(
+      lines.filter((_, index) => modules[index] === undefined),
+      `${where}: write each line as export { names } from "./module";`,
+    ).toEqual([]);
+    expect(modules, `${where}: order the lines by module name`).toEqual(
+      modules.toSorted(
+        (one, other) => Number((one ?? "") > (other ?? "")) - Number((one ?? "") < (other ?? "")),
+      ),
+    );
+    expect(new Set(modules).size, `${where}: re-export each module on one line`).toBe(
+      modules.length,
+    );
+    expect(notModules, `${where}: re-export only components and kebab-case modules`).toEqual([]);
+    expect(
+      lines.filter((_, index) => names.includes(modules[index] ?? "")),
+      where,
+    ).toEqual(names.map((name) => `export { ${name}, type ${name}Props } from "./${name}";`));
   }
 });
 

@@ -19,11 +19,11 @@ import {
 import { tokens } from "./tokens.stylex";
 
 const pixelsPerRem = 16;
-const characterThatEndsADeclaration = /[;{}]/;
+export const characterThatEndsADeclaration = /[;{}]/;
 
 type Absent = null | undefined;
 type TokenKey<Name, Of extends Scale> = Name extends `--solix-${Of}-${infer Key}` ? Key : never;
-type ScaleKey<Of extends Scale> = TokenKey<Extract<keyof typeof tokens, string>, Of>;
+export type ScaleKey<Of extends Scale> = TokenKey<Extract<keyof typeof tokens, string>, Of>;
 type ValueOf<Row> = Row extends PropertyRow
   ?
       | NonNullable<JSX.CSSProperties[Row["property"]]>

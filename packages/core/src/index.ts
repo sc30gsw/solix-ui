@@ -7,3 +7,5 @@ export { TabsList, type TabsListProps } from "./TabsList";
 export { TabsPanel, type TabsPanelProps } from "./TabsPanel";
 export { TabsTab, type TabsTabProps } from "./TabsTab";
 export { TextInput, type TextInputProps } from "./TextInput";
+export { createTheme, type SolixTheme } from "./create-theme";
+export { SolixProvider, type SolixProviderProps } from "./solix-provider";

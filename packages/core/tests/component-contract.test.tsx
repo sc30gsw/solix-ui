@@ -20,6 +20,7 @@ import {
   builtComponents,
   carriedComponents,
   compiledClassesOf,
+  dist,
   library,
   renderBuilt,
   rootPart,
@@ -85,9 +86,14 @@ function expectCompiledClassesFirst(name: string, part: string, element: Element
   ).toEqual([...own, stableClass(name, part)]);
 }
 
-test("every component the library exports is held to the root contract", () => {
+test("every component the library exports is held to the root contract", async () => {
+  const componentModules: Record<string, unknown>[] = await Promise.all(
+    builtComponents.map((name) => import(join(dist, `${name}.jsx`))),
+  );
   const exportedComponents = Object.entries(library)
-    .filter(([, exported]) => typeof exported === "function")
+    .filter(([, exported]) =>
+      componentModules.some((module) => Object.values(module).includes(exported)),
+    )
     .map(([name]) => name);
 
   expect(exportedComponents.sort()).toEqual(Object.keys(fixtures).sort());

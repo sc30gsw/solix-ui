@@ -72,6 +72,7 @@ function computedValues(
     ({ written, injected }) => {
       if (injected) {
         const style = document.createElement("style");
+        style.nonce = document.querySelector<HTMLElement>("[nonce]")?.nonce ?? "";
         style.textContent = injected;
         document.head.append(style);
       }

@@ -21,6 +21,7 @@ const journeys = [
   ["button-default", "A library button with its default style"],
   ["consumer-override", "A consumer's plain class overrides the library"],
   ["token-theme", "A consumer rethemes a subtree through a token"],
+  ["provider-theme", "The provider themes what its selector names, and every style element carries the page's nonce"],
   ["changing-props", "A class and an attribute that change after the first render"],
   ["disclosure", "A disclosure opens and closes"],
   ["text-input", "A text input shows its border, its disabled look and its error after the user leaves it"],

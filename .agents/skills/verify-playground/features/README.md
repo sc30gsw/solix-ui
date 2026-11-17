@@ -31,6 +31,7 @@ Each feature file starts with an H1 title and one paragraph describing what the 
 - [Default button](./button-default.md) covers the library's default style on a button.
 - [Consumer override](./consumer-override.md) covers a consumer's plain class replacing one library style.
 - [Token theme](./token-theme.md) covers a consumer retheming a subtree through a public token.
+- [Provider theme](./provider-theme.md) covers `SolixProvider` theming what its selector names, and the nonce on every style element.
 - [Changing props](./changing-props.md) covers a class and an attribute that the app changes after the first render.
 - [Disclosure](./disclosure.md) covers opening and closing by click and by keyboard, the styles that follow its state, and a disclosure nested in another.
 - [Text input](./text-input.md) covers the border, the disabled look, a consumer's override and the error shown after the user leaves an invalid value.

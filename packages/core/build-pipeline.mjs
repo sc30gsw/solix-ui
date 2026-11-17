@@ -5,13 +5,14 @@ import syntaxJsx from "@babel/plugin-syntax-jsx";
 import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
 import postcss from "postcss";
+import { behaviourSdkLayer, cascadeLayerOrder, libraryCascadeLayer } from "./src/cascade-layers.ts";
 import { stableClassPrefix } from "./src/stable-class.ts";
 
-export const LIBRARY_CASCADE_LAYER = "solix";
+export const LIBRARY_CASCADE_LAYER = libraryCascadeLayer;
 export const LIBRARY_CLASS_PREFIX = "sx";
 export const STYLE_PROP_LAYER = "style-props";
 export const HIDDEN_LAYER = "hidden";
-export const BEHAVIOUR_SDK_LAYER = "ui-sdk";
+export const BEHAVIOUR_SDK_LAYER = behaviourSdkLayer;
 export const LIBRARY_PART_CONDITION = `:where([class^="${stableClassPrefix}"], [class*=" ${stableClassPrefix}"])`;
 export const HIDDEN_PART_SELECTOR = `[hidden]${LIBRARY_PART_CONDITION}:not([hidden="until-found"])`;
 
@@ -135,7 +136,7 @@ function scopedToLibraryParts(css) {
 export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
   const css = stylexPlugin.processStylexRules(rules, { useLayers: true });
   return [
-    `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};`,
+    cascadeLayerOrder,
     scopedToLibraryParts(behaviourSdkRules),
     `@layer ${LIBRARY_CASCADE_LAYER} {`,
     css,

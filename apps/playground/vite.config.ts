@@ -5,6 +5,6 @@ import { allowedRuntimeDependencyNames } from "../../scripts/runtime-dependencie
 const dependenciesOfTheLinkedLibrariesViteMustNotPreBundle = allowedRuntimeDependencyNames();
 
 export default defineConfig({
-  plugins: [solid({ start: { nodeServer: true }, ssr: true })],
+  plugins: [solid({ start: { nodeServer: true, middleware: "src/middleware.ts" }, ssr: true })],
   optimizeDeps: { exclude: dependenciesOfTheLinkedLibrariesViteMustNotPreBundle },
 });

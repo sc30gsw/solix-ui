@@ -7,9 +7,10 @@ import {
   type TypesOf,
 } from "@ui-sdk/core";
 import { usePrimitive } from "@ui-sdk/solid/primitive";
-import type { JSX } from "@solidjs/web";
-import { merge, omit, untrack } from "solid-js";
+import { isServer, type JSX } from "@solidjs/web";
+import { merge, omit, untrack, useContext } from "solid-js";
 import { rootPart } from "./parts";
+import { StyleNonceContext } from "./run-time-style";
 import { withConsumerStyle } from "./style-props";
 
 export { tabs } from "@ui-sdk/core/tabs";
@@ -140,10 +141,22 @@ export type Behaviour<P extends Primitive> = {
 
 const nothingOfItsOwn: ComponentProps = {};
 
+const pageNonceProperty = "csp-nonce";
+
+function giveTheSdkThePageNonce(nonce: string | undefined): void {
+  if (isServer || nonce === undefined || nonce === "") return;
+  if (document.head.querySelector(`meta[property="${pageNonceProperty}"]`)) return;
+  const meta = document.createElement("meta");
+  meta.setAttribute("property", pageNonceProperty);
+  meta.nonce = nonce;
+  document.head.append(meta);
+}
+
 export function createBehaviour<P extends Primitive>(
   primitive: P,
   options: () => OptionsOf<P>,
 ): Behaviour<P> {
+  giveTheSdkThePageNonce(untrack(useContext(StyleNonceContext)));
   const handle = usePrimitive(primitive, options);
   const bind = (
     parts: StyledParts<AnyProps, string, AnyProps>,
