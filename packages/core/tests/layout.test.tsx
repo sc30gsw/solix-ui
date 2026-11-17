@@ -224,10 +224,26 @@ test.each(groupCases)("Group: %s", (_, props, { grow, children, ...expected }) =
     elementsOf(html)
       .slice(1)
       .map(({ tag }) => tag),
-    "it leaves out every falsy child",
+    "it leaves out null, undefined, booleans and the empty string",
   ).toEqual(["span", "span", "i"]);
-  expect(html, "it renders no text for a falsy child").not.toMatch(/>0<|>false<|>true</);
+  expect(html.replaceAll(/<[^>]*>/g, " "), "it renders no text for a boolean").not.toMatch(
+    /false|true/,
+  );
   expect(elementsOf(html)).toHaveLength(children + 1);
+});
+
+test("Group renders a 0 child, and counts it among the children it grows", () => {
+  const html = render("Group", {
+    grow: true,
+    get children() {
+      return [0, null, false, "", <span>One</span>];
+    },
+  });
+
+  expect(html.replaceAll(/<!--[^>]*-->/g, "")).toMatch(/>0<span/);
+  expect(libraryOf("Group", { grow: true, children: [0, null, false, "", "a"] }).style).toEqual({
+    "--sx-group-child-width": "calc((100% + var(--group-gap)) / 2 - var(--group-gap))",
+  });
 });
 
 const flexCases: [what: string, props: FlexProps<"div" | "section">, expected: Rendered][] = [

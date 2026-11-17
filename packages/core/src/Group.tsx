@@ -2,6 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { children } from "solid-js";
 import { createParts, type ElementProps } from "./parts";
+import { rendersSomething } from "./renders-something";
 import { variableProperty } from "./style-prop-table";
 import type { VariableProp } from "./style-props";
 import { tokens } from "./tokens.stylex";
@@ -33,10 +34,6 @@ export type GroupProps = ElementProps<
     preventGrowOverflow?: boolean;
   }
 >;
-
-function rendersSomething(child: unknown): boolean {
-  return child !== true && Boolean(child);
-}
 
 export function Group(props: GroupProps) {
   const resolved = children(() => props.children);
