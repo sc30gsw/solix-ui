@@ -1,6 +1,9 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
+import { afterAll, beforeAll } from "vite-plus/test";
+import { localUrl } from "../../../../tests/support/server-process.ts";
+import { closed, listening } from "#/tests/support/listening.ts";
 
 const contentTypes: Readonly<Record<string, string>> = {
   ".html": "text/html",
@@ -13,9 +16,7 @@ const contentTypes: Readonly<Record<string, string>> = {
   ".woff2": "font/woff2",
 };
 
-export type StaticServer = { url: string; close: () => Promise<void> };
-
-export async function serveDirectory(root: string, port: number): Promise<StaticServer> {
+export function serveDirectory(root: string, port: number): string {
   const server = createServer((request, response) => {
     const path = normalize(decodeURIComponent(new URL(request.url ?? "/", "http://host").pathname));
     const file = join(root, path.endsWith("/") ? `${path}index.html` : path);
@@ -28,12 +29,9 @@ export async function serveDirectory(root: string, port: number): Promise<Static
     });
     createReadStream(file).pipe(response);
   });
-  await new Promise<void>((listening, failed) => {
-    server.once("error", failed);
-    server.listen(port, "127.0.0.1", listening);
-  });
-  return {
-    url: `http://127.0.0.1:${port}/`,
-    close: () => new Promise((closed) => server.close(() => closed())),
-  };
+
+  beforeAll(() => listening(server, port));
+  afterAll(() => closed(server));
+
+  return localUrl(port);
 }

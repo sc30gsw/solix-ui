@@ -47,3 +47,35 @@ export const CleanupWithoutOwner: Story = {
     onCleanup(() => undefined);
   },
 };
+
+const nameless = { children: undefined };
+
+export const AccessibilityTestOff: Story = {
+  args: nameless,
+  parameters: { a11y: { test: "off" } },
+};
+
+export const AccessibilityTestTodo: Story = {
+  args: nameless,
+  parameters: { a11y: { test: "todo" } },
+};
+
+export const AccessibilityDisabled: Story = {
+  args: nameless,
+  parameters: { a11y: { disable: true } },
+};
+
+export const AccessibilityRulesNarrowed: Story = {
+  args: nameless,
+  parameters: { a11y: { options: { runOnly: ["region"] } } },
+};
+
+export const AccessibilityRuleTurnedOff: Story = {
+  args: nameless,
+  parameters: { a11y: { config: { rules: [{ id: "color-contrast", enabled: false }] } } },
+};
+
+export const AccessibilityLeftToSomeone: Story = {
+  args: nameless,
+  globals: { a11y: { manual: true } },
+};

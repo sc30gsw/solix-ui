@@ -1,16 +1,15 @@
 import solid from "@solidjs/vite-plugin";
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { defineConfig } from "vite-plus";
-import { playwright } from "vite-plus/test/browser-playwright";
-import type { BrowserInstanceOption } from "vite-plus/test/node";
-import { enginesToVerify } from "../../scripts/browser-engines.mjs";
+import { browserInEveryEngine } from "../../scripts/browser-instances.ts";
 import { allowedRuntimeDependencyNames } from "../../scripts/runtime-dependencies.ts";
 
+type StoriesServer = { project: string; port: number };
+
 const preBundledForStories = ["@stylexjs/stylex"];
+const storyTimeout = 30_000;
 
-export type StoriesRun = { project: string; port: number };
-
-export function storiesProject({ project, port }: StoriesRun, configDir: string) {
+export function storiesProject({ project, port }: StoriesServer, configDir: string) {
   return defineConfig({
     plugins: [solid(), storybookTest({ configDir })],
     optimizeDeps: {
@@ -19,18 +18,10 @@ export function storiesProject({ project, port }: StoriesRun, configDir: string)
     },
     test: {
       name: project,
+      testTimeout: storyTimeout,
+      hookTimeout: storyTimeout,
       api: { port, strictPort: true },
-      browser: {
-        enabled: true,
-        headless: true,
-        provider: playwright(),
-        screenshotFailures: false,
-        get instances() {
-          return enginesToVerify().map((engine) => ({
-            browser: engine as BrowserInstanceOption["browser"],
-          }));
-        },
-      },
+      browser: browserInEveryEngine(),
     },
   });
 }

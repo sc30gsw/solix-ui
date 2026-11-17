@@ -25,6 +25,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Closed: Story = {};
 
+export const Opened: Story = {
+  args: { opened: true },
+};
+
 export const OpenedAndClosedByItsCloseButton: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Open settings" }));

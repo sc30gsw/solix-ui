@@ -6,7 +6,15 @@ import type * as Library from "#/src/index.ts";
 import type * as Parts from "#/src/parts.ts";
 import type * as StableClass from "#/src/stable-class.ts";
 import type * as StyleProps from "#/src/style-props.ts";
-import { parse, staticPropertyName, ts } from "../../../scripts/syntax";
+import {
+  aliasDeclarationsOfTypeAt,
+  aliasDeclarationsReturnedBy,
+  openProgram,
+  parse,
+  staticPropertyName,
+  ts,
+  virtualSource,
+} from "../../../scripts/syntax";
 import { memberMarkupOf } from "#/tests/markup.ts";
 
 export type ConsumerProps = Record<string, unknown>;
@@ -53,6 +61,63 @@ export function builtSource(name: string): string {
 }
 
 const builtByName: Record<string, unknown> = library;
+
+const libraryEntry = join(import.meta.dirname, "../src/index.ts");
+const jsxElementSource = "export const jsxElement = <></>;\n";
+
+function namedValueExports(source: ts.SourceFile): ts.Identifier[] {
+  return source.statements.flatMap((statement) =>
+    ts.isExportDeclaration(statement) &&
+    statement.exportClause &&
+    ts.isNamedExports(statement.exportClause)
+      ? statement.exportClause.elements.flatMap((element) =>
+          element.isTypeOnly || !ts.isIdentifier(element.name) ? [] : [element.name],
+        )
+      : [],
+  );
+}
+
+function declaredValues(source: ts.SourceFile): ts.Identifier[] {
+  return source.statements
+    .filter(ts.isVariableStatement)
+    .flatMap((statement) => [...statement.declarationList.declarations])
+    .flatMap(({ name }) => (ts.isIdentifier(name) ? [name] : []));
+}
+
+function exportsReturningTheJsxElement(): string[] {
+  const elementFile = virtualSource(jsxElementSource, ".tsx");
+  const program = openProgram([libraryEntry, elementFile]);
+  try {
+    const entry = program.sourceFile(libraryEntry);
+    const element = program.sourceFile(elementFile);
+    if (!entry || !element) {
+      throw new Error(`${libraryEntry}: TypeScript could not read the library's entry.`);
+    }
+    const jsxElement = declaredValues(element).flatMap((name) =>
+      aliasDeclarationsOfTypeAt(program, name),
+    );
+    if (jsxElement.length === 0) {
+      throw new Error("TypeScript gives no type alias for a JSX element of this project.");
+    }
+    return namedValueExports(entry)
+      .filter((name) =>
+        aliasDeclarationsReturnedBy(program, name).some((returned) =>
+          jsxElement.includes(returned),
+        ),
+      )
+      .map(({ text }) => text)
+      .filter((name) => name in builtByName);
+  } finally {
+    program.dispose();
+  }
+}
+
+let componentExportNames: string[] | undefined;
+
+export function componentExports(): string[] {
+  componentExportNames ??= exportsReturningTheJsxElement();
+  return componentExportNames;
+}
 
 function builtNamed(name: string): Component<ConsumerProps> {
   const built = builtByName[name];

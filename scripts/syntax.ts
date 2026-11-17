@@ -1,5 +1,7 @@
 export * as ts from "#/scripts/syntax/ast.ts";
 export {
+  aliasDeclarationsOfTypeAt,
+  aliasDeclarationsReturnedBy,
   assertedType,
   calledDeclaration,
   constructedClass,
@@ -14,7 +16,6 @@ export {
   memberDeclarations,
   parameterAliases,
   reachedFrom,
-  returnedAliasDeclarations,
   returnsAlias,
   stringsIn,
   symbolOf,
@@ -33,6 +34,7 @@ export {
   sharedSettings,
   typeCheckedWithScripts,
   stringLiteralTypesOf,
+  virtualSource,
   type Program,
 } from "#/scripts/syntax/program.ts";
 export {

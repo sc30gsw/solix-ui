@@ -215,24 +215,37 @@ export function parameterAliases(program: Program, call: ts.CallExpression): Ali
     });
 }
 
+function returnTypeOf(program: Program, fn: ts.Node): Type | undefined {
+  if (!ts.isSignatureDeclaration(fn)) return undefined;
+  const signature = program.checker.getSignatureFromDeclaration(fn);
+  return signature && program.checker.getReturnTypeOfSignature(signature);
+}
+
 export function returnsAlias(program: Program, fn: ts.Node, alias: string): boolean {
-  if (!ts.isSignatureDeclaration(fn)) return false;
-  const { checker } = program;
-  const signature = checker.getSignatureFromDeclaration(fn);
-  const returned = signature && checker.getReturnTypeOfSignature(signature);
+  const returned = returnTypeOf(program, fn);
   if (!returned) return false;
   const named = (type: Type | undefined) => aliasesOf(type).some(({ name }) => name === alias);
   return (
     named(returned) ||
-    checker.getPropertiesOfType(returned).some((member) => named(checker.getTypeOfSymbol(member)))
+    program.checker
+      .getPropertiesOfType(returned)
+      .some((member) => named(program.checker.getTypeOfSymbol(member)))
   );
 }
 
-export function returnedAliasDeclarations(program: Program, fn: ts.Node): ts.Node[] {
-  if (!ts.isSignatureDeclaration(fn)) return [];
-  const signature = program.checker.getSignatureFromDeclaration(fn);
-  const returned = signature && program.checker.getReturnTypeOfSignature(signature);
-  return declarationsOfSymbol(returned?.getAliasSymbol());
+export function aliasDeclarationsOfTypeAt(program: Program, node: ts.Node): ts.Node[] {
+  return declarationsOfSymbol(program.checker.getTypeAtLocation(node)?.getAliasSymbol());
+}
+
+export function aliasDeclarationsReturnedBy(program: Program, node: ts.Node): ts.Node[] {
+  const symbol = symbolOf(program, node);
+  const type = symbol && program.checker.getTypeOfSymbol(symbol);
+  if (!type) return [];
+  return program.checker
+    .getSignaturesOfType(type, SignatureKind.Call)
+    .flatMap((signature) =>
+      declarationsOfSymbol(program.checker.getReturnTypeOfSignature(signature)?.getAliasSymbol()),
+    );
 }
 
 export function stringsIn(program: Program, expression: ts.Expression | undefined): string[] {

@@ -1,11 +1,11 @@
 import { createServer } from "node:http";
 import { afterAll, beforeAll } from "vite-plus/test";
-
-export type TelemetryCollector = { url: string; received: () => string[] };
+import { localUrl } from "../../../../tests/support/server-process.ts";
+import { closed, listening } from "#/tests/support/listening.ts";
 
 export const telemetryUrlVariable = "STORYBOOK_TELEMETRY_URL";
 
-export function collectTelemetry(port: number): TelemetryCollector {
+export function collectTelemetry(port: number): { url: string; received: () => string[] } {
   const received: string[] = [];
   const server = createServer((request, response) => {
     let body = "";
@@ -16,16 +16,8 @@ export function collectTelemetry(port: number): TelemetryCollector {
     });
   });
 
-  beforeAll(async () => {
-    await new Promise<void>((listening, failed) => {
-      server.once("error", failed);
-      server.listen(port, "127.0.0.1", listening);
-    });
-  });
+  beforeAll(() => listening(server, port));
+  afterAll(() => closed(server));
 
-  afterAll(async () => {
-    await new Promise((closed) => server.close(closed));
-  });
-
-  return { url: `http://127.0.0.1:${port}/event-log`, received: () => [...received] };
+  return { url: `${localUrl(port)}event-log`, received: () => [...received] };
 }

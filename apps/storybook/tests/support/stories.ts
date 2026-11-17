@@ -1,56 +1,43 @@
-import { globSync } from "node:fs";
-import { join } from "node:path";
-import {
-  declarationsOf,
-  findAncestor,
-  nameOf,
-  openProgram,
-  returnedAliasDeclarations,
-  ts,
-} from "../../../../scripts/syntax.ts";
+import { join, relative, resolve } from "node:path";
+import { buildIndex } from "storybook/internal/core-server";
+import type { StoryIndexEntry } from "storybook/internal/types";
+import { repositoryRoot } from "../../../../scripts/repository.ts";
+import { storiesServer } from "#/tests/support/test-servers.ts";
+
+type TestFilesOfEachProject = Readonly<Record<string, readonly string[]>>;
 
 export const storybookDirectory = join(import.meta.dirname, "../..");
 
-const libraryEntry = join(storybookDirectory, "../../packages/core/src/index.ts");
-const jsxNamespace = "JSX";
-const jsxElement = "Element";
+const storybookConfigDirectory = join(storybookDirectory, ".storybook");
+const testRunTag = "test";
 
-function isTheJsxElement(declaration: ts.Node): boolean {
-  return (
-    ts.isTypeAliasDeclaration(declaration) &&
-    declaration.name.text === jsxElement &&
-    findAncestor(
-      declaration,
-      (ancestor) =>
-        ancestor.kind === ts.SyntaxKind.ModuleDeclaration && nameOf(ancestor) === jsxNamespace,
-    ) !== undefined
+export async function storyIndex(): Promise<StoryIndexEntry[]> {
+  const index = await buildIndex({ configDir: storybookConfigDirectory });
+  return Object.values(index.entries).filter(
+    (entry): entry is StoryIndexEntry => entry.type === "story",
   );
 }
 
-export function exportsThatRender(): string[] {
-  const program = openProgram([libraryEntry]);
-  try {
-    const source = program.sourceFile(libraryEntry);
-    if (!source) throw new Error(`${libraryEntry}: TypeScript could not read the library's entry.`);
-    return source.statements.flatMap((statement) =>
-      ts.isExportDeclaration(statement) &&
-      statement.exportClause &&
-      ts.isNamedExports(statement.exportClause)
-        ? statement.exportClause.elements.flatMap((element) =>
-            !element.isTypeOnly &&
-            declarationsOf(program, element.name).some((declaration) =>
-              returnedAliasDeclarations(program, declaration).some(isTheJsxElement),
-            )
-              ? [element.name.text]
-              : [],
-          )
-        : [],
-    );
-  } finally {
-    program.dispose();
-  }
+export function storyFileOf({ importPath }: StoryIndexEntry): string {
+  return relative(repositoryRoot, resolve(importPath));
 }
 
-export const storyFiles = globSync("src/**/*.stories.tsx", { cwd: storybookDirectory }).map(
-  (file) => join(storybookDirectory, file),
-);
+export function isTaggedForTheTestRun({ tags = [] }: StoryIndexEntry): boolean {
+  return tags.includes(testRunTag);
+}
+
+export function storiesProjectIn(engine: string): string {
+  return `${storiesServer.project} (${engine})`;
+}
+
+export function storiesTestedInEveryEngine(
+  stories: readonly StoryIndexEntry[],
+  listing: TestFilesOfEachProject,
+  engines: readonly string[],
+): StoryIndexEntry[] {
+  return stories.filter(
+    (story) =>
+      isTaggedForTheTestRun(story) &&
+      engines.every((engine) => listing[storiesProjectIn(engine)]?.includes(storyFileOf(story))),
+  );
+}

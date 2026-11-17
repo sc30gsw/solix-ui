@@ -1,16 +1,15 @@
-import { expect, test } from "vite-plus/test";
+import { expect, inject, test } from "vite-plus/test";
 import { builtComponents, library } from "#/packages/core/tests/built-library.ts";
 import {
   type Built,
   carriersIn,
+  type ConditionState,
   conditionProblems,
+  conditionStateIn,
   parseRoadmap,
   readRoadmap,
-  type Repository,
   roadmapFile,
   roadmapProblems,
-  runsTheFile,
-  theRepository,
 } from "#/scripts/roadmap.ts";
 
 const builtByName: Record<string, unknown> = library;
@@ -164,29 +163,23 @@ const withCondition = [
   "",
 ].join("\n");
 
-function repositoryWith(files: string[], runByVerify: string[]): Repository {
-  return {
-    exists: (file) => files.includes(file),
-    runByVerify: (file) => runByVerify.includes(file),
-  };
+function statesOf(states: Readonly<Record<string, ConditionState>>) {
+  return (file: string): ConditionState => states[file] ?? "missing";
 }
 
-test(`every step of ${roadmapFile} that adds no component and is merged names its test, and every condition says the truth about this repository`, async () => {
+test(`every step of ${roadmapFile} that adds no component and is merged names its test, and every condition says the truth about the files the test runner lists for vp run verify`, () => {
   const { steps } = readRoadmap();
 
   expect(steps.filter(({ mergedWhen }) => mergedWhen !== undefined).length).toBeGreaterThan(0);
-  expect(conditionProblems(steps, await theRepository())).toEqual([]);
+  expect(conditionProblems(steps, conditionStateIn(inject("testFilesOfEachProject")))).toEqual([]);
 });
 
-test("verify runs a file that a test project of the root config includes and does not exclude", () => {
-  const projects = [
-    "apps/storybook/vite.config.ts",
-    { test: { include: ["tests/**/*.test.ts"], exclude: ["tests/fixtures/**"] } },
-  ];
+test("a condition's test is missing when no file has its path, not run when no project the runner lists runs it, and run otherwise", () => {
+  const stateOf = conditionStateIn({ node: ["tests/roadmap.test.ts"], other: [] });
 
-  expect(runsTheFile(projects, "tests/tooling.test.ts")).toBe(true);
-  expect(runsTheFile(projects, "tests/fixtures/tooling.test.ts")).toBe(false);
-  expect(runsTheFile(projects, "scripts/tooling.test.ts")).toBe(false);
+  expect(stateOf("tests/roadmap.test.ts")).toBe("run");
+  expect(stateOf(roadmapFile)).toBe("not run");
+  expect(stateOf("tests/no-such.test.ts")).toBe("missing");
 });
 
 test("a step that adds no component reads the condition on the line under it", () => {
@@ -202,25 +195,20 @@ test("a step that adds no component reads the condition on the line under it", (
   ]);
 });
 
-test("a condition holds when its test exists and verify runs it, and a step says merged exactly when its condition holds", () => {
+test("a step says merged exactly when its condition's test exists and verify runs it", () => {
   const { steps } = parseRoadmap(withCondition);
 
-  expect(
-    conditionProblems(steps, repositoryWith(["tests/tooling.test.ts"], ["tests/tooling.test.ts"])),
-  ).toEqual([]);
-  expect(conditionProblems(steps, repositoryWith([], []))).toEqual([
+  expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "run" }))).toEqual([]);
+  expect(conditionProblems(steps, statesOf({}))).toEqual([
     `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts does not exist. Mark it in progress, or land it.`,
   ]);
-  expect(conditionProblems(steps, repositoryWith(["tests/tooling.test.ts"], []))).toEqual([
+  expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "not run" }))).toEqual([
     `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts is not a file \`vp run verify\` runs. Mark it in progress, or land it.`,
   ]);
   expect(
     conditionProblems(
       steps,
-      repositoryWith(
-        ["tests/tooling.test.ts", "tests/docs.test.ts"],
-        ["tests/tooling.test.ts", "tests/docs.test.ts"],
-      ),
+      statesOf({ "tests/tooling.test.ts": "run", "tests/docs.test.ts": "run" }),
     ),
   ).toEqual([
     `${roadmapFile}: Docs is marked not started, but tests/docs.test.ts exists and \`vp run verify\` runs it. Mark it merged.`,

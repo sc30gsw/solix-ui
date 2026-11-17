@@ -1,5 +1,5 @@
 import { join } from "node:path";
 import { storiesProject } from "#/stories-project.ts";
-import { storiesRun } from "#/tests/support/test-servers.ts";
+import { storiesServer } from "#/tests/support/test-servers.ts";
 
-export default storiesProject(storiesRun, join(import.meta.dirname, ".storybook"));
+export default storiesProject(storiesServer, join(import.meta.dirname, ".storybook"));
