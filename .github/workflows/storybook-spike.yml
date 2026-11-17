@@ -29,26 +29,21 @@ jobs:
         env:
           SPIKE_BREAKS: "1"
         run: |
-          vp test run --reporter=default --reporter=json --outputFile=breaks.json || true
-          node -e '
-            const expected = {
-              "Axe Violation": "button-name",
-              "Target Too Small": "target-size",
-              "Play Fails": "toHaveTextContent",
-              "Solid Warning": "NO_OWNER_EFFECT",
-              "Solid Diagnostic": "REACTIVE_WRITE_IN_OWNED_SCOPE",
-            };
-            const report = JSON.parse(require("node:fs").readFileSync("breaks.json", "utf8"));
-            const results = report.testResults.flatMap((file) => file.assertionResults);
-            const plain = (r) => r.failureMessages.join("\n").replace(/\x1b\[[0-9;]*m/g, "");
-            const wrong = results.filter((r) => r.status !== "failed" || !plain(r).includes(expected[r.title]));
-            for (const r of results) console.log(`${r.status} ${r.fullName}: ${plain(r).split("\n").slice(0, 3).join(" | ")}`);
-            for (const r of wrong) console.error(`WRONG ${r.fullName} wanted ${expected[r.title]}:\n${plain(r).slice(0, 600)}`);
-            if (results.length !== Object.keys(expected).length * 3 || wrong.length > 0) {
-              console.error(`expected ${Object.keys(expected).length * 3} failures for the expected reasons, got ${results.length} results, ${wrong.length} wrong`);
-              process.exit(1);
-            }
-          '
+          status=0
+          for engine in chromium firefox webkit; do
+            for case in "Axe Violation=button-name" "Target Too Small=target-size" "Play Fails=toHaveTextContent" "Solid Warning=NO_OWNER_EFFECT" "Solid Diagnostic=REACTIVE_WRITE_IN_OWNED_SCOPE"; do
+              story="${case%%=*}"
+              reason="${case#*=}"
+              SPIKE_ENGINE=$engine vp test run -t "^$story\$" > run.log 2>&1 && passed=1 || passed=0
+              text=$(sed 's/\x1b\[[0-9;]*m//g' run.log)
+              if [ $passed = 0 ] && grep -Eq "Tests +1 failed" <<<"$text" && grep -q -- "$reason" <<<"$text"; then
+                echo "ok   $engine $story fails with $reason"
+              else
+                echo "MISS $engine $story"; cat run.log; status=1
+              fi
+            done
+          done
+          exit $status
       - name: Static build
         working-directory: apps/storybook
         run: vp exec storybook build -o storybook-static

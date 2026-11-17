@@ -6,7 +6,11 @@ import type { BrowserInstanceOption } from "vite-plus/test/node";
 import { allowedRuntimeDependencyNames } from "../../scripts/runtime-dependencies.ts";
 
 const localChromium = process.env.SPIKE_CHROMIUM;
-const engines = process.env.CI ? ["chromium", "firefox", "webkit"] : ["chromium"];
+const engines = process.env.SPIKE_ENGINE
+  ? [process.env.SPIKE_ENGINE]
+  : process.env.CI
+    ? ["chromium", "firefox", "webkit"]
+    : ["chromium"];
 
 export default defineConfig({
   plugins: [solid()],
