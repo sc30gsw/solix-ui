@@ -23,7 +23,7 @@ import { packages } from "#/tests/support/workspace.ts";
 const catalogOnly = ["catalog:", '  "@solidjs/web": 2.0.0-rc.21', "  solid-js: 2.0.0-rc.21", ""];
 const agePolicy = ["minimumReleaseAge: 99", "minimumReleaseAgeStrict: true", ""];
 const temporary: string[] = [];
-const namesAReleaseAgeSetting = /minimum[-_.]?release[-_.]?age|trust[-_.]?lockfile/i;
+const namesAReleaseAgeSetting = /minimum[-_.]?release[-_.]?age|trust[-_.]?lockfile|pnpmfile/i;
 const githubFiles = globSync(".github/**/*.{yml,yaml}", { cwd: repositoryRoot });
 const hookFiles = globSync(".vite-hooks/*", { cwd: repositoryRoot }).filter((path) =>
   statSync(join(repositoryRoot, path)).isFile(),
@@ -53,28 +53,44 @@ function userConfigWith(lines: readonly string[]): string {
   return configHome;
 }
 
-test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true, and does not trust the lockfile past the release-age check`, () => {
+test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true, ignores every pnpmfile, and does not trust the lockfile past the release-age check`, () => {
   expect(pnpmSettings().minimumReleaseAge).toBeGreaterThan(0);
   expect(pnpmSettings().minimumReleaseAgeStrict).toBe(true);
   expect(pnpmSettings().trustLockfile).toBe(false);
+  expect(pnpmSettings().ignorePnpmfile).toBe(true);
 });
 
-test(`no file under .github, no hook and no script of a workspace manifest sets a release-age setting or trusts the lockfile, on a command line or in a variable, so only ${workspaceFile} sets them`, () => {
-  const textFiles = [...githubFiles, ...hookFiles].map((file) => ({
-    file,
-    lines: readFileSync(join(repositoryRoot, file), "utf8").split("\n"),
-  }));
-  const scripts = packages.map(({ path, manifest }) => ({
-    file: `${path} scripts`,
-    lines: Object.values(manifest.scripts ?? {}),
-  }));
-  const settingLines = [...textFiles, ...scripts].flatMap(({ file, lines }) =>
-    lines.flatMap((line, index) =>
-      namesAReleaseAgeSetting.test(line)
-        ? [`${file}:${index + 1}: set the release age in ${workspaceFile} only: ${line.trim()}`]
-        : [],
-    ),
+function logicalLines(text: string): { number: number; line: string }[] {
+  const lines = text.split("\n");
+  return lines.flatMap((line, index) => {
+    if (index > 0 && lines[index - 1]?.endsWith("\\")) return [];
+    let joined = line;
+    for (let next = index; joined.endsWith("\\") && next + 1 < lines.length; next += 1) {
+      joined = joined.slice(0, -1) + (lines[next + 1] ?? "").trimStart();
+    }
+    return [{ number: index + 1, line: joined }];
+  });
+}
+
+test(`no YAML file under .github, no file in .vite-hooks and no script of a workspace manifest names a release-age setting, trustLockfile or a pnpmfile, with lines a backslash continues joined first, so only ${workspaceFile} sets the release age, nothing trusts the lockfile and no pnpmfile runs`, () => {
+  const fileLines = [...githubFiles, ...hookFiles].flatMap((file) =>
+    logicalLines(readFileSync(join(repositoryRoot, file), "utf8")).map(({ number, line }) => ({
+      where: `${file}:${number}`,
+      line,
+    })),
   );
+  const scripts = packages.flatMap(({ path, manifest }) =>
+    Object.entries(manifest.scripts ?? {}).map(([name, line]) => ({
+      where: `${path} scripts.${name}`,
+      line,
+    })),
+  );
+  const settingLines = [...fileLines, ...scripts]
+    .filter(({ line }) => namesAReleaseAgeSetting.test(line))
+    .map(
+      ({ where, line }) =>
+        `${where}: names a release-age setting, trustLockfile or a pnpmfile; set the release age only in ${workspaceFile}, do not trust the lockfile, and run no pnpmfile: ${line.trim()}`,
+    );
 
   expect(githubFiles).toContain(".github/workflows/ci.yml");
   expect(hookFiles).toContain(".vite-hooks/pre-commit");
@@ -95,6 +111,7 @@ test("the settings are the workspace file's own: the user's pnpm config and pnpm
     minimumReleaseAgeStrict: false,
     minimumReleaseAgeExclude: [],
     trustLockfile: false,
+    ignorePnpmfile: false,
     approvedSkills: {},
   });
   vi.stubEnv("XDG_CONFIG_HOME", userConfigWith([]));

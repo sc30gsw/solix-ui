@@ -4,6 +4,7 @@ packages:
 catalogMode: strict
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
+ignorePnpmfile: true
 minimumReleaseAgeExclude:
   - solid-js@2.0.0
   - "@solidjs/web@2.0.0"
