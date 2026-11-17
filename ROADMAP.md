@@ -4,12 +4,14 @@ Solix UI is a component library for Solid 2.0, styled with StyleX. This page say
 
 ## v1.0
 
-The work comes in this order. Each step has a status: not started, in progress or merged. Only the status merged is checked against the build. A part that a component carries as a static member goes with that component.
+The work comes in this order. Each step has a status: not started, in progress or merged. A step that adds components is merged when the build exports every one of them; a part that a component carries as a static member goes with that component. A step that adds no component says on the line under it which test shows it merged, and is merged exactly when that test exists and `vp run verify` runs it.
 
 1. **Layout** (merged): Box, Center, Container, Flex, Grid, Group, SimpleGrid, Space, Stack.
 2. **UI SDK seam** (merged): Tabs.
-3. **`#/` subpath imports** (not started).
-4. **Storybook** (not started).
+3. **`#/` subpath imports** (merged).
+   - Merged when: `tests/subpath-imports.test.ts` exists and `vp run verify` runs it.
+4. **Storybook** (merged).
+   - Merged when: `apps/storybook/tests/story-coverage.test.ts` exists and `vp run verify` runs it.
 5. **Buttons and basic display** (not started): Button, UnstyledButton, CloseButton, IconButton, CopyButton, FileButton, Toggle, Link, Text, Title, Highlight, List, Divider, Paper, VisuallyHidden, Loader, Badge, Avatar, Card, Image, BackgroundImage, Indicator, NumberFormatter, Code.
 6. **Input basics** (not started): Input, InputBase, TextInput, Textarea, PasswordInput, NumberInput, PinInput, Fieldset, Checkbox, Radio, Switch, Chip, Slider, NativeSelect.
 7. **Overlays** (not started): Modal, Drawer, Dialog, Overlay, LoadingOverlay, Popover, Tooltip, Menu, Transition, Collapse, Accordion, Spoiler, Portal, FocusTrap.

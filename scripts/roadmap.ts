@@ -1,19 +1,31 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { listed, repositoryRoot } from "#/scripts/repository.ts";
+import { existsSync, readFileSync } from "node:fs";
+import { join, matchesGlob } from "node:path";
+import { listed, repositoryRoot, rootManifest } from "#/scripts/repository.ts";
 
 export const roadmapFile = "ROADMAP.md";
 export const stepStatuses = ["not started", "in progress", "merged"] as const;
 
 export type StepStatus = (typeof stepStatuses)[number];
 
-export type Step = { name: string; status: StepStatus; components: string[] };
+export type Step = {
+  name: string;
+  status: StepStatus;
+  components: string[];
+  mergedWhen?: string;
+};
 
 export type Leaving = { component: string; replacedBy: string[] };
 
 export type Roadmap = { steps: Step[]; leaving: Leaving[] };
 
 export type Built = { components: readonly string[]; carriedBy: Readonly<Record<string, string>> };
+
+export type Repository = {
+  exists: (file: string) => boolean;
+  runByVerify: (file: string) => boolean;
+};
+
+export type TestProject = { test?: { include?: string[]; exclude?: string[] } };
 
 export type Line = {
   text: string;
@@ -31,6 +43,10 @@ const boldBullet = /^- \*\*/;
 const stepLine = /^\d+\. \*\*([^*]+)\*\* \(([^)]+)\)(?:: (.+))?\.$/;
 const leavingLine = /^- \*\*([^*]+)\*\* will leave once (.+) (?:is|are) in the built library\.$/;
 const componentName = /^[A-Z][A-Za-z0-9]*$/;
+const conditionLine = /^ {3}- Merged when: `([^`]+)` exists and `vp run verify` runs it\.$/;
+const conditionLike = /^\s*- Merged when\b/;
+const verifyRunsTheTests = "vp test";
+const testConfigFile = "vite.config.ts";
 const listSeparator = /, | and /;
 
 export function linesOf(text: string): Line[] {
@@ -88,11 +104,6 @@ function stepOf(line: Line, index: number): Step {
       `${where(line)}: ${name} has the status "${status}". A status is one of ${listed(stepStatuses.map((known) => `"${known}"`))}.`,
     );
   }
-  if (components === undefined && status === "merged") {
-    throw new Error(
-      `${where(line)}: ${name} adds no component, so nothing can show it merged. Mark it not started or in progress.`,
-    );
-  }
   return { name, status, components: components === undefined ? [] : namesIn(components, line) };
 }
 
@@ -129,11 +140,48 @@ function placedOnce(placements: readonly { name: string; line: Line }[]): void {
   }
 }
 
+function conditionOf(line: Line): string {
+  const file = conditionLine.exec(line.text)?.[1];
+  if (file === undefined) {
+    throw new Error(
+      `${where(line)}: write the condition as "   - Merged when: \`<test file>\` exists and \`vp run verify\` runs it.", indented under its step.`,
+    );
+  }
+  return file;
+}
+
+function withConditions(v1: readonly Line[], stepLines: readonly Line[], steps: Step[]): Step[] {
+  const conditionLines = v1.filter(({ text }) => conditionLike.test(text));
+  const decided = steps.map((step) => ({ ...step }));
+  for (const line of conditionLines) {
+    const file = conditionOf(line);
+    const index = stepLines.findIndex(({ number }) => number === line.number - 1);
+    const step = decided[index];
+    if (step === undefined) {
+      throw new Error(`${where(line)}: a condition goes on the line right under its step.`);
+    }
+    if (step.components.length > 0) {
+      throw new Error(
+        `${where(line)}: ${step.name} adds components, and the build decides whether they are merged. Remove the condition.`,
+      );
+    }
+    step.mergedWhen = file;
+  }
+  for (const [index, step] of decided.entries()) {
+    if (step.status === "merged" && step.components.length === 0 && step.mergedWhen === undefined) {
+      throw new Error(
+        `${where(stepLines[index])}: ${step.name} adds no component, so give it the condition that shows it merged, on the line under it: "   - Merged when: \`<test file>\` exists and \`vp run verify\` runs it."`,
+      );
+    }
+  }
+  return decided;
+}
+
 export function parseRoadmap(text: string): Roadmap {
   const v1 = linesOf(text).filter(({ section }) => section === stepsSection);
   const stepLines = v1.filter(isStepLine);
   const leavingLines = v1.filter(isLeavingLine);
-  const steps = stepLines.map(stepOf);
+  const steps = withConditions(v1, stepLines, stepLines.map(stepOf));
   const leaving = leavingLines.map(leavingOf);
   placedOnce([
     ...steps.flatMap(({ components }, index) =>
@@ -246,4 +294,45 @@ export function roadmapProblems(roadmap: Roadmap, built: Built): string[] {
     ...placementProblems(roadmap, built),
     ...leavingProblems(roadmap, built),
   ];
+}
+
+export function runsTheFile(projects: readonly unknown[], file: string): boolean {
+  return projects.some((project) => {
+    const { include = [], exclude = [] } =
+      typeof project === "object" && project !== null ? ((project as TestProject).test ?? {}) : {};
+    return (
+      include.some((pattern) => matchesGlob(file, pattern)) &&
+      !exclude.some((pattern) => matchesGlob(file, pattern))
+    );
+  });
+}
+
+export async function theRepository(): Promise<Repository> {
+  const runsTheTests = (rootManifest().scripts?.verify ?? "")
+    .split(" && ")
+    .includes(verifyRunsTheTests);
+  const { default: config } = (await import(join(repositoryRoot, testConfigFile))) as {
+    default: { test?: { projects?: unknown[] } };
+  };
+  return {
+    exists: (file) => existsSync(join(repositoryRoot, file)),
+    runByVerify: (file) => runsTheTests && runsTheFile(config.test?.projects ?? [], file),
+  };
+}
+
+export function conditionProblems(steps: readonly Step[], repository: Repository): string[] {
+  return steps.flatMap(({ name, status, mergedWhen }) => {
+    if (mergedWhen === undefined) return [];
+    const holds = repository.exists(mergedWhen) && repository.runByVerify(mergedWhen);
+    if (status === "merged" && !holds) {
+      return [
+        `${roadmapFile}: ${name} is marked merged, but ${mergedWhen} ${repository.exists(mergedWhen) ? "is not a file `vp run verify` runs" : "does not exist"}. Mark it in progress, or land it.`,
+      ];
+    }
+    return status !== "merged" && holds
+      ? [
+          `${roadmapFile}: ${name} is marked ${status}, but ${mergedWhen} exists and \`vp run verify\` runs it. Mark it merged.`,
+        ]
+      : [];
+  });
 }
