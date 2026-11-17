@@ -34,7 +34,7 @@ export {
   sharedSettings,
   typeCheckedWithScripts,
   stringLiteralTypesOf,
-  virtualSource,
+  virtualFile,
   type Program,
 } from "#/scripts/syntax/program.ts";
 export {

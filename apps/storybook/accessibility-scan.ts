@@ -3,3 +3,5 @@ export const selectorsTheAccessibilityAddonLeavesUnscanned = [
   "#storybook-docs",
   "#storybook-highlights-root",
 ];
+
+export const globalSwitchesThatSkipTheAccessibilityScan = [["a11y", "manual"], ["ghostStories"]];

@@ -1,5 +1,5 @@
 const idleCallbackDelay = 1;
-const idleCallbackMethod = "requestIdleCallback";
+const requestIdleCallbackName = "requestIdleCallback";
 
 function idleCallbackByTimeout(callback: IdleRequestCallback): number {
   return window.setTimeout(
@@ -8,9 +8,9 @@ function idleCallbackByTimeout(callback: IdleRequestCallback): number {
   );
 }
 
-if (!Reflect.has(window, idleCallbackMethod)) {
+if (!Reflect.has(window, requestIdleCallbackName)) {
   Object.assign(window, {
-    [idleCallbackMethod]: idleCallbackByTimeout,
+    [requestIdleCallbackName]: idleCallbackByTimeout,
     cancelIdleCallback: (handle: number) => window.clearTimeout(handle),
   });
 }

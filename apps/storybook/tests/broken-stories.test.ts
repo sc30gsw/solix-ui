@@ -21,15 +21,16 @@ const reasonOf: { [Story in BrokenStory]: string } = {
   PlayFunctionFails: "toHaveTextContent",
   EffectWithoutOwner: "NO_OWNER_EFFECT",
   CleanupWithoutOwner: "NO_OWNER_CLEANUP",
-  AccessibilityTestOff: 'before it ran, a11y.test is "off"',
-  AccessibilityTestTodo: 'before it ran, a11y.test is "todo"',
-  AccessibilityDisabled: "before it ran, a11y.disable is true",
-  AccessibilityRulesNarrowed: 'before it ran, a11y.options is {"runOnly":["region"]}',
-  AccessibilityRuleTurnedOff: "before it ran, a11y.config is",
-  AccessibilityLeftToSomeone: "before it ran, globals.a11y.manual is true",
-  AccessibilitySkippedAsAGhost: "before it ran, globals.ghostStories is true",
+  AccessibilityTestOff: 'before it ran:\na11y.test is "off"',
+  AccessibilityTestTodo: 'a11y.test is "todo"',
+  AccessibilityDisabled: "a11y.disable is true",
+  AccessibilityRulesNarrowed: 'a11y.options is {"runOnly":["region"]}',
+  AccessibilityRuleTurnedOff: "a11y.config is",
+  AccessibilityLeftToAManualRun: "globals.a11y.manual is true",
+  AccessibilitySkippedAsAGhost: "globals.ghostStories is true",
   RenderedWhereTheScanDoesNotLook: "the canvas holds .sb-wrapper",
-  PlayTurnsTheCheckOff: 'while it ran, a11y.test is "off"',
+  PlayTurnsTheCheckOff: 'while it ran:\na11y.test is "off"',
+  NamelessLinkAfterAWrite: "link-name",
 };
 
 const fixturesDirectory = join(storybookDirectory, "fixtures");
@@ -37,6 +38,13 @@ const brokenStoriesRunTimeout = 240_000;
 const indexTimeout = 60_000;
 const telemetry = collectTelemetry(brokenStoriesTelemetryPort);
 const idOf = new Map<string, string>();
+
+function storyIdOf(story: string): string {
+  const id = idOf.get(story);
+  if (id === undefined)
+    throw new Error(`${story}: Storybook's index of the fixtures holds no such story.`);
+  return id;
+}
 
 beforeAll(async () => {
   for (const { exportName, id } of await storyIndex(brokenStoriesConfigDirectory)) {
@@ -46,7 +54,7 @@ beforeAll(async () => {
 
 describe.each(enginesToVerify())("in %s, one run of every broken story", (engine) => {
   const outcomes = new Map<string, Outcome>();
-  let printed = "";
+  let runOutput = "";
 
   beforeAll(async () => {
     const run = await runVitest(
@@ -55,7 +63,7 @@ describe.each(enginesToVerify())("in %s, one run of every broken story", (engine
       { [telemetryUrlVariable]: telemetry.url },
       brokenStoriesRunTimeout,
     );
-    printed = "missing" in run.report ? `${run.report.missing}\n${run.output}` : run.output;
+    runOutput = "unreadable" in run.report ? `${run.report.unreadable}\n${run.output}` : run.output;
     for (const { id, status, messages } of "tests" in run.report ? run.report.tests : []) {
       outcomes.set(id, { status, messages: messages.join("\n") });
     }
@@ -64,20 +72,18 @@ describe.each(enginesToVerify())("in %s, one run of every broken story", (engine
   test.each(Object.entries(reasonOf))(
     "fails %s for its own reason, %s, and for no other broken story's",
     (story, reason) => {
-      const outcome = outcomes.get(idOf.get(story) ?? story);
+      const outcome = outcomes.get(storyIdOf(story));
       const otherReasons = Object.values(reasonOf).filter((other) => other !== reason);
 
-      expect(outcome?.status, printed).toBe("failed");
+      expect(outcome?.status, runOutput).toBe("failed");
       expect(outcome?.messages).toContain(reason);
       expect(otherReasons.filter((other) => outcome?.messages.includes(other))).toEqual([]);
     },
   );
 
   test("runs every broken story Storybook indexes, and no other", () => {
-    expect([...outcomes.keys()].sort(), printed).toEqual(
-      Object.keys(reasonOf)
-        .map((story) => idOf.get(story) ?? story)
-        .sort(),
+    expect([...outcomes.keys()].sort(), runOutput).toEqual(
+      Object.keys(reasonOf).map(storyIdOf).sort(),
     );
   });
 });

@@ -9,10 +9,10 @@ export default class StoryReporter implements Reporter {
   private readonly stories: ReportedStory[] = [];
 
   onTestCaseResult(testCase: TestCase): void {
-    const storyId: unknown = Reflect.get(testCase.meta(), "storyId");
+    const meta: Record<string, unknown> = { ...testCase.meta() };
     const result = testCase.result();
     this.stories.push({
-      id: typeof storyId === "string" ? storyId : testCase.fullName,
+      id: typeof meta.storyId === "string" ? meta.storyId : `no story id: ${testCase.fullName}`,
       status: result.state,
       messages: (result.errors ?? []).map(({ message }) => message),
     });

@@ -75,7 +75,7 @@ export const AccessibilityRuleTurnedOff: Story = {
   parameters: { a11y: { config: { rules: [{ id: "color-contrast", enabled: false }] } } },
 };
 
-export const AccessibilityLeftToSomeone: Story = {
+export const AccessibilityLeftToAManualRun: Story = {
   args: nameless,
   globals: { a11y: { manual: true } },
 };
@@ -96,6 +96,10 @@ export const RenderedWhereTheScanDoesNotLook: Story = {
 export const PlayTurnsTheCheckOff: Story = {
   args: nameless,
   play: async ({ parameters }) => {
-    Object.assign(Object(parameters.a11y), { test: "off" });
+    Object.assign(parameters.a11y, { test: "off" });
   },
+};
+
+export const NamelessLinkAfterAWrite: Story = {
+  render: () => <a href="#after-a-write" />,
 };

@@ -12,6 +12,7 @@ import {
 
 const run: StoriesRun = {
   listing: inject("testFilesOfEachProject"),
+  runTestNamePattern: inject("runTestNamePattern"),
   settings: inject("runSettingsOfEachProject"),
   engines: enginesToVerify(),
 };
@@ -35,10 +36,11 @@ describe.each(run.engines)("in %s", (engine) => {
 
   test("the stories project runs every story Storybook indexes: no tag of the test plugin leaves one out, and the project narrows test names no further than the run", () => {
     const settings = run.settings[project];
+    if (settings === undefined) throw new Error(`${project}: the run gives no settings for it.`);
 
-    expect(settings?.testNamePattern).toBe(settings?.runTestNamePattern);
+    expect(settings.testNamePattern).toBe(run.runTestNamePattern);
     expect(
-      stories.filter((story) => !isRunByTheProject(story, settings)).map(({ id }) => id),
+      stories.filter((story) => !isRunByTheProject(story, settings, project)).map(({ id }) => id),
     ).toEqual([]);
   });
 });

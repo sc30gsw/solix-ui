@@ -20,7 +20,7 @@ const { comparisons, problems } = compareWithNewest({
   policy: releasePolicy(settings),
   now: Date.now(),
   heldBack: heldBackEntries(),
-  untilStable: untilStableMembers(settings.catalog),
+  untilStablePackages: untilStableMembers(settings.catalog),
 });
 
 console.log(reportTable(comparisons));

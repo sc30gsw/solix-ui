@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { Browser, Page } from "playwright";
 import type { StoryIndexEntry } from "storybook/internal/types";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { storybookAppManifest } from "../../../scripts/release-sources.ts";
 import { manifestAt } from "../../../scripts/repository.ts";
 import { inEveryEngine } from "../../../tests/support/served-app.ts";
 import { childRunMargin, runVp } from "#/tests/support/child-runs.ts";
@@ -10,7 +11,6 @@ import { serveDirectory } from "#/tests/support/static-server.ts";
 import { collectTelemetry, telemetryUrlVariable } from "#/tests/support/telemetry-collector.ts";
 import { interfaceTelemetryPort, staticStorybookPort } from "#/tests/support/test-servers.ts";
 
-const storybookManifest = "apps/storybook/package.json";
 const staticBuildScript = "build-storybook";
 const scriptsRunUnderTheCollector = [staticBuildScript];
 const staticBuild = join(import.meta.dirname, "../dist");
@@ -57,7 +57,7 @@ beforeAll(async () => {
 }, buildTimeout + childRunMargin);
 
 test("the scripts of the Storybook package are the ones this test runs under the telemetry collector", () => {
-  expect(Object.keys(manifestAt(storybookManifest).scripts ?? {})).toEqual(
+  expect(Object.keys(manifestAt(storybookAppManifest).scripts ?? {})).toEqual(
     scriptsRunUnderTheCollector,
   );
 });
@@ -68,7 +68,7 @@ test("the static build succeeds and sends no Storybook telemetry", () => {
   expect(telemetry.received()).toEqual([]);
 });
 
-type Setup = { name: string; withoutIdleCallbacks: boolean };
+type InterfaceSetup = { name: string; withoutIdleCallbacks: boolean };
 
 function removeIdleCallbacks(names: readonly string[]): void {
   for (const name of names) {
@@ -77,7 +77,10 @@ function removeIdleCallbacks(names: readonly string[]): void {
   }
 }
 
-function checkTheInterface(browser: () => Browser, { name, withoutIdleCallbacks }: Setup): void {
+function checkTheInterface(
+  browser: () => Browser,
+  { name, withoutIdleCallbacks }: InterfaceSetup,
+): void {
   describe(name, () => {
     let page: Page;
     const consoleErrors: string[] = [];
@@ -165,7 +168,7 @@ function checkTheInterface(browser: () => Browser, { name, withoutIdleCallbacks 
       interfaceTimeout,
     );
 
-    test("the interface has requestIdleCallback and cancelIdleCallback, which Storybook's interface calls with no fallback", async () => {
+    test("the interface has requestIdleCallback and cancelIdleCallback", async () => {
       expect(
         await page.evaluate(
           (names) => names.map((name) => typeof Reflect.get(window, name)),

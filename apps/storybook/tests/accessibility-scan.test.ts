@@ -3,19 +3,26 @@ import { findPackageJSON } from "node:module";
 import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { descendants, parseAll, staticPropertyName, ts } from "../../../scripts/syntax.ts";
-import { selectorsTheAccessibilityAddonLeavesUnscanned } from "#/accessibility-scan.ts";
+import {
+  globalSwitchesThatSkipTheAccessibilityScan,
+  selectorsTheAccessibilityAddonLeavesUnscanned,
+} from "#/accessibility-scan.ts";
 
 const accessibilityAddon = "@storybook/addon-a11y";
 const scanContextKeys = ["include", "exclude"];
+const globalsOfTheStory = "globals";
+const reRead = `Read what ${accessibilityAddon}'s afterEach and run, in its built files, skip or leave out of the scan, and write it again in apps/storybook/accessibility-scan.ts.`;
 
-function addonFiles(): string[] {
+function addonSources(): ts.SourceFile[] {
   const manifest = findPackageJSON(
     accessibilityAddon,
     join(import.meta.dirname, "../package.json"),
   );
   if (manifest === undefined) throw new Error(`${accessibilityAddon} does not resolve.`);
   const directory = dirname(manifest);
-  return globSync("dist/**/*.js", { cwd: directory }).map((file) => join(directory, file));
+  return parseAll(
+    globSync("dist/**/*.js", { cwd: directory }).map((file) => join(directory, file)),
+  );
 }
 
 function excludedSelectorsIn(source: ts.SourceFile): string[][] {
@@ -37,8 +44,63 @@ function excludedSelectorsIn(source: ts.SourceFile): string[][] {
   });
 }
 
-test("the selectors the preview refuses in a canvas are the ones the accessibility addon leaves out of its scan", () => {
-  const lists = parseAll(addonFiles()).flatMap(excludedSelectorsIn);
+function chainOf(
+  access: ts.PropertyAccessExpression,
+): { root: string; path: string[] } | undefined {
+  const path = [access.name.text];
+  let inner: ts.Expression = access.expression;
+  while (ts.isPropertyAccessExpression(inner)) {
+    path.unshift(inner.name.text);
+    inner = inner.expression;
+  }
+  return ts.isIdentifier(inner) ? { root: inner.text, path } : undefined;
+}
 
-  expect(lists).toEqual([selectorsTheAccessibilityAddonLeavesUnscanned]);
+function isLongestChain(access: ts.PropertyAccessExpression): boolean {
+  const holder = access.parent;
+  return !(ts.isPropertyAccessExpression(holder) && holder.expression === access);
+}
+
+function globalPathsReadIn(source: ts.SourceFile): string[][] {
+  const chains = descendants(source)
+    .filter(ts.isPropertyAccessExpression)
+    .filter(isLongestChain)
+    .flatMap((access) => {
+      const chain = chainOf(access);
+      return chain === undefined ? [] : [{ access, ...chain }];
+    });
+  const aliasOf = new Map(
+    chains.flatMap(({ access, root, path }) =>
+      root === globalsOfTheStory &&
+      ts.isVariableDeclaration(access.parent) &&
+      ts.isIdentifier(access.parent.name)
+        ? [[access.parent.name.text, path] as const]
+        : [],
+    ),
+  );
+  return chains.flatMap(({ access, root, path }) => {
+    if (ts.isVariableDeclaration(access.parent)) return [];
+    const base = root === globalsOfTheStory ? [] : aliasOf.get(root);
+    return base === undefined ? [] : [[...base, ...path]];
+  });
+}
+
+test("the selectors the preview refuses in a canvas are the ones the accessibility addon leaves out of its scan", () => {
+  expect(addonSources().flatMap(excludedSelectorsIn), reRead).toEqual([
+    selectorsTheAccessibilityAddonLeavesUnscanned,
+  ]);
+});
+
+test("the global switches the preview refuses are the globals the accessibility addon reads before it scans", () => {
+  const read = [
+    ...new Set(
+      addonSources()
+        .flatMap(globalPathsReadIn)
+        .map((path) => path.join(".")),
+    ),
+  ].sort();
+
+  expect(read, reRead).toEqual(
+    globalSwitchesThatSkipTheAccessibilityScan.map((path) => path.join(".")).sort(),
+  );
 });

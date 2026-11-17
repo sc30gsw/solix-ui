@@ -177,8 +177,8 @@ test(`every step of ${roadmapFile} that adds no component and is merged names it
 test("a condition's test is missing when no file has its path, not listed when no project of the run lists it, and listed otherwise", () => {
   const stateOf = conditionStateIn({ node: ["tests/roadmap.test.ts"], other: [] });
 
-  expect(stateOf("tests/roadmap.test.ts")).toBe("run");
-  expect(stateOf(roadmapFile)).toBe("not run");
+  expect(stateOf("tests/roadmap.test.ts")).toBe("listed");
+  expect(stateOf(roadmapFile)).toBe("not listed");
   expect(stateOf("tests/no-such.test.ts")).toBe("missing");
 });
 
@@ -198,17 +198,17 @@ test("a step that adds no component reads the condition on the line under it", (
 test("a step says merged exactly when its condition's test exists and the runner lists it for verify", () => {
   const { steps } = parseRoadmap(withCondition);
 
-  expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "run" }))).toEqual([]);
+  expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "listed" }))).toEqual([]);
   expect(conditionProblems(steps, statesOf({}))).toEqual([
     `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts does not exist. Mark it in progress, or land it.`,
   ]);
-  expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "not run" }))).toEqual([
+  expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "not listed" }))).toEqual([
     `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts is not a file \`vp run verify\` lists. Mark it in progress, or land it.`,
   ]);
   expect(
     conditionProblems(
       steps,
-      statesOf({ "tests/tooling.test.ts": "run", "tests/docs.test.ts": "run" }),
+      statesOf({ "tests/tooling.test.ts": "listed", "tests/docs.test.ts": "listed" }),
     ),
   ).toEqual([
     `${roadmapFile}: Docs is marked not started, but tests/docs.test.ts exists and \`vp run verify\` lists it. Mark it merged.`,

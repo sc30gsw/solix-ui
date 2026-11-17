@@ -84,14 +84,14 @@ export function parse(file: string): SourceFile {
   return parseAll([file])[0];
 }
 
-export function virtualSource(text: string, extension: string): string {
+export function virtualFile(text: string, extension: string): string {
   const file = virtualPath(`source${extension}`);
   virtualFiles.set(file, text);
   return file;
 }
 
 export function parseText(text: string, extension: string): SourceFile {
-  return parse(virtualSource(text, extension));
+  return parse(virtualFile(text, extension));
 }
 
 export function rereadFiles(files: readonly string[]): void {

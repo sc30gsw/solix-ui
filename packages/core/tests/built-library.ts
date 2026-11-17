@@ -13,7 +13,7 @@ import {
   parse,
   staticPropertyName,
   ts,
-  virtualSource,
+  virtualFile,
 } from "../../../scripts/syntax";
 import { memberMarkupOf } from "#/tests/markup.ts";
 
@@ -85,24 +85,25 @@ function declaredValues(source: ts.SourceFile): ts.Identifier[] {
 }
 
 function exportsReturningTheJsxElement(): string[] {
-  const elementFile = virtualSource(jsxElementSource, ".tsx");
+  const elementFile = virtualFile(jsxElementSource, ".tsx");
   const program = openProgram([libraryEntry, elementFile]);
   try {
     const entry = program.sourceFile(libraryEntry);
     const element = program.sourceFile(elementFile);
+    const unread = [...(entry ? [] : [libraryEntry]), ...(element ? [] : [elementFile])];
     if (!entry || !element) {
-      throw new Error(`${libraryEntry}: TypeScript could not read the library's entry.`);
+      throw new Error(`${unread.join(", ")}: TypeScript could not read this file.`);
     }
-    const jsxElement = declaredValues(element).flatMap((name) =>
+    const jsxElementAliases = declaredValues(element).flatMap((name) =>
       aliasDeclarationsOfTypeAt(program, name),
     );
-    if (jsxElement.length === 0) {
+    if (jsxElementAliases.length === 0) {
       throw new Error("TypeScript gives no type alias for a JSX element of this project.");
     }
     return namedValueExports(entry)
       .filter((name) =>
         aliasDeclarationsReturnedBy(program, name).some((returned) =>
-          jsxElement.includes(returned),
+          jsxElementAliases.includes(returned),
         ),
       )
       .map(({ text }) => {

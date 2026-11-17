@@ -1,36 +1,23 @@
 import { join } from "node:path";
 import type { StoryIndexEntry } from "storybook/internal/types";
-import { beforeAll, expect, inject, test } from "vite-plus/test";
-import { enginesToVerify } from "../../../scripts/browser-engines.mjs";
+import { beforeAll, expect, test } from "vite-plus/test";
 import { repositoryRoot } from "../../../scripts/repository.ts";
 import { componentExports, library } from "../../../packages/core/tests/built-library.ts";
-import {
-  refuseARunWithoutTheStoriesProjects,
-  type StoriesRun,
-  storiesRunInEveryEngine,
-  storyFileOf,
-  storyIndex,
-} from "#/tests/support/stories.ts";
+import { storyFileOf, storyIndex } from "#/tests/support/stories.ts";
 
 type StoryModule = { default?: { component?: unknown } };
 
 const builtByName: Record<string, unknown> = library;
 const indexTimeout = 60_000;
-let tested: StoryIndexEntry[] = [];
+let stories: StoryIndexEntry[] = [];
 
 beforeAll(async () => {
-  const run: StoriesRun = {
-    listing: inject("testFilesOfEachProject"),
-    settings: inject("runSettingsOfEachProject"),
-    engines: enginesToVerify(),
-  };
-  refuseARunWithoutTheStoriesProjects(run);
-  tested = storiesRunInEveryEngine(await storyIndex(), run);
+  stories = await storyIndex();
 }, indexTimeout);
 
-test("every component the built library exports is the component of a story that runs as a test in every engine, and every file of such a story names a component", async () => {
+test("every component the built library exports is the component of a story Storybook indexes, and every file of such a story names a component", async () => {
   const components = componentExports();
-  const files = [...new Set(tested.map(storyFileOf))];
+  const files = [...new Set(stories.map(storyFileOf))];
   const storied = await Promise.all(
     files.map(async (file) => ({
       file,

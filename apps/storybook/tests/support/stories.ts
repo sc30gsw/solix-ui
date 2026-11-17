@@ -1,26 +1,30 @@
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { buildIndex } from "storybook/internal/core-server";
 import type { StoryIndexEntry } from "storybook/internal/types";
+import { storybookAppManifest } from "../../../../scripts/release-sources.ts";
 import { repositoryRoot } from "../../../../scripts/repository.ts";
-import type { RunSettings } from "../../../../tests/support/global-setup.ts";
+import type {
+  RunSettings,
+  TestFilesOfEachProject,
+} from "../../../../tests/support/global-setup.ts";
 import { storiesServer } from "#/tests/support/test-servers.ts";
-
-type TestFilesOfEachProject = Readonly<Record<string, readonly string[]>>;
 
 export type StoriesRun = {
   listing: TestFilesOfEachProject;
+  runTestNamePattern: string | null;
   settings: Readonly<Record<string, RunSettings>>;
   engines: readonly string[];
 };
 
-export const storybookDirectory = join(import.meta.dirname, "../..");
+export const storybookDirectory = join(repositoryRoot, dirname(storybookAppManifest));
 export const brokenStoriesConfigDirectory = join(storybookDirectory, "fixtures/.storybook");
 
 const storybookConfigDirectory = join(storybookDirectory, ".storybook");
-const tagsThePluginIncludesByDefault = ["test"];
-const includedTagsVariable = "__VITEST_INCLUDE_TAGS__";
-const excludedTagsVariable = "__VITEST_EXCLUDE_TAGS__";
-const skippedTagsVariable = "__VITEST_SKIP_TAGS__";
+const tagVariablesOfTheTestPlugin = {
+  included: "__VITEST_INCLUDE_TAGS__",
+  excluded: "__VITEST_EXCLUDE_TAGS__",
+  skipped: "__VITEST_SKIP_TAGS__",
+} as const;
 
 export async function storyIndex(
   configDir: string = storybookConfigDirectory,
@@ -48,38 +52,29 @@ export function refuseARunWithoutTheStoriesProjects({ listing, engines }: Storie
   }
 }
 
-function tagsIn(env: Readonly<Record<string, string>>, variable: string): string[] | undefined {
-  return env[variable]?.split(",").filter((tag) => tag !== "");
+function tagsIn({ env }: RunSettings, project: string, variable: string): string[] {
+  const tags = env[variable];
+  if (tags === undefined) {
+    throw new Error(
+      `${project}: its env holds no ${variable}, which Storybook's test plugin writes, so nothing tells which stories it runs. Read the plugin's tag variables in @storybook/addon-vitest/dist/vitest-plugin again.`,
+    );
+  }
+  return tags.split(",").filter((tag) => tag !== "");
 }
 
-export function isRunByTheProject(story: StoryIndexEntry, settings: RunSettings | undefined) {
+export function isRunByTheProject(
+  story: StoryIndexEntry,
+  settings: RunSettings,
+  project: string,
+): boolean {
   const tags = story.tags ?? [];
-  const env = settings?.env ?? {};
-  const included = tagsIn(env, includedTagsVariable) ?? tagsThePluginIncludesByDefault;
+  const included = tagsIn(settings, project, tagVariablesOfTheTestPlugin.included);
   const leftOut = [
-    ...(tagsIn(env, excludedTagsVariable) ?? []),
-    ...(tagsIn(env, skippedTagsVariable) ?? []),
+    ...tagsIn(settings, project, tagVariablesOfTheTestPlugin.excluded),
+    ...tagsIn(settings, project, tagVariablesOfTheTestPlugin.skipped),
   ];
   return (
-    settings !== undefined &&
     (included.length === 0 || included.some((tag) => tags.includes(tag))) &&
     !leftOut.some((tag) => tags.includes(tag))
-  );
-}
-
-export function storiesRunInEveryEngine(
-  stories: readonly StoryIndexEntry[],
-  { listing, settings, engines }: StoriesRun,
-): StoryIndexEntry[] {
-  return stories.filter((story) =>
-    engines.every((engine) => {
-      const project = storiesProjectIn(engine);
-      const projectSettings = settings[project];
-      return (
-        listing[project]?.includes(storyFileOf(story)) === true &&
-        projectSettings?.testNamePattern === projectSettings?.runTestNamePattern &&
-        isRunByTheProject(story, projectSettings)
-      );
-    }),
   );
 }

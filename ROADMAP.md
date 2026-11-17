@@ -20,7 +20,7 @@ The work comes in this order. Each step has a status: not started, in progress o
 10. **Feedback and data** (not started): Alert, EmptyState, Progress, Skeleton, Table, ScrollArea, Scroller.
 11. **AppShell and Splitter** (not started): AppShell, Splitter.
 
-The UI SDK seam is the behaviour layer: `Tabs` builds on it, and every new behaviour component will. Storybook will be the surface for visual checks and adds no component. Modal will move onto UI SDK's Dialog.
+The UI SDK seam is the behaviour layer: `Tabs` builds on it, and every new behaviour component will. Storybook is where components are reviewed, and adds no component. Modal will move onto UI SDK's Dialog.
 
 ### Leaving
 
@@ -64,8 +64,8 @@ A revisit is a choice deferred on purpose. Each one says why not now and gives a
 
 ### Storybook's idle-callback workaround
 
-`apps/storybook/.storybook/manager.ts` adds `requestIdleCallback` and `cancelIdleCallback` to Storybook's interface where the engine has none, as WebKit has none, because the interface calls `requestIdleCallback` with no fallback when a story finishes.
+`apps/storybook/.storybook/manager.ts` adds `requestIdleCallback` and `cancelIdleCallback` to Storybook's interface where the engine has none.
 
-- Why not now: Storybook 11 is still a prerelease, and the prerelease the catalog pins makes the call; without the workaround the accessibility panel stops in WebKit.
+- Why not now: Storybook's interface calls `requestIdleCallback` with no fallback when a story finishes, and `cancelIdleCallback` when it has `requestIdleCallback` and args change. WebKit has neither, so without the entry the call throws and the accessibility panel stops there. Storybook 11 is still a prerelease, and the prerelease the catalog pins makes the call.
 - When it is reconsidered: on a stable Storybook 11. Remove the manager entry if its interface guards the call, and keep it with a new condition if it does not.
 - Condition: a stable release old enough to install under the repository's `minimumReleaseAge` exists for `storybook@^11.0.0`.

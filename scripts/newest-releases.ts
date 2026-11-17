@@ -50,7 +50,6 @@ type ChannelContext = {
   pinned: string;
   nodeLtsMajor: number | undefined;
   now: number;
-  untilStable: readonly string[];
 };
 
 type Channel = {
@@ -154,11 +153,11 @@ export const solidPackages = Object.keys(channels).filter(
 
 function channelOf(
   { name, registryName, pinned }: RegistryPin,
-  untilStable: readonly string[],
+  untilStablePackages: readonly string[],
 ): Channel {
   return (
     channels[registryName] ??
-    (untilStable.includes(name) ? pinnedMajorUntilStableChannel : undefined) ??
+    (untilStablePackages.includes(name) ? pinnedMajorUntilStableChannel : undefined) ??
     (semver.prerelease(pinned) === null ? stableChannel : prereleasePinChannel)
   );
 }
@@ -207,18 +206,18 @@ export function pinsOf(
   ];
 }
 
-type NamesDependencies = {
+type DependencyLists = {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
 
-function namedBy(manifest: NamesDependencies): string[] {
+function namedBy(manifest: DependencyLists): string[] {
   return Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
 }
 
 export function prereleasePinsOnlyNamedBy(
-  manifest: NamesDependencies,
-  others: readonly NamesDependencies[],
+  manifest: DependencyLists,
+  others: readonly DependencyLists[],
   catalog: Record<string, string>,
 ): string[] {
   return namedBy(manifest)
@@ -311,13 +310,13 @@ function nodeLtsReleases(nodeReleases: readonly NodeRelease[]): Releases | undef
 
 function registryReleases(
   pin: RegistryPin,
+  channel: Channel,
   document: RegistryDocument,
   policy: ReleasePolicy,
   context: ChannelContext,
 ): Releases | Unknown {
   const published = publishedIn(pin.registryName, document, policy);
   if (!Array.isArray(published)) return published;
-  const channel = channelOf(pin, context.untilStable);
   return (
     releasesAmong(channel.versions(published, context), context.now) ?? {
       why: `no published release is on its channel (${channel.describe}); check the name and the channel.`,
@@ -368,27 +367,26 @@ export function compareWithNewest(input: {
   policy: ReleasePolicy;
   now: number;
   heldBack: readonly HeldBack[];
-  untilStable: readonly string[];
+  untilStablePackages: readonly string[];
 }): Report {
   const nodeLts = nodeLtsReleases(input.nodeReleases);
   const nodeLtsMajor = nodeLts && semver.major(nodeLts.newest);
   const comparisons = input.pins.map((pin): PinComparison => {
-    const channel =
-      pin.source === "node" ? nodeChannel : channelOf(pin, input.untilStable).describe;
+    const channel = pin.source === "node" ? undefined : channelOf(pin, input.untilStablePackages);
     const releases =
-      pin.source === "node"
+      channel === undefined || pin.source === "node"
         ? (nodeLts ?? { why: "Node's release index lists no LTS release." })
-        : registryReleases(pin, input.documents[pin.registryName] ?? {}, input.policy, {
+        : registryReleases(pin, channel, input.documents[pin.registryName] ?? {}, input.policy, {
             pinned: pin.pinned,
             nodeLtsMajor,
             now: input.now,
-            untilStable: input.untilStable,
           });
+    const described = channel === undefined ? nodeChannel : channel.describe;
     return "why" in releases
-      ? { pin, channel, status: "unknown", why: releases.why }
+      ? { pin, channel: described, status: "unknown", why: releases.why }
       : compared(
           pin,
-          channel,
+          described,
           releases,
           input.heldBack.find(({ name }) => name === pin.name),
         );

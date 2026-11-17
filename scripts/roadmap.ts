@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listed, repositoryRoot } from "#/scripts/repository.ts";
+import type { TestFilesOfEachProject } from "#/tests/support/global-setup.ts";
 
 export const roadmapFile = "ROADMAP.md";
 export const stepStatuses = ["not started", "in progress", "merged"] as const;
@@ -20,9 +21,7 @@ export type Roadmap = { steps: Step[]; leaving: Leaving[] };
 
 export type Built = { components: readonly string[]; carriedBy: Readonly<Record<string, string>> };
 
-export type ConditionState = "missing" | "not run" | "run";
-
-type TestFilesOfEachProject = Readonly<Record<string, readonly string[]>>;
+export type ConditionState = "missing" | "not listed" | "listed";
 
 export type Line = {
   text: string;
@@ -293,10 +292,10 @@ export function roadmapProblems(roadmap: Roadmap, built: Built): string[] {
 export function conditionStateIn(
   testFilesOfEachProject: TestFilesOfEachProject,
 ): (file: string) => ConditionState {
-  const run = new Set(Object.values(testFilesOfEachProject).flat());
+  const listedFiles = new Set(Object.values(testFilesOfEachProject).flat());
   return (file) => {
     if (!existsSync(join(repositoryRoot, file))) return "missing";
-    return run.has(file) ? "run" : "not run";
+    return listedFiles.has(file) ? "listed" : "not listed";
   };
 }
 
@@ -307,12 +306,12 @@ export function conditionProblems(
   return steps.flatMap(({ name, status, mergedWhen }) => {
     if (mergedWhen === undefined) return [];
     const state = stateOf(mergedWhen);
-    if (status === "merged" && state !== "run") {
+    if (status === "merged" && state !== "listed") {
       return [
         `${roadmapFile}: ${name} is marked merged, but ${mergedWhen} ${state === "missing" ? "does not exist" : "is not a file `vp run verify` lists"}. Mark it in progress, or land it.`,
       ];
     }
-    return status !== "merged" && state === "run"
+    return status !== "merged" && state === "listed"
       ? [
           `${roadmapFile}: ${name} is marked ${status}, but ${mergedWhen} exists and \`vp run verify\` lists it. Mark it merged.`,
         ]

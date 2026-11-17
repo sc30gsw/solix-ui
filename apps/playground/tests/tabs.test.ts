@@ -3,7 +3,7 @@ import type { Locator } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
-import { wcag2ATags } from "../../../tests/support/browser-gates.ts";
+import { wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
 import { computed, inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 import {
   account,
@@ -439,7 +439,7 @@ inEveryEngine((browser) => {
               `${id}: ${help} (${nodes.map(({ target, failureSummary }) => `${target.join(" ")}: ${failureSummary}`).join(", ")})`,
           );
         },
-        [tabsRegion, wcag2ATags] as const,
+        [tabsRegion, wcag2AAndAATags] as const,
       );
 
       await context.close();

@@ -1,7 +1,7 @@
 import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { findPackageJSON } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
 import {
@@ -19,6 +19,7 @@ import {
 } from "#/scripts/syntax.ts";
 import { solidPackages } from "#/scripts/newest-releases.ts";
 import { type PnpmSettings, pnpmSettings } from "#/scripts/pnpm-settings.ts";
+import { storybookAppManifest } from "#/scripts/release-sources.ts";
 import {
   type AllowedRuntimeDependency,
   allowedRuntimeDependencies,
@@ -85,7 +86,7 @@ const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
 const storybookInterfaceLibrary = "react";
 const storybookInterfaceLibraryDeclarer = "@storybook/icons";
-const storybookDirectory = join(repositoryRoot, "apps/storybook");
+const storybookDirectory = join(repositoryRoot, dirname(storybookAppManifest));
 const packageManifest = "package.json";
 const dependencyLists = [
   "dependencies",

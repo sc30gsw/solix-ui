@@ -98,7 +98,7 @@ function check(
     nodeReleases?: NodeRelease[];
     excluded?: ReleasePolicy["excluded"];
     heldBack?: HeldBack[];
-    untilStable?: string[];
+    untilStablePackages?: string[];
   } = {},
 ) {
   return compareWithNewest({
@@ -108,15 +108,20 @@ function check(
     policy: { ...policy, excluded: options.excluded ?? [] },
     now,
     heldBack: options.heldBack ?? [],
-    untilStable: options.untilStable ?? [],
+    untilStablePackages: options.untilStablePackages ?? [],
   });
 }
 
-function checkOf(name: string, pinned: string, releases: Release[], untilStable: string[] = []) {
+function checkOf(
+  name: string,
+  pinned: string,
+  releases: Release[],
+  untilStablePackages: string[] = [],
+) {
   const report = check({
     pins: pinsOf(manifest, { [name]: pinned }),
     documents: { ...documents, [name]: registryDocument(releases) },
-    untilStable,
+    untilStablePackages,
   });
   return { comparison: report.comparisons[0], problems: report.problems };
 }
@@ -351,7 +356,7 @@ test("the prerelease pins only a manifest names are the catalog entries it names
   ).toEqual(["a-framework", "an-addon"]);
 });
 
-test("the until-stable channel that the weekly check uses holds prerelease pins of the catalog that the Storybook app names and no other workspace manifest does", () => {
+test("every member of the until-stable channel that the weekly check uses is named by the Storybook app and by no other workspace manifest, and there is at least one", () => {
   const { catalog } = pnpmSettings();
   const members = untilStableMembers(catalog);
   const app = manifestAt(storybookAppManifest);
@@ -386,33 +391,37 @@ test("a pin on the until-stable channel is behind the newest release of the majo
     ["11.0.1", 0.5],
     ["11.1.0-beta.0", 1.5],
   ];
-  const untilStable = ["a-package"];
+  const untilStablePackages = ["a-package"];
 
   expect(
-    checkOf("a-package", "11.0.0-next-20261020160717", nightlies, untilStable).comparison,
+    checkOf("a-package", "11.0.0-next-20261020160717", nightlies, untilStablePackages).comparison,
   ).toMatchObject({
     status: "behind",
     eligible: "11.0.0-next-20261105190313",
     newest: "11.0.0-next-20261116090000",
   });
   expect(
-    checkOf("a-package", "11.0.0-next-20261105190313", nightlies, untilStable).comparison,
+    checkOf("a-package", "11.0.0-next-20261105190313", nightlies, untilStablePackages).comparison,
   ).toMatchObject({ status: "not yet eligible" });
-  expect(checkOf("a-package", "11.0.0-beta.3", beforeStable, untilStable).comparison).toMatchObject(
-    { status: "behind", eligible: "11.0.0-rc.0" },
-  );
+  expect(
+    checkOf("a-package", "11.0.0-beta.3", beforeStable, untilStablePackages).comparison,
+  ).toMatchObject({ status: "behind", eligible: "11.0.0-rc.0" });
   expect(checkOf("a-package", "11.0.0-beta.3", beforeStable).comparison).toMatchObject({
     status: "current",
   });
-  expect(checkOf("a-package", "11.0.0-rc.0", afterStable, untilStable).comparison).toMatchObject({
+  expect(
+    checkOf("a-package", "11.0.0-rc.0", afterStable, untilStablePackages).comparison,
+  ).toMatchObject({
     status: "behind",
     eligible: "11.0.0",
     newest: "11.0.1",
   });
-  expect(checkOf("a-package", "11.0.0", afterStable, untilStable).comparison).toMatchObject({
-    status: "not yet eligible",
-    newest: "11.0.1",
-  });
+  expect(checkOf("a-package", "11.0.0", afterStable, untilStablePackages).comparison).toMatchObject(
+    {
+      status: "not yet eligible",
+      newest: "11.0.1",
+    },
+  );
 });
 
 test("a published version with no publish time, or one that is not a date, is a problem that names the package and the version", () => {
