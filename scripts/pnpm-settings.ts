@@ -17,6 +17,7 @@ export type PnpmSettings = {
   overrides: Record<string, string>;
   minimumReleaseAge: number | undefined;
   minimumReleaseAgeStrict: boolean;
+  trustLockfile: boolean;
   minimumReleaseAgeExclude: string[];
   approvedSkills: Record<string, string[]>;
 };
@@ -26,6 +27,7 @@ export type RawSettings = {
   overrides?: Record<string, string>;
   minimumReleaseAge?: number;
   minimumReleaseAgeStrict?: boolean;
+  trustLockfile?: boolean;
   minimumReleaseAgeExclude?: string[] | null;
   permissions?: Record<string, { skills?: string[] | boolean }>;
 };
@@ -55,6 +57,7 @@ export function settingsFrom(raw: RawSettings): PnpmSettings {
     overrides: raw.overrides ?? {},
     minimumReleaseAge: raw.minimumReleaseAge,
     minimumReleaseAgeStrict: raw.minimumReleaseAgeStrict ?? false,
+    trustLockfile: raw.trustLockfile ?? false,
     minimumReleaseAgeExclude: raw.minimumReleaseAgeExclude ?? [],
     approvedSkills: approvedSkillsIn(raw.permissions),
   };
