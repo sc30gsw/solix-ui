@@ -40,10 +40,10 @@ jobs:
             };
             const report = JSON.parse(require("node:fs").readFileSync("breaks.json", "utf8"));
             const results = report.testResults.flatMap((file) => file.assertionResults);
-            const wrong = results.filter(
-              (r) => r.status !== "failed" || !r.failureMessages.join("\n").includes(expected[r.title]),
-            );
-            console.log(results.map((r) => `${r.status} ${r.fullName}`).join("\n"));
+            const plain = (r) => r.failureMessages.join("\n").replace(/\x1b\[[0-9;]*m/g, "");
+            const wrong = results.filter((r) => r.status !== "failed" || !plain(r).includes(expected[r.title]));
+            for (const r of results) console.log(`${r.status} ${r.fullName}: ${plain(r).split("\n").slice(0, 3).join(" | ")}`);
+            for (const r of wrong) console.error(`WRONG ${r.fullName} wanted ${expected[r.title]}:\n${plain(r).slice(0, 600)}`);
             if (results.length !== Object.keys(expected).length * 3 || wrong.length > 0) {
               console.error(`expected ${Object.keys(expected).length * 3} failures for the expected reasons, got ${results.length} results, ${wrong.length} wrong`);
               process.exit(1);
