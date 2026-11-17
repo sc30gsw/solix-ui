@@ -13,15 +13,30 @@ import {
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
 import {
+  breakpoints,
   canonicalStylePropNames,
-  stylePropClassPrefix,
+  childRuleLayer,
+  componentLayer,
+  containerQueryLayer,
+  layerOrder,
+  libraryLayerOrder,
+  libraryLayers,
+  responsiveKeys,
   stylePropNames,
+  variableClass,
+  variableGroups,
+  variableNames,
+  variableRow,
+  variablesOf,
+  visibilityClass,
+  visibilityPropNames,
 } from "../src/style-prop-table";
 import { stableClassPrefix } from "../src/stable-class";
 import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
 import { parse, ts } from "../../../scripts/syntax";
 import {
   enclosingAtRules,
+  inChildRuleLayer,
   inStylePropLayer,
   layersAroundDeclaration,
   nestedLayerOrder,
@@ -65,6 +80,7 @@ type PlacedRule = {
   media: string | undefined;
   declarations: string[];
   inStylePropLayer: boolean;
+  inChildRuleLayer: boolean;
 };
 
 function libraryLayer(): postcss.AtRule {
@@ -93,6 +109,7 @@ function placedRules(): PlacedRule[] {
         node.type === "decl" ? [`${node.prop}:${node.value}`] : [],
       ),
       inStylePropLayer: inStylePropLayer(rule),
+      inChildRuleLayer: inChildRuleLayer(rule),
     });
   });
   return placed;
@@ -130,11 +147,16 @@ function setsEverythingAndMore(shorthand: string, longhand: string): boolean {
   return covered.length > inner.length && inner.every((side) => covered.includes(side));
 }
 
-function stylePropLayerRules(): { inside: PlacedRule[]; outside: PlacedRule[] } {
+function stylePropLayerRules(): {
+  inside: PlacedRule[];
+  outside: PlacedRule[];
+  childRules: PlacedRule[];
+} {
   const placed = placedRules();
   return {
-    inside: placed.filter(({ inStylePropLayer }) => inStylePropLayer),
-    outside: placed.filter(({ inStylePropLayer }) => !inStylePropLayer),
+    inside: placed.filter((rule) => rule.inStylePropLayer && !rule.inChildRuleLayer),
+    outside: placed.filter((rule) => !rule.inStylePropLayer),
+    childRules: placed.filter((rule) => rule.inChildRuleLayer),
   };
 }
 
@@ -290,17 +312,14 @@ test("input validity and the modal backdrop compile to the platform's own select
   expect(stylesheet).toMatch(new RegExp(`\\.${LIBRARY_CLASS_PREFIX}\\w+::backdrop\\{`));
 });
 
-test("the style-prop layer sits inside the library layer, ordered after every layer StyleX emits, and only the hidden layer comes after it", () => {
-  const order = nestedLayerOrder(libraryLayer());
-
-  expect(order.length, "StyleX emits layers of its own inside the library layer").toBeGreaterThan(
-    2,
-  );
-  expect(order.filter((name) => name === STYLE_PROP_LAYER)).toEqual([STYLE_PROP_LAYER]);
-  expect(order.slice(-2), `the nested layer order is ${order.join(", ")}`).toEqual([
+test("the library layer ranks its components, then its style props, then the container queries a component writes at run time, and the hidden layer last", () => {
+  expect(libraryLayers).toEqual([
+    componentLayer,
     STYLE_PROP_LAYER,
+    containerQueryLayer,
     HIDDEN_LAYER,
   ]);
+  expect(nestedLayerOrder(libraryLayer())).toEqual([...libraryLayers]);
 });
 
 test("the hidden layer holds one rule, display none on a hidden element with a class that starts with the stable class prefix, unless it is hidden until found", () => {
@@ -315,10 +334,6 @@ test("the hidden layer holds one rule, display none on a hidden element with a c
   expect(rules).toEqual([
     `[hidden]${libraryPartCondition}:not([hidden="until-found"]){display:none}`,
   ]);
-});
-
-test("the style-prop table uses the build's class prefix", () => {
-  expect(stylePropClassPrefix).toBe(LIBRARY_CLASS_PREFIX);
 });
 
 test("the style-prop layer holds the style-prop classes and the registrations of their custom properties, each with the library prefix, and nothing else", () => {
@@ -338,7 +353,9 @@ test("the style-prop layer holds the style-prop classes and the registrations of
   expect(
     atRulesInside.filter(
       (rule) =>
-        !rule.startsWith("@media ") && !rule.startsWith(`@property ${stylePropCustomProperty}`),
+        !rule.startsWith("@media ") &&
+        !rule.startsWith(`@property ${stylePropCustomProperty}`) &&
+        rule !== `@layer ${childRuleLayer}`,
     ),
   ).toEqual([]);
 });
@@ -527,4 +544,163 @@ test("hiddenFrom and visibleFrom hide the element from, or below, each breakpoin
   });
 
   expect(violations).toEqual([]);
+});
+
+test("every variable is named apart from every other variable and every style-prop class, so its class and custom property are its own", () => {
+  const stylePropClasses = [
+    ...canonicalStylePropNames.flatMap((name) => [
+      `${LIBRARY_CLASS_PREFIX}-${name}`,
+      ...breakpoints.map((breakpoint) => `${LIBRARY_CLASS_PREFIX}-${name}-${breakpoint}`),
+    ]),
+    ...visibilityPropNames.flatMap((name) =>
+      breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
+    ),
+  ];
+  const variableClasses = variableNames.flatMap((name) =>
+    responsiveKeys.map((key) => variableClass(name, key)),
+  );
+
+  expect(variableNames.length).toBeGreaterThan(0);
+  expect(variableGroups.flatMap(variablesOf)).toHaveLength(variableNames.length);
+  expect(variableClasses.filter((found) => stylePropClasses.includes(found))).toEqual([]);
+});
+
+test("each variable sets the custom property named for it from its own --sx- custom property, at its base and, when it is responsive, then at each breakpoint in ascending order", () => {
+  const { inside } = stylePropLayerRules();
+  const violations = variableNames.flatMap((name) => {
+    const property = `--${name}`;
+    const keys = variableRow(name).responsive ? ownerBreakpoints : [];
+    const expected = [
+      { selector: `.${variableClass(name, "base")}`, media: undefined },
+      ...keys.map(([breakpoint, width]) => ({
+        selector: `${stylePropClass}${name}-${breakpoint}`,
+        media: `(min-width: ${width})`,
+      })),
+    ];
+    const found = inside.filter(({ selector }) =>
+      responsiveKeys.some((key) => selector === `.${variableClass(name, key)}`),
+    );
+    const written = found.map(
+      ({ selector, media }) => `${selector} in ${media ?? "no media query"}`,
+    );
+    const wanted = expected.map(
+      ({ selector, media }) => `${selector} in ${media ?? "no media query"}`,
+    );
+    const reads = found.filter(
+      ({ selector, declarations }) =>
+        JSON.stringify(declarations) !==
+        JSON.stringify([`${property}:var(--${selector.slice(1)})`]),
+    );
+    return [
+      ...(JSON.stringify(written) === JSON.stringify(wanted)
+        ? []
+        : [
+            `packages/core/src/style-prop-table.ts: emit ${wanted.join(", ")} for ${name}, not ${written.join(", ")}.`,
+          ]),
+      ...reads.map(
+        ({ selector, declarations }) =>
+          `${selector} declares ${declarations.join("; ")}; make it set ${property} to var(--${selector.slice(1)}).`,
+      ),
+    ];
+  });
+
+  expect(violations).toEqual([]);
+});
+
+type ParsedSelector = { compounds: string[]; combinators: string[]; list: boolean };
+
+function parseSelector(selector: string): ParsedSelector {
+  const compounds = [""];
+  const combinators: string[] = [];
+  let depth = 0;
+  let quote: string | undefined;
+  let pending: string | undefined;
+  let list = false;
+  for (const character of selector) {
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined;
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === "[" || character === "(") {
+      depth += 1;
+    } else if (character === "]" || character === ")") {
+      depth -= 1;
+    } else if (depth === 0 && character === ",") {
+      list = true;
+      continue;
+    } else if (depth === 0 && /[\s>+~]/.test(character)) {
+      pending = (pending ?? "") + character;
+      continue;
+    }
+    if (pending !== undefined) {
+      combinators.push(pending.trim() === "" ? " " : pending.trim());
+      compounds.push("");
+      pending = undefined;
+    }
+    compounds[compounds.length - 1] += character;
+  }
+  return { compounds, combinators, list };
+}
+
+test("each child rule is one selector, from an element that carries a variable's class to its children, or to the children of a child one attribute selector names, joined by > alone, in a layer nested first in the style-prop layer, so a style prop on a child beats it", () => {
+  let styleProps: postcss.AtRule | undefined;
+  libraryLayer().walkAtRules("layer", (rule) => {
+    if (rule.params === STYLE_PROP_LAYER) styleProps = rule;
+  });
+  const { childRules } = stylePropLayerRules();
+  const variableClasses = variableNames.map((name) => variableClass(name, "base"));
+  const problems = childRules.flatMap(({ selector }) => {
+    const { compounds, combinators, list } = parseSelector(selector);
+    const [owner = "", child, grandchild] = compounds;
+    const carrier = /^\.([\w-]+)/.exec(owner)?.[1];
+    return [
+      ...(list ? [`${selector}: write one selector, not a list.`] : []),
+      ...(combinators.every((combinator) => combinator === ">")
+        ? []
+        : [`${selector}: join its compound selectors with > alone.`]),
+      ...(carrier !== undefined && variableClasses.includes(carrier)
+        ? []
+        : [`${selector}: start from the class of a variable.`]),
+      ...(child === undefined ||
+      compounds.length > 3 ||
+      (grandchild !== undefined && !/^\[[^\]]+\]$/.test(child))
+        ? [
+            `${selector}: style the children, or the children of a child one attribute selector names, and no deeper.`,
+          ]
+        : []),
+    ];
+  });
+
+  expect(styleProps && nestedLayerOrder(styleProps)).toEqual([childRuleLayer]);
+  expect(childRules.length).toBeGreaterThan(0);
+  expect(problems).toEqual([]);
+});
+
+test("the stylesheet first ranks the SDK's layer before the library's, and the library layer first names its sub-layers in the order it ranks them, the hidden layer last: the two statements a component's run-time rules start with. StyleX's layers sit in the first sub-layer", () => {
+  const statement = (node: postcss.ChildNode | undefined) =>
+    node?.type === "atrule" ? `@layer ${node.params};` : node?.toString();
+  const [opening] = postcss.parse(stylesheet).nodes;
+  const [first] = libraryLayer().nodes ?? [];
+  let components: postcss.AtRule | undefined;
+  libraryLayer().each((node) => {
+    if (node.type === "atrule" && node.name === "layer" && node.params === componentLayer) {
+      components = node;
+    }
+  });
+
+  expect(statement(first)).toBe(libraryLayerOrder);
+  expect(layerOrder).toBe(
+    `${statement(opening)}@layer ${LIBRARY_CASCADE_LAYER}{${statement(first)}}`,
+  );
+  expect(components && nestedLayerOrder(components).length).toBeGreaterThan(0);
+});
+
+test("every variable's custom property is read by a component's compiled styles or by a child rule", () => {
+  const { outside, childRules } = stylePropLayerRules();
+  const readers = [...outside, ...childRules].flatMap(({ declarations }) => declarations);
+  const unread = variableNames.filter(
+    (name) => !readers.some((declaration) => declaration.includes(`var(--${name})`)),
+  );
+
+  expect(unread).toEqual([]);
 });

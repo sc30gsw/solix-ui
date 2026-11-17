@@ -3,10 +3,12 @@ import { expect } from "vite-plus/test";
 import type * as Library from "../src/index";
 import type { DisplayPropName } from "../src/style-prop-table";
 import {
+  type Around,
   carriedComponents,
   type ConsumerProps,
   handledKeys,
   renderBuilt,
+  renderBuiltTwice,
   renderBuiltWithin,
 } from "./built-library";
 import { elementsOf } from "./markup";
@@ -66,6 +68,22 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     elementProps: { children: true },
     props: { children: "Label" },
   },
+  Center: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: true,
+    elementProps: { children: true },
+    props: { children: "Content" },
+  },
+  Container: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    elementProps: { children: true },
+    props: { children: "Content" },
+  },
   Disclosure: {
     tag: "details",
     booleanAttribute: "open",
@@ -74,6 +92,43 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     elementProps: { children: true },
     props: { label: "Label", children: "Content" },
   },
+  Flex: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: true,
+    elementProps: { children: true },
+    props: { children: "Content" },
+  },
+  Grid: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    elementProps: { children: true },
+    props: {
+      type: "container",
+      breakpoints: { xs: "20em", sm: "30em", md: "40em", lg: "50em", xl: "60em" },
+      gap: { base: "xs", md: "xl" },
+      children: "Content",
+    },
+  },
+  GridCol: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    elementProps: { children: true },
+    props: { span: { base: 12, md: 6 }, children: "Content" },
+  },
+  Group: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    elementProps: { children: true },
+    props: { children: "Content" },
+  },
   Modal: {
     tag: "dialog",
     booleanAttribute: "hidden",
@@ -81,6 +136,35 @@ export const fixtures: { [Name in ComponentName]: Fixture<(typeof Library)[Name]
     polymorphic: false,
     elementProps: { children: true },
     props: { label: "Label", opened: false, children: "Content" },
+  },
+  SimpleGrid: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    elementProps: { children: true },
+    props: {
+      type: "container",
+      cols: { base: 1, "30em": 2 },
+      spacing: { "20em": "xl" },
+      children: "Content",
+    },
+  },
+  Space: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    elementProps: { children: true },
+    props: { children: "Content" },
+  },
+  Stack: {
+    tag: "div",
+    booleanAttribute: "hidden",
+    takesDisplay: true,
+    polymorphic: false,
+    elementProps: { children: true },
+    props: { children: "Content" },
   },
   Tabs: {
     tag: "div",
@@ -144,22 +228,29 @@ function attributesNamed(html: string, props: readonly string[]): string[] {
   );
 }
 
-function fixtureOf(name: string): { props: ConsumerProps } {
+function fixturePropsOf(name: string): ConsumerProps {
   if (!isComponentName(name)) {
     throw new Error(`packages/core/tests/fixtures.ts: add a fixture for ${name}.`);
   }
-  return fixtures[name];
+  return fixtures[name].props;
+}
+
+function aroundOf(name: string): Around | undefined {
+  const carrier = carriedComponents[name]?.carrier;
+  return carrier === undefined ? undefined : { carrier, props: fixturePropsOf(carrier) };
 }
 
 function renderGiven(name: string, given: ConsumerProps): string {
-  const carrier = carriedComponents[name]?.carrier;
-  return carrier === undefined
-    ? renderBuilt(name, given)
-    : renderBuiltWithin(carrier, fixtureOf(carrier).props, name, given);
+  const around = aroundOf(name);
+  return around === undefined ? renderBuilt(name, given) : renderBuiltWithin(around, name, given);
+}
+
+export function renderTwiceOnOnePage(name: string): string {
+  return renderBuiltTwice(name, fixturePropsOf(name), aroundOf(name));
 }
 
 export function render(name: string, props: ConsumerProps = {}): string {
-  const { props: fixtureProps } = fixtureOf(name);
+  const fixtureProps = fixturePropsOf(name);
   const html = renderGiven(name, { ...fixtureProps, ...props });
   expect(
     attributesNamed(
@@ -176,7 +267,7 @@ export function render(name: string, props: ConsumerProps = {}): string {
 }
 
 export function readsInOneRender(name: string, prop: string): number {
-  const { props } = fixtureOf(name);
+  const props = fixturePropsOf(name);
   let reads = 0;
   renderGiven(
     name,

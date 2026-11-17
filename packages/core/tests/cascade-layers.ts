@@ -1,5 +1,6 @@
 import type postcss from "postcss";
 import { STYLE_PROP_LAYER } from "../build-pipeline.mjs";
+import { childRuleLayer } from "../src/style-prop-table";
 
 function isAtRule(node: postcss.Node | postcss.Document | undefined): node is postcss.AtRule {
   return node?.type === "atrule";
@@ -23,6 +24,12 @@ export function layersAroundDeclaration(declaration: postcss.Declaration): strin
 export function inStylePropLayer(node: postcss.Node): boolean {
   return enclosingAtRules(node).some(
     ({ name, params }) => name === "layer" && params === STYLE_PROP_LAYER,
+  );
+}
+
+export function inChildRuleLayer(node: postcss.Node): boolean {
+  return enclosingAtRules(node).some(
+    ({ name, params }) => name === "layer" && params === childRuleLayer,
   );
 }
 

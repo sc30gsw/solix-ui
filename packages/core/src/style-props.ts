@@ -1,17 +1,33 @@
 import type { JSX } from "@solidjs/web";
+import { createSignal, onCleanup } from "solid-js";
 import {
   baseKey,
   type Breakpoint,
+  breakpointWidths,
+  breakpoints,
   canonicalOf,
+  containerVariableClass,
+  isBreakpoint,
+  layerOrder,
+  libraryCascadeLayer,
   type PropertyRow,
+  readerRule,
+  registrationRule,
   type ResponsiveKey,
-  responsiveKeys,
   type RowOf,
   type Scale,
   stylePropClass,
+  containerQueryLayer,
   type StylePropName,
   stylePropNames,
   stylePropTable,
+  variableClass,
+  type VariableGroup,
+  type VariableName,
+  variablesOf,
+  variableProperty,
+  variableRow,
+  type VariableRowOf,
   visibilityClass,
   type VisibilityPropName,
   visibilityPropNames,
@@ -20,6 +36,14 @@ import { tokens } from "./tokens.stylex";
 
 const pixelsPerRem = 16;
 const characterThatEndsADeclaration = /[;{}]/;
+const containerWidthUnits = ["rem", "px", "em"] as const;
+const fractionLeadingZeros = ["", "0", "00", "000"] as const;
+const unsignedInteger = "(?:0|[1-9]\\d*)";
+const fractionDigits = `0{0,${fractionLeadingZeros.length - 1}}${unsignedInteger}`;
+const containerWidthPattern = new RegExp(
+  `^(${unsignedInteger}(?:\\.${fractionDigits})?|\\.${fractionDigits})(${containerWidthUnits.join("|")})$`,
+);
+const characterOutsideAClassName = /[^\w-]/g;
 
 type Absent = null | undefined;
 type TokenKey<Name, Of extends Scale> = Name extends `--solix-${Of}-${infer Key}` ? Key : never;
@@ -33,25 +57,102 @@ type ValueOf<Row> = Row extends PropertyRow
 
 export type StyleProp<V> = V | Absent | { [Key in ResponsiveKey]?: V | Absent };
 
+/** A key of a token scale, a number of pixels written in rem, or any CSS length. */
+export type ScaleValue<Of extends Scale> = ScaleKey<Of> | number | (string & {});
+
+export type Spacing = ScaleValue<"spacing">;
+
+type NonZeroDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+type UnsignedInteger = `${bigint}` & (`${NonZeroDigit}${string}` | "0");
+type FractionDigits = `${(typeof fractionLeadingZeros)[number]}${UnsignedInteger}`;
+type ContainerWidthUnit = (typeof containerWidthUnits)[number];
+
+/**
+ * A container width that a value keyed for container queries applies from: a non-negative
+ * decimal length with a unit and no space, such as `"40em"` or `"2.5rem"`.
+ */
+export type ContainerWidth =
+  | `${UnsignedInteger}${ContainerWidthUnit}`
+  | `${UnsignedInteger}.${FractionDigits}${ContainerWidthUnit}`
+  | `.${FractionDigits}${ContainerWidthUnit}`;
+
+/**
+ * A value for every width, or values keyed by the container width each applies from: a length
+ * such as `"40em"`, or a breakpoint, which stands for the library's width for it, in rem.
+ */
+export type ContainerProp<V> =
+  | V
+  | Absent
+  | { [Key in typeof baseKey | Breakpoint | ContainerWidth]?: V | Absent };
+
+type Keyed<V> = V | Absent | Readonly<Record<string, V | Absent>>;
+
+type Row<Name extends VariableName> = VariableRowOf<Name>;
+
+type DefaultValue<Name extends VariableName> =
+  Row<Name> extends { kind: "length"; scale: infer Of extends Scale }
+    ? ScaleValue<Of>
+    : Row<Name> extends { kind: "length" }
+      ? number | (string & {})
+      : string | number;
+
+/** A prop that sets the variable `Name`, keyed by breakpoint when its row is responsive. */
+export type VariableProp<
+  Name extends VariableName,
+  Value = DefaultValue<Name>,
+> = Row<Name>["responsive"] extends true ? StyleProp<Value> : Value | Absent;
+
+/** A prop that sets the responsive variable `Name`, keyed by container width. */
+export type ContainerVariableProp<
+  Name extends VariableName,
+  Value = DefaultValue<Name>,
+> = ContainerProp<Value>;
+
+export type VariableValue = Keyed<string | number>;
+
+export type ContainerQueries = {
+  readonly scope: string;
+  readonly widths: readonly (readonly [key: string, width: string])[];
+};
+
+type Used = readonly [name: VariableName, slot: number];
+
+export type QueryContainer = {
+  readonly queries: () => ContainerQueries | undefined;
+  readonly report: (used: () => readonly Used[]) => void;
+  readonly rules: () => string | undefined;
+  readonly member: () => QueryContainer;
+};
+
+export type ResolvedVariables = ResolvedStyleProps & { readonly used: readonly Used[] };
+
 export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
 } & { [Name in VisibilityPropName]?: Breakpoint | Absent };
 
-type ResolvedStyleProps = {
+export type ResolvedStyleProps = {
   classes: string[];
   properties: Record<`--${string}`, string>;
 };
 
-function responsiveEntries(value: StyleProp<string | number>): [ResponsiveKey, string | number][] {
+function keyedEntries<Key extends string>(
+  value: VariableValue,
+  keys: readonly Key[],
+): [typeof baseKey | Key, string | number][] {
   if (value === undefined || value === null) return [];
   if (typeof value !== "object") return [[baseKey, value]];
-  return responsiveKeys.flatMap((key): [ResponsiveKey, string | number][] => {
-    const written = value[key];
+  const keyed: Partial<Record<string, string | number | Absent>> = value;
+  const every: (typeof baseKey | Key)[] = [baseKey, ...keys];
+  return every.flatMap((key): [typeof baseKey | Key, string | number][] => {
+    const written = keyed[key];
     return written === undefined || written === null ? [] : [[key, written]];
   });
 }
 
-function cssValue(row: PropertyRow, written: string | number): string | undefined {
+function cssValue(
+  row: Pick<PropertyRow, "kind" | "scale">,
+  written: string | number,
+): string | undefined {
   if (typeof written === "number") {
     return row.kind === "length" ? `${written / pixelsPerRem}rem` : String(written);
   }
@@ -90,7 +191,7 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
   const properties: Record<`--${string}`, string> = {};
   for (const name of stylePropNames) {
     const canonical = canonicalOf(name);
-    for (const [key, written] of responsiveEntries(props[name])) {
+    for (const [key, written] of keyedEntries(props[name], breakpoints)) {
       const value = cssValue(stylePropTable[canonical], written);
       if (value === undefined) continue;
       const className = stylePropClass(canonical, key);
@@ -105,4 +206,207 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
     }
   }
   return { classes: [...classes], properties };
+}
+
+export function eachValue<V extends string | number>(
+  value: Keyed<V>,
+  write: (given: V) => string | undefined,
+): Keyed<string> {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object") return write(value);
+  return Object.fromEntries(
+    Object.entries(value).map(([key, given]) => [
+      key,
+      given === undefined || given === null ? given : write(given),
+    ]),
+  );
+}
+
+export function withBase<V extends string | number>(value: Keyed<V>, base: V): Keyed<V> {
+  if (value === undefined || value === null) return base;
+  if (typeof value !== "object") return value;
+  return { ...value, [baseKey]: value[baseKey] ?? base };
+}
+
+function placed(
+  name: VariableName,
+  value: VariableValue,
+  queries: ContainerQueries | undefined,
+): [className: string, written: string | number, slot: number | undefined][] {
+  if (!variableRow(name).responsive) {
+    return keyedEntries(value, []).map(([, written]) => [
+      variableClass(name, baseKey),
+      written,
+      undefined,
+    ]);
+  }
+  if (queries === undefined) {
+    return keyedEntries(value, breakpoints).map(([key, written]) => [
+      variableClass(name, key),
+      written,
+      undefined,
+    ]);
+  }
+  const slots = queries.widths.map(([key]) => key);
+  return keyedEntries(value, slots).map(([key, written]) => {
+    if (key === baseKey) return [variableClass(name, baseKey), written, undefined];
+    const slot = slots.indexOf(key);
+    return [containerVariableClass(name, queries.scope, slot), written, slot];
+  });
+}
+
+export function resolveVariables(
+  group: VariableGroup,
+  given: Readonly<Partial<Record<VariableName, VariableValue>>>,
+  queries: ContainerQueries | undefined,
+  leaveOut: (name: VariableName) => boolean,
+): ResolvedVariables {
+  const classes: string[] = [];
+  const properties: Record<`--${string}`, string> = {};
+  const used: Used[] = [];
+  for (const name of variablesOf(group)) {
+    if (leaveOut(name)) continue;
+    for (const [className, written, slot] of placed(name, given[name], queries)) {
+      const value = cssValue(variableRow(name), written);
+      if (value === undefined) continue;
+      classes.push(className);
+      properties[`--${className}`] = value;
+      if (slot !== undefined) used.push([name, slot]);
+    }
+  }
+  return { classes, properties, used };
+}
+
+export function containerKeysOf(value: Keyed<unknown>): [key: string, width: string][] {
+  if (value === undefined || value === null || typeof value !== "object") return [];
+  return Object.keys(value).flatMap((key): [string, string][] => {
+    if (isBreakpoint(key)) return [[key, containerWidthOf(key)]];
+    return isContainerWidth(key) ? [[key, key]] : [];
+  });
+}
+
+export function containerWidthOf(breakpoint: Breakpoint): string {
+  const written = breakpointWidths[breakpoint];
+  const parsed = widthOf(written);
+  return parsed?.unit === "em" ? `${parsed.amount}rem` : written;
+}
+
+function widthOf(written: string): { amount: number; unit: ContainerWidthUnit } | undefined {
+  const [, amount, given] = containerWidthPattern.exec(written) ?? [];
+  const unit = containerWidthUnits.find((found) => found === given);
+  return amount === undefined || unit === undefined ? undefined : { amount: Number(amount), unit };
+}
+
+export function isContainerWidth(written: string): written is ContainerWidth {
+  return widthOf(written) !== undefined;
+}
+
+function pixelsOf(width: string): number {
+  const { amount = 0, unit = "px" } = widthOf(width) ?? {};
+  return amount * (unit === "px" ? 1 : pixelsPerRem);
+}
+
+function rulesFor(queries: ContainerQueries, used: readonly Used[]): string | undefined {
+  if (used.length === 0) return undefined;
+  const registrations = used.map(([name, slot]) =>
+    registrationRule(containerVariableClass(name, queries.scope, slot)),
+  );
+  const readers = queries.widths.flatMap(([, width], slot) => {
+    const atSlot = used.filter(([, at]) => at === slot);
+    if (atSlot.length === 0) return [];
+    const read = atSlot.map(([name]) =>
+      readerRule(containerVariableClass(name, queries.scope, slot), variableProperty(name)),
+    );
+    return [`@container (min-width: ${width}){${read.join("")}}`];
+  });
+  return `${layerOrder}@layer ${libraryCascadeLayer}.${containerQueryLayer}{${[...registrations, ...readers].join("")}}`;
+}
+
+function uniqueUsed(used: readonly Used[]): Used[] {
+  const seen = new Map(used.map((pair) => [pair.join(" "), pair]));
+  return [...seen.values()].sort(([before, beforeSlot], [after, afterSlot]) =>
+    beforeSlot === afterSlot ? before.localeCompare(after) : beforeSlot - afterSlot,
+  );
+}
+
+type Member = {
+  written: readonly string[];
+  readonly changed: () => number;
+  readonly setChanged: (next: (count: number) => number) => void;
+};
+
+function keyOf([name, slot]: Used): string {
+  return `${name} ${slot}`;
+}
+
+function createMember(members: Member[]): Member {
+  const [changed, setChanged] = createSignal(0, { ownedWrite: true });
+  const member: Member = { written: [], changed, setChanged };
+  members.push(member);
+  onCleanup(() => {
+    members.splice(members.indexOf(member), 1);
+    setChanged((count) => count + 1);
+  });
+  return member;
+}
+
+function writtenBefore(members: readonly Member[], own: Member | undefined): Set<string> {
+  const before = own === undefined ? [] : members.slice(0, members.indexOf(own));
+  return new Set(
+    before.flatMap((member) => {
+      member.changed();
+      return member.written;
+    }),
+  );
+}
+
+function settle(own: Member | undefined, placed: readonly string[]): void {
+  if (own === undefined || own.written.join() === placed.join()) return;
+  own.written = placed;
+  own.setChanged((count) => count + 1);
+}
+
+function queryContainer(
+  queries: () => ContainerQueries | undefined,
+  members: Member[],
+  own?: Member,
+): QueryContainer {
+  let reported: () => readonly Used[] = () => [];
+  return {
+    queries,
+    report(used) {
+      reported = used;
+    },
+    rules() {
+      const current = queries();
+      if (current === undefined) return undefined;
+      const placed = uniqueUsed(reported());
+      settle(own, placed.map(keyOf));
+      const before = writtenBefore(members, own);
+      return rulesFor(
+        current,
+        placed.filter((pair) => !before.has(keyOf(pair))),
+      );
+    },
+    member: () => queryContainer(queries, members, createMember(members)),
+  };
+}
+
+export function createQueryContainer(
+  scope: string,
+  widths: () => readonly (readonly [key: string, width: string])[] | undefined,
+): QueryContainer {
+  return queryContainer(() => {
+    const given = widths();
+    if (given === undefined) return undefined;
+    return {
+      scope: scope.replace(characterOutsideAClassName, "_"),
+      widths: given
+        .flatMap(([key, width]): [string, string][] => {
+          const parsed = widthOf(width);
+          return parsed ? [[key, `${parsed.amount}${parsed.unit}`]] : [];
+        })
+        .toSorted(([, narrower], [, wider]) => pixelsOf(narrower) - pixelsOf(wider)),
+    };
+  }, []);
 }

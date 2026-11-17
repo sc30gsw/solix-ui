@@ -24,13 +24,13 @@ It does if it edits any of these:
 | `packages/core/src/Modal.tsx`: `Modal` | Its `opened` prop drives `showModal()` and `close()` from one effect. A consumer's `onClose` reaches the `<dialog>`. It has one `<form method="dialog">` button named `Close`. |
 | `packages/core/src/light-dismiss.ts` | The fallback runs only where `closedBy` is missing. It closes when the press and the release are both outside the dialog's box. |
 | `apps/playground/src/App.tsx` and `apps/playground/src/sections` | The page has one `<dialog>`, a button named `Open modal`, a first button directly under `main`, a text input named `Name` inside the dialog, the text `Modal content`, and a paragraph that starts `The app records the modal as` and ends `opened.` or `closed.` |
-| `apps/playground/tests/modal-protocol.test.ts` | It runs the commands against the built app in each installed engine and holds the model of the two facts. |
+| `apps/playground/tests/modal-protocol.test.ts` | It runs the commands against the built app in each installed engine and holds the model of the two facts. It runs the fixed sequences in `everyActionInEachRun` before the generated ones. |
 | `tests/support` | It runs `vp run -r build` in production mode before any test, which builds the library and the app, and then starts the built app once and gives the test its URL as `playgroundUrl`. |
 | `scripts/browser-engines.mjs` | It lists the engines the test runs on, and which of them are installed. |
 | `vite.config.ts` | It sets the test include globs and the global setup. |
 | `playwright`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `2130845`. Run `git diff 2130845 -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `d67b2cc`. Run `git diff d67b2cc -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 
@@ -42,11 +42,12 @@ It takes about fifteen seconds per installed engine, most of it the library and 
 
 ## The tool and why
 
-No model checker runs on a Solid component, so this is not a proof. The test uses fast-check's model-based commands. fast-check runs one fixed sequence, `lightDismissal`, a press of Open modal and then a press outside, and then generates sequences of up to ten user actions. It runs each against the built app in a real browser engine, and after every action compares the page with the model. A failing generated sequence is shrunk to the shortest one that still fails; the fixed one is reported as it is. Nothing about the modal is modelled by hand beyond the two facts above.
+No model checker runs on a Solid component, so this is not a proof. The test uses fast-check's model-based commands. It runs three fixed sequences first, then sequences of up to ten user actions that fast-check generates, each against the built app in a real browser engine, and after every action compares the page with the model. A failing generated sequence is shrunk to the shortest one that still fails, and a failing fixed sequence is reported whole. Nothing about the modal is modelled by hand beyond the two facts above.
 
 ## What a pass covers
 
-- The fixed sequence `lightDismissal` first, then 15 generated sequences per engine per run, a different set each run, each starting from a fresh page load. The fixed sequence makes every run press outside an open dialog, which 15 generated sequences do not always do.
+- Three fixed sequences per engine per run, the same each run, so every action runs in every run: open and press outside, open and press Escape, and open, press inside, Tab, Shift+Tab, type `ab`, press Close and open again.
+- Then 15 generated sequences per engine per run, a different set each run. Each sequence starts from a fresh page load.
 - Seven actions: press Open modal, Escape, press outside, press inside, Close button, Tab and Shift+Tab, typing up to six letters in the Name field.
 - The fallback alone: with `closedBy` removed from the prototype and the attribute removed from the element, a press outside closes it, a press inside does not, and a drag that starts inside and ends outside does not.
 
@@ -61,14 +62,14 @@ No model checker runs on a Solid component, so this is not a proof. The test use
 
 ## Reading a failure
 
-- **An `expect` fails after `Counterexample`.** This is a real break unless it is listed below. fast-check prints the sequence, `[[press the Open modal button,press outside the dialog]]` for the fixed one and, for a generated one, the shortest that still fails, such as `[press the Open modal button,press outside the dialog /*replayPath="…"*/]`, and the message names the observation, such as `the dialog's open property: expected true to be false`. Report it in those terms. Do not loosen the assertion.
+- **An `expect` fails after `Counterexample`.** This is a real break unless it is listed below. fast-check prints a generated sequence shrunk to the shortest that still fails, such as `[press the Open modal button,press outside the dialog /*replayPath="BF:C"*/]`, and a fixed sequence whole and in double brackets, such as `[[press the Open modal button,press outside the dialog]]`. The message names the observation, such as `the dialog's open property: expected true to be false`. Report it in those terms. Do not loosen the assertion.
 - **`focus is on the page behind the open dialog`.** Tab and Shift+Tab may leave the dialog for the browser's own controls, so `document.body` is allowed. An element of the page behind is not.
 - **A timeout in `page.goto` or a click.** The server did not start or the page is not the one in the table. Run `vp run -r build`, then the test.
 - To replay one failure, add the printed `seed` and `path` to the options object passed to `fc.assert`, run again, and remove them afterwards.
 
 ## When the change is intended
 
-- A new way to close the modal: add a command class to `steps`, with its precondition and the model change.
+- A new way to close the modal: add a command class to `steps`, with its precondition and the model change, and a fixed sequence to `everyActionInEachRun` that opens the modal and closes it that way.
 - A new element in the dialog that takes focus: keep the focus assertion as it is. It only forbids focus on the page behind.
 - Upgrading Solid, Playwright or fast-check: change the versions in the catalog in `pnpm-workspace.yaml`, then run the check.
-- Mutation check after editing the skill's covered code: remove `closedby="any"` from `Modal.tsx` on Chromium and run the test. It must fail on every run with `Counterexample: [[press the Open modal button,press outside the dialog]]`. Restore the attribute afterwards.
+- Mutation check after editing the skill's covered code: remove `closedby="any"` from `Modal.tsx` on Chromium and run the test. It must fail on every run with `[[press the Open modal button,press outside the dialog]]`, the first fixed sequence. Restore the attribute afterwards.

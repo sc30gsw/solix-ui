@@ -26,12 +26,67 @@ export function rootElementOf(html: string): Element {
   return root;
 }
 
-export function contentOf(html: string): string {
-  const [outer] = elementsOf(html);
-  if (!outer || !html.startsWith(`<${outer.tag}`) || !html.endsWith(`</${outer.tag}>`)) {
-    throw new Error(`The rendered markup is not one element: ${html}`);
+export function elementCarrying(html: string, className: string): Element {
+  const carrying = elementsOf(html).filter((element) => classesOf(element).includes(className));
+  if (carrying.length !== 1) {
+    throw new Error(
+      `The rendered markup holds ${carrying.length} elements with ${className}: ${html}`,
+    );
   }
-  return html.slice(html.indexOf(">") + 1, html.lastIndexOf("</"));
+  return carrying[0];
+}
+
+const tag = /<(\/?)([a-z][a-z0-9-]*)(?:\s[^>]*?)?(\/?)>/g;
+const voidElements = new Set([
+  "area",
+  "base",
+  "br",
+  "col",
+  "embed",
+  "hr",
+  "img",
+  "input",
+  "link",
+  "meta",
+  "source",
+  "track",
+  "wbr",
+]);
+
+export function topLevelTags(html: string): string[] {
+  let depth = 0;
+  const found: string[] = [];
+  for (const [, closing, name, selfClosing] of html.matchAll(tag)) {
+    if (closing) {
+      depth -= 1;
+      continue;
+    }
+    if (depth === 0) found.push(name);
+    if (!selfClosing && !voidElements.has(name)) depth += 1;
+  }
+  return found;
+}
+
+const leadingRules = /^<style[^>]*>[^<]*<\/style>/;
+
+export function withoutLeadingRules(html: string): string {
+  return html.replace(leadingRules, "");
+}
+
+export function memberMarkupOf(html: string, carrierClass: string): string {
+  let rest = html;
+  for (;;) {
+    const unwrapped = withoutLeadingRules(rest);
+    const [outer] = elementsOf(unwrapped);
+    const carriers =
+      outer !== undefined && classesOf(outer).some((found) => found.startsWith(carrierClass));
+    if (!carriers || topLevelTags(unwrapped).length !== 1) return rest;
+    rest = unwrapped.slice(unwrapped.indexOf(">") + 1, unwrapped.lastIndexOf("</"));
+  }
+}
+
+export function rulesOf(html: string): string[] {
+  return [...html.matchAll(/<style[^>]*>([^<]*)<\/style>/g)].map(([, rules]) => rules);
 }
 
 export function valuesOf(element: Element, name: string): (string | true)[] {
