@@ -106,11 +106,41 @@ function tagOf(node: ts.Node): JsxTag | undefined {
   return ts.isJsxSelfClosingElement(node) ? node : undefined;
 }
 
+function rendered(children: readonly ts.JsxChild[]): ts.JsxChild[] {
+  return children.filter((child) => !ts.isJsxText(child) || child.text.trim() !== "");
+}
+
+function isStyleElement(node: ts.Node): boolean {
+  const shown = ts.isParenthesizedExpression(node) ? unwrapped(node) : node;
+  return tagOf(shown)?.tagName.getText() === "style";
+}
+
+function isShowOfRules(child: ts.JsxChild): boolean {
+  if (!ts.isJsxElement(child) || child.openingElement.tagName.getText() !== "Show") return false;
+  const [only, ...others] = rendered(child.children);
+  if (only === undefined || others.length > 0) return false;
+  if (isStyleElement(only)) return true;
+  const shown = ts.isJsxExpression(only) ? only.expression : undefined;
+  return shown !== undefined && ts.isArrowFunction(shown) && isStyleElement(shown.body);
+}
+
+function besideProblems(tag: JsxTag): string[] {
+  const element = ts.isJsxOpeningElement(tag) ? tag.parent : tag;
+  const holder = element.parent;
+  if (!ts.isJsxFragment(holder) && !ts.isJsxElement(holder)) return [];
+  const children = rendered(holder.children);
+  const at = children.findIndex((child) => child === element);
+  const before = children.slice(0, at);
+  return at === children.length - 1 && before.length <= 1 && before.every(isShowOfRules)
+    ? []
+    : [
+        `render nothing beside <${tag.tagName.getText()}> but, before it, one <Show> whose child is a <style> of its rules.`,
+      ];
+}
+
 function rootAfterItsRules(fragment: ts.JsxFragment): JsxTag[] {
-  const tags = fragment.children.flatMap((child) => tagOf(child) ?? []);
-  const root = tags.at(-1);
-  const intrinsic = (tag: JsxTag) => intrinsicElement.test(tag.tagName.getText());
-  return root && intrinsic(root) && tags.slice(0, -1).every((tag) => !intrinsic(tag)) ? [root] : [];
+  const root = tagOf(rendered(fragment.children).at(-1) ?? fragment);
+  return root && intrinsicElement.test(root.tagName.getText()) ? [root] : [];
 }
 
 function returnedRoots(fn: ts.FunctionDeclaration): JsxTag[] {
@@ -345,6 +375,10 @@ function rootProblems(name: string, fn: ts.FunctionDeclaration, shape: PropsShap
       `spread {...${rootBinding}} once, on the returned root element, so it takes the consumer's attributes, the style props and its class and style.`,
     );
   }
+  const containers = jsxTags(fn).filter((found) =>
+    spreadsOn(found).includes(`${partBinding}("${containerPart}")`),
+  );
+  problems.push(...[root, ...containers].flatMap(besideProblems));
   const tag = root.tagName.getText();
   if (shape.kind === polymorphicPropsType) {
     const element = polymorphicDefault(fn) ?? "<element>";
