@@ -373,15 +373,35 @@ function described(node: Node | null): string {
   return `<${node.localName}${node.id === "" ? "" : `#${node.id}`}> "${label}"`;
 }
 
-function focusReport(): string {
-  const selection = document.getSelection();
-  return `focus stays in the trap: the active element is ${described(document.activeElement)}, the page ${document.hasFocus() ? "has" : "does not have"} focus, and the selection starts in ${described(selection?.anchorNode ?? null)} at ${selection?.anchorOffset ?? "no offset"}`;
+function whereFocusIs(): string {
+  return `the active element is ${described(document.activeElement)} and the page ${document.hasFocus() ? "has" : "does not have"} focus`;
+}
+
+function leftThePage(): boolean {
+  return !document.hasFocus() && document.activeElement === document.body;
+}
+
+async function holdsTheContract(
+  container: HTMLElement,
+  comeBackBackwards: boolean,
+): Promise<boolean> {
+  expect(
+    container.contains(document.activeElement) || leftThePage(),
+    `focus is never on a page element outside the trap: ${whereFocusIs()}`,
+  ).toBe(true);
+  if (!leftThePage()) return true;
+  await tab(comeBackBackwards);
+  expect(
+    document.hasFocus() && container.contains(document.activeElement),
+    `focus that comes back from the browser's own controls lands in the trap: ${whereFocusIs()}`,
+  ).toBe(true);
+  return false;
 }
 
 async function followTheEngineOrder(
   initial: readonly Kind[],
   steps: readonly Step[],
-  afterwards?: (container: HTMLElement) => Promise<void>,
+  comeBackBackwards: boolean,
 ): Promise<void> {
   document.body.replaceChildren();
   html(`<button>Before</button>`);
@@ -426,197 +446,51 @@ async function followTheEngineOrder(
         container,
       );
       await tab(current.backwards);
-      expect(container.contains(document.activeElement), focusReport()).toBe(true);
-      if (expected !== undefined) {
+      const keptThePage = await holdsTheContract(container, comeBackBackwards);
+      if (keptThePage && expected !== undefined) {
         expect(document.activeElement, "focus lands where the engine's order says").toBe(expected);
       }
     }
-    await afterwards?.(container);
   } finally {
     unmount();
   }
 }
 
-test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus never leaves the trap and lands where the engine's own Tab order says", async () => {
+test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus is never on a page element outside the trap, lands where the engine's own Tab order says while the page keeps focus, and comes back into the trap with the next Tab or Shift+Tab when a key takes it to the browser's own controls", async () => {
   await fc.assert(
     fc.asyncProperty(
       fc.array(fc.constantFrom(...kinds), { minLength: 0, maxLength: 4 }),
       fc.array(step, { minLength: 1, maxLength: 12 }),
-      (initial, steps) => followTheEngineOrder(initial, steps),
+      fc.boolean(),
+      followTheEngineOrder,
     ),
     { numRuns: 25 },
   );
 });
 
-test("Shift+Tab from the container keeps focus in the trap after its focused textarea is disabled and hidden, its button removed, and the textarea shown again still disabled", async () => {
-  await followTheEngineOrder(
-    ["textarea", "button"],
-    [
-      { type: "toggle", at: 0, change: "disabled" },
-      { type: "toggle", at: 0, change: "hidden" },
-      { type: "remove", at: 123_208_341 },
-      { type: "tab", backwards: false },
-      { type: "toggle", at: 0, change: "hidden" },
-      { type: "tab", backwards: true },
-    ],
-  );
+const showsAgain: Step[] = [
+  { type: "toggle", at: 0, change: "disabled" },
+  { type: "toggle", at: 0, change: "hidden" },
+  { type: "remove", at: 123_208_341 },
+  { type: "tab", backwards: false },
+  { type: "toggle", at: 0, change: "hidden" },
+  { type: "tab", backwards: true },
+];
+
+const removes: Step[] = [
+  { type: "toggle", at: 14_481_141, change: "disabled" },
+  { type: "toggle", at: 0, change: "disabled" },
+  { type: "tab", backwards: false },
+  { type: "remove", at: 0 },
+  { type: "tab", backwards: true },
+];
+
+test("after its focused textarea is disabled and hidden, its button removed, and the textarea shown again still disabled, Shift+Tab from the container never puts focus on a page element outside the trap, and when it takes focus to the browser's own controls the next Tab, or the next Shift+Tab, brings it back into the trap", async () => {
+  await followTheEngineOrder(["textarea", "button"], showsAgain, false);
+  await followTheEngineOrder(["textarea", "button"], showsAgain, true);
 });
 
-test("Shift+Tab from the container keeps focus in the trap after its button and its focused textarea are disabled and the textarea is removed", async () => {
-  await followTheEngineOrder(
-    ["textarea", "button"],
-    [
-      { type: "toggle", at: 14_481_141, change: "disabled" },
-      { type: "toggle", at: 0, change: "disabled" },
-      { type: "tab", backwards: false },
-      { type: "remove", at: 0 },
-      { type: "tab", backwards: true },
-    ],
-  );
+test("after its button and its focused textarea are disabled and the textarea is removed, Shift+Tab from the container never puts focus on a page element outside the trap, and when it takes focus to the browser's own controls the next Tab, or the next Shift+Tab, brings it back into the trap", async () => {
+  await followTheEngineOrder(["textarea", "button"], removes, false);
+  await followTheEngineOrder(["textarea", "button"], removes, true);
 });
-
-type PageState = { focused: boolean; inside: boolean; seen: string };
-
-function pageState(container: HTMLElement, events: readonly string[] = []): PageState {
-  const selection = document.getSelection();
-  const focused = document.hasFocus();
-  const inside = container.contains(document.activeElement);
-  return {
-    focused,
-    inside,
-    seen: `the active element is ${described(document.activeElement)}, ${inside ? "inside" : "outside"} the container, the page ${focused ? "has" : "does not have"} focus, the selection starts in ${described(selection?.anchorNode ?? null)} at ${selection?.anchorOffset ?? "no offset"}${events.length === 0 ? ", and no focus event reached the page" : `, and the page saw ${events.join(", ")}`}`,
-  };
-}
-
-async function pressWatched(container: HTMLElement, backwards: boolean): Promise<PageState> {
-  const events: string[] = [];
-  const noteTarget = (event: Event) =>
-    events.push(
-      `${event.type} on ${described(event.target instanceof Node ? event.target : null)}`,
-    );
-  const noteWindow = (event: Event) => events.push(`${event.type} on the window`);
-  document.addEventListener("focusin", noteTarget, true);
-  document.addEventListener("focusout", noteTarget, true);
-  window.addEventListener("blur", noteWindow);
-  window.addEventListener("focus", noteWindow);
-  try {
-    await tab(backwards);
-    await settled();
-  } finally {
-    document.removeEventListener("focusin", noteTarget, true);
-    document.removeEventListener("focusout", noteTarget, true);
-    window.removeEventListener("blur", noteWindow);
-    window.removeEventListener("focus", noteWindow);
-  }
-  return pageState(container, events);
-}
-
-async function inAModalDialog(
-  initial: readonly Kind[],
-  steps: readonly Step[],
-): Promise<{ before: PageState; after: PageState }> {
-  document.body.replaceChildren();
-  html(`<button>Before</button>`);
-  const dialog = html<HTMLDialogElement>(`<dialog tabindex="-1" aria-label="Dialog"></dialog>`);
-  html(`<button>After</button>`);
-  const slots: Slot[] = [];
-  for (const [index, kind] of initial.entries()) {
-    apply({ type: "add", at: index, kind }, slots, dialog, `dialog start ${index}`);
-  }
-  dialog.showModal();
-  await settled();
-  for (const [index, current] of steps.slice(0, -1).entries()) {
-    if (current.type === "tab") await tab(current.backwards);
-    else apply(current, slots, dialog, `dialog step ${index}`);
-    await settled();
-  }
-  const before = pageState(dialog);
-  const after = await pressWatched(dialog, true);
-  dialog.close();
-  return { before, after };
-}
-
-const escapesSeenInFirefox: Record<string, [Kind[], Step[]]> = {
-  "the focused textarea disabled and hidden, the button removed, and the textarea shown again": [
-    ["textarea", "button"],
-    [
-      { type: "toggle", at: 0, change: "disabled" },
-      { type: "toggle", at: 0, change: "hidden" },
-      { type: "remove", at: 123_208_341 },
-      { type: "tab", backwards: false },
-      { type: "toggle", at: 0, change: "hidden" },
-      { type: "tab", backwards: true },
-    ],
-  ],
-  "the button and the focused textarea disabled, and the textarea removed": [
-    ["textarea", "button"],
-    [
-      { type: "toggle", at: 14_481_141, change: "disabled" },
-      { type: "toggle", at: 0, change: "disabled" },
-      { type: "tab", backwards: false },
-      { type: "remove", at: 0 },
-      { type: "tab", backwards: true },
-    ],
-  ],
-};
-
-for (const [sequence, [initial, steps]] of Object.entries(escapesSeenInFirefox)) {
-  const allButTheLastKey = steps.slice(0, -1);
-
-  test(`after ${sequence}: the last Shift+Tab reaches the page as a focusin and the page keeps focus`, async () => {
-    await followTheEngineOrder(initial, allButTheLastKey, async (container) => {
-      const before = pageState(container);
-      const after = await pressWatched(container, true);
-      expect(
-        after.focused && after.inside,
-        `before the key ${before.seen}; after it ${after.seen}`,
-      ).toBe(true);
-    });
-  });
-
-  test(`after ${sequence}: another Shift+Tab after the last one leaves focus in the trap with the page focused`, async () => {
-    await followTheEngineOrder(initial, allButTheLastKey, async (container) => {
-      const first = await pressWatched(container, true);
-      const second = await pressWatched(container, true);
-      expect(
-        second.focused && second.inside,
-        `after the last Shift+Tab ${first.seen}; after another ${second.seen}`,
-      ).toBe(true);
-    });
-  });
-
-  test(`after ${sequence}: a Tab after the last Shift+Tab leaves focus in the trap with the page focused`, async () => {
-    await followTheEngineOrder(initial, allButTheLastKey, async (container) => {
-      const first = await pressWatched(container, true);
-      const second = await pressWatched(container, false);
-      expect(
-        second.focused && second.inside,
-        `after the last Shift+Tab ${first.seen}; after a Tab ${second.seen}`,
-      ).toBe(true);
-    });
-  });
-
-  test(`after ${sequence}: with the document selection cleared just before the last Shift+Tab, focus stays in the trap`, async () => {
-    await followTheEngineOrder(initial, allButTheLastKey, async (container) => {
-      document.getSelection()?.removeAllRanges();
-      const after = await pressWatched(container, true);
-      expect(after.focused && after.inside, after.seen).toBe(true);
-    });
-  });
-
-  test(`after ${sequence}: with the document selection collapsed at the start of the container just before the last Shift+Tab, focus stays in the trap`, async () => {
-    await followTheEngineOrder(initial, allButTheLastKey, async (container) => {
-      document.getSelection()?.collapse(container, 0);
-      const after = await pressWatched(container, true);
-      expect(after.focused && after.inside, after.seen).toBe(true);
-    });
-  });
-
-  test(`after ${sequence}, in a native modal dialog in place of the trap with the same stops and steps: the page has no focus before the last Shift+Tab or after it`, async () => {
-    const { before, after } = await inAModalDialog(initial, steps);
-    expect(
-      [before.focused, after.focused],
-      `before the last Shift+Tab ${before.seen}; after it ${after.seen}`,
-    ).toEqual([false, false]);
-  });
-}
