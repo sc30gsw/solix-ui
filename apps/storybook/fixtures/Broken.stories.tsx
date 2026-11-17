@@ -1,5 +1,5 @@
 import { Button } from "@solix/core";
-import { createEffect, createSignal } from "solid-js";
+import { createEffect, onCleanup } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect } from "storybook/test";
 
@@ -42,10 +42,8 @@ export const EffectWithoutOwner: Story = {
   },
 };
 
-export const WriteInAnOwnedScope: Story = {
-  render: () => {
-    const [label, setLabel] = createSignal("Save");
-    setLabel("Saved");
-    return <Button>{label()}</Button>;
+export const CleanupWithoutOwner: Story = {
+  play: async () => {
+    onCleanup(() => undefined);
   },
 };

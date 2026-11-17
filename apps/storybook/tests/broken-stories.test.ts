@@ -15,7 +15,7 @@ const reasonOf: { [Story in BrokenStory]: string } = {
   TargetTooSmall: "target-size",
   PlayFunctionFails: "toHaveTextContent",
   EffectWithoutOwner: "NO_OWNER_EFFECT",
-  WriteInAnOwnedScope: "REACTIVE_WRITE_IN_OWNED_SCOPE",
+  CleanupWithoutOwner: "NO_OWNER_CLEANUP",
 };
 
 const fixturesDirectory = join(storybookDirectory, "fixtures");
