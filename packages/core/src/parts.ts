@@ -92,9 +92,15 @@ type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
 type Given<Props> = (keyof Props & string) | ((props: Props) => VariableValue);
 
+export type CarriedStyling = {
+  readonly class: () => JSX.ClassValue;
+  readonly style: () => JSX.CSSProperties | undefined;
+};
+
 export type PartsOptions<Group extends VariableGroup, Props> = {
   readonly variables: { readonly [Name in VariablesOf<Group>]: Given<Props> };
   readonly queries?: QueryContainer;
+  readonly carried?: CarriedStyling;
 };
 
 type GivenProps<Options> = Options extends { variables: infer Given }
@@ -113,6 +119,7 @@ const noVariables: ResolvedVariables = { classes: [], properties: {}, used: [] }
 type GivenOptions = {
   readonly variables: Readonly<Record<string, Given<Record<string, unknown>>>>;
   readonly queries?: QueryContainer;
+  readonly carried?: CarriedStyling;
 };
 
 function isOptions(given: unknown): given is GivenOptions {
@@ -178,6 +185,7 @@ export function createParts(
   const partClass = (name: string): JSX.ClassValue => [
     props.unstyled ? undefined : stylex.attrs(compiled[name]).class,
     stableClass(component, name),
+    name === rootPart ? options?.carried?.class() : undefined,
     props.classes?.[name],
   ];
   const ownStyle = (name: string): JSX.CSSProperties => presentStyle(props.styles?.[name]);
@@ -190,7 +198,12 @@ export function createParts(
       },
       get style() {
         return withConsumerStyle(
-          { ...variables().properties, ...resolved().properties, ...ownStyle(rootPart) },
+          {
+            ...variables().properties,
+            ...resolved().properties,
+            ...presentStyle(options?.carried?.style()),
+            ...ownStyle(rootPart),
+          },
           props.style,
         );
       },

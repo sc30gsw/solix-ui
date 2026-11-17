@@ -39,6 +39,8 @@ export type GridProps = ElementProps<
     | { type?: "media"; breakpoints?: never }
     | { type: "container"; breakpoints?: Record<Breakpoint, ContainerWidth> }
   ) & {
+    classes?: { col?: JSX.ClassValue };
+    styles?: { col?: JSX.CSSProperties };
     gap?: VariableProp<"grid-gap">;
     rowGap?: VariableProp<"grid-row-gap">;
     columnGap?: VariableProp<"grid-column-gap">;
@@ -73,14 +75,17 @@ export function Grid(props: GridProps) {
     },
     "breakpoints",
     "children",
+    "classes",
     "columns",
     "grow",
+    "styles",
     "type",
   );
   const context = {
     columns: () => props.columns ?? defaultColumns,
     grow: () => props.grow ?? false,
     container,
+    col: { class: () => props.classes?.col, style: () => props.styles?.col },
   };
   const grid = (
     <div {...root}>

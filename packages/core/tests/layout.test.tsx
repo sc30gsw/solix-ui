@@ -509,6 +509,47 @@ function columnIn(grid: GridProps, column: GridColProps): Rendered & { html: str
 const basisOf = (share: string) =>
   `calc((100% + var(--grid-column-gap)) * ${share} - var(--grid-column-gap))`;
 
+test("Grid gives classes.col and styles.col to each column, before the column's own classes and styles, so a column's own value wins", () => {
+  expectTypeOf<{
+    classes: { col: string; inner: string };
+    styles: { col: { color: string } };
+  }>().toExtend<GridProps>();
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      classes: { col: "from-grid" },
+      styles: { col: { color: "red", "font-weight": "bold" } },
+      get children() {
+        return [
+          createComponent(library.GridCol, {}),
+          createComponent(library.GridCol, {
+            classes: { root: "own" },
+            styles: { root: { color: "blue" } },
+          }),
+        ];
+      },
+    }),
+  );
+  const [plain, own] = elementsOf(html)
+    .filter((element) => classesOf(element).includes("solix-GridCol-root"))
+    .map((element) => ({
+      classes: classesOf(element).filter((found) => !found.startsWith(LIBRARY_CLASS_PREFIX)),
+      style: Object.fromEntries(
+        declarationsIn(valuesOf(element, "style")[0]).filter(
+          ([property]) => !property.startsWith("--"),
+        ),
+      ),
+    }));
+
+  expect(plain).toEqual({
+    classes: ["solix-GridCol-root", "from-grid"],
+    style: { color: "red", "font-weight": "bold" },
+  });
+  expect(own).toEqual({
+    classes: ["solix-GridCol-root", "from-grid", "own"],
+    style: { color: "blue", "font-weight": "bold" },
+  });
+});
+
 test("Grid carries GridCol as Grid.Col", () => {
   expect(Reflect.get(library.Grid, "Col")).toBe(library.GridCol);
 });

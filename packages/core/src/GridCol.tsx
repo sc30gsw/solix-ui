@@ -84,6 +84,7 @@ export function GridCol(props: GridColProps) {
           eachValue<Span>(span(given), (each) => (each === "content" ? "auto" : undefined)),
       },
       queries: own,
+      carried: grid.col,
     },
     "offset",
     "span",
