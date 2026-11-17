@@ -11,6 +11,7 @@ import {
   packageManagerPinName,
   type Pin,
   pinsOf,
+  prereleasePinsNamedBy,
   type RegistryDocument,
   type ReleasePolicy,
 } from "#/scripts/newest-releases.ts";
@@ -92,6 +93,7 @@ function check(
     nodeReleases?: NodeRelease[];
     excluded?: ReleasePolicy["excluded"];
     heldBack?: HeldBack[];
+    untilStable?: string[];
   } = {},
 ) {
   return compareWithNewest({
@@ -101,13 +103,15 @@ function check(
     policy: { ...policy, excluded: options.excluded ?? [] },
     now,
     heldBack: options.heldBack ?? [],
+    untilStable: options.untilStable ?? [],
   });
 }
 
-function checkOf(name: string, pinned: string, releases: Release[]) {
+function checkOf(name: string, pinned: string, releases: Release[], untilStable: string[] = []) {
   const report = check({
     pins: pinsOf(manifest, { [name]: pinned }),
     documents: { ...documents, [name]: registryDocument(releases) },
+    untilStable,
   });
   return { comparison: report.comparisons[0], problems: report.problems };
 }
@@ -319,7 +323,24 @@ test("a prerelease pin of a package with no stable release yet is behind its new
   ).toMatchObject({ status: "behind", eligible: "3.0.0", newest: "3.0.0" });
 });
 
-test("a pin on the next line is behind the newest release of the major it pins, nightly, beta or release candidate, and follows stable releases once that major has one old enough to install", () => {
+test("the prerelease pins that a manifest names are the catalog entries it names whose catalog version is a prerelease", () => {
+  expect(
+    prereleasePinsNamedBy(
+      {
+        dependencies: { "a-library": "workspace:*", "a-stable-tool": "catalog:" },
+        devDependencies: { "a-framework": "catalog:", "an-addon": "catalog:" },
+      },
+      {
+        "a-framework": "11.0.0-next-20261020160717",
+        "an-addon": "11.0.0-beta.3",
+        "a-stable-tool": "1.0.0",
+        "an-unnamed-beta": "2.0.0-beta.1",
+      },
+    ),
+  ).toEqual(["a-framework", "an-addon"]);
+});
+
+test("a pin on the until-stable channel is behind the newest release of the major it pins, nightly, beta or release candidate, and follows stable releases once that major has one old enough to install", () => {
   const nightlies: Release[] = [
     ["10.7.4", 30],
     ["11.0.0-next-20261020160717", 28],
@@ -327,34 +348,42 @@ test("a pin on the next line is behind the newest release of the major it pins, 
     ["11.0.0-next-20261116090000", 0.5],
     ["12.0.0-next-20261101000000", 10],
   ];
-  const betas: Release[] = [
+  const beforeStable: Release[] = [
     ["10.6.7", 7],
     ["11.0.0-beta.3", 4],
     ["11.0.0-rc.0", 2],
     ["11.0.0-rc.1", 0.5],
   ];
-  const stable: Release[] = [...betas, ["11.0.0", 2], ["11.0.1", 0.5], ["11.1.0-beta.0", 1.5]];
+  const afterStable: Release[] = [
+    ...beforeStable,
+    ["11.0.0", 2],
+    ["11.0.1", 0.5],
+    ["11.1.0-beta.0", 1.5],
+  ];
+  const untilStable = ["a-package"];
 
   expect(
-    checkOf("storybook-solidjs-vite", "11.0.0-next-20261020160717", nightlies).comparison,
+    checkOf("a-package", "11.0.0-next-20261020160717", nightlies, untilStable).comparison,
   ).toMatchObject({
     status: "behind",
     eligible: "11.0.0-next-20261105190313",
     newest: "11.0.0-next-20261116090000",
   });
   expect(
-    checkOf("storybook-solidjs-vite", "11.0.0-next-20261105190313", nightlies).comparison,
+    checkOf("a-package", "11.0.0-next-20261105190313", nightlies, untilStable).comparison,
   ).toMatchObject({ status: "not yet eligible" });
-  expect(checkOf("storybook", "11.0.0-beta.3", betas).comparison).toMatchObject({
-    status: "behind",
-    eligible: "11.0.0-rc.0",
+  expect(checkOf("a-package", "11.0.0-beta.3", beforeStable, untilStable).comparison).toMatchObject(
+    { status: "behind", eligible: "11.0.0-rc.0" },
+  );
+  expect(checkOf("a-package", "11.0.0-beta.3", beforeStable).comparison).toMatchObject({
+    status: "current",
   });
-  expect(checkOf("@storybook/addon-vitest", "11.0.0-rc.0", stable).comparison).toMatchObject({
+  expect(checkOf("a-package", "11.0.0-rc.0", afterStable, untilStable).comparison).toMatchObject({
     status: "behind",
     eligible: "11.0.0",
     newest: "11.0.1",
   });
-  expect(checkOf("@storybook/addon-a11y", "11.0.0", stable).comparison).toMatchObject({
+  expect(checkOf("a-package", "11.0.0", afterStable, untilStable).comparison).toMatchObject({
     status: "not yet eligible",
     newest: "11.0.1",
   });

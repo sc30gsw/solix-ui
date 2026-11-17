@@ -46,7 +46,12 @@ type Releases = {
 
 type Unknown = { why: string };
 
-type ChannelContext = { pinned: string; nodeLtsMajor: number | undefined; now: number };
+type ChannelContext = {
+  pinned: string;
+  nodeLtsMajor: number | undefined;
+  now: number;
+  untilStable: readonly string[];
+};
 
 type Channel = {
   describe: string;
@@ -80,8 +85,12 @@ function isOnTheVersionOf(pinned: string, { version }: Published): boolean {
   );
 }
 
+function onTheMajorOf(published: readonly Published[], major: number | undefined): Published[] {
+  return published.filter(({ version }) => semver.major(version) === major);
+}
+
 function solidLine(published: readonly Published[], now: number): Published[] {
-  const line = published.filter(({ version }) => semver.major(version) === solidMajor);
+  const line = onTheMajorOf(published, solidMajor);
   const stable = line.filter(isStable);
   return stable.some(({ eligibleAt }) => eligibleAt <= now) ? stable : line;
 }
@@ -107,17 +116,20 @@ const solidChannel: Channel = {
   versions: (published, { now }) => solidLine(published, now),
 };
 
-function nextLine(published: readonly Published[], { pinned, now }: ChannelContext): Published[] {
-  const line = published.filter(({ version }) => semver.major(version) === semver.major(pinned));
+function pinnedMajorUntilStable(
+  published: readonly Published[],
+  { pinned, now }: ChannelContext,
+): Published[] {
+  const line = onTheMajorOf(published, semver.major(pinned));
   return line.some((release) => isStable(release) && release.eligibleAt <= now)
     ? published.filter(isStable)
     : line;
 }
 
-const nextChannel: Channel = {
+const pinnedMajorUntilStableChannel: Channel = {
   describe:
-    "the next line: its newest release on the major it pins, nightly, beta, release candidate or stable, until a stable release of that major is old enough to install; then its newest stable release",
-  versions: nextLine,
+    "its newest release on the major it pins, nightly, beta, release candidate or stable, until a stable release of that major is old enough to install; then its newest stable release",
+  versions: pinnedMajorUntilStable,
 };
 
 export const channels: Record<string, Channel> = {
@@ -127,19 +139,12 @@ export const channels: Record<string, Channel> = {
   "@solidjs/signals": solidChannel,
   "@solidjs/vite-plugin": {
     describe: "its newest release on the major it pins, tagged or not",
-    versions: (published, { pinned }) =>
-      published.filter(({ version }) => semver.major(version) === semver.major(pinned)),
+    versions: (published, { pinned }) => onTheMajorOf(published, semver.major(pinned)),
   },
-  storybook: nextChannel,
-  "@storybook/addon-a11y": nextChannel,
-  "@storybook/addon-vitest": nextChannel,
-  "storybook-solidjs-vite": nextChannel,
   "@types/node": {
     describe: "its newest stable release on the major of Node's newest LTS",
     versions: (published, { nodeLtsMajor }) =>
-      published.filter(
-        (release) => isStable(release) && semver.major(release.version) === nodeLtsMajor,
-      ),
+      onTheMajorOf(published, nodeLtsMajor).filter(isStable),
   },
 };
 
@@ -147,9 +152,13 @@ export const solidPackages = Object.keys(channels).filter(
   (name) => channels[name] === solidChannel,
 );
 
-function channelOf({ registryName, pinned }: RegistryPin): Channel {
+function channelOf(
+  { name, registryName, pinned }: RegistryPin,
+  untilStable: readonly string[],
+): Channel {
   return (
     channels[registryName] ??
+    (untilStable.includes(name) ? pinnedMajorUntilStableChannel : undefined) ??
     (semver.prerelease(pinned) === null ? stableChannel : prereleasePinChannel)
   );
 }
@@ -196,6 +205,19 @@ export function pinsOf(
       pinned: lowestVersion(nodePinName, manifest.engines?.node),
     },
   ];
+}
+
+export function prereleasePinsNamedBy(
+  manifest: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> },
+  catalog: Record<string, string>,
+): string[] {
+  return Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })
+    .filter((name) => {
+      const specifier = catalog[name];
+      const version = specifier === undefined ? null : semver.valid(specifier);
+      return version !== null && semver.prerelease(version) !== null;
+    })
+    .sort();
 }
 
 export function exclusionsIn(entries: readonly string[]): Exclusion[] {
@@ -281,7 +303,7 @@ function registryReleases(
 ): Releases | Unknown {
   const published = publishedIn(pin.registryName, document, policy);
   if (!Array.isArray(published)) return published;
-  const channel = channelOf(pin);
+  const channel = channelOf(pin, context.untilStable);
   return (
     releasesAmong(channel.versions(published, context), context.now) ?? {
       why: `no published release is on its channel (${channel.describe}); check the name and the channel.`,
@@ -332,11 +354,13 @@ export function compareWithNewest(input: {
   policy: ReleasePolicy;
   now: number;
   heldBack: readonly HeldBack[];
+  untilStable: readonly string[];
 }): Report {
   const nodeLts = nodeLtsReleases(input.nodeReleases);
   const nodeLtsMajor = nodeLts && semver.major(nodeLts.newest);
   const comparisons = input.pins.map((pin): PinComparison => {
-    const channel = pin.source === "node" ? nodeChannel : channelOf(pin).describe;
+    const channel =
+      pin.source === "node" ? nodeChannel : channelOf(pin, input.untilStable).describe;
     const releases =
       pin.source === "node"
         ? (nodeLts ?? { why: "Node's release index lists no LTS release." })
@@ -344,6 +368,7 @@ export function compareWithNewest(input: {
             pinned: pin.pinned,
             nodeLtsMajor,
             now: input.now,
+            untilStable: input.untilStable,
           });
     return "why" in releases
       ? { pin, channel, status: "unknown", why: releases.why }
