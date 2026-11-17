@@ -12,7 +12,7 @@ export const LIBRARY_CLASS_PREFIX = "sx";
 export const STYLE_PROP_LAYER = "style-props";
 export const HIDDEN_LAYER = "hidden";
 export const BEHAVIOUR_SDK_LAYER = "ui-sdk";
-export const LIBRARY_PART_CONDITION = `:where([class*="${stableClassPrefix}"])`;
+export const LIBRARY_PART_CONDITION = `:where([class^="${stableClassPrefix}"], [class*=" ${stableClassPrefix}"])`;
 export const HIDDEN_PART_SELECTOR = `[hidden]${LIBRARY_PART_CONDITION}:not([hidden="until-found"])`;
 
 export const sdkHiddenRuleSource = {

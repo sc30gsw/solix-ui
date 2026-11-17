@@ -42,18 +42,22 @@ const tabValues = fc.uniqueArray(
 );
 
 inEveryEngine((browser) => {
-  test("the library's stylesheet alone, with no behaviour component mounted, leaves a hidden element of another library that a style displays alone, and keeps a hidden part that carries a library part class hidden whatever display its style gives", async () => {
+  test("the library's stylesheet alone, with no behaviour component mounted, leaves a hidden element of another library, whose class holds the stable class prefix only inside a word, to the display its style gives, and keeps hidden a part with a class that starts with the stable class prefix, first or after another class, when its style gives it a display", async () => {
     const page = await browser().newPage();
     await page.setContent(
       [
         `<style>${stylesheet}</style>`,
-        '<div data-slot="x" hidden class="tp-flex" style="display:block">Another library</div>',
+        '<div data-slot="x" hidden class="notsolix-thing tp-flex" style="display:block">Another library</div>',
         `<div data-slot="tabs-panel" hidden class="${stableClass("TabsPanel", rootPart)}" style="display:grid">A part</div>`,
+        `<div data-slot="tabs-panel" hidden class="app-grid ${stableClass("TabsPanel", rootPart)}" style="display:grid">A part after a class of the app's</div>`,
       ].join(""),
     );
 
     expect(await computed(page.getByText("Another library"), "display")).toBe("block");
-    expect(await computed(page.getByText("A part"), "display")).toBe("none");
+    expect(await computed(page.getByText("A part", { exact: true }), "display")).toBe("none");
+    expect(await computed(page.getByText("A part after a class of the app's"), "display")).toBe(
+      "none",
+    );
 
     await page.close();
   });

@@ -29,7 +29,7 @@ import {
 
 const stylesheet = builtStylesheet.trim();
 const realHiddenRule = behaviourSdkHiddenRule(join(import.meta.dirname, ".."));
-const libraryPartCondition = `:where([class*="${stableClassPrefix}"])`;
+const libraryPartCondition = `:where([class^="${stableClassPrefix}"], [class*=" ${stableClassPrefix}"])`;
 const ownerBreakpoints: [name: string, width: string][] = [
   ["xs", "36em"],
   ["sm", "48em"],
@@ -155,7 +155,7 @@ function sdkSelectors(): string[] {
   return selectors;
 }
 
-test("the stylesheet first orders the behaviour SDK's layer before the library's, then holds the rule the SDK writes at run time to keep a hidden part hidden, read from the SDK's package and narrowed to an element that carries a library part class, and then every other rule inside the one library cascade layer", () => {
+test("the stylesheet first orders the behaviour SDK's layer before the library's, then holds the rule the SDK writes at run time to keep a hidden part hidden, read from the SDK's package and narrowed to an element with a class that starts with the stable class prefix, and then every other rule inside the one library cascade layer", () => {
   const [selector, ...others] = sdkSelectors();
   const narrowed = realHiddenRule.replace(selector, `${selector}${libraryPartCondition}`);
   const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n${narrowed}\n`;
@@ -246,14 +246,11 @@ test.each([
     'writeStyle(doc, "id", "@layer ui-sdk { :where([hidden]) { display: none !important }");',
   ],
   ["nothing", "return doc;"],
-])(
-  "the build refuses the SDK's hidden rule when its writer holds %s, and names what it found",
-  (_, body) => {
-    expect(() => behaviourSdkHiddenRule(sdkWhoseHiddenWriterIs(body))).toThrow(
-      `${sdkHiddenRuleSource.writer} writes`,
-    );
-  },
-);
+])("the build refuses the SDK's hidden rule when its writer holds %s", (_, body) => {
+  expect(() => behaviourSdkHiddenRule(sdkWhoseHiddenWriterIs(body))).toThrow(
+    `${sdkHiddenRuleSource.writer} writes`,
+  );
+});
 
 test("the build takes the SDK's hidden rule when its writer holds one closed layer block of one rule that declares only display none important, whatever its selector", () => {
   const rule = `@layer ${BEHAVIOUR_SDK_LAYER} { :where([data-part][hidden]) { display: none !important } }`;
@@ -306,7 +303,7 @@ test("the style-prop layer sits inside the library layer, ordered after every la
   ]);
 });
 
-test("the hidden layer holds one rule, the build's selector for a hidden part with display none", () => {
+test("the hidden layer holds one rule, display none on a hidden element with a class that starts with the stable class prefix, unless it is hidden until found", () => {
   const rules: string[] = [];
   libraryLayer().walkAtRules("layer", (layer) => {
     if (layer.params !== HIDDEN_LAYER) return;
