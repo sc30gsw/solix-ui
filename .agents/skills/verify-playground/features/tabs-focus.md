@@ -12,6 +12,7 @@ The Tab key treats a list of tabs as one stop. It enters a list at the selected 
 ## How to get to it (user POV)
 
 - Click `Two` in `Manual vertical` and `Security` in `Account`.
+- Put focus on `Security`. The journey calls `focus()` on it, because a click does not focus a button in every engine.
 - Press Shift+Tab, then Tab three times.
 
 ## Driving it with drive.mjs
@@ -26,4 +27,5 @@ Preconditions:
 ## Gotchas
 
 - A panel with no focusable content is itself a tab stop, so Tab from a list reaches its panel before the next list.
-- A focus ring shows only for keyboard focus. A click on a tab focuses it without a ring, which is why the journey leaves the list and comes back.
+- A focus ring shows only for keyboard focus, which is why the journey leaves the list and comes back.
+- WebKit does not focus a button on a click, so the journey focuses the selected tab itself before it presses Shift+Tab.
