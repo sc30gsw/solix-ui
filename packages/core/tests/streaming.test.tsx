@@ -19,6 +19,7 @@ function AsyncColumn() {
     get span() {
       return { base: 12, md: span() };
     },
+    offset: { md: 1 },
     children: "Half",
   });
 }
@@ -28,8 +29,19 @@ const queried: Record<"media" | "container", GridProps> = {
   container: { type: "container", breakpoints },
 };
 
-async function chunksOf(type: "media" | "container"): Promise<string[]> {
-  const stream = renderToStream(() =>
+async function chunksFrom(grid: Parameters<typeof renderToStream>[0]): Promise<string[]> {
+  const stream = renderToStream(grid);
+  const chunks: string[] = [];
+  await new Promise<void>((resolve) => {
+    Reflect.apply(Reflect.get(stream, "pipe"), stream, [
+      { write: (chunk) => chunks.push(String(chunk)), end: () => resolve() } satisfies Sink,
+    ]);
+  });
+  return chunks;
+}
+
+function chunksOf(type: "media" | "container"): Promise<string[]> {
+  return chunksFrom(() =>
     createComponent(library.Grid, {
       ...queried[type],
       gap: { base: "xs", md: "xl" },
@@ -43,13 +55,6 @@ async function chunksOf(type: "media" | "container"): Promise<string[]> {
       },
     }),
   );
-  const chunks: string[] = [];
-  await new Promise<void>((resolve) => {
-    Reflect.apply(Reflect.get(stream, "pipe"), stream, [
-      { write: (chunk) => chunks.push(String(chunk)), end: () => resolve() } satisfies Sink,
-    ]);
-  });
-  return chunks;
 }
 
 test.each(["media", "container"] as const)(
@@ -62,3 +67,32 @@ test.each(["media", "container"] as const)(
     expect(rest.join(""), "the column arrives in a later chunk").toContain("Half");
   },
 );
+
+test("a column that streams in after another writes the rules no earlier column wrote, and none that one wrote", async () => {
+  const chunks = await chunksFrom(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      breakpoints,
+      get children() {
+        return [
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "First" }),
+          createComponent(Loading, {
+            fallback,
+            get children() {
+              return createComponent(AsyncColumn, {});
+            },
+          }),
+        ];
+      },
+    }),
+  );
+  const [shell = "", ...rest] = chunks;
+  const later = rest.join("");
+  const flexBasis = ".sx-col-flex-basis-c0-2{";
+
+  expect(shell).toContain(fallback);
+  expect(shell).toContain(flexBasis);
+  expect(later).toContain("Half");
+  expect(later).toContain(".sx-col-offset-c0-2{");
+  expect(later).not.toContain(flexBasis);
+});

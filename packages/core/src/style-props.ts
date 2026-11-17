@@ -1,4 +1,5 @@
 import type { JSX } from "@solidjs/web";
+import { createSignal, onCleanup } from "solid-js";
 import {
   baseKey,
   type Breakpoint,
@@ -313,7 +314,48 @@ function uniqueUsed(used: readonly Used[]): Used[] {
   );
 }
 
-function queryContainer(queries: () => ContainerQueries | undefined): QueryContainer {
+type Member = {
+  written: readonly string[];
+  readonly changed: () => number;
+  readonly setChanged: (next: (count: number) => number) => void;
+};
+
+function keyOf([name, slot]: Used): string {
+  return `${name} ${slot}`;
+}
+
+function createMember(members: Member[]): Member {
+  const [changed, setChanged] = createSignal(0, { ownedWrite: true });
+  const member: Member = { written: [], changed, setChanged };
+  members.push(member);
+  onCleanup(() => {
+    members.splice(members.indexOf(member), 1);
+    setChanged((count) => count + 1);
+  });
+  return member;
+}
+
+function writtenBefore(members: readonly Member[], own: Member | undefined): Set<string> {
+  const before = own === undefined ? [] : members.slice(0, members.indexOf(own));
+  return new Set(
+    before.flatMap((member) => {
+      member.changed();
+      return member.written;
+    }),
+  );
+}
+
+function settle(own: Member | undefined, placed: readonly string[]): void {
+  if (own === undefined || own.written.join() === placed.join()) return;
+  own.written = placed;
+  own.setChanged((count) => count + 1);
+}
+
+function queryContainer(
+  queries: () => ContainerQueries | undefined,
+  members: Member[],
+  own?: Member,
+): QueryContainer {
   let reported: () => readonly Used[] = () => [];
   return {
     queries,
@@ -322,9 +364,16 @@ function queryContainer(queries: () => ContainerQueries | undefined): QueryConta
     },
     rules() {
       const current = queries();
-      return current && rulesFor(current, uniqueUsed(reported()));
+      if (current === undefined) return undefined;
+      const placed = uniqueUsed(reported());
+      settle(own, placed.map(keyOf));
+      const before = writtenBefore(members, own);
+      return rulesFor(
+        current,
+        placed.filter((pair) => !before.has(keyOf(pair))),
+      );
     },
-    member: () => queryContainer(queries),
+    member: () => queryContainer(queries, members, createMember(members)),
   };
 }
 
@@ -344,5 +393,5 @@ export function createQueryContainer(
         })
         .toSorted(([, narrower], [, wider]) => pixelsOf(narrower) - pixelsOf(wider)),
     };
-  });
+  }, []);
 }

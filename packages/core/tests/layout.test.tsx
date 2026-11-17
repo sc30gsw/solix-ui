@@ -718,7 +718,7 @@ test.each(columnCases)("GridCol: %s", (_, grid, column, expected) => {
   expect(html).not.toContain("solix-Grid-container");
 });
 
-test("GridCol: in a grid with container queries and breakpoints, keys its values by the grid's container widths, whose rules the grid renders", () => {
+test("GridCol: in a grid with container queries and breakpoints, keys its values by the grid's container widths, and renders its own rules", () => {
   const { html, classes } = columnIn(
     {
       type: "container",
@@ -732,7 +732,7 @@ test("GridCol: in a grid with container queries and breakpoints, keys its values
   expect(rules).toContain("@container (min-width: 20em){");
   expect(
     [...rules.matchAll(/@property (--[\w-]+)/g)].map(([, property]) => property),
-    "the grid's rules hold only the pairs its columns use",
+    "the column's rules hold only the pairs it places",
   ).toEqual(["--sx-col-flex-basis-c0-2", "--sx-col-flex-grow-c0-2", "--sx-col-max-width-c0-2"]);
   expect(rules).toContain(
     ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}",
@@ -748,6 +748,29 @@ test("GridCol: in a grid with container queries and no breakpoints, keys its val
   expect(rules).toContain(`@container (min-width: ${mdInRem}){`);
   expect(rules).not.toContain("@media");
   expect(html).toContain("solix-Grid-container");
+});
+
+test("a container grid of 12 columns writes each rule its columns share once, in the first column that places it, and a later column writes only what no earlier one wrote", () => {
+  const span = { base: 12, md: 6 };
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      get children() {
+        return [
+          ...Array.from({ length: 11 }, () => createComponent(library.GridCol, { span })),
+          createComponent(library.GridCol, { span, offset: { md: 1 } }),
+        ];
+      },
+    }),
+  );
+  const rules = rulesOf(html);
+  const flexBasis = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
+
+  expect(rules).toHaveLength(2);
+  expect(rules.join("").split(flexBasis)).toHaveLength(2);
+  expect(rules[0]).toContain(flexBasis);
+  expect(rules[1]).not.toContain(flexBasis);
+  expect(rules[1]).toContain(".sx-col-offset-c0-2{--col-offset:var(--sx-col-offset-c0-2)}");
 });
 
 test("a grid with container queries and no value keyed by a width renders its container part and no style element", () => {
