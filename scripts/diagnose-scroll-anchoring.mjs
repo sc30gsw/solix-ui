@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { chromium, firefox } from "playwright";
-import { expectedValues } from "./expected-values.ts";
+import { expectedValues } from "#/scripts/expected-values.ts";
 
 const engines = { chromium, firefox };
 const [engineName = "firefox", url = "http://127.0.0.1:4400/", runs = "3"] = process.argv.slice(2);
