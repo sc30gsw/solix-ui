@@ -248,6 +248,51 @@ inEveryEngine((browser) => {
       expect(await stateOf(page, manual)).toMatchObject({ focused: two });
     });
 
+    test("Shift+Tab leaves a tab list from the selected tab that a click focused, whether or not it had focus before the click, Tab comes back to that tab, and the click shows no focus ring", async () => {
+      const { page } = opened;
+      const securityTab = tabNamed(page, account, security);
+      const pressAndFind = async (key: string) => {
+        await page.keyboard.press(key);
+        return page.evaluate((list) => {
+          const active = document.activeElement;
+          const described =
+            active === null
+              ? "nothing"
+              : `<${active.tagName.toLowerCase()} role="${active.getAttribute("role") ?? ""}"> "${active.textContent ?? ""}"`;
+          return {
+            described,
+            inTheList: active?.closest('[role="tablist"]')?.getAttribute("aria-label") === list,
+          };
+        }, account);
+      };
+      const clicks = [
+        { name: "a click that moves focus to the tab", times: 1 },
+        { name: "a click on the tab that has focus", times: 2 },
+      ];
+      for (const click of clicks) {
+        await tabNamed(page, account, overview).click();
+        for (let pressed = 0; pressed < click.times; pressed += 1) await securityTab.click();
+
+        expect(await computed(securityTab, "outline-style"), `${click.name}: focus ring`).toBe(
+          "none",
+        );
+
+        const left = await pressAndFind("Shift+Tab");
+
+        expect(
+          left.inTheList,
+          `${click.name}, then Shift+Tab: document.activeElement is ${left.described}`,
+        ).toBe(false);
+
+        const back = await pressAndFind("Tab");
+
+        expect(
+          (await stateOf(page, account)).focused,
+          `${click.name}, then Shift+Tab and Tab: document.activeElement is ${back.described}`,
+        ).toBe(security);
+      }
+    });
+
     test("with allowTabDeactivation a click on the selected tab selects none, and with keepMounted false a panel keeps its content only while it shows, unless the panel itself keeps it", async () => {
       const { page } = opened;
       const notesTab = tabNamed(page, optional, notes);
