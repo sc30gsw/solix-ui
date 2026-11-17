@@ -530,7 +530,7 @@ function parseSelector(selector: string): ParsedSelector {
   return { compounds, combinators, list };
 }
 
-test("each child rule is one selector, from an element that carries a variable's class to its children, or to the children of a child it names, joined by > alone, in a layer nested first in the style-prop layer, so a style prop on a child beats it", () => {
+test("each child rule is one selector, from an element that carries a variable's class to its children, or to the children of a child one attribute selector names, joined by > alone, in a layer nested first in the style-prop layer, so a style prop on a child beats it", () => {
   let styleProps: postcss.AtRule | undefined;
   libraryLayer().walkAtRules("layer", (rule) => {
     if (rule.params === STYLE_PROP_LAYER) styleProps = rule;
@@ -549,8 +549,12 @@ test("each child rule is one selector, from an element that carries a variable's
       ...(carrier !== undefined && variableClasses.includes(carrier)
         ? []
         : [`${selector}: start from the class of a variable.`]),
-      ...(child === undefined || compounds.length > 3 || (grandchild !== undefined && child === "*")
-        ? [`${selector}: style the children, or the children of a child it names, and no deeper.`]
+      ...(child === undefined ||
+      compounds.length > 3 ||
+      (grandchild !== undefined && !/^\[[^\]]+\]$/.test(child))
+        ? [
+            `${selector}: style the children, or the children of a child one attribute selector names, and no deeper.`,
+          ]
         : []),
     ];
   });

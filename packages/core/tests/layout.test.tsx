@@ -1,3 +1,4 @@
+import type { CompiledStyles } from "@stylexjs/stylex";
 import { createComponent, renderToString } from "@solidjs/web";
 import { expect, expectTypeOf, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
@@ -12,6 +13,7 @@ import type {
   SpaceProps,
   StackProps,
 } from "../src/index";
+import type { createParts } from "../src/parts";
 import type { ContainerWidth } from "../src/style-props";
 import { isContainerWidth, library } from "./built-library";
 import { render } from "./fixtures";
@@ -725,4 +727,13 @@ test("a container width the type takes is one the run time takes, and the other 
     "0x10px",
     "5 em",
   ]);
+});
+
+type NameTakenWithoutOptions<Name extends string> = Parameters<
+  typeof createParts<Name, Record<"root", CompiledStyles>, { class?: string }>
+>[0];
+
+test("createParts refuses, by type, a variable group's name called without its options", () => {
+  expectTypeOf<NameTakenWithoutOptions<"Center">>().toEqualTypeOf<"Center">();
+  expectTypeOf<NameTakenWithoutOptions<"Space">>().toBeNever();
 });

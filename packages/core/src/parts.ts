@@ -120,11 +120,12 @@ function isOptions(given: unknown): given is GivenOptions {
 }
 
 export function createParts<
+  Name extends string,
   Styles extends Compiled,
   Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
   KeptOffRoot extends keyof Props = never,
 >(
-  component: string,
+  component: Name extends VariableGroup ? never : Name,
   compiled: Styles,
   props: Props,
   ...keptOffRoot: KeptOffRoot[]
