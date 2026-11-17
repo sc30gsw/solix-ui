@@ -293,6 +293,28 @@ inEveryEngine((browser) => {
       }
     });
 
+    test("a click on the tab that has focus fires no blur, focusout, focus or focusin", async () => {
+      const { page } = opened;
+      const securityTab = tabNamed(page, account, security);
+      await securityTab.click();
+      await tabList(page, account).evaluate((node) => {
+        const fired: string[] = [];
+        (window as Window & { focusEventsFired?: string[] }).focusEventsFired = fired;
+        for (const type of ["blur", "focusout", "focus", "focusin"]) {
+          node.addEventListener(type, (event) => fired.push(event.type), { capture: true });
+        }
+      });
+
+      await securityTab.click();
+
+      expect(await stateOf(page, account)).toMatchObject({ focused: security });
+      expect(
+        await page.evaluate(
+          () => (window as Window & { focusEventsFired?: string[] }).focusEventsFired,
+        ),
+      ).toEqual([]);
+    });
+
     test("with allowTabDeactivation a click on the selected tab selects none, and with keepMounted false a panel keeps its content only while it shows, unless the panel itself keeps it", async () => {
       const { page } = opened;
       const notesTab = tabNamed(page, optional, notes);
