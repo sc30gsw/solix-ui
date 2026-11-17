@@ -23,7 +23,6 @@ export const LIBRARY_CLASS_PREFIX = stylePropClassPrefix;
 export const STYLE_PROP_LAYER = stylePropLayer;
 export const HIDDEN_LAYER = hiddenLayer;
 export const BEHAVIOUR_SDK_LAYER = behaviourSdkLayer;
-export const LIBRARY_STYLE_MARK = "data-solix-rules";
 export const LIBRARY_PART_CONDITION = `:where([class^="${stableClassPrefix}"], [class*=" ${stableClassPrefix}"])`;
 export const HIDDEN_PART_SELECTOR = `[hidden]${LIBRARY_PART_CONDITION}:not([hidden="until-found"])`;
 

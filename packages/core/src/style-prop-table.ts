@@ -32,6 +32,7 @@ export const containerQueryLayer = "container-queries";
 export const childRuleLayer = "child-rules";
 export const hiddenLayer = "hidden";
 export const behaviourSdkLayer = "ui-sdk";
+export const libraryStyleMark = "data-solix-rules";
 
 export const breakpointWidths = {
   xs: "36em",
@@ -358,8 +359,15 @@ function childRules(): string[] {
   );
 }
 
-export const outerLayerOrder = `@layer ${behaviourSdkLayer}, ${libraryCascadeLayer};`;
-export const libraryLayerOrder = `@layer ${componentLayer}, ${stylePropLayer}, ${containerQueryLayer}, ${hiddenLayer};`;
+const outerLayers = [behaviourSdkLayer, libraryCascadeLayer] as const;
+export const libraryLayers = [
+  componentLayer,
+  stylePropLayer,
+  containerQueryLayer,
+  hiddenLayer,
+] as const;
+export const outerLayerOrder = `@layer ${outerLayers.join(", ")};`;
+export const libraryLayerOrder = `@layer ${libraryLayers.join(", ")};`;
 export const layerOrder = `${outerLayerOrder}@layer ${libraryCascadeLayer}{${libraryLayerOrder}}`;
 
 export function stylePropRules(): string {

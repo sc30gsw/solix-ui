@@ -4,11 +4,7 @@ import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import postcss from "postcss";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import {
-  LIBRARY_CASCADE_LAYER,
-  LIBRARY_CLASS_PREFIX,
-  LIBRARY_STYLE_MARK,
-} from "../build-pipeline.mjs";
+import { LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
 import type { PolymorphicProps } from "../src/parts";
 import {
@@ -16,6 +12,7 @@ import {
   breakpoints,
   canonicalOf,
   layerOrder,
+  libraryStyleMark,
   canonicalStylePropNames,
   containerQueryLayer,
   type DisplayPropName,
@@ -596,19 +593,18 @@ function scopesOf(classes: Iterable<string>): Set<string> {
 
 function containerRuleProblems(name: string, html: string): string[] {
   const rendered = new Set(elementsOf(html).flatMap(classesOf));
-  const order = layerOrder;
   const unmarked = elementsOf(html).filter(
     ({ tag, attributes }) =>
-      tag === "style" && !attributes.some(([attribute]) => attribute === LIBRARY_STYLE_MARK),
+      tag === "style" && !attributes.some(([attribute]) => attribute === libraryStyleMark),
   );
   const markProblems = unmarked.map(
-    () => `${name}: mark each style element with ${LIBRARY_STYLE_MARK}.`,
+    () => `${name}: mark each style element with ${libraryStyleMark}.`,
   );
   return [
     ...markProblems,
     ...rulesOf(html).flatMap((rules) => {
-      if (!rules.startsWith(order)) return [`${name}: start its rules with ${order}.`];
-      const [layer, ...others] = postcss.parse(rules.slice(order.length)).nodes;
+      if (!rules.startsWith(layerOrder)) return [`${name}: start its rules with ${layerOrder}.`];
+      const [layer, ...others] = postcss.parse(rules.slice(layerOrder.length)).nodes;
       if (
         others.length > 0 ||
         layer?.type !== "atrule" ||

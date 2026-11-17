@@ -13,7 +13,7 @@ const { browserType, engineNames, enginesToVerify } = await repositoryModule("sc
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
 const { baseKey, breakpointWidths, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
-const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
 const { pageStyleRules, stylesAddedToThePage } = await repositoryModule("apps/playground/tests/support/page-styles.ts");
 const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabNames, tabsRegion, valueOf } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
@@ -566,6 +566,7 @@ const journeys = {
       const outsideTheSdkLayer = (rule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
       const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibraryOrTheApp);
       observe(`${when}: rules the SDK added outside its layer`, rules.filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
+      observe(`${when}: rules of the library's marked styles that name no solix layer`, rules.filter((rule) => rule.fromTheLibrary && !rule.layers.some((layer) => layer === LIBRARY_CASCADE_LAYER || layer.startsWith(`${LIBRARY_CASCADE_LAYER}.`))).map(({ text }) => text).join(" | "), "");
       observe(`${when}: important declarations outside the SDK's layer`, rules.filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
       observe(`${when}: the SDK added the hidden rule the build reads from it`, (await stylesAddedToThePage(page)).includes(sdkHiddenRule), true);
       observe(`${when}: style attributes on the parts`, written.partStyles, ["", styleOfTheOneStyleProp, displayedByTheApp.style].sort().join(" | "));

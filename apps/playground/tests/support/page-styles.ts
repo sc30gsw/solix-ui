@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import { LIBRARY_STYLE_MARK } from "../../../../packages/core/build-pipeline.mjs";
+import { libraryStyleMark } from "../../../../packages/core/src/style-prop-table.ts";
 
 export function stylesAddedToThePage(page: Page): Promise<string[]> {
   return page.evaluate(
@@ -11,7 +11,7 @@ export function stylesAddedToThePage(page: Page): Promise<string[]> {
         [...sheet.cssRules].map((rule) => rule.cssText),
       ),
     ],
-    LIBRARY_STYLE_MARK,
+    libraryStyleMark,
   );
 }
 
@@ -62,5 +62,5 @@ export function pageStyleRules(page: Page): Promise<PageStyleRule[]> {
       walk(sheet.cssRules, [], { addedAtRunTime: true, fromTheLibrary: false });
     }
     return found;
-  }, LIBRARY_STYLE_MARK);
+  }, libraryStyleMark);
 }

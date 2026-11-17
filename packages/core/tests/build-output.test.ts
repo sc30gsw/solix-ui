@@ -20,7 +20,7 @@ import {
   containerQueryLayer,
   layerOrder,
   libraryLayerOrder,
-  outerLayerOrder,
+  libraryLayers,
   responsiveKeys,
   stylePropNames,
   variableClass,
@@ -313,12 +313,13 @@ test("input validity and the modal backdrop compile to the platform's own select
 });
 
 test("the library layer ranks its components, then its style props, then the container queries a component writes at run time, and the hidden layer last", () => {
-  expect(nestedLayerOrder(libraryLayer())).toEqual([
+  expect(libraryLayers).toEqual([
     componentLayer,
     STYLE_PROP_LAYER,
     containerQueryLayer,
     HIDDEN_LAYER,
   ]);
+  expect(nestedLayerOrder(libraryLayer())).toEqual([...libraryLayers]);
 });
 
 test("the hidden layer holds one rule, display none on a hidden element with a class that starts with the stable class prefix, unless it is hidden until found", () => {
@@ -687,10 +688,9 @@ test("the stylesheet first ranks the SDK's layer before the library's, and the l
     }
   });
 
-  expect(statement(opening)).toBe(outerLayerOrder);
   expect(statement(first)).toBe(libraryLayerOrder);
-  expect(layerOrder.startsWith(outerLayerOrder) && layerOrder.includes(libraryLayerOrder)).toBe(
-    true,
+  expect(layerOrder).toBe(
+    `${statement(opening)}@layer ${LIBRARY_CASCADE_LAYER}{${statement(first)}}`,
   );
   expect(components && nestedLayerOrder(components).length).toBeGreaterThan(0);
 });

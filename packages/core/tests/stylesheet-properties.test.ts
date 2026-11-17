@@ -6,13 +6,11 @@ import {
   compileLibrarySource,
   BEHAVIOUR_SDK_LAYER,
   behaviourSdkHiddenRule,
-  HIDDEN_LAYER,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
   libraryStylesheet,
-  STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
-import { componentLayer, containerQueryLayer, stylePropRules } from "../src/style-prop-table";
+import { libraryLayers, stylePropRules } from "../src/style-prop-table";
 import { layersAroundDeclaration, nestedLayerOrder } from "./cascade-layers";
 
 const packageRoot = join(import.meta.dirname, "..");
@@ -167,12 +165,7 @@ test("for every generated style definition, the stylesheet orders the behaviour 
       ]);
       stylesheet.each((layer) => {
         if (layer.type !== "atrule" || layer.params !== LIBRARY_CASCADE_LAYER) return;
-        expect(nestedLayerOrder(layer)).toEqual([
-          componentLayer,
-          STYLE_PROP_LAYER,
-          containerQueryLayer,
-          HIDDEN_LAYER,
-        ]);
+        expect(nestedLayerOrder(layer)).toEqual([...libraryLayers]);
       });
 
       stylesheet.walkRules((rule) => {

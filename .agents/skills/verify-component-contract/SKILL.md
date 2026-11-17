@@ -110,5 +110,5 @@ No verifier runs on Solid components, so this is not a proof. The test uses fast
 
 - A new style prop: add a row to the table in `packages/core/src/style-prop-table.ts` and nothing else. The check draws it from there. A second name for an existing prop is a row with `aliasOf`.
 - A new component: add its entry to `fixtures`; the type checker names each field it needs. A component that another carries needs no more: the fixtures read the carrier from the build. Its parts come from its build. If its root should not take consumer attributes, that breaks the contract in `AGENTS.md`, so change that rule and its check first.
-- A component's root tag or boolean attribute changes: change its entry in `fixtures`.`fixtures`.
+- A component's root tag or boolean attribute changes: change its entry in `fixtures`.
 - Upgrading Solid or the Solid plugin: change the versions in the catalog in `pnpm-workspace.yaml`, then run the check.
