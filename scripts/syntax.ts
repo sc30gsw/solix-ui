@@ -14,6 +14,7 @@ export {
   memberDeclarations,
   parameterAliases,
   reachedFrom,
+  returnedAliasDeclarations,
   returnsAlias,
   stringsIn,
   symbolOf,

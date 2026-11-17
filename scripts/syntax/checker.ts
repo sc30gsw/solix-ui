@@ -228,6 +228,13 @@ export function returnsAlias(program: Program, fn: ts.Node, alias: string): bool
   );
 }
 
+export function returnedAliasDeclarations(program: Program, fn: ts.Node): ts.Node[] {
+  if (!ts.isSignatureDeclaration(fn)) return [];
+  const signature = program.checker.getSignatureFromDeclaration(fn);
+  const returned = signature && program.checker.getReturnTypeOfSignature(signature);
+  return declarationsOfSymbol(returned?.getAliasSymbol());
+}
+
 export function stringsIn(program: Program, expression: ts.Expression | undefined): string[] {
   return expression ? stringLiteralTypesOf(program.checker, expression) : [];
 }

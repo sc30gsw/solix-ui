@@ -10,6 +10,7 @@ const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
+const storiesProject = "apps/storybook/vite.config.ts";
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 
 export default defineConfig({
@@ -56,6 +57,9 @@ export default defineConfig({
           "apps/*/vite.config.ts",
           "apps/*/src/App.tsx",
           "apps/playground/src/middleware.ts",
+          "apps/storybook/**/vite.config.ts",
+          "apps/storybook/**/.storybook/*.ts",
+          "apps/storybook/**/*.stories.tsx",
         ],
         rules: { "import/no-default-export": "off" },
       },
@@ -100,6 +104,7 @@ export default defineConfig({
           },
         },
       },
+      storiesProject,
     ],
   },
 });
