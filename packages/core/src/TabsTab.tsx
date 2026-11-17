@@ -97,6 +97,7 @@ export type TabsTabProps = ElementProps<
 
 export function TabsTab(props: TabsTabProps) {
   const tabs = useTabs("Tabs.Tab");
+  let pressLandedInside = false;
   const { root, part } = tabs.behaviour.bind(
     createParts("TabsTab", styles, props, "value", "leftSection", "rightSection", "children"),
     {
@@ -114,9 +115,16 @@ export function TabsTab(props: TabsTabProps) {
             return tabs.selected() === props.value ? "" : undefined;
           },
           ref: tabs.steps.item(() => props.value),
-          onPointerUp: (event: PointerEvent & { currentTarget: HTMLButtonElement }) => {
+          onPointerDown: (event: PointerEvent & { currentTarget: HTMLButtonElement }) => {
+            pressLandedInside = event.target !== event.currentTarget;
+          },
+          onBlur: () => {
+            pressLandedInside = false;
+          },
+          onKeyDown: (event: KeyboardEvent & { currentTarget: HTMLButtonElement }) => {
+            if (!pressLandedInside || event.key !== "Tab" || !event.shiftKey) return;
+            pressLandedInside = false;
             const tab = event.currentTarget;
-            if (event.target === tab || !tab.matches(":focus")) return;
             tab.blur();
             tab.focus({ preventScroll: true });
           },

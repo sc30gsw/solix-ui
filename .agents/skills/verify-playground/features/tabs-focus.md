@@ -27,4 +27,4 @@ Preconditions:
 
 - A panel with no focusable content is itself a tab stop, so Tab from a list reaches its panel before the next list.
 - A focus ring shows only for keyboard focus, which is why the journey leaves the list and comes back.
-- WebKit starts Tab and Shift+Tab from the node a click landed on when that node is inside the focused element. A click on a tab lands on its label, and the tab before that label is the tab itself, so Shift+Tab would find the tab that already has focus and leave focus where it is. `Tabs.Tab` focuses itself again after such a press, so the next Tab or Shift+Tab starts from the tab.
+- WebKit starts Tab and Shift+Tab from the node a click landed on when that node is inside the focused element. A click on a tab lands on its label, and the tab before that label is the tab itself, so Shift+Tab would find the tab that already has focus and leave focus where it is. After such a press, `Tabs.Tab` focuses itself again when Shift+Tab goes down, before the browser moves focus, so the search starts from the tab. A click fires no focus or blur event of its own.
