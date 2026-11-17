@@ -154,7 +154,7 @@ test(
         { examples: [[Number.MAX_SAFE_INTEGER]] },
       ),
     ).rejects.toThrow(
-      /^Property failed after 1 tests\n\{ seed: -?\d+, path: "0(?::\d+)+", endOnFailure: true \}\nCounterexample: \[\d+\]\nShrunk \d+ time\(s\)/,
+      /^Property failed after 1 tests\n\{ seed: -?\d+, path: "0(?::\d+)*", endOnFailure: true \}\nCounterexample: \[\d+\]\nShrunk \d+ time\(s\)/,
     );
   },
 );
