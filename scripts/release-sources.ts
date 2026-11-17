@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   exclusionsIn,
+  prereleasePinsOnlyNamedBy,
   type HeldBack,
   heldBackFile,
   type NodeRelease,
@@ -9,7 +10,7 @@ import {
   type ReleasePolicy,
 } from "#/scripts/newest-releases.ts";
 import { type PnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
-import { repositoryRoot } from "#/scripts/repository.ts";
+import { manifestAt, manifestPaths, repositoryRoot } from "#/scripts/repository.ts";
 
 const registry = "https://registry.npmjs.org";
 const nodeIndex = "https://nodejs.org/dist/index.json";
@@ -22,6 +23,18 @@ export function releasePolicy(settings: PnpmSettings): ReleasePolicy {
     minimumReleaseAgeMinutes: settings.minimumReleaseAge,
     excluded: exclusionsIn(settings.minimumReleaseAgeExclude),
   };
+}
+
+export const storybookAppManifest = "apps/storybook/package.json";
+
+export function untilStableMembers(catalog: Record<string, string>): string[] {
+  return prereleasePinsOnlyNamedBy(
+    manifestAt(storybookAppManifest),
+    manifestPaths()
+      .filter((path) => path !== storybookAppManifest)
+      .map(manifestAt),
+    catalog,
+  );
 }
 
 export function heldBackEntries(): HeldBack[] {

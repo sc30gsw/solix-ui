@@ -2,31 +2,43 @@ import type { StoryIndexEntry } from "storybook/internal/types";
 import { beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import {
-  isTaggedForTheTestRun,
+  isRunByTheProject,
+  refuseARunWithoutTheStoriesProjects,
+  type StoriesRun,
   storiesProjectIn,
   storyFileOf,
   storyIndex,
 } from "#/tests/support/stories.ts";
 
-const listing = inject("testFilesOfEachProject");
+const run: StoriesRun = {
+  listing: inject("testFilesOfEachProject"),
+  settings: inject("runSettingsOfEachProject"),
+  engines: enginesToVerify(),
+};
 const indexTimeout = 60_000;
 let stories: StoryIndexEntry[] = [];
 
 beforeAll(async () => {
+  refuseARunWithoutTheStoriesProjects(run);
   stories = await storyIndex();
 }, indexTimeout);
 
-test("every story Storybook indexes is tagged for the test run", () => {
-  expect(stories.length).toBeGreaterThan(0);
-  expect(stories.filter((story) => !isTaggedForTheTestRun(story)).map(({ id }) => id)).toEqual([]);
-});
+describe.each(run.engines)("in %s", (engine) => {
+  const project = storiesProjectIn(engine);
 
-describe.each(enginesToVerify())("in %s", (engine) => {
-  test("the stories project of vp run verify runs every file of a story Storybook tests, and no file without one", () => {
-    const tested = [...new Set(stories.filter(isTaggedForTheTestRun).map(storyFileOf))].sort();
-    const run = [...(listing[storiesProjectIn(engine)] ?? [])].sort();
+  test("the stories project of vp run verify lists every file of a story Storybook indexes, and no other", () => {
+    const indexed = [...new Set(stories.map(storyFileOf))].sort();
 
-    expect(tested.length).toBeGreaterThan(0);
-    expect(run).toEqual(tested);
+    expect(indexed.length).toBeGreaterThan(0);
+    expect([...(run.listing[project] ?? [])].sort()).toEqual(indexed);
+  });
+
+  test("the stories project runs every story Storybook indexes: no tag of the test plugin leaves one out, and the project narrows test names no further than the run", () => {
+    const settings = run.settings[project];
+
+    expect(settings?.testNamePattern).toBe(settings?.runTestNamePattern);
+    expect(
+      stories.filter((story) => !isRunByTheProject(story, settings)).map(({ id }) => id),
+    ).toEqual([]);
   });
 });

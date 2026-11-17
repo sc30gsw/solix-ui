@@ -11,13 +11,18 @@ import {
   packageManagerPinName,
   type Pin,
   pinsOf,
-  prereleasePinsNamedBy,
+  prereleasePinsOnlyNamedBy,
   type RegistryDocument,
   type ReleasePolicy,
 } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
-import { heldBackEntries, releasePolicy } from "#/scripts/release-sources.ts";
-import { rootManifest } from "#/scripts/repository.ts";
+import {
+  heldBackEntries,
+  releasePolicy,
+  storybookAppManifest,
+  untilStableMembers,
+} from "#/scripts/release-sources.ts";
+import { manifestAt, manifestPaths, rootManifest } from "#/scripts/repository.ts";
 
 const now = Date.parse("2026-11-14T12:00:00Z");
 const day = 24 * 60 * 60_000;
@@ -323,21 +328,42 @@ test("a prerelease pin of a package with no stable release yet is behind its new
   ).toMatchObject({ status: "behind", eligible: "3.0.0", newest: "3.0.0" });
 });
 
-test("the prerelease pins that a manifest names are the catalog entries it names whose catalog version is a prerelease", () => {
+test("the prerelease pins only a manifest names are the catalog entries it names whose catalog version is a prerelease and that no other manifest names", () => {
   expect(
-    prereleasePinsNamedBy(
+    prereleasePinsOnlyNamedBy(
       {
         dependencies: { "a-library": "workspace:*", "a-stable-tool": "catalog:" },
-        devDependencies: { "a-framework": "catalog:", "an-addon": "catalog:" },
+        devDependencies: {
+          "a-framework": "catalog:",
+          "an-addon": "catalog:",
+          "a-shared-beta": "catalog:",
+        },
       },
+      [{ dependencies: { "a-shared-beta": "catalog:" } }],
       {
         "a-framework": "11.0.0-next-20261020160717",
         "an-addon": "11.0.0-beta.3",
+        "a-shared-beta": "0.1.0-beta.5",
         "a-stable-tool": "1.0.0",
         "an-unnamed-beta": "2.0.0-beta.1",
       },
     ),
   ).toEqual(["a-framework", "an-addon"]);
+});
+
+test("the until-stable channel that the weekly check uses holds prerelease pins of the catalog that the Storybook app names and no other workspace manifest does", () => {
+  const { catalog } = pnpmSettings();
+  const members = untilStableMembers(catalog);
+  const app = manifestAt(storybookAppManifest);
+  const others = manifestPaths()
+    .filter((path) => path !== storybookAppManifest)
+    .map(manifestAt);
+  const named = (manifest: typeof app) =>
+    Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
+
+  expect(members.length).toBeGreaterThan(0);
+  expect(members.filter((name) => !named(app).includes(name))).toEqual([]);
+  expect(members.filter((name) => others.some((other) => named(other).includes(name)))).toEqual([]);
 });
 
 test("a pin on the until-stable channel is behind the newest release of the major it pins, nightly, beta or release candidate, and follows stable releases once that major has one old enough to install", () => {

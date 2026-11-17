@@ -4,14 +4,14 @@ Solix UI is a component library for Solid 2.0, styled with StyleX. This page say
 
 ## v1.0
 
-The work comes in this order. Each step has a status: not started, in progress or merged. A step that adds components may be marked merged only when the build exports every one of them; a part that a component carries as a static member goes with that component. A step that adds no component says on the line under it which test shows it merged, and is merged exactly when that test exists and `vp run verify` runs it.
+The work comes in this order. Each step has a status: not started, in progress or merged. A step that adds components may be marked merged only when the build exports every one of them; a part that a component carries as a static member goes with that component. A step that adds no component says on the line under it which test shows it merged, and is merged exactly when that test exists and `vp run verify` lists it.
 
 1. **Layout** (merged): Box, Center, Container, Flex, Grid, Group, SimpleGrid, Space, Stack.
 2. **UI SDK seam** (merged): Tabs.
 3. **`#/` subpath imports** (merged).
-   - Merged when: `tests/subpath-imports.test.ts` exists and `vp run verify` runs it.
+   - Merged when: `tests/subpath-imports.test.ts` exists and `vp run verify` lists it.
 4. **Storybook** (merged).
-   - Merged when: `apps/storybook/tests/stories-in-verify.test.ts` exists and `vp run verify` runs it.
+   - Merged when: `apps/storybook/tests/stories-in-verify.test.ts` exists and `vp run verify` lists it.
 5. **Buttons and basic display** (not started): Button, UnstyledButton, CloseButton, IconButton, CopyButton, FileButton, Toggle, Link, Text, Title, Highlight, List, Divider, Paper, VisuallyHidden, Loader, Badge, Avatar, Card, Image, BackgroundImage, Indicator, NumberFormatter, Code.
 6. **Input basics** (not started): Input, InputBase, TextInput, Textarea, PasswordInput, NumberInput, PinInput, Fieldset, Checkbox, Radio, Switch, Chip, Slider, NativeSelect.
 7. **Overlays** (not started): Modal, Drawer, Dialog, Overlay, LoadingOverlay, Popover, Tooltip, Menu, Transition, Collapse, Accordion, Spoiler, Portal, FocusTrap.
@@ -61,3 +61,11 @@ A revisit is a choice deferred on purpose. Each one says why not now and gives a
 - Why not now: It is experimental: 0.x, first published 2026-11-09, with breaking changes promised until Solid 2.0 is final. Compiled `.rx` adds a runtime package that every consumer would install. It does not fit the library's Babel and StyleX build or its TypeScript 7 rules.
 - When it is reconsidered: for the playground first, not the library source.
 - Condition: a stable release old enough to install under the repository's `minimumReleaseAge` exists for `solid-js@^2.0.0` and `@reactivescript/compiler@>=1.0.0`.
+
+### Storybook's idle-callback workaround
+
+`apps/storybook/.storybook/manager.ts` adds `requestIdleCallback` and `cancelIdleCallback` to Storybook's interface where the engine has none, as WebKit has none, because the interface calls `requestIdleCallback` with no fallback when a story finishes.
+
+- Why not now: Storybook 11 is still a prerelease, and the prerelease the catalog pins makes the call; without the workaround the accessibility panel stops in WebKit.
+- When it is reconsidered: on a stable Storybook 11. Remove the manager entry if its interface guards the call, and keep it with a new condition if it does not.
+- Condition: a stable release old enough to install under the repository's `minimumReleaseAge` exists for `storybook@^11.0.0`.

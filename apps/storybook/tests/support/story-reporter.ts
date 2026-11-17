@@ -3,19 +3,18 @@ import type { Reporter, TestCase } from "vite-plus/test/node";
 
 export const storyReportVariable = "SOLIX_STORY_REPORT";
 
-export type ReportedStory = { title: string; status: string; failureMessages: string[] };
+export type ReportedStory = { id: string; status: string; messages: string[] };
 
 export default class StoryReporter implements Reporter {
   private readonly stories: ReportedStory[] = [];
 
   onTestCaseResult(testCase: TestCase): void {
+    const storyId: unknown = Reflect.get(testCase.meta(), "storyId");
     const result = testCase.result();
     this.stories.push({
-      title: testCase.name,
+      id: typeof storyId === "string" ? storyId : testCase.fullName,
       status: result.state,
-      failureMessages: (result.errors ?? []).map(({ message, stack }) =>
-        [message, stack ?? ""].join("\n"),
-      ),
+      messages: (result.errors ?? []).map(({ message }) => message),
     });
   }
 

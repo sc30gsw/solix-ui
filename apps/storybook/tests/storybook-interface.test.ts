@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Page } from "playwright";
+import type { Browser, Page } from "playwright";
 import type { StoryIndexEntry } from "storybook/internal/types";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { manifestAt } from "../../../scripts/repository.ts";
 import { inEveryEngine } from "../../../tests/support/served-app.ts";
-import { runVp } from "#/tests/support/child-runs.ts";
+import { childRunMargin, runVp } from "#/tests/support/child-runs.ts";
 import { serveDirectory } from "#/tests/support/static-server.ts";
 import { collectTelemetry, telemetryUrlVariable } from "#/tests/support/telemetry-collector.ts";
 import { interfaceTelemetryPort, staticStorybookPort } from "#/tests/support/test-servers.ts";
@@ -21,6 +21,10 @@ const componentAndStorySeparator = "--";
 const playFunctionTag = "play-fn";
 const previewFrame = "#storybook-preview-iframe";
 const storyRoot = "#storybook-root";
+const idleCallbacks = ["requestIdleCallback", "cancelIdleCallback"];
+const storyWithATextArg = "button--default";
+const textArg = "children";
+const typedArg = "Saved again";
 
 const telemetry = collectTelemetry(interfaceTelemetryPort);
 const url = serveDirectory(staticBuild, staticStorybookPort);
@@ -50,7 +54,7 @@ beforeAll(async () => {
     buildTimeout,
   );
   stories = build.exitCode === 0 ? builtStories() : [];
-}, buildTimeout);
+}, buildTimeout + childRunMargin);
 
 test("the scripts of the Storybook package are the ones this test runs under the telemetry collector", () => {
   expect(Object.keys(manifestAt(storybookManifest).scripts ?? {})).toEqual(
@@ -64,13 +68,24 @@ test("the static build succeeds and sends no Storybook telemetry", () => {
   expect(telemetry.received()).toEqual([]);
 });
 
-inEveryEngine((browser) => {
-  describe("Storybook's own interface, built", () => {
+type Setup = { name: string; withoutIdleCallbacks: boolean };
+
+function removeIdleCallbacks(names: readonly string[]): void {
+  for (const name of names) {
+    Reflect.deleteProperty(Window.prototype, name);
+    Reflect.deleteProperty(window, name);
+  }
+}
+
+function checkTheInterface(browser: () => Browser, { name, withoutIdleCallbacks }: Setup): void {
+  describe(name, () => {
     let page: Page;
     const consoleErrors: string[] = [];
 
     beforeAll(async () => {
-      page = await browser().newPage({ viewport: { width: 1400, height: 900 } });
+      const context = await browser().newContext({ viewport: { width: 1400, height: 900 } });
+      if (withoutIdleCallbacks) await context.addInitScript(removeIdleCallbacks, idleCallbacks);
+      page = await context.newPage();
       page.on("console", (message) => {
         if (message.type() === "error") consoleErrors.push(message.text());
       });
@@ -79,7 +94,7 @@ inEveryEngine((browser) => {
     }, interfaceTimeout);
 
     afterAll(async () => {
-      await page.close();
+      await page.context().close();
     });
 
     test(
@@ -132,14 +147,46 @@ inEveryEngine((browser) => {
       interfaceTimeout,
     );
 
-    test("the interface has requestIdleCallback, which Storybook's interface calls with no fallback and which the app's manager entry adds where the engine lacks it", async () => {
-      expect(await page.evaluate(() => typeof Reflect.get(window, "requestIdleCallback"))).toBe(
-        "function",
-      );
+    test(
+      "a story's text arg changed through the controls panel reaches the preview",
+      async () => {
+        await page.goto(`${url}?path=/story/${storyWithATextArg}`, { waitUntil: "load" });
+        await page.getByRole("tab", { name: /controls/i }).click();
+        const control = page.locator(`#control-${textArg}`);
+        await control.fill("");
+        await control.pressSequentially(typedArg);
+
+        await expect
+          .poll(() => page.frameLocator(previewFrame).locator(storyRoot).innerText(), {
+            timeout: panelTimeout,
+          })
+          .toBe(typedArg);
+      },
+      interfaceTimeout,
+    );
+
+    test("the interface has requestIdleCallback and cancelIdleCallback, which Storybook's interface calls with no fallback", async () => {
+      expect(
+        await page.evaluate(
+          (names) => names.map((name) => typeof Reflect.get(window, name)),
+          idleCallbacks,
+        ),
+      ).toEqual(idleCallbacks.map(() => "function"));
     });
 
     test("the interface reports no console error", () => {
       expect(consoleErrors).toEqual([]);
     });
+  });
+}
+
+inEveryEngine((browser) => {
+  checkTheInterface(browser, {
+    name: "Storybook's own interface, built",
+    withoutIdleCallbacks: false,
+  });
+  checkTheInterface(browser, {
+    name: "Storybook's own interface, built, opened where the engine has no idle callbacks",
+    withoutIdleCallbacks: true,
   });
 });

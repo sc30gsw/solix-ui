@@ -4,6 +4,7 @@ import {
   solidDevelopmentBuildLoaded,
   wcag2ATags,
 } from "../../../tests/support/browser-gates.ts";
+import { selectorsTheAccessibilityAddonLeavesUnscanned } from "#/accessibility-scan.ts";
 import "@solix/core/styles.css";
 
 const accessibility = {
@@ -11,7 +12,13 @@ const accessibility = {
   options: { runOnly: { type: "tag", values: wcag2ATags } },
 };
 const accessibilityKey = "a11y";
-const manualKey = "manual";
+const globalSwitchesThatSkipTheScan = [[accessibilityKey, "manual"], ["ghostStories"]] as const;
+
+type ResolvedStory = {
+  parameters: Record<string, unknown>;
+  globals: Record<string, unknown>;
+  canvasElement: Element;
+};
 
 let diagnosticsRaised: () => string[] = () => [];
 
@@ -19,10 +26,9 @@ function shown(value: unknown): string {
   return value === undefined ? "nothing" : JSON.stringify(value);
 }
 
-type ResolvedStory = {
-  parameters: Record<string, unknown>;
-  globals: Record<string, unknown>;
-};
+function switchedOn(globals: Record<string, unknown>, path: readonly string[]): boolean {
+  return path.reduce<unknown>((value, key) => Object(value)[key], globals) === true;
+}
 
 function accessibilityLeft({ parameters, globals }: ResolvedStory): string[] {
   const own: Record<string, unknown> = accessibility;
@@ -33,19 +39,32 @@ function accessibilityLeft({ parameters, globals }: ResolvedStory): string[] {
       (key) =>
         `${accessibilityKey}.${key} is ${shown(resolved[key])} where the project sets ${shown(own[key])}`,
     );
-  const manual: unknown = Object(globals[accessibilityKey])[manualKey];
-  const leftToAPerson =
-    manual === true
-      ? [`globals.${accessibilityKey}.${manualKey} is true where the project leaves it off`]
-      : [];
-  return [...changed, ...leftToAPerson];
+  const switched = globalSwitchesThatSkipTheScan
+    .filter((path) => switchedOn(globals, path))
+    .map((path) => `globals.${path.join(".")} is true where the project leaves it off`);
+  return [...changed, ...switched];
+}
+
+function unscannedIn({ canvasElement }: ResolvedStory): string[] {
+  return selectorsTheAccessibilityAddonLeavesUnscanned
+    .filter((selector) => canvasElement.querySelector(selector) !== null)
+    .map(
+      (selector) =>
+        `the canvas holds ${selector}, which the accessibility addon leaves out of its scan`,
+    );
+}
+
+function refuseAnyLeft(when: string, left: readonly string[]): void {
+  if (left.length > 0) {
+    throw new Error(
+      `The story leaves the accessibility gate ${when}:\n${left.map((line) => `${when}, ${line}`).join("\n")}`,
+    );
+  }
 }
 
 function beforeEachStory(context: ResolvedStory): void {
-  const left = accessibilityLeft(context);
-  if (left.length > 0) {
-    throw new Error(`The story leaves the accessibility gate:\n${left.join("\n")}`);
-  }
+  refuseAnyLeft("before it ran", accessibilityLeft(context));
+  context.parameters[accessibilityKey] = structuredClone(context.parameters[accessibilityKey]);
   if (import.meta.env.DEV && !solidDevelopmentBuildLoaded()) {
     throw new Error(
       "Solid's development build is not loaded, so no story can be checked for Solid development diagnostics.",
@@ -54,9 +73,10 @@ function beforeEachStory(context: ResolvedStory): void {
   diagnosticsRaised = captureSolidDiagnostics();
 }
 
-function afterEachStory(): void {
+function afterEachStory(context: ResolvedStory): void {
   const raised = diagnosticsRaised();
   diagnosticsRaised = () => [];
+  refuseAnyLeft("while it ran", [...accessibilityLeft(context), ...unscannedIn(context)]);
   if (raised.length > 0) {
     throw new Error(`The story raised a Solid development diagnostic:\n${raised.join("\n")}`);
   }
@@ -65,7 +85,7 @@ function afterEachStory(): void {
 const preview: Preview = {
   parameters: { [accessibilityKey]: accessibility },
   beforeEach: (context) => beforeEachStory(context),
-  afterEach: afterEachStory,
+  afterEach: (context) => afterEachStory(context),
 };
 
 export default preview;

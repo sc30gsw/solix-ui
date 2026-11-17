@@ -79,3 +79,23 @@ export const AccessibilityLeftToSomeone: Story = {
   args: nameless,
   globals: { a11y: { manual: true } },
 };
+
+export const AccessibilitySkippedAsAGhost: Story = {
+  args: nameless,
+  globals: { ghostStories: true },
+};
+
+export const RenderedWhereTheScanDoesNotLook: Story = {
+  render: () => (
+    <div class="sb-wrapper">
+      <Button />
+    </div>
+  ),
+};
+
+export const PlayTurnsTheCheckOff: Story = {
+  args: nameless,
+  play: async ({ parameters }) => {
+    Object.assign(Object(parameters.a11y), { test: "off" });
+  },
+};

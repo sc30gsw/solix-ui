@@ -157,9 +157,9 @@ const withCondition = [
   "",
   "1. **Gadgets** (merged): Gadget.",
   "2. **Tooling** (merged).",
-  "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` runs it.",
+  "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.",
   "3. **Docs** (not started).",
-  "   - Merged when: `tests/docs.test.ts` exists and `vp run verify` runs it.",
+  "   - Merged when: `tests/docs.test.ts` exists and `vp run verify` lists it.",
   "",
 ].join("\n");
 
@@ -174,7 +174,7 @@ test(`every step of ${roadmapFile} that adds no component and is merged names it
   expect(conditionProblems(steps, conditionStateIn(inject("testFilesOfEachProject")))).toEqual([]);
 });
 
-test("a condition's test is missing when no file has its path, not run when no project the runner lists runs it, and run otherwise", () => {
+test("a condition's test is missing when no file has its path, not listed when no project of the run lists it, and listed otherwise", () => {
   const stateOf = conditionStateIn({ node: ["tests/roadmap.test.ts"], other: [] });
 
   expect(stateOf("tests/roadmap.test.ts")).toBe("run");
@@ -195,7 +195,7 @@ test("a step that adds no component reads the condition on the line under it", (
   ]);
 });
 
-test("a step says merged exactly when its condition's test exists and verify runs it", () => {
+test("a step says merged exactly when its condition's test exists and the runner lists it for verify", () => {
   const { steps } = parseRoadmap(withCondition);
 
   expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "run" }))).toEqual([]);
@@ -203,7 +203,7 @@ test("a step says merged exactly when its condition's test exists and verify run
     `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts does not exist. Mark it in progress, or land it.`,
   ]);
   expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "not run" }))).toEqual([
-    `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts is not a file \`vp run verify\` runs. Mark it in progress, or land it.`,
+    `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts is not a file \`vp run verify\` lists. Mark it in progress, or land it.`,
   ]);
   expect(
     conditionProblems(
@@ -211,20 +211,20 @@ test("a step says merged exactly when its condition's test exists and verify run
       statesOf({ "tests/tooling.test.ts": "run", "tests/docs.test.ts": "run" }),
     ),
   ).toEqual([
-    `${roadmapFile}: Docs is marked not started, but tests/docs.test.ts exists and \`vp run verify\` runs it. Mark it merged.`,
+    `${roadmapFile}: Docs is marked not started, but tests/docs.test.ts exists and \`vp run verify\` lists it. Mark it merged.`,
   ]);
 });
 
 test("the roadmap refuses every condition it cannot read, or that has no step right above it or decides a step with components, by line number", () => {
   const refusals: [string, string, string][] = [
     [
-      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` runs it.",
+      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.",
       "   - Merged when: tests/tooling.test.ts exists.",
       ":5: write the condition as",
     ],
     [
-      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` runs it.",
-      "- Merged when: `tests/tooling.test.ts` exists and `vp run verify` runs it.",
+      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.",
+      "- Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.",
       ":5: write the condition as",
     ],
     [
@@ -234,11 +234,11 @@ test("the roadmap refuses every condition it cannot read, or that has no step ri
     ],
     [
       "1. **Gadgets** (merged): Gadget.",
-      "1. **Gadgets** (merged): Gadget.\n   - Merged when: `tests/gadget.test.ts` exists and `vp run verify` runs it.",
+      "1. **Gadgets** (merged): Gadget.\n   - Merged when: `tests/gadget.test.ts` exists and `vp run verify` lists it.",
       ":4: Gadgets adds components",
     ],
     [
-      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` runs it.\n",
+      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.\n",
       "",
       ":4: Tooling adds no component, so give it the condition",
     ],

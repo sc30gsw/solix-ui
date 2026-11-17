@@ -207,15 +207,29 @@ export function pinsOf(
   ];
 }
 
-export function prereleasePinsNamedBy(
-  manifest: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> },
+type NamesDependencies = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+function namedBy(manifest: NamesDependencies): string[] {
+  return Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
+}
+
+export function prereleasePinsOnlyNamedBy(
+  manifest: NamesDependencies,
+  others: readonly NamesDependencies[],
   catalog: Record<string, string>,
 ): string[] {
-  return Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })
+  return namedBy(manifest)
     .filter((name) => {
       const specifier = catalog[name];
       const version = specifier === undefined ? null : semver.valid(specifier);
-      return version !== null && semver.prerelease(version) !== null;
+      return (
+        version !== null &&
+        semver.prerelease(version) !== null &&
+        !others.some((other) => namedBy(other).includes(name))
+      );
     })
     .sort();
 }

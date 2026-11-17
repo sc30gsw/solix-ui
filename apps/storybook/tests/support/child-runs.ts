@@ -21,14 +21,21 @@ function childEnvironment(addedEnvironment: Record<string, string>): NodeJS.Proc
   return { ...environment, ...addedEnvironment };
 }
 
-function stopGroup(pid: number | undefined): void {
-  if (pid === undefined) return;
+const groupAlreadyGone = "ESRCH";
+
+function stopGroup(pid: number | undefined): string {
+  if (pid === undefined) return "";
   try {
     process.kill(-pid);
-  } catch {
-    return;
+    return "";
+  } catch (error) {
+    return Object(error).code === groupAlreadyGone
+      ? ""
+      : `\nThe run's process group ${pid} could not be stopped: ${String(error)}`;
   }
 }
+
+export const childRunMargin = 15_000;
 
 export function runVp(
   directory: string,
@@ -49,16 +56,15 @@ export function runVp(
   const printed = () => stripVTControlCharacters(output.join(""));
   return new Promise((finished) => {
     const timer = setTimeout(() => {
-      stopGroup(child.pid);
+      const unstopped = stopGroup(child.pid);
       finished({
         exitCode: null,
-        output: `vp ${args.join(" ")} did not finish within ${timeout} ms and was stopped. What it printed:\n${printed()}`,
+        output: `vp ${args.join(" ")} did not finish within ${timeout} ms and was stopped.${unstopped} What it printed:\n${printed()}`,
       });
     }, timeout);
     child.on("close", (exitCode) => {
       clearTimeout(timer);
-      stopGroup(child.pid);
-      finished({ exitCode, output: printed() });
+      finished({ exitCode, output: `${printed()}${stopGroup(child.pid)}` });
     });
   });
 }
@@ -75,7 +81,7 @@ function reportIn(file: string): Report {
     return {
       tests: stories.map((story) => ({
         ...story,
-        failureMessages: story.failureMessages.map(stripVTControlCharacters),
+        messages: story.messages.map(stripVTControlCharacters),
       })),
     };
   } catch (error) {
@@ -94,7 +100,7 @@ export async function runVitest(
   try {
     const finished = await runVp(
       directory,
-      ["test", "run", ...args, `--reporter=${storyReporter}`],
+      ["test", "run", ...args, "--reporter=default", `--reporter=${storyReporter}`],
       { ...addedEnvironment, [storyReportVariable]: reportFile },
       timeout,
     );

@@ -105,8 +105,14 @@ function exportsReturningTheJsxElement(): string[] {
           jsxElement.includes(returned),
         ),
       )
-      .map(({ text }) => text)
-      .filter((name) => name in builtByName);
+      .map(({ text }) => {
+        if (!(text in builtByName)) {
+          throw new Error(
+            `packages/core/dist/index.js: the source entry exports ${text}, which the build does not. Build the library again.`,
+          );
+        }
+        return text;
+      });
   } finally {
     program.dispose();
   }

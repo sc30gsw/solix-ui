@@ -8,11 +8,40 @@ import { withoutTestRunnerVariables } from "#/tests/support/test-runner-environm
 const playgroundDirectory = join(repositoryRoot, "apps/playground");
 const playgroundPort = 4319;
 
+export type { RunSettings };
+
 declare module "vite-plus/test" {
   interface ProvidedContext {
     playgroundUrl: string;
     testFilesOfEachProject: Record<string, string[]>;
+    runSettingsOfEachProject: Record<string, RunSettings>;
   }
+}
+
+type RunSettings = {
+  testNamePattern: string | null;
+  runTestNamePattern: string | null;
+  env: Record<string, string>;
+};
+
+function patternOf(pattern: RegExp | string | undefined): string | null {
+  return pattern === undefined ? null : String(pattern);
+}
+
+function runSettingsOfEachProject(project: TestProject): Record<string, RunSettings> {
+  const runTestNamePattern = patternOf(project.vitest.config.testNamePattern);
+  return Object.fromEntries(
+    project.vitest.projects.map(({ name, config }) => [
+      name,
+      {
+        testNamePattern: patternOf(config.testNamePattern),
+        runTestNamePattern,
+        env: Object.fromEntries(
+          Object.entries(config.env ?? {}).map(([key, value]) => [key, String(value)]),
+        ),
+      },
+    ]),
+  );
 }
 
 function productionEnvironment(): NodeJS.ProcessEnv {
@@ -30,6 +59,7 @@ async function testFilesOfEachProject(project: TestProject): Promise<Record<stri
 
 export async function setup(project: TestProject): Promise<() => void> {
   project.provide("testFilesOfEachProject", await testFilesOfEachProject(project));
+  project.provide("runSettingsOfEachProject", runSettingsOfEachProject(project));
   execFileSync(installedVp, ["run", "-r", "build"], {
     cwd: repositoryRoot,
     env: productionEnvironment(),

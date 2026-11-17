@@ -1,20 +1,15 @@
-import {
-  compareWithNewest,
-  pinsOf,
-  prereleasePinsNamedBy,
-  reportTable,
-} from "#/scripts/newest-releases.ts";
+import { compareWithNewest, pinsOf, reportTable } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   heldBackEntries,
   nodeReleases,
   registryDocuments,
   releasePolicy,
+  untilStableMembers,
 } from "#/scripts/release-sources.ts";
-import { manifestAt, rootManifest } from "#/scripts/repository.ts";
+import { rootManifest } from "#/scripts/repository.ts";
 
 const settings = pnpmSettings();
-const storybookApp = "apps/storybook/package.json";
 const pins = pinsOf(rootManifest(), settings.catalog);
 const { comparisons, problems } = compareWithNewest({
   pins,
@@ -25,7 +20,7 @@ const { comparisons, problems } = compareWithNewest({
   policy: releasePolicy(settings),
   now: Date.now(),
   heldBack: heldBackEntries(),
-  untilStable: prereleasePinsNamedBy(manifestAt(storybookApp), settings.catalog),
+  untilStable: untilStableMembers(settings.catalog),
 });
 
 console.log(reportTable(comparisons));

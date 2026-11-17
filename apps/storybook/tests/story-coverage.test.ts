@@ -4,7 +4,13 @@ import { beforeAll, expect, inject, test } from "vite-plus/test";
 import { enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import { repositoryRoot } from "../../../scripts/repository.ts";
 import { componentExports, library } from "../../../packages/core/tests/built-library.ts";
-import { storiesTestedInEveryEngine, storyFileOf, storyIndex } from "#/tests/support/stories.ts";
+import {
+  refuseARunWithoutTheStoriesProjects,
+  type StoriesRun,
+  storiesRunInEveryEngine,
+  storyFileOf,
+  storyIndex,
+} from "#/tests/support/stories.ts";
 
 type StoryModule = { default?: { component?: unknown } };
 
@@ -13,11 +19,13 @@ const indexTimeout = 60_000;
 let tested: StoryIndexEntry[] = [];
 
 beforeAll(async () => {
-  tested = storiesTestedInEveryEngine(
-    await storyIndex(),
-    inject("testFilesOfEachProject"),
-    enginesToVerify(),
-  );
+  const run: StoriesRun = {
+    listing: inject("testFilesOfEachProject"),
+    settings: inject("runSettingsOfEachProject"),
+    engines: enginesToVerify(),
+  };
+  refuseARunWithoutTheStoriesProjects(run);
+  tested = storiesRunInEveryEngine(await storyIndex(), run);
 }, indexTimeout);
 
 test("every component the built library exports is the component of a story that runs as a test in every engine, and every file of such a story names a component", async () => {

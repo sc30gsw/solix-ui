@@ -40,9 +40,9 @@ const boldBullet = /^- \*\*/;
 const stepLine = /^\d+\. \*\*([^*]+)\*\* \(([^)]+)\)(?:: (.+))?\.$/;
 const leavingLine = /^- \*\*([^*]+)\*\* will leave once (.+) (?:is|are) in the built library\.$/;
 const componentName = /^[A-Z][A-Za-z0-9]*$/;
-const conditionLine = /^ {3}- Merged when: `([^`]+)` exists and `vp run verify` runs it\.$/;
+const conditionLine = /^ {3}- Merged when: `([^`]+)` exists and `vp run verify` lists it\.$/;
 const conditionLike = /^\s*- Merged when\b/;
-const conditionTemplate = "   - Merged when: `<test file>` exists and `vp run verify` runs it.";
+const conditionTemplate = "   - Merged when: `<test file>` exists and `vp run verify` lists it.";
 const listSeparator = /, | and /;
 
 export function linesOf(text: string): Line[] {
@@ -309,12 +309,12 @@ export function conditionProblems(
     const state = stateOf(mergedWhen);
     if (status === "merged" && state !== "run") {
       return [
-        `${roadmapFile}: ${name} is marked merged, but ${mergedWhen} ${state === "missing" ? "does not exist" : "is not a file `vp run verify` runs"}. Mark it in progress, or land it.`,
+        `${roadmapFile}: ${name} is marked merged, but ${mergedWhen} ${state === "missing" ? "does not exist" : "is not a file `vp run verify` lists"}. Mark it in progress, or land it.`,
       ];
     }
     return status !== "merged" && state === "run"
       ? [
-          `${roadmapFile}: ${name} is marked ${status}, but ${mergedWhen} exists and \`vp run verify\` runs it. Mark it merged.`,
+          `${roadmapFile}: ${name} is marked ${status}, but ${mergedWhen} exists and \`vp run verify\` lists it. Mark it merged.`,
         ]
       : [];
   });
