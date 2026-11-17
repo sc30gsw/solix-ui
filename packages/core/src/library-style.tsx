@@ -1,6 +1,6 @@
 import { useContext } from "solid-js";
-import { StyleNonceContext } from "./run-time-style";
-import { libraryStyleMark } from "./style-prop-table";
+import { StyleNonceContext } from "#/src/run-time-style.ts";
+import { libraryStyleMark } from "#/src/style-prop-table.ts";
 
 export type LibraryStyleProps = { of: string; css: string };
 

@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { getHotkeyHandler, type HotkeyItem } from "../src/index";
+import { getHotkeyHandler, type HotkeyItem } from "#/src/index.ts";
 
 function keydown(key: string): KeyboardEvent {
   const event = new Event("keydown", { cancelable: true });

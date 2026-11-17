@@ -1,12 +1,12 @@
 import { createEffect, createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { createLeakyListener } from "./fixtures/leaky-listener";
-import { createLeakyObserver } from "./fixtures/leaky-observer";
-import { createLeakySubscription } from "./fixtures/leaky-subscription";
-import { createLeakyTimer } from "./fixtures/leaky-timer";
-import { createCleanupInCommand } from "./fixtures/raises-diagnostic";
-import { flush, mount, reportAfterDispose } from "./support/browser-harness";
-import { attached } from "./support/dom";
+import { createLeakyListener } from "#/tests/fixtures/leaky-listener.ts";
+import { createLeakyObserver } from "#/tests/fixtures/leaky-observer.ts";
+import { createLeakySubscription } from "#/tests/fixtures/leaky-subscription.ts";
+import { createLeakyTimer } from "#/tests/fixtures/leaky-timer.ts";
+import { createCleanupInCommand } from "#/tests/fixtures/raises-diagnostic.ts";
+import { flush, mount, reportAfterDispose } from "#/tests/support/browser-harness.ts";
+import { attached } from "#/tests/support/dom.ts";
 
 test("it reports a listener that an effect added on a later flush and never removed", () => {
   const [target, setTarget] = createSignal<EventTarget | undefined>(undefined);

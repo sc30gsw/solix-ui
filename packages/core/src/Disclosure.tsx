@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
-import { disclosureState } from "./disclosure-state.stylex";
-import { createParts, type ElementProps } from "./parts";
-import { tokens } from "./tokens.stylex";
+import { disclosureState } from "#/src/disclosure-state.stylex.ts";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   root: {

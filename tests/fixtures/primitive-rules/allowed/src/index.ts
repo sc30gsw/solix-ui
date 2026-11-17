@@ -1,8 +1,8 @@
-export { createAllowed, type AllowedOptions } from "./create-allowed";
-export { createBuilt } from "./create-built";
-export { createCommanded } from "./create-commanded";
-export { createElement } from "./create-element";
-export { createEventListener } from "./create-event-listener";
-export { createMeasured } from "./create-measured";
-export { createWatched } from "./create-watched";
-export { getHotkeyHandler } from "./get-hotkey-handler";
+export { createAllowed, type AllowedOptions } from "#/tests/fixtures/primitive-rules/allowed/src/create-allowed.ts";
+export { createBuilt } from "#/tests/fixtures/primitive-rules/allowed/src/create-built.ts";
+export { createCommanded } from "#/tests/fixtures/primitive-rules/allowed/src/create-commanded.ts";
+export { createElement } from "#/tests/fixtures/primitive-rules/allowed/src/create-element.ts";
+export { createEventListener } from "#/tests/fixtures/primitive-rules/allowed/src/create-event-listener.ts";
+export { createMeasured } from "#/tests/fixtures/primitive-rules/allowed/src/create-measured.ts";
+export { createWatched } from "#/tests/fixtures/primitive-rules/allowed/src/create-watched.ts";
+export { getHotkeyHandler } from "#/tests/fixtures/primitive-rules/allowed/src/get-hotkey-handler.ts";

@@ -2,7 +2,7 @@ import { createComponent, renderToString } from "@solidjs/web";
 import type { Browser } from "playwright";
 import { describe, expect, test } from "vite-plus/test";
 import { library, stylesheet } from "../../../packages/core/tests/built-library";
-import { inEveryEngine } from "./support/playground";
+import { inEveryEngine } from "#/tests/support/playground.ts";
 
 const origin = "http://layer-order.test";
 const sheet = `<link rel="stylesheet" href="${origin}/styles.css">`;

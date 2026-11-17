@@ -1,11 +1,11 @@
 import { expect, test } from "vite-plus/test";
-import { engineNames } from "../scripts/browser-engines.mjs";
+import { engineNames } from "#/scripts/browser-engines.mjs";
 import {
   commentSizeLimit,
   evidenceComment,
   evidenceReports,
   headingAnchors,
-} from "../scripts/evidence-summary.mjs";
+} from "#/scripts/evidence-summary.mjs";
 
 const journeysThePlaygroundMayReach = 200;
 const titleLengthAboveTodaysMean = 70;

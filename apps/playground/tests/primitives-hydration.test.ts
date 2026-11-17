@@ -1,7 +1,7 @@
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import type { BrowserValuePrimitive } from "../../../packages/primitives/fixtures/primitive-kinds";
-import { inEveryEngine, openPage, type OpenPage } from "./support/playground";
+import { inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
 const probe = "output[data-hydration-probe]";

@@ -4,10 +4,10 @@ import fc from "fast-check";
 import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import { tokenValues } from "../../../scripts/tokens";
-import type * as CreateTheme from "../src/create-theme";
-import { layerOrder, libraryCascadeLayer, libraryStyleMark } from "../src/style-prop-table";
-import { dist, library } from "./built-library";
-import { elementsOf, valuesOf } from "./markup";
+import type * as CreateTheme from "#/src/create-theme.ts";
+import { layerOrder, libraryCascadeLayer, libraryStyleMark } from "#/src/style-prop-table.ts";
+import { dist, library } from "#/tests/built-library.ts";
+import { elementsOf, valuesOf } from "#/tests/markup.ts";
 
 const { scaleOfThemeKey } = (await import(join(dist, "create-theme.js"))) as typeof CreateTheme;
 

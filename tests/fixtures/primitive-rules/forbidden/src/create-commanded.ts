@@ -1,5 +1,5 @@
-import { createStateCommand } from "../../../../../packages/primitives/src/internal-command";
-import { verticalOffset } from "./internal-position";
+import { createStateCommand } from "#/packages/primitives/src/internal-command.ts";
+import { verticalOffset } from "#/tests/fixtures/primitive-rules/forbidden/src/internal-position.ts";
 
 function home(): void {
   window.scrollTo(0, 0);

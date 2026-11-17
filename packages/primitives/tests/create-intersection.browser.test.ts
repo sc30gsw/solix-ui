@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import { expect, test, vi } from "vite-plus/test";
-import { createIntersection } from "../src/index";
-import { flush, mount } from "./support/browser-harness";
-import { box, engineWait } from "./support/dom";
+import { createIntersection } from "#/src/index.ts";
+import { flush, mount } from "#/tests/support/browser-harness.ts";
+import { box, engineWait } from "#/tests/support/dom.ts";
 
 function scroller(): { root: HTMLDivElement; below: HTMLDivElement } {
   const root = box("root");

@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import type { TestProject } from "vite-plus/test/node";
-import { installedVp, repositoryRoot } from "../../scripts/repository";
-import { localUrl, startServer } from "./server-process";
+import { installedVp, repositoryRoot } from "#/scripts/repository.ts";
+import { localUrl, startServer } from "#/tests/support/server-process.ts";
 
 const playgroundDirectory = join(repositoryRoot, "apps/playground");
 const playgroundPort = 4319;

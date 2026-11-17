@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import type { Locator, Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
-import { inEveryEngine } from "./support/playground";
+import { inEveryEngine } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 15;

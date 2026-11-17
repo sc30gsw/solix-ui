@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import { tokenValues } from "../../../scripts/tokens";
-import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
+import { LIBRARY_CLASS_PREFIX } from "#/build-pipeline.mjs";
 import {
   baseKey,
   breakpoints,
@@ -10,7 +10,7 @@ import {
   type StylePropName,
   stylePropNames,
   stylePropTable,
-} from "../src/style-prop-table";
+} from "#/src/style-prop-table.ts";
 import {
   classProp,
   type ConsumerStyle,
@@ -19,7 +19,7 @@ import {
   type DrawnDeclaration,
   type PartClassToken,
   type StylePropCase,
-} from "./consumer-props";
+} from "#/tests/consumer-props.ts";
 
 type Drawn = { value: string | number | null; kept: boolean };
 

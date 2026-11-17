@@ -1,7 +1,7 @@
-import { accessUntracked } from "../../../../../packages/primitives/src/internal-access";
-import { moveFocus } from "../../../../../packages/primitives/src/internal-focus";
-import { createValue } from "../../../../../packages/primitives/src/internal-value";
-import type { MaybeAccessor, ReadOnce } from "../../../../../packages/primitives/src/types";
+import { accessUntracked } from "#/packages/primitives/src/internal-access.ts";
+import { moveFocus } from "#/packages/primitives/src/internal-focus.ts";
+import { createValue } from "#/packages/primitives/src/internal-value.ts";
+import type { MaybeAccessor, ReadOnce } from "#/packages/primitives/src/types.ts";
 
 const missing = Symbol("missing");
 const empty = Object.freeze([]);

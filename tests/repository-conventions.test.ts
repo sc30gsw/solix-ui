@@ -10,16 +10,16 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { engineNames } from "../scripts/browser-engines.mjs";
-import { approvedSkills, frontMatterOf } from "../scripts/package-skills";
-import { pnpmSettings } from "../scripts/pnpm-settings";
+import { engineNames } from "#/scripts/browser-engines.mjs";
+import { approvedSkills, frontMatterOf } from "#/scripts/package-skills.ts";
+import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   outsideGeneratedOrInstalled,
   repositoryRoot,
   rootManifest,
   workflowFiles,
   workspaceFile,
-} from "./support/workspace";
+} from "#/tests/support/workspace.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");

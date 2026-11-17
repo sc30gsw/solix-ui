@@ -1,64 +1,68 @@
-export { createActiveElement, type ActiveElementOptions } from "./create-active-element";
+export { createActiveElement, type ActiveElementOptions } from "#/src/create-active-element.ts";
 export {
   createClickOutside,
   type ClickOutsideHandler,
   type PressEventName,
-} from "./create-click-outside";
-export { createCounter, type CounterHandlers, type CounterOptions } from "./create-counter";
+} from "#/src/create-click-outside.ts";
+export { createCounter, type CounterHandlers, type CounterOptions } from "#/src/create-counter.ts";
 export {
   createDisclosure,
   type DisclosureHandlers,
   type DisclosureOptions,
-} from "./create-disclosure";
-export { createDocumentVisibility } from "./create-document-visibility";
-export { createElementSize, type ElementSize } from "./create-element-size";
-export { createEventListener } from "./create-event-listener";
-export { createFocusReturn, type FocusReturnOptions } from "./create-focus-return";
-export { createFocusTrap } from "./create-focus-trap";
+} from "#/src/create-disclosure.ts";
+export { createDocumentVisibility } from "#/src/create-document-visibility.ts";
+export { createElementSize, type ElementSize } from "#/src/create-element-size.ts";
+export { createEventListener } from "#/src/create-event-listener.ts";
+export { createFocusReturn, type FocusReturnOptions } from "#/src/create-focus-return.ts";
+export { createFocusTrap } from "#/src/create-focus-trap.ts";
 export {
   createFocusWithin,
   type FocusWithinOptions,
   type FocusWithinReturn,
-} from "./create-focus-within";
-export { createHeadroom, type HeadroomOptions, type HeadroomReturn } from "./create-headroom";
-export { createHotkeys } from "./create-hotkeys";
-export { createHover, type HoverReturn } from "./create-hover";
-export { createInViewport, type InViewportReturn } from "./create-in-viewport";
-export { createInputState, type InputChange } from "./create-input-state";
-export { createIntersection, type IntersectionReturn } from "./create-intersection";
-export { createListState, type ListMove, type ListStateHandlers } from "./create-list-state";
-export { createMap } from "./create-map";
-export { createMediaQuery } from "./create-media-query";
-export { createMutationObserverTarget } from "./create-mutation-observer-target";
-export { createMutationObserver } from "./create-mutation-observer";
-export { createPageLeave } from "./create-page-leave";
-export { createPrevious } from "./create-previous";
-export { createQueue, type QueueOptions, type QueueReturn } from "./create-queue";
-export { createResizeObserver, type ResizeObserverReturn } from "./create-resize-observer";
-export { createScrollDirection, type ScrollDirection } from "./create-scroll-direction";
-export { createSetState, type SetStatePatch } from "./create-set-state";
-export { createSet } from "./create-set";
+} from "#/src/create-focus-within.ts";
+export {
+  createHeadroom,
+  type HeadroomOptions,
+  type HeadroomReturn,
+} from "#/src/create-headroom.ts";
+export { createHotkeys } from "#/src/create-hotkeys.ts";
+export { createHover, type HoverReturn } from "#/src/create-hover.ts";
+export { createInViewport, type InViewportReturn } from "#/src/create-in-viewport.ts";
+export { createInputState, type InputChange } from "#/src/create-input-state.ts";
+export { createIntersection, type IntersectionReturn } from "#/src/create-intersection.ts";
+export { createListState, type ListMove, type ListStateHandlers } from "#/src/create-list-state.ts";
+export { createMap } from "#/src/create-map.ts";
+export { createMediaQuery } from "#/src/create-media-query.ts";
+export { createMutationObserverTarget } from "#/src/create-mutation-observer-target.ts";
+export { createMutationObserver } from "#/src/create-mutation-observer.ts";
+export { createPageLeave } from "#/src/create-page-leave.ts";
+export { createPrevious } from "#/src/create-previous.ts";
+export { createQueue, type QueueOptions, type QueueReturn } from "#/src/create-queue.ts";
+export { createResizeObserver, type ResizeObserverReturn } from "#/src/create-resize-observer.ts";
+export { createScrollDirection, type ScrollDirection } from "#/src/create-scroll-direction.ts";
+export { createSetState, type SetStatePatch } from "#/src/create-set-state.ts";
+export { createSet } from "#/src/create-set.ts";
 export {
   createStateHistory,
   type StateHistory,
   type StateHistoryHandlers,
-} from "./create-state-history";
-export { createTextSelection } from "./create-text-selection";
-export { createToggle, type ToggleRequest, type ToggleReturn } from "./create-toggle";
+} from "#/src/create-state-history.ts";
+export { createTextSelection } from "#/src/create-text-selection.ts";
+export { createToggle, type ToggleRequest, type ToggleReturn } from "#/src/create-toggle.ts";
 export {
   createUncontrolled,
   type UncontrolledOptions,
   type UncontrolledReturn,
-} from "./create-uncontrolled";
-export { createValidatedState, type ValidatedState } from "./create-validated-state";
-export { createViewportSize, type ViewportSize } from "./create-viewport-size";
-export { createWindowEvent } from "./create-window-event";
+} from "#/src/create-uncontrolled.ts";
+export { createValidatedState, type ValidatedState } from "#/src/create-validated-state.ts";
+export { createViewportSize, type ViewportSize } from "#/src/create-viewport-size.ts";
+export { createWindowEvent } from "#/src/create-window-event.ts";
 export {
   createWindowScroll,
   type ScrollPosition,
   type WindowScrollReturn,
-} from "./create-window-scroll";
-export { getHotkeyHandler } from "./get-hotkey-handler";
+} from "#/src/create-window-scroll.ts";
+export { getHotkeyHandler } from "#/src/get-hotkey-handler.ts";
 export type {
   BrowserValue,
   HotkeyItem,
@@ -68,4 +72,4 @@ export type {
   ObserverRect,
   ReadOnce,
   RefSetter,
-} from "./types";
+} from "#/src/types.ts";

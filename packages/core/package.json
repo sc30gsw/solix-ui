@@ -11,6 +11,9 @@
   "sideEffects": [
     "**/*.css"
   ],
+  "imports": {
+    "#/*": "./*"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

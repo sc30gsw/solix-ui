@@ -1,5 +1,5 @@
 import { Box } from "@solix/core";
-import { themedByTheProvider, themeNames, themeSection } from "./theme-setups";
+import { themedByTheProvider, themeNames, themeSection } from "#/src/sections/theme-setups.ts";
 
 export function ThemeSection() {
   return (

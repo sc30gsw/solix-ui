@@ -1,6 +1,6 @@
 import type { JSX } from "@solidjs/web";
-import type { Breakpoint, StylePropName, VisibilityPropName } from "../src/style-prop-table";
-import type { ConsumerProps } from "./built-library";
+import type { Breakpoint, StylePropName, VisibilityPropName } from "#/src/style-prop-table.ts";
+import type { ConsumerProps } from "#/tests/built-library.ts";
 
 export type ClassToken = { token: string; applied: boolean; writtenAs: string };
 export type PartClassToken = ClassToken & { target: string };

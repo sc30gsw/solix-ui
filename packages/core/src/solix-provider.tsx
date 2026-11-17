@@ -1,8 +1,8 @@
 import type { JSX } from "@solidjs/web";
 import { Show, useContext } from "solid-js";
-import { type SolixTheme, themeStyleSheet } from "./create-theme";
-import { LibraryStyle } from "./library-style";
-import { type GetStyleNonce, StyleNonceContext } from "./run-time-style";
+import { type SolixTheme, themeStyleSheet } from "#/src/create-theme.ts";
+import { LibraryStyle } from "#/src/library-style.tsx";
+import { type GetStyleNonce, StyleNonceContext } from "#/src/run-time-style.ts";
 
 export type SolixProviderProps = {
   theme?: SolixTheme;

@@ -1,7 +1,7 @@
 import type { Accessor } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { createValue } from "./internal-value";
-import type { MaybeAccessor, ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { MaybeAccessor, ReadOnce } from "#/src/types.ts";
 
 /** Each option is read when a handler runs. */
 export type CounterOptions = {

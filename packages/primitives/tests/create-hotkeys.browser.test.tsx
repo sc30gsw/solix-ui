@@ -2,9 +2,9 @@ import { type JSX, render } from "@solidjs/web";
 import { createSignal, onCleanup } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
-import { createHotkeys, getHotkeyHandler, type HotkeyItem } from "../src/index";
-import { flush, mount, unmount } from "./support/browser-harness";
-import { attached } from "./support/dom";
+import { createHotkeys, getHotkeyHandler, type HotkeyItem } from "#/src/index.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
+import { attached } from "#/tests/support/dom.ts";
 
 function recorder() {
   const calls: string[] = [];

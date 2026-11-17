@@ -1,7 +1,7 @@
-import { newestSolidRelease, solidPackages } from "./newest-releases.ts";
-import { pnpmSettings, rewriteCatalog } from "./pnpm-settings.ts";
-import { registryDocuments, releasePolicy } from "./release-sources.ts";
-import { listed } from "./repository.ts";
+import { newestSolidRelease, solidPackages } from "#/scripts/newest-releases.ts";
+import { pnpmSettings, rewriteCatalog } from "#/scripts/pnpm-settings.ts";
+import { registryDocuments, releasePolicy } from "#/scripts/release-sources.ts";
+import { listed } from "#/scripts/repository.ts";
 
 const version = newestSolidRelease(
   await registryDocuments(solidPackages),

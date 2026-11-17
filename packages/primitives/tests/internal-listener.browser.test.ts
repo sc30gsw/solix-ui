@@ -1,10 +1,10 @@
 import { onCleanup } from "solid-js";
 import { expect, onTestFinished, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
-import { watchEvents } from "../src/internal-listener";
-import { mount, record } from "./support/browser-harness";
-import { box, button, witnessed } from "./support/dom";
-import { tallPage } from "./support/scroll";
+import { watchEvents } from "#/src/internal-listener.ts";
+import { mount, record } from "#/tests/support/browser-harness.ts";
+import { box, button, witnessed } from "#/tests/support/dom.ts";
+import { tallPage } from "#/tests/support/scroll.ts";
 
 const ping = "solix-ping";
 

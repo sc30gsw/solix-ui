@@ -9,8 +9,8 @@ import {
   type TabsSetup,
   tabsSetups,
   vertical,
-} from "../../src/sections/tabs-setups.ts";
-import type { RovingList } from "./roving-list-model.ts";
+} from "#/src/sections/tabs-setups.ts";
+import type { RovingList } from "#/tests/support/roving-list-model.ts";
 
 export {
   account,
@@ -28,7 +28,7 @@ export {
   tabsSetups,
   valueOf,
   vertical,
-} from "../../src/sections/tabs-setups.ts";
+} from "#/src/sections/tabs-setups.ts";
 
 export const tabsRegion = 'section[aria-label="Tabs"]';
 

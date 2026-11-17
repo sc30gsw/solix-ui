@@ -1,7 +1,7 @@
 import { createEffect } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { createBrowserCommand, createStateCommand } from "../src/internal-command";
-import { mount, unmount } from "./support/browser-harness";
+import { createBrowserCommand, createStateCommand } from "#/src/internal-command.ts";
+import { mount, unmount } from "#/tests/support/browser-harness.ts";
 
 function recorder(kind: string, seen: string[]) {
   return {

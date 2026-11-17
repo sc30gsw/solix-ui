@@ -1,8 +1,8 @@
 import { createRoot } from "solid-js";
 import { expect, test, vi } from "vite-plus/test";
-import { type Primitive, serialized, serverCases, startCase } from "../fixtures/server-cases";
-import * as primitives from "../src/index";
-import { flush, mount, unmount } from "./support/browser-harness";
+import { type Primitive, serialized, serverCases, startCase } from "#/fixtures/server-cases.ts";
+import * as primitives from "#/src/index.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
 
 const names = Object.keys(serverCases) as Primitive[];
 

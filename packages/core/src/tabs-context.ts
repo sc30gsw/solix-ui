@@ -1,6 +1,6 @@
 import { createContext, useContext } from "solid-js";
-import type { Behaviour, tabs } from "./headless";
-import type { SteppedList } from "./step-over-disabled";
+import type { Behaviour, tabs } from "#/src/headless.ts";
+import type { SteppedList } from "#/src/step-over-disabled.ts";
 
 export type TabsOrientation = "horizontal" | "vertical";
 

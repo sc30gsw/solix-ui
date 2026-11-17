@@ -6,7 +6,7 @@ import {
   nameOf,
   stringsIn,
   ts,
-} from "../../../scripts/syntax";
+} from "#/scripts/syntax.ts";
 import {
   calleeName,
   callsTo,
@@ -14,7 +14,7 @@ import {
   type Library,
   refersTo,
   refersToDomMember,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const listenerModule = "internal-listener.ts";
 const rawListen = { file: listenerModule, name: "listen" };

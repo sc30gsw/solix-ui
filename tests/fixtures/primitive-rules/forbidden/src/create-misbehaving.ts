@@ -1,9 +1,9 @@
 import { createMemo, from } from "solid-js";
-import { access } from "../../../../../packages/primitives/src/internal-access";
-import { createAttachment } from "../../../../../packages/primitives/src/internal-attachment";
-import { createBrowserValue } from "../../../../../packages/primitives/src/internal-browser-value";
-import { listenAsAsked, listenerSettings } from "../../../../../packages/primitives/src/internal-listener";
-import { listen } from "./internal-listener";
+import { access } from "#/packages/primitives/src/internal-access.ts";
+import { createAttachment } from "#/packages/primitives/src/internal-attachment.ts";
+import { createBrowserValue } from "#/packages/primitives/src/internal-browser-value.ts";
+import { listenAsAsked, listenerSettings } from "#/packages/primitives/src/internal-listener.ts";
+import { listen } from "#/tests/fixtures/primitive-rules/forbidden/src/internal-listener.ts";
 
 /** Holds what the rules forbid. */
 export function createMisbehaving(options: { size: MaybeSize }, element: HTMLElement): () => number {

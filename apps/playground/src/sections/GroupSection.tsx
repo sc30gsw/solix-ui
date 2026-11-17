@@ -1,5 +1,5 @@
 import { Box, Button, Group } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 export function GroupSection() {
   return (

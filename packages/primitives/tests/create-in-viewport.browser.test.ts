@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
-import { createInViewport } from "../src/index";
-import { flush, mount } from "./support/browser-harness";
-import { box, engineWait } from "./support/dom";
+import { createInViewport } from "#/src/index.ts";
+import { flush, mount } from "#/tests/support/browser-harness.ts";
+import { box, engineWait } from "#/tests/support/dom.ts";
 
 test("it is whether the entry createIntersection reports intersects, false until it does", async () => {
   const { ref, inViewport } = mount(() => createInViewport<HTMLElement>());

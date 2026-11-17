@@ -4,9 +4,9 @@ import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import postcss from "postcss";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import { LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
-import type * as Library from "../src/index";
-import type { PolymorphicProps } from "../src/parts";
+import { LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX } from "#/build-pipeline.mjs";
+import type * as Library from "#/src/index.ts";
+import type { PolymorphicProps } from "#/src/parts.ts";
 import {
   baseKey,
   breakpoints,
@@ -26,7 +26,7 @@ import {
   variablesOf,
   visibilityClass,
   visibilityPropNames,
-} from "../src/style-prop-table";
+} from "#/src/style-prop-table.ts";
 import {
   classTokens,
   declarationsByPart,
@@ -36,7 +36,7 @@ import {
   declaredStyleProp,
   stringAttributes,
   stylePropCases,
-} from "./arbitraries";
+} from "#/tests/arbitraries.ts";
 import {
   builtComponents,
   carriedComponents,
@@ -48,7 +48,7 @@ import {
   rootPart,
   stableClass,
   stylesheet,
-} from "./built-library";
+} from "#/tests/built-library.ts";
 import {
   classesPropsFrom,
   classProp,
@@ -60,7 +60,7 @@ import {
   type StylePropCase,
   stylePropPropsOf,
   styleWritten,
-} from "./consumer-props";
+} from "#/tests/consumer-props.ts";
 import {
   components,
   fixtures,
@@ -69,7 +69,7 @@ import {
   render,
   renderTwiceOnOnePage,
   type TakesDisplay,
-} from "./fixtures";
+} from "#/tests/fixtures.ts";
 import {
   classesOf,
   declarationsIn,
@@ -81,7 +81,7 @@ import {
   topLevelTags,
   valuesOf,
   withoutLeadingRules,
-} from "./markup";
+} from "#/tests/markup.ts";
 
 const generatedRuns = 300;
 const containerPart = "container";

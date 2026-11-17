@@ -1,5 +1,5 @@
 import { existsSync, globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
   stylePropKeys,
@@ -7,14 +7,15 @@ import {
   variableGroups,
   variableNames,
   variableRow,
-} from "../packages/core/src/style-prop-table";
+} from "#/packages/core/src/style-prop-table.ts";
 import {
   builtComponents,
   carriedComponents,
   compiledClassesOf,
-} from "../packages/core/tests/built-library";
-import { allowedRuntimeDependencies, loads } from "../scripts/runtime-dependencies";
-import { tokenValues } from "../scripts/tokens";
+} from "#/packages/core/tests/built-library.ts";
+import { allowedRuntimeDependencies, loads } from "#/scripts/runtime-dependencies.ts";
+import { fileNamedBy } from "#/scripts/subpath.ts";
+import { tokenValues } from "#/scripts/tokens.ts";
 import {
   calledDeclaration,
   constructedClass,
@@ -26,6 +27,7 @@ import {
   isDomLibraryFile,
   memberDeclarations,
   nameOf,
+  moduleSpecifierOf,
   openProgram,
   parse,
   parseAll,
@@ -34,9 +36,8 @@ import {
   stringsIn,
   symbolOf,
   ts,
-} from "../scripts/syntax";
-import { moduleSpecifierOf } from "./support/module-specifiers";
-import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
+} from "#/scripts/syntax.ts";
+import { componentLibraries, repositoryRoot, scriptFiles } from "#/tests/support/workspace.ts";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
@@ -49,8 +50,7 @@ const containerPart = "container";
 const variablesOption = "variables";
 const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
-const partsImport = "./parts";
-const libraryEntry = /(?:^|\/)src\/index$/;
+const libraryEntry = /(?:^|\/)src\/index\.ts$/;
 const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
 const rootBinding = "root";
 const partBinding = "part";
@@ -250,11 +250,12 @@ type PropsShape = {
 };
 
 function importedFromParts(source: ts.SourceFile, name: string): boolean {
+  const partsFile = join(dirname(source.fileName), partsModule);
   return source.statements.some((statement) => {
     if (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== partsImport
+      fileNamedBy(source.fileName, statement.moduleSpecifier.text) !== partsFile
     ) {
       return false;
     }
@@ -713,7 +714,7 @@ test("no file but its seam loads a runtime dependency the allow-list names with 
         `const later = await import("${dependency}");`,
         `const required = require("${dependency}");`,
         `type Handle = import("${dependency}/primitive").PrimitiveHandle<never>;`,
-        'import { createBehaviour } from "./headless";',
+        'import { createBehaviour } from "#/src/headless.ts";',
         `const named = "${dependency}";`,
         `import { other } from "${dependency}-and-more";`,
       ].join("\n"),
@@ -853,27 +854,36 @@ test("every other source file is the barrel, a StyleX definition, or a kebab-cas
   expect(violations).toEqual([]);
 });
 
-const barrelLine = /^export \{ [^}]+ \} from "\.\/([^"]+)";$/;
+const barrelLine = /^export \{ [^}]+ \} from "([^"]+)";$/;
+
+function moduleNameOf(file: string): string {
+  return basename(file).replace(/\.tsx?$/, "");
+}
 
 test("the barrel exports every component and its props type once, and by name what other modules give consumers, one line per module in the order of the module names, and nothing else", () => {
   for (const { source } of libraries) {
-    const where = relativePath(join(source, "index.ts"));
+    const barrel = join(source, "index.ts");
+    const where = relativePath(barrel);
     const names = components
       .filter(({ file }) => file.startsWith(source))
       .map(({ name }) => name)
       .sort();
-    const lines = readFileSync(join(source, "index.ts"), "utf8").trim().split("\n");
-    const modules = lines.map((line) => barrelLine.exec(line)?.[1]);
-    const notModules = modules.filter(
-      (module) =>
-        module !== undefined &&
-        !names.includes(module) &&
-        !["ts", "tsx"].some((extension) => existsSync(join(source, `${module}.${extension}`))),
+    const lines = readFileSync(barrel, "utf8").trim().split("\n");
+    const files = lines.map((line) => {
+      const specifier = barrelLine.exec(line)?.[1];
+      return specifier === undefined ? undefined : fileNamedBy(barrel, specifier);
+    });
+    const modules = files.map((file) => (file === undefined ? undefined : moduleNameOf(file)));
+    const notModules = files.filter(
+      (file) =>
+        file !== undefined &&
+        (dirname(file) !== source ||
+          (!names.includes(moduleNameOf(file)) && !helperFile.test(basename(file)))),
     );
 
     expect(
-      lines.filter((_, index) => modules[index] === undefined),
-      `${where}: write each line as export { names } from "./module";`,
+      lines.filter((_, index) => files[index] === undefined),
+      `${where}: write each line as export { names } from "<specifier of a module in src>";`,
     ).toEqual([]);
     expect(modules, `${where}: order the lines by module name`).toEqual(
       modules.toSorted(
@@ -883,11 +893,24 @@ test("the barrel exports every component and its props type once, and by name wh
     expect(new Set(modules).size, `${where}: re-export each module on one line`).toBe(
       modules.length,
     );
-    expect(notModules, `${where}: re-export only components and kebab-case modules`).toEqual([]);
     expect(
-      lines.filter((_, index) => names.includes(modules[index] ?? "")),
+      notModules.map((file) => (file === undefined ? "" : relativePath(file))),
+      `${where}: re-export only components and kebab-case modules of src`,
+    ).toEqual([]);
+    expect(
+      lines.flatMap((line, index) => {
+        const module = modules[index];
+        return module !== undefined && names.includes(module) ? [[module, line]] : [];
+      }),
       where,
-    ).toEqual(names.map((name) => `export { ${name}, type ${name}Props } from "./${name}";`));
+    ).toEqual(
+      names.map((name) => [
+        name,
+        expect.stringMatching(
+          new RegExp(`^export \\{ ${name}, type ${name}Props \\} from "[^"]+";$`),
+        ),
+      ]),
+    );
   }
 });
 

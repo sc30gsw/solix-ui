@@ -1,5 +1,5 @@
 import { Box, SimpleGrid } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 const containerCols = { base: 1, "18em": 2, "30em": 4 } as const;
 

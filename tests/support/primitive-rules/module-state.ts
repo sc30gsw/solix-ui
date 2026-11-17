@@ -1,5 +1,5 @@
-import { isAsConst, modifierFlags, outsideClosures, ts, unwrapped } from "../../../scripts/syntax";
-import { at, type PrimitiveRule, type Rule } from "./library";
+import { isAsConst, modifierFlags, outsideClosures, ts, unwrapped } from "#/scripts/syntax.ts";
+import { at, type PrimitiveRule, type Rule } from "#/tests/support/primitive-rules/library.ts";
 
 const callsAllowedAtModuleLevel = ["Symbol", "Object.freeze"];
 

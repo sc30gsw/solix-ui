@@ -1,5 +1,5 @@
 import * as stylex from "@stylexjs/stylex";
-import { createParts, type ElementProps } from "./parts";
+import { createParts, type ElementProps } from "#/src/parts.ts";
 
 const styles = stylex.create({
   root: {

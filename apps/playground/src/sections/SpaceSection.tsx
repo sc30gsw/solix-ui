@@ -1,5 +1,5 @@
 import { Box, Space } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 export function SpaceSection() {
   return (

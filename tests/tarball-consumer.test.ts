@@ -12,16 +12,24 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
-import { pnpmSettings, workspaceFile } from "../scripts/pnpm-settings";
-import { solidPackages } from "../scripts/newest-releases";
-import { allowedRuntimeDependencyNames } from "../scripts/runtime-dependencies";
-import { stateOf, tabNamed } from "../apps/playground/tests/support/tabs";
-import { browserType, enginesToVerify } from "../scripts/browser-engines.mjs";
-import { sharedSettings } from "../scripts/syntax";
-import { type RunningServer, startServer } from "./support/server-process";
+import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
+import { solidPackages } from "#/scripts/newest-releases.ts";
+import { allowedRuntimeDependencyNames } from "#/scripts/runtime-dependencies.ts";
+import { stateOf, tabNamed } from "#/apps/playground/tests/support/tabs.ts";
+import { browserType, enginesToVerify } from "#/scripts/browser-engines.mjs";
+import { isRelative } from "#/scripts/subpath.ts";
+import {
+  descendants,
+  firstLine,
+  moduleSpecifierOf,
+  parse,
+  sharedSettings,
+  ts,
+} from "#/scripts/syntax.ts";
+import { type RunningServer, startServer } from "#/tests/support/server-process.ts";
 import {
   type ExportTarget,
   type Manifest,
@@ -32,7 +40,7 @@ import {
   packageManagerAnswerTimeout,
   repositoryRoot,
   rootManifest,
-} from "./support/workspace";
+} from "#/tests/support/workspace.ts";
 
 const [library] = componentLibraries;
 const libraryName = library.manifest.name ?? "";
@@ -43,6 +51,7 @@ const installAndBuildTimeout = 240_000;
 const packTimeout = packageManagerAnswerTimeout * libraryPackages.length;
 const fromOutsideTheRepository = allowedRuntimeDependencyNames();
 const settingsAConsumerWrites = ["plugins"];
+const subpathImportPrefix = "#";
 const settingsOfAnAppInThisRepository = join(repositoryRoot, "apps/playground/tsconfig.json");
 const [engine] = enginesToVerify();
 const servers: [label: string, port: number, command: string[]][] = [
@@ -325,6 +334,29 @@ describe("installed into a consumer outside the workspace", () => {
 
   test("the consumer's app and every type the library hands it pass a strict type check against the installed tarballs, with the repository's compiler settings", () => {
     expect(typeErrors()).toBe("");
+  });
+
+  test("no module a library ships in dist names a subpath import, and each relative one names a file the tarball holds", () => {
+    const violations = libraryPackages.flatMap(({ manifest }) => {
+      const installed = realpathSync(join(app, "node_modules", manifest.name ?? ""));
+      const files = globSync("dist/**/*.{js,jsx,mjs}", { cwd: installed });
+      return files.flatMap((file) =>
+        descendants(parse(join(installed, file))).flatMap((node) => {
+          const specifier = moduleSpecifierOf(node);
+          if (!specifier || !ts.isStringLiteralLikeNode(specifier)) return [];
+          const where = `${manifest.name}/${file}: ${firstLine(node)}`;
+          if (specifier.text.startsWith(subpathImportPrefix)) {
+            return [`${where} names a subpath import, which a consumer's tools may not resolve.`];
+          }
+          return isRelative(specifier.text) &&
+            !existsSync(resolve(installed, dirname(file), specifier.text))
+            ? [`${where} names a file the tarball does not hold.`]
+            : [];
+        }),
+      );
+    });
+
+    expect(violations).toEqual([]);
   });
 
   test("a consumer that renders only a Button bundles no module of the SDK's packages into its client scripts, by the source maps of its build, and one that renders Tabs bundles some", () => {

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { repositoryRoot } from "./repository.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
 
 export const runtimeDependencyList = "scripts/runtime-dependencies.json";
 

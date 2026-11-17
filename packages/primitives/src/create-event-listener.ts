@@ -1,12 +1,12 @@
-import { access } from "./internal-access";
-import { createElementAttachment } from "./internal-attachment";
+import { access } from "#/src/internal-access.ts";
+import { createElementAttachment } from "#/src/internal-attachment.ts";
 import {
   type EventOf,
   listenAsAsked,
   type ListenerSettings,
   listenerSettings,
-} from "./internal-listener";
-import type { ListenerOptions, MaybeAccessor, RefSetter } from "./types";
+} from "#/src/internal-listener.ts";
+import type { ListenerOptions, MaybeAccessor, RefSetter } from "#/src/types.ts";
 
 /**
  * Listens to `type` on the element its ref is on, an HTML, SVG or MathML element, and returns that

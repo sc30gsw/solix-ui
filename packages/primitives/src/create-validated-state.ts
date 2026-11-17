@@ -1,8 +1,8 @@
 import { type Accessor, createMemo } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { sameKeys } from "./internal-equal";
-import { createValue } from "./internal-value";
-import type { ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { sameKeys } from "#/src/internal-equal.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { ReadOnce } from "#/src/types.ts";
 
 export type ValidatedState<T> = {
   /** The last value set, valid or not. */

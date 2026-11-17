@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { listed, repositoryRoot } from "./repository.ts";
+import { listed, repositoryRoot } from "#/scripts/repository.ts";
 
 export const roadmapFile = "ROADMAP.md";
 export const stepStatuses = ["not started", "in progress", "merged"] as const;

@@ -1,8 +1,8 @@
 import { createComponent, renderToStream } from "@solidjs/web";
 import { createMemo, Loading } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import type { GridProps } from "../src/index";
-import { library } from "./built-library";
+import type { GridProps } from "#/src/index.ts";
+import { library } from "#/tests/built-library.ts";
 
 const breakpoints = { xs: "5em", sm: "10em", md: "20em", lg: "60em", xl: "70em" } as const;
 const fallback = "Waiting for the column";

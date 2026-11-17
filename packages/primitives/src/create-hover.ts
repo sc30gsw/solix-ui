@@ -1,6 +1,6 @@
-import { createElementValue } from "./internal-browser-value";
-import { disposeAll, watchEvents } from "./internal-listener";
-import type { BrowserValue, RefSetter } from "./types";
+import { createElementValue } from "#/src/internal-browser-value.ts";
+import { disposeAll, watchEvents } from "#/src/internal-listener.ts";
+import type { BrowserValue, RefSetter } from "#/src/types.ts";
 
 /** The ref to put on the element, and whether the pointer is over it. */
 export type HoverReturn<E extends Element> = { ref: RefSetter<E>; hovered: BrowserValue<boolean> };

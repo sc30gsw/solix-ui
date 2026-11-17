@@ -7,9 +7,9 @@ import {
   type NodeRelease,
   type RegistryDocument,
   type ReleasePolicy,
-} from "./newest-releases.ts";
-import { type PnpmSettings, workspaceFile } from "./pnpm-settings.ts";
-import { repositoryRoot } from "./repository.ts";
+} from "#/scripts/newest-releases.ts";
+import { type PnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
 
 const registry = "https://registry.npmjs.org";
 const nodeIndex = "https://nodejs.org/dist/index.json";

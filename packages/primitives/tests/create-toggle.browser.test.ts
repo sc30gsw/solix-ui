@@ -1,8 +1,8 @@
 import fc from "fast-check";
 import { expect, test } from "vite-plus/test";
-import { createToggle, type ToggleReturn } from "../src/index";
-import { flush, mount, unmount, watch } from "./support/browser-harness";
-import { command, flushCommand, type Tick } from "./support/model";
+import { createToggle, type ToggleReturn } from "#/src/index.ts";
+import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
+import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
 
 test("by default it starts at false and each toggle flips it", () => {
   const [value, toggle] = mount(() => createToggle());

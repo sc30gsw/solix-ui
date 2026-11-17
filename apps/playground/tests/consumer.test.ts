@@ -9,7 +9,7 @@ import {
   inEveryEngine,
   openPage,
   type OpenPage,
-} from "./support/playground";
+} from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
 

@@ -9,9 +9,9 @@ import {
 import { usePrimitive } from "@ui-sdk/solid/primitive";
 import { isServer, type JSX } from "@solidjs/web";
 import { merge, omit, untrack, useContext } from "solid-js";
-import { rootPart } from "./parts";
-import { StyleNonceContext } from "./run-time-style";
-import { withConsumerStyle } from "./style-props";
+import { rootPart } from "#/src/parts.ts";
+import { StyleNonceContext } from "#/src/run-time-style.ts";
+import { withConsumerStyle } from "#/src/style-props.ts";
 
 export { tabs } from "@ui-sdk/core/tabs";
 

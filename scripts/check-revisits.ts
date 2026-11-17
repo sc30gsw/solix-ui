@@ -1,6 +1,6 @@
-import { pnpmSettings } from "./pnpm-settings.ts";
-import { registryDocuments, releasePolicy } from "./release-sources.ts";
-import { evaluateRevisits, readRevisits, revisitTable } from "./revisits.ts";
+import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
+import { registryDocuments, releasePolicy } from "#/scripts/release-sources.ts";
+import { evaluateRevisits, readRevisits, revisitTable } from "#/scripts/revisits.ts";
 
 const revisits = readRevisits();
 const { evaluations, problems } = evaluateRevisits({

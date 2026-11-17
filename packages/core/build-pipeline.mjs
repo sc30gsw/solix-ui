@@ -5,7 +5,8 @@ import syntaxJsx from "@babel/plugin-syntax-jsx";
 import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
 import postcss from "postcss";
-import { stableClassPrefix } from "./src/stable-class.ts";
+import { distSpecifiers, libraryLayout } from "../../scripts/dist-specifiers.ts";
+import { stableClassPrefix } from "#/src/stable-class.ts";
 
 import {
   behaviourSdkLayer,
@@ -16,7 +17,7 @@ import {
   outerLayerOrder,
   stylePropClassPrefix,
   stylePropLayer,
-} from "./src/style-prop-table.ts";
+} from "#/src/style-prop-table.ts";
 
 export const LIBRARY_CASCADE_LAYER = libraryCascadeLayer;
 export const LIBRARY_CLASS_PREFIX = stylePropClassPrefix;
@@ -32,6 +33,10 @@ export const sdkHiddenRuleSource = {
   writer: "enforceHidden",
 };
 
+export function componentLibraryLayout(packageRoot) {
+  return libraryLayout(packageRoot, { ".ts": ".js", ".tsx": ".jsx" });
+}
+
 const typesStripped = [presetTypescript];
 const jsxKeptInTsx = [{ test: /\.tsx$/, plugins: [syntaxJsx] }];
 
@@ -43,6 +48,7 @@ export async function compileLibrarySource({ filename, source, packageRoot }) {
     presets: typesStripped,
     overrides: jsxKeptInTsx,
     plugins: [
+      distSpecifiers(componentLibraryLayout(packageRoot)),
       [
         stylexPlugin,
         {

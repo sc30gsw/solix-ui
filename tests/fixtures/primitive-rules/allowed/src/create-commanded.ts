@@ -1,4 +1,4 @@
-import { createBrowserCommand, createStateCommand } from "../../../../../packages/primitives/src/internal-command";
+import { createBrowserCommand, createStateCommand } from "#/packages/primitives/src/internal-command.ts";
 
 function scrollHome(count: number): void {
   window.scrollTo(0, count);

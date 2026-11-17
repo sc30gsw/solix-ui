@@ -1,6 +1,6 @@
-import { createResizeObserver } from "./create-resize-observer";
-import { mapBrowserValue } from "./internal-browser-value";
-import type { BrowserValue, MaybeAccessor, RefSetter } from "./types";
+import { createResizeObserver } from "#/src/create-resize-observer.ts";
+import { mapBrowserValue } from "#/src/internal-browser-value.ts";
+import type { BrowserValue, MaybeAccessor, RefSetter } from "#/src/types.ts";
 
 /** The ref to put on the element, and the width and height of its box. */
 export type ElementSize<E extends Element> = {

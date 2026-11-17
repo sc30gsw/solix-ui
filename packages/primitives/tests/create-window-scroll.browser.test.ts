@@ -1,8 +1,8 @@
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { createWindowScroll } from "../src/index";
-import { mount, unmount, watch } from "./support/browser-harness";
-import { nextTask, engineWait } from "./support/dom";
-import { tallPage } from "./support/scroll";
+import { createWindowScroll } from "#/src/index.ts";
+import { mount, unmount, watch } from "#/tests/support/browser-harness.ts";
+import { nextTask, engineWait } from "#/tests/support/dom.ts";
+import { tallPage } from "#/tests/support/scroll.ts";
 
 afterEach(() => {
   window.scrollTo({ top: 0, left: 0, behavior: "instant" });

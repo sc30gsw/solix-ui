@@ -9,9 +9,9 @@ import {
   isNode,
   isShadowRoot,
   viewOf,
-} from "../src/internal-node";
-import "./support/browser-harness";
-import { attached, box } from "./support/dom";
+} from "#/src/internal-node.ts";
+import "#/tests/support/browser-harness.ts";
+import { attached, box } from "#/tests/support/dom.ts";
 
 function framed(): Document {
   const frame = attached(document.createElement("iframe"));

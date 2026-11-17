@@ -1,5 +1,5 @@
 import { type Accessor, untrack } from "solid-js";
-import type { MaybeAccessor, ReadOnce } from "./types";
+import type { MaybeAccessor, ReadOnce } from "#/src/types.ts";
 
 export function access<T>(value: MaybeAccessor<T>): T {
   return typeof value === "function" ? (value as Accessor<T>)() : value;

@@ -4,8 +4,8 @@ import {
   constructorClasses,
   isDomLibraryFile,
   ts,
-} from "../../../scripts/syntax";
-import { forbidOutside, refersToDomMember } from "./library";
+} from "#/scripts/syntax.ts";
+import { forbidOutside, refersToDomMember } from "#/tests/support/primitive-rules/library.ts";
 
 const observerModule = "internal-dom-observer.ts";
 const observerClass = /Observer$/;

@@ -5,9 +5,14 @@ import {
   type Symbol as CheckerSymbol,
   type Type,
 } from "typescript/unstable/sync";
-import * as ts from "./ast.ts";
-import { type Program, stringLiteralTypesOf } from "./program.ts";
-import { fileOf, findAncestor, isConstTypeReference, isValueReference } from "./walk.ts";
+import * as ts from "#/scripts/syntax/ast.ts";
+import { type Program, stringLiteralTypesOf } from "#/scripts/syntax/program.ts";
+import {
+  fileOf,
+  findAncestor,
+  isConstTypeReference,
+  isValueReference,
+} from "#/scripts/syntax/walk.ts";
 
 export type Alias = { name: string; file: string };
 

@@ -1,18 +1,18 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { createUniqueId, Show } from "solid-js";
-import { GridCol } from "./GridCol";
-import { GridContext } from "./grid-context";
-import { LibraryStyle } from "./library-style";
-import { createParts, type ElementProps } from "./parts";
-import { type Breakpoint, breakpoints } from "./style-prop-table";
+import { GridCol } from "#/src/GridCol.tsx";
+import { GridContext } from "#/src/grid-context.ts";
+import { LibraryStyle } from "#/src/library-style.tsx";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import { type Breakpoint, breakpoints } from "#/src/style-prop-table.ts";
 import {
   type ContainerWidth,
   containerWidthOf,
   createQueryContainer,
   type VariableProp,
-} from "./style-props";
-import { tokens } from "./tokens.stylex";
+} from "#/src/style-props.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const defaultColumns = 12;
 

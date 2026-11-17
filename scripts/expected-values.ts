@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "playwright";
 import postcss from "postcss";
-import { repositoryRoot } from "./repository.ts";
-import { type TokenKind, tokenKind, tokenValues } from "./tokens.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
+import { type TokenKind, tokenKind, tokenValues } from "#/scripts/tokens.ts";
 
 const playgroundStylesheet = "apps/playground/src/app.css";
 const sides = ["top", "right", "bottom", "left"];

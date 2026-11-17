@@ -1,5 +1,5 @@
 import { createEffect, onCleanup, untrack } from "solid-js";
-import { type BrowserCallback, createBrowserMemo } from "./internal-browser-value";
+import { type BrowserCallback, createBrowserMemo } from "#/src/internal-browser-value.ts";
 
 type Command<Args extends unknown[], R> = (...args: Args) => R;
 

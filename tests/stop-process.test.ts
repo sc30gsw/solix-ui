@@ -3,8 +3,8 @@ import { once } from "node:events";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "vite-plus/test";
-import { descendants, parse, ts } from "../scripts/syntax";
-import { repositoryRoot } from "./support/workspace";
+import { descendants, parse, ts } from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const stopProcess = pathToFileURL(join(repositoryRoot, "scripts/stop-process.mjs")).href;
 const moreThanAPipeHolds = 500_000;

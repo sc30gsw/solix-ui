@@ -1,14 +1,28 @@
-import { importsOf } from "../../../scripts/syntax";
-import { browserTests, type PrimitiveRule, type Rule, solidModule, testAt } from "./library";
+import { join, relative } from "node:path";
+import { fileNamedBy } from "#/scripts/subpath.ts";
+import { importsOf } from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
+import {
+  browserTests,
+  type PrimitiveRule,
+  type Rule,
+  solidModule,
+  testAt,
+} from "#/tests/support/primitive-rules/library.ts";
 
-const browserHarness = "./support/browser-harness";
+const browserHarnessFile = "support/browser-harness.ts";
 
 const flushName = "flush";
 
 const browserTestsUseTheHarness: Rule = (library) =>
   browserTests(library).flatMap(([file, source]) => {
+    const testFile = join(library.testDirectory, file);
+    const harnessFile = join(library.testDirectory, browserHarnessFile);
+    const browserHarness = relative(repositoryRoot, harnessFile);
     const imports = importsOf(source);
-    const harness = imports.some(({ specifier }) => specifier === browserHarness)
+    const harness = imports.some(
+      ({ specifier }) => fileNamedBy(testFile, specifier) === harnessFile,
+    )
       ? []
       : [
           `${testAt(library, file, source)}: import ${browserHarness}, so this file's tests fail on a Solid diagnostic and on a listener, timer or observer left after dispose.`,

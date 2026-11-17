@@ -4,9 +4,9 @@ import { describe, expect, inject, test } from "vite-plus/test";
 import { behaviourSdkHiddenRule } from "../../../packages/core/build-pipeline.mjs";
 import { libraryStyleMark } from "../../../packages/core/src/style-prop-table";
 import { elementsOf, valuesOf } from "../../../packages/core/tests/markup";
-import { policyHeader } from "../src/middleware";
-import { themedByTheProvider, themedSpacing, themeNames } from "../src/sections/theme-setups";
-import { inEveryEngine } from "./support/playground";
+import { policyHeader } from "#/src/middleware.ts";
+import { themedByTheProvider, themedSpacing, themeNames } from "#/src/sections/theme-setups.ts";
+import { inEveryEngine } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
 const policyNonce = /'nonce-([^']+)'/;

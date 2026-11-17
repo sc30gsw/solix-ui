@@ -1,7 +1,7 @@
-import { access } from "./internal-access";
-import { createElementValue } from "./internal-browser-value";
-import { observe } from "./internal-dom-observer";
-import type { BrowserValue, MaybeAccessor, RefSetter } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { createElementValue } from "#/src/internal-browser-value.ts";
+import { observe } from "#/src/internal-dom-observer.ts";
+import type { BrowserValue, MaybeAccessor, RefSetter } from "#/src/types.ts";
 
 /** The ref to put on the element, and the latest entry the observer reported for it. */
 export type IntersectionReturn<E extends Element> = {

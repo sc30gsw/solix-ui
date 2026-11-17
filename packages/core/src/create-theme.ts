@@ -1,5 +1,5 @@
-import { layerOrder, libraryCascadeLayer, type Scale } from "./style-prop-table";
-import { characterThatEndsADeclaration, type ScaleKey, tokenOf } from "./style-props";
+import { layerOrder, libraryCascadeLayer, type Scale } from "#/src/style-prop-table.ts";
+import { characterThatEndsADeclaration, type ScaleKey, tokenOf } from "#/src/style-props.ts";
 
 export const scaleOfThemeKey = {
   spacing: "spacing",

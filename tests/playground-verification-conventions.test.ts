@@ -1,8 +1,15 @@
 import { globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { descendants, exportsOf, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
-import { repositoryRoot } from "./support/workspace";
+import {
+  descendants,
+  exportsOf,
+  parse,
+  parseAll,
+  staticPropertyName,
+  ts,
+} from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const skill = ".agents/skills/verify-playground";
 const skillFile = `${skill}/SKILL.md`;

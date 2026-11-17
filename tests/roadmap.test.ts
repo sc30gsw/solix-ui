@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { builtComponents, library } from "../packages/core/tests/built-library";
+import { builtComponents, library } from "#/packages/core/tests/built-library.ts";
 import {
   type Built,
   carriersIn,
@@ -7,7 +7,7 @@ import {
   readRoadmap,
   roadmapFile,
   roadmapProblems,
-} from "../scripts/roadmap";
+} from "#/scripts/roadmap.ts";
 
 const builtByName: Record<string, unknown> = library;
 

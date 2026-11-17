@@ -1,5 +1,5 @@
-import { activeElementOf } from "./internal-active";
-import { isHtmlOrSvgElement } from "./internal-node";
+import { activeElementOf } from "#/src/internal-active.ts";
+import { isHtmlOrSvgElement } from "#/src/internal-node.ts";
 
 export type Focusable = HTMLElement | SVGElement;
 

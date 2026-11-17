@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type * as Primitives from "../src/index";
+import type * as Primitives from "#/src/index.ts";
 
 export const dist = join(import.meta.dirname, "../dist");
 

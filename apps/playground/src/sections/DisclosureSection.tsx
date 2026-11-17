@@ -1,5 +1,5 @@
 import { Disclosure } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 export function DisclosureSection() {
   return (

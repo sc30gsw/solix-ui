@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { createScrollFold, resizeSettleMs, type ScrollMove } from "../src/internal-scroll";
-import { mount, unmount } from "./support/browser-harness";
-import { applied, stubbedScroll } from "./support/scroll";
+import { createScrollFold, resizeSettleMs, type ScrollMove } from "#/src/internal-scroll.ts";
+import { mount, unmount } from "#/tests/support/browser-harness.ts";
+import { applied, stubbedScroll } from "#/tests/support/scroll.ts";
 
 afterEach(() => {
   vi.useRealTimers();

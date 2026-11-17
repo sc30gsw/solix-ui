@@ -1,5 +1,5 @@
 import { Box, Button, Stack } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 export function StackSection() {
   return (
