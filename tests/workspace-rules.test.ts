@@ -639,7 +639,7 @@ test("every package on the Solid 2 channel is pinned to one release and installe
   expect(violations).toEqual([]);
 });
 
-test("every peer range of a library package accepts the version the catalog pins", () => {
+test("every peer range of a library package accepts the version the catalog pins, and starts at a stable release where the catalog pins one", () => {
   const { catalog } = pnpmSettings();
   const violations = libraryPackages.flatMap(({ path, manifest }) =>
     Object.entries(manifest.peerDependencies ?? {}).flatMap(([name, range]) => {
@@ -647,11 +647,17 @@ test("every peer range of a library package accepts the version the catalog pins
       const pinned = catalog[name];
       if (pinned === undefined)
         return [`${workspaceFile}: add "${name}" to the catalog, which ${path} names as a peer.`];
-      return semver.satisfies(pinned, range, { includePrerelease: true })
-        ? []
-        : [
-            `${path}: widen the peer range "${range}" of "${name}" so it accepts ${pinned}, the version the catalog in ${workspaceFile} pins.`,
-          ];
+      if (!semver.satisfies(pinned, range, { includePrerelease: true })) {
+        return [
+          `${path}: widen the peer range "${range}" of "${name}" so it accepts ${pinned}, the version the catalog in ${workspaceFile} pins.`,
+        ];
+      }
+      const lowest = semver.minVersion(range)?.version ?? "";
+      return semver.prerelease(pinned) === null && semver.prerelease(lowest) !== null
+        ? [
+            `${path}: start the peer range "${range}" of "${name}" at a stable release, not ${lowest}: the catalog pins ${pinned}, so no prerelease is tested.`,
+          ]
+        : [];
     }),
   );
 

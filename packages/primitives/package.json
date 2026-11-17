@@ -28,6 +28,6 @@
     "solid-js": "catalog:"
   },
   "peerDependencies": {
-    "solid-js": "^2.0.0-rc.22"
+    "solid-js": "^2.0.0"
   }
 }
