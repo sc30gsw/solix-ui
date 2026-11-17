@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"],
+    "allowJs": true
+  },
+  "include": [
+    "src",
+    "fixtures",
+    ".storybook/*.ts",
+    "fixtures/.storybook/*.ts",
+    "vite.config.ts",
+    "stories-project.ts"
+  ]
+}

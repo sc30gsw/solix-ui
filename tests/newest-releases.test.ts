@@ -11,12 +11,18 @@ import {
   packageManagerPinName,
   type Pin,
   pinsOf,
+  prereleasePinsOnlyNamedBy,
   type RegistryDocument,
   type ReleasePolicy,
 } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
-import { heldBackEntries, releasePolicy } from "#/scripts/release-sources.ts";
-import { rootManifest } from "#/scripts/repository.ts";
+import {
+  heldBackEntries,
+  releasePolicy,
+  storybookAppManifest,
+  untilStableMembers,
+} from "#/scripts/release-sources.ts";
+import { manifestAt, manifestPaths, rootManifest } from "#/scripts/repository.ts";
 
 const now = Date.parse("2026-11-14T12:00:00Z");
 const day = 24 * 60 * 60_000;
@@ -92,6 +98,7 @@ function check(
     nodeReleases?: NodeRelease[];
     excluded?: ReleasePolicy["excluded"];
     heldBack?: HeldBack[];
+    untilStablePackages?: string[];
   } = {},
 ) {
   return compareWithNewest({
@@ -101,13 +108,20 @@ function check(
     policy: { ...policy, excluded: options.excluded ?? [] },
     now,
     heldBack: options.heldBack ?? [],
+    untilStablePackages: options.untilStablePackages ?? [],
   });
 }
 
-function checkOf(name: string, pinned: string, releases: Release[]) {
+function checkOf(
+  name: string,
+  pinned: string,
+  releases: Release[],
+  untilStablePackages: string[] = [],
+) {
   const report = check({
     pins: pinsOf(manifest, { [name]: pinned }),
     documents: { ...documents, [name]: registryDocument(releases) },
+    untilStablePackages,
   });
   return { comparison: report.comparisons[0], problems: report.problems };
 }
@@ -317,6 +331,97 @@ test("a prerelease pin of a package with no stable release yet is behind its new
   expect(
     checkOf("a-package", "3.0.0-beta.7", [...neverStable, ["3.0.0", 2]]).comparison,
   ).toMatchObject({ status: "behind", eligible: "3.0.0", newest: "3.0.0" });
+});
+
+test("the prerelease pins only a manifest names are the catalog entries it names whose catalog version is a prerelease and that no other manifest names", () => {
+  expect(
+    prereleasePinsOnlyNamedBy(
+      {
+        dependencies: { "a-library": "workspace:*", "a-stable-tool": "catalog:" },
+        devDependencies: {
+          "a-framework": "catalog:",
+          "an-addon": "catalog:",
+          "a-shared-beta": "catalog:",
+        },
+      },
+      [{ dependencies: { "a-shared-beta": "catalog:" } }],
+      {
+        "a-framework": "11.0.0-next-20261020160717",
+        "an-addon": "11.0.0-beta.3",
+        "a-shared-beta": "0.1.0-beta.5",
+        "a-stable-tool": "1.0.0",
+        "an-unnamed-beta": "2.0.0-beta.1",
+      },
+    ),
+  ).toEqual(["a-framework", "an-addon"]);
+});
+
+test("every member of the until-stable channel that the weekly check uses is named by the Storybook app and by no other workspace manifest, and there is at least one", () => {
+  const { catalog } = pnpmSettings();
+  const members = untilStableMembers(catalog);
+  const app = manifestAt(storybookAppManifest);
+  const others = manifestPaths()
+    .filter((path) => path !== storybookAppManifest)
+    .map(manifestAt);
+  const named = (manifest: typeof app) =>
+    Object.keys({ ...manifest.dependencies, ...manifest.devDependencies });
+
+  expect(members.length).toBeGreaterThan(0);
+  expect(members.filter((name) => !named(app).includes(name))).toEqual([]);
+  expect(members.filter((name) => others.some((other) => named(other).includes(name)))).toEqual([]);
+});
+
+test("a pin on the until-stable channel is behind the newest release of the major it pins, nightly, beta or release candidate, and follows stable releases once that major has one old enough to install", () => {
+  const nightlies: Release[] = [
+    ["10.7.4", 30],
+    ["11.0.0-next-20261020160717", 28],
+    ["11.0.0-next-20261105190313", 12],
+    ["11.0.0-next-20261116090000", 0.5],
+    ["12.0.0-next-20261101000000", 10],
+  ];
+  const beforeStable: Release[] = [
+    ["10.6.7", 7],
+    ["11.0.0-beta.3", 4],
+    ["11.0.0-rc.0", 2],
+    ["11.0.0-rc.1", 0.5],
+  ];
+  const afterStable: Release[] = [
+    ...beforeStable,
+    ["11.0.0", 2],
+    ["11.0.1", 0.5],
+    ["11.1.0-beta.0", 1.5],
+  ];
+  const untilStablePackages = ["a-package"];
+
+  expect(
+    checkOf("a-package", "11.0.0-next-20261020160717", nightlies, untilStablePackages).comparison,
+  ).toMatchObject({
+    status: "behind",
+    eligible: "11.0.0-next-20261105190313",
+    newest: "11.0.0-next-20261116090000",
+  });
+  expect(
+    checkOf("a-package", "11.0.0-next-20261105190313", nightlies, untilStablePackages).comparison,
+  ).toMatchObject({ status: "not yet eligible" });
+  expect(
+    checkOf("a-package", "11.0.0-beta.3", beforeStable, untilStablePackages).comparison,
+  ).toMatchObject({ status: "behind", eligible: "11.0.0-rc.0" });
+  expect(checkOf("a-package", "11.0.0-beta.3", beforeStable).comparison).toMatchObject({
+    status: "current",
+  });
+  expect(
+    checkOf("a-package", "11.0.0-rc.0", afterStable, untilStablePackages).comparison,
+  ).toMatchObject({
+    status: "behind",
+    eligible: "11.0.0",
+    newest: "11.0.1",
+  });
+  expect(checkOf("a-package", "11.0.0", afterStable, untilStablePackages).comparison).toMatchObject(
+    {
+      status: "not yet eligible",
+      newest: "11.0.1",
+    },
+  );
 });
 
 test("a published version with no publish time, or one that is not a date, is a problem that names the package and the version", () => {

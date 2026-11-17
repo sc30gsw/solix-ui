@@ -4,6 +4,7 @@ import { manifestAt, manifestPaths, repositoryRoot, scriptFilesIn } from "#/scri
 
 export { workspaceFile } from "#/scripts/pnpm-settings.ts";
 export {
+  type Dependent,
   type ExportTarget,
   type Installed,
   type Manifest,
@@ -14,6 +15,7 @@ export {
   packageManagerAnswerTimeout,
   repositoryRoot,
   rootManifest,
+  whyInstalled,
 } from "#/scripts/repository.ts";
 
 export const primitivesDirectory = join(repositoryRoot, "packages/primitives");

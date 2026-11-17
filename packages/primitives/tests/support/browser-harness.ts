@@ -1,11 +1,9 @@
-import {
-  createEffect,
-  createRoot,
-  type DiagnosticCapture,
-  flush as flushSolid,
-  OBSERVE,
-} from "solid-js";
+import { createEffect, createRoot, flush as flushSolid } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
+import {
+  captureSolidDiagnostics,
+  solidDevelopmentBuildLoaded,
+} from "../../../../tests/support/browser-gates.ts";
 import type { EventOf } from "#/src/internal-listener.ts";
 import type { RefSetter } from "#/src/types.ts";
 import {
@@ -43,7 +41,7 @@ const disposers: (() => void)[] = [];
 const recorders: (() => void)[] = [];
 const scope = { depth: 0 };
 const journals = new Set<Attachments>();
-let diagnostics: DiagnosticCapture | undefined;
+let diagnosticsRaised: () => string[] = () => [];
 
 function inScope(): boolean {
   return scope.depth > 0;
@@ -271,13 +269,7 @@ function startRecording(): void {
   liveTimers.clear();
   liveObservations.clear();
   liveHandlers.clear();
-  diagnostics = OBSERVE?.diagnostics.capture();
-}
-
-function diagnosticsRaised(): string[] {
-  return (diagnostics?.stop() ?? []).map(
-    ({ code, message }) => `${code}: ${message.split("\n")[0]}`,
-  );
+  diagnosticsRaised = captureSolidDiagnostics();
 }
 
 export function mount<T>(create: () => T): T {
@@ -350,7 +342,9 @@ export function reportAfterDispose(): string[] {
 }
 
 beforeEach(() => {
-  expect(OBSERVE, "the browser project runs Solid's development build").toBeDefined();
+  expect(solidDevelopmentBuildLoaded(), "the browser project runs Solid's development build").toBe(
+    true,
+  );
   startRecording();
 });
 

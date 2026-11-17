@@ -1,6 +1,7 @@
 import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { findPackageJSON } from "node:module";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
 import {
@@ -18,12 +19,14 @@ import {
 } from "#/scripts/syntax.ts";
 import { solidPackages } from "#/scripts/newest-releases.ts";
 import { type PnpmSettings, pnpmSettings } from "#/scripts/pnpm-settings.ts";
+import { storybookAppManifest } from "#/scripts/release-sources.ts";
 import {
   type AllowedRuntimeDependency,
   allowedRuntimeDependencies,
   runtimeDependencyList,
 } from "#/scripts/runtime-dependencies.ts";
 import {
+  type Dependent,
   type Installed,
   type Manifest,
   installedVersions,
@@ -37,6 +40,7 @@ import {
   repositoryRoot,
   rootManifest,
   scriptFiles,
+  whyInstalled,
   workflowFiles,
   workspaceFile,
 } from "#/tests/support/workspace.ts";
@@ -80,6 +84,16 @@ const optionsOfTheTypeCheckedProject = ["allowJs"];
 const pnpmSettingsReader = "scripts/pnpm-settings.ts";
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
+const storybookInterfaceLibrary = "react";
+const storybookInterfaceLibraryDeclarer = "@storybook/icons";
+const storybookDirectory = join(repositoryRoot, dirname(storybookAppManifest));
+const packageManifest = "package.json";
+const dependencyLists = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+] as const;
 
 function runtimeVersions(manifest: Manifest): Record<string, string> {
   return { ...manifest.optionalDependencies, ...manifest.dependencies };
@@ -729,4 +743,77 @@ test("no .node-version, .nvmrc or .tool-versions file, devEngines.runtime or eng
     lowestMajorOf(typesRange),
     `${workspaceFile}: set "@types/node" (now ${typesRange}) to Node ${nodeMajor}, the major that engines.node in ${nodeVersionHome} names (${nodeRange}).`,
   ).toBe(nodeMajor);
+});
+
+function workspacePackagesReaching(dependents: readonly Dependent[]): string[] {
+  return dependents.flatMap((dependent) =>
+    dependent.depField === undefined
+      ? workspacePackagesReaching(dependent.dependents ?? [])
+      : [dependent.name],
+  );
+}
+
+function resolvesFrom(directory: string, name: string): boolean {
+  try {
+    return findPackageJSON(name, join(directory, packageManifest)) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+function namedPackages(manifest: Manifest): string[] {
+  return [...new Set(dependencyLists.flatMap((list) => Object.keys(manifest[list] ?? {})))];
+}
+
+test(`${storybookInterfaceLibrary} is installed only as a dependency of ${storybookInterfaceLibraryDeclarer}`, () => {
+  const installed = whyInstalled([storybookInterfaceLibrary]);
+
+  expect(installed.length).toBeGreaterThan(0);
+  expect(
+    installed.flatMap(({ dependents = [] }) =>
+      dependents
+        .filter(({ name }) => name !== storybookInterfaceLibraryDeclarer)
+        .map(({ name }) => name),
+    ),
+  ).toEqual([]);
+});
+
+test(`only the Storybook app reaches ${storybookInterfaceLibrary} through what it installs`, () => {
+  const storybookApp = packages.find(({ directory }) => directory === storybookDirectory);
+  const reachedBy = new Set(
+    whyInstalled([storybookInterfaceLibrary]).flatMap(({ dependents = [] }) =>
+      workspacePackagesReaching(dependents),
+    ),
+  );
+
+  expect(storybookApp?.manifest.name).toBeDefined();
+  expect([...reachedBy]).toEqual([storybookApp?.manifest.name]);
+});
+
+test(`no workspace manifest names ${storybookInterfaceLibrary}`, () => {
+  expect(
+    packages.flatMap(({ path, manifest }) =>
+      dependencyLists
+        .filter((list) => manifest[list]?.[storybookInterfaceLibrary] !== undefined)
+        .map((list) => `${path} names ${storybookInterfaceLibrary} in ${list}.`),
+    ),
+  ).toEqual([]);
+});
+
+test("the resolver finds every package that a workspace package names, from that package's directory", () => {
+  expect(
+    packages.flatMap(({ path, directory, manifest }) =>
+      namedPackages(manifest)
+        .filter((name) => !resolvesFrom(directory, name))
+        .map((name) => `${path}: ${name} does not resolve.`),
+    ),
+  ).toEqual([]);
+});
+
+test(`no workspace package resolves ${storybookInterfaceLibrary}`, () => {
+  expect(
+    packages
+      .filter(({ directory }) => resolvesFrom(directory, storybookInterfaceLibrary))
+      .map(({ path }) => `${storybookInterfaceLibrary} resolves from the directory of ${path}.`),
+  ).toEqual([]);
 });

@@ -3,6 +3,7 @@ import type { Locator } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
+import { wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
 import { computed, inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 import {
   account,
@@ -33,7 +34,6 @@ const { notes, files } = tabNames.optional;
 const { inbox, drafts, locked } = tabNames.controlled;
 const { kept, asked, styled, classed } = tabNames.held;
 const axeSource = join(import.meta.dirname, "../../../node_modules/axe-core/axe.min.js");
-const wcag22LevelAOrAA = /^wcag2\d?a{1,2}$/;
 
 inEveryEngine((browser) => {
   describe("Tabs before any script runs", () => {
@@ -416,10 +416,9 @@ inEveryEngine((browser) => {
       await tabNamed(page, optional, notes).click();
       await page.addScriptTag({ path: axeSource });
       const found = await page.evaluate(
-        async ([region, tagPattern]) => {
+        async ([region, tags]) => {
           const { axe } = window as unknown as {
             axe: {
-              getRules: () => { tags: string[] }[];
               run: (
                 context: Element | null,
                 options: object,
@@ -432,28 +431,20 @@ inEveryEngine((browser) => {
               }>;
             };
           };
-          const pattern = new RegExp(tagPattern);
-          const tags = [...new Set(axe.getRules().flatMap(({ tags: found }) => found))].filter(
-            (tag) => pattern.test(tag),
-          );
           const results = await axe.run(document.querySelector(region), {
             runOnly: { type: "tag", values: tags },
           });
-          return {
-            tags,
-            violations: results.violations.map(
-              ({ id, help, nodes }) =>
-                `${id}: ${help} (${nodes.map(({ target, failureSummary }) => `${target.join(" ")}: ${failureSummary}`).join(", ")})`,
-            ),
-          };
+          return results.violations.map(
+            ({ id, help, nodes }) =>
+              `${id}: ${help} (${nodes.map(({ target, failureSummary }) => `${target.join(" ")}: ${failureSummary}`).join(", ")})`,
+          );
         },
-        [tabsRegion, wcag22LevelAOrAA.source] as const,
+        [tabsRegion, wcag2AAndAATags] as const,
       );
 
       await context.close();
 
-      expect(found.tags).toEqual(expect.arrayContaining(["wcag2a", "wcag2aa", "wcag22aa"]));
-      expect(found.violations).toEqual([]);
+      expect(found).toEqual([]);
     });
 
     test.each(tabLists.flatMap(singleSteps))(

@@ -92,7 +92,7 @@ test(`every revisit in ${roadmapFile} has a reason and one condition`, () => {
   expect(revisitsWithoutReasonOrCondition(revisits)).toEqual([]);
 });
 
-test(`no revisit in ${roadmapFile} is met by the registry fixture in ${fixtureFile}, which holds solid-js and @reactivescript/compiler as of 2026-11-16`, () => {
+test(`no revisit in ${roadmapFile} is met by the registry fixture in ${fixtureFile}, which holds solid-js, @reactivescript/compiler and storybook's releases on majors 10 and 11 as of 2026-11-16`, () => {
   const report = evaluated(registryFixture, readRevisits());
 
   expect(report.problems).toEqual([]);

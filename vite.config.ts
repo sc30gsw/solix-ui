@@ -1,8 +1,6 @@
 import solid from "@solidjs/vite-plugin";
 import { defineConfig, lazyPlugins } from "vite-plus";
-import { playwright } from "vite-plus/test/browser-playwright";
-import type { BrowserInstanceOption } from "vite-plus/test/node";
-import { enginesToVerify } from "#/scripts/browser-engines.mjs";
+import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
@@ -10,6 +8,7 @@ const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
+const storiesProjectConfig = "apps/storybook/vite.config.ts";
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 
 export default defineConfig({
@@ -56,6 +55,10 @@ export default defineConfig({
           "apps/*/vite.config.ts",
           "apps/*/src/App.tsx",
           "apps/playground/src/middleware.ts",
+          "apps/storybook/**/vite.config.ts",
+          "apps/storybook/**/.storybook/*.ts",
+          "apps/storybook/**/*.stories.tsx",
+          "apps/storybook/tests/support/story-reporter.ts",
         ],
         rules: { "import/no-default-export": "off" },
       },
@@ -87,19 +90,10 @@ export default defineConfig({
           name: "browser",
           include: [browserTests],
           api: { port: browserTestServerPort, strictPort: true },
-          browser: {
-            enabled: true,
-            headless: true,
-            provider: playwright(),
-            screenshotFailures: false,
-            get instances() {
-              return enginesToVerify().map((engine) => ({
-                browser: engine as BrowserInstanceOption["browser"],
-              }));
-            },
-          },
+          browser: browserInEveryEngine(),
         },
       },
+      storiesProjectConfig,
     ],
   },
 });
