@@ -1,5 +1,6 @@
 import fc from "fast-check";
 import { chromium, firefox } from "playwright";
+import { expectedValues } from "./expected-values.ts";
 
 const engines = { chromium, firefox };
 const [engineName = "firefox", url = "http://127.0.0.1:4400/", runs = "3"] = process.argv.slice(2);
@@ -38,6 +39,65 @@ function measure() {
   };
 }
 
+function instrument() {
+  const log = [];
+  window.__anchorLog = log;
+  let last = 0;
+  const shownPanels = () =>
+    [...document.querySelectorAll('[role="tabpanel"]')].filter((panel) => !panel.hidden).length;
+  const generatedRows = () => {
+    const list = document.querySelector('[role="tablist"][aria-label="Generated"]');
+    return list ? Math.round(list.getBoundingClientRect().height) : undefined;
+  };
+  const note = (via) => {
+    const y = window.scrollY;
+    if (y !== last) {
+      log.push({
+        via,
+        delta: Math.round((y - last) * 100) / 100,
+        t: Math.round(performance.now()),
+        shown: shownPanels(),
+        generatedHeight: generatedRows(),
+        stack:
+          via === "frame" || via === "scroll"
+            ? undefined
+            : new Error().stack.split("\n").slice(2, 10).join(" | "),
+      });
+      last = y;
+    }
+  };
+  const wrapMethod = (owner, name) => {
+    const original = owner[name];
+    owner[name] = function (...args) {
+      const result = original.apply(this, args);
+      note(name);
+      return result;
+    };
+  };
+  const wrapGetter = (owner, name) => {
+    const descriptor = Object.getOwnPropertyDescriptor(owner, name);
+    Object.defineProperty(owner, name, {
+      ...descriptor,
+      get() {
+        const result = descriptor.get.call(this);
+        note(name);
+        return result;
+      },
+    });
+  };
+  wrapMethod(Element.prototype, "getBoundingClientRect");
+  wrapMethod(HTMLElement.prototype, "focus");
+  for (const name of ["scrollWidth", "scrollHeight", "clientWidth", "clientHeight"]) {
+    wrapGetter(Element.prototype, name);
+  }
+  const frame = () => {
+    note("frame");
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  addEventListener("scroll", () => note("scroll"), { capture: true, passive: true });
+}
+
 for (let run = 0; run < Number(runs); run += 1) {
   const context = await browser.newContext();
   const page = await context.newPage();
@@ -49,7 +109,9 @@ for (let run = 0; run < Number(runs); run += 1) {
       console.log("WARNING at", step);
     }
   });
+  if (process.env.DIAG_INSTRUMENT) await page.addInitScript(instrument);
   await page.goto(url, { waitUntil: "networkidle" });
+  if (!process.env.DIAG_NO_SENTINELS) await expectedValues(page, { sentinels: true });
   const tab = (list, name) =>
     page
       .getByRole("tablist", { name: list, exact: true })
@@ -80,7 +142,7 @@ for (let run = 0; run < Number(runs); run += 1) {
       step = `fill ${index}`;
       index += 1;
       await values.fill(JSON.stringify(drawn));
-      const lengths = drawn.map((value) => [...value].length);
+      const lengths = drawn.map((value) => value.length);
       for (;;) {
         const count = await page
           .getByRole("tablist", { name: "Generated", exact: true })

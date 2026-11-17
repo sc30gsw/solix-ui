@@ -40,8 +40,9 @@ jobs:
           (cd apps/playground && PORT=4400 HOST=127.0.0.1 node dist/server/node.js > /tmp/server.log 2>&1 &)
           sleep 3
           node scripts/diagnose-scroll-anchoring.mjs firefox http://127.0.0.1:4400/ 4
+          DIAG_INSTRUMENT=1 node scripts/diagnose-scroll-anchoring.mjs firefox http://127.0.0.1:4400/ 3
       - run: |
-          for run in 1 2 3 4; do vp test --project node apps/playground/tests/behaviour-seam.test.ts || true; done
+          for run in 1 2; do vp test --project node apps/playground/tests/behaviour-seam.test.ts || true; done
 
   evidence:
     timeout-minutes: 30
