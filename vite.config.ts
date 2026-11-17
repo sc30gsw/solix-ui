@@ -1,6 +1,7 @@
 import solid from "@solidjs/vite-plugin";
 import { defineConfig, lazyPlugins } from "vite-plus";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
+import { testSetupFiles } from "#/scripts/test-setup-files.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
@@ -68,7 +69,7 @@ export default defineConfig({
   test: {
     testTimeout: 30_000,
     hookTimeout: 30_000,
-    setupFiles: ["tests/support/property-reports.ts"],
+    setupFiles: testSetupFiles,
     projects: [
       {
         extends: true,

@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import fc from "fast-check";
 import {
   mergeConfig,
@@ -29,7 +29,7 @@ const parametersThatReportOrInterrupt = [
   "skipAllAfterTimeLimit",
   "plugins",
 ];
-const shortTimeout = 1_000;
+const shortTimeout = 5_000;
 const runTime = 100;
 const slowRuns = 100;
 
@@ -44,17 +44,27 @@ function isInline(
 }
 
 const { projects: definitions = [], ...shared } = config.test ?? {};
-const projects = definitions.map((definition, index) => {
-  if (!isInline(definition)) {
-    throw new Error(`vite.config.ts: project ${index} is not an inline project this check reads.`);
+
+async function resolvedProject(
+  definition: TestProjectConfiguration,
+  index: number,
+): Promise<TestProjectInlineConfiguration> {
+  if (typeof definition === "string") {
+    const { default: loaded } = await import(join(repositoryRoot, definition));
+    return loaded;
   }
-  const resolved: TestProjectInlineConfiguration =
-    definition.extends === false ? definition : mergeConfig({ test: shared }, definition);
-  return {
-    name: JSON.stringify(resolved.test?.name ?? index),
-    setupFiles: [resolved.test?.setupFiles ?? []].flat().map((file) => join(repositoryRoot, file)),
-  };
-});
+  if (!isInline(definition)) {
+    throw new Error(`vite.config.ts: project ${index} is not a project this check reads.`);
+  }
+  return definition.extends === false ? definition : mergeConfig({ test: shared }, definition);
+}
+
+const projects = (
+  await Promise.all(definitions.map((definition, index) => resolvedProject(definition, index)))
+).map((resolved, index) => ({
+  name: JSON.stringify(resolved.test?.name ?? index),
+  setupFiles: [resolved.test?.setupFiles ?? []].flat().map((file) => resolve(repositoryRoot, file)),
+}));
 
 const checkedFiles = scriptFiles.map((file) => join(repositoryRoot, file));
 const program = openProgram(checkedFiles);
