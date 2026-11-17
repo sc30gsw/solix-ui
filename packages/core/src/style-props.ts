@@ -35,7 +35,7 @@ import {
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const pixelsPerRem = 16;
-const characterThatEndsADeclaration = /[;{}]/;
+export const characterThatEndsADeclaration = /[;{}]/;
 const containerWidthUnits = ["rem", "px", "em"] as const;
 const fractionLeadingZeros = ["", "0", "00", "000"] as const;
 const unsignedInteger = "(?:0|[1-9]\\d*)";
@@ -47,7 +47,7 @@ const characterOutsideAClassName = /[^\w-]/g;
 
 type Absent = null | undefined;
 type TokenKey<Name, Of extends Scale> = Name extends `--solix-${Of}-${infer Key}` ? Key : never;
-type ScaleKey<Of extends Scale> = TokenKey<Extract<keyof typeof tokens, string>, Of>;
+export type ScaleKey<Of extends Scale> = TokenKey<Extract<keyof typeof tokens, string>, Of>;
 type ValueOf<Row> = Row extends PropertyRow
   ?
       | NonNullable<JSX.CSSProperties[Row["property"]]>
@@ -149,6 +149,11 @@ function keyedEntries<Key extends string>(
   });
 }
 
+export function tokenOf(scale: Scale, key: string): string | undefined {
+  const token = `--solix-${scale}-${key}`;
+  return Object.hasOwn(tokens, token) ? token : undefined;
+}
+
 function cssValue(
   row: Pick<PropertyRow, "kind" | "scale">,
   written: string | number,
@@ -157,8 +162,8 @@ function cssValue(
     return row.kind === "length" ? `${written / pixelsPerRem}rem` : String(written);
   }
   if (characterThatEndsADeclaration.test(written)) return undefined;
-  const token = `--solix-${row.scale}-${written}`;
-  return row.scale !== undefined && Object.hasOwn(tokens, token) ? `var(${token})` : written;
+  const token = row.scale === undefined ? undefined : tokenOf(row.scale, written);
+  return token === undefined ? written : `var(${token})`;
 }
 
 function presentEntries(style: JSX.CSSProperties): [string, string | number][] {

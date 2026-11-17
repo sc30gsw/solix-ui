@@ -209,6 +209,35 @@ inEveryEngine((browser) => {
         .toMatchObject({ selected: near, focused: near, shown: [panelOf(near)] });
     });
 
+    test("typing tab values while the generated list wraps over several rows moves neither the page nor the field", async () => {
+      const { page } = opened;
+      const field = page.getByRole("textbox", { name: "Tab values" });
+      const list = tabList(page, generated);
+      const wrapping = Array.from({ length: 5 }, (_, index) => `a wide tab number ${index}`);
+      const where = () =>
+        field.evaluate((element) => ({
+          scrolled: window.scrollY,
+          fieldTop: element.getBoundingClientRect().top,
+        }));
+      const listHeight = () => list.evaluate((element) => element.getBoundingClientRect().height);
+      const show = async (labels: string[]) => {
+        await field.fill(JSON.stringify(labels));
+        await expect.poll(() => list.getByRole("tab").count()).toBe(labels.length);
+      };
+      await show(["x"]);
+      const oneTabHigh = await listHeight();
+      await show(wrapping);
+      const before = await where();
+
+      expect(await listHeight()).toBeGreaterThan(oneTabHigh);
+
+      for (const labels of [["x"], wrapping, ["y"], wrapping]) {
+        await show(labels);
+
+        expect(await where(), JSON.stringify(labels)).toEqual(before);
+      }
+    });
+
     test("for generated tab values under a root id, every tab's aria-controls names exactly one element, its panel, and every panel's aria-labelledby names exactly one element, its tab", async () => {
       const { page } = opened;
       const values = page.getByRole("textbox", { name: "Tab values" });

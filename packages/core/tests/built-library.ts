@@ -28,6 +28,14 @@ if (builtComponents.length === 0) {
 
 export const library = (await import(join(dist, "index.js"))) as typeof Library;
 
+const builtComponentModules: Record<string, unknown>[] = await Promise.all(
+  builtComponents.map((name) => import(join(dist, `${name}.jsx`))),
+);
+
+export function isBuiltComponent(exported: unknown): boolean {
+  return builtComponentModules.some((module) => Object.values(module).includes(exported));
+}
+
 export const { handledKeys, rootPart, stylesApiPropKeys } = (await import(
   join(dist, "parts.js")
 )) as typeof Parts;

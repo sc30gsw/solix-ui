@@ -41,6 +41,7 @@ import {
   builtComponents,
   carriedComponents,
   compiledClassesOf,
+  isBuiltComponent,
   library,
   renderBuilt,
   resolveVariables,
@@ -128,7 +129,7 @@ function expectCompiledClassesFirst(name: string, part: string, element: Element
 
 test("every component the library exports is held to the root contract", () => {
   const exportedComponents = Object.entries(library)
-    .filter(([, exported]) => typeof exported === "function")
+    .filter(([, exported]) => isBuiltComponent(exported))
     .map(([name]) => name);
 
   expect(exportedComponents.sort()).toEqual(Object.keys(fixtures).sort());

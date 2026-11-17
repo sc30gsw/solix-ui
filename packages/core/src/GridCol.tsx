@@ -2,6 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { Show } from "solid-js";
 import { useGrid } from "#/src/grid-context.ts";
+import { LibraryStyle } from "#/src/library-style.tsx";
 import { createParts, type ElementProps } from "#/src/parts.ts";
 import { variableProperty } from "#/src/style-prop-table.ts";
 import { eachValue, type StyleProp, type VariableProp, withBase } from "#/src/style-props.ts";
@@ -91,7 +92,7 @@ export function GridCol(props: GridColProps) {
   );
   return (
     <>
-      <Show when={own.rules()}>{(rules) => <style data-solix-rules>{rules()}</style>}</Show>
+      <Show when={own.rules()}>{(rules) => <LibraryStyle of="grid-col" css={rules()} />}</Show>
       <div {...root} />
     </>
   );

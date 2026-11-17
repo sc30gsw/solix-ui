@@ -18,18 +18,22 @@ import { fileNamedBy } from "#/scripts/subpath.ts";
 import { tokenValues } from "#/scripts/tokens.ts";
 import {
   calledDeclaration,
+  constructedClass,
   descendants,
   exportsOf,
   fileOf,
   findAncestor,
   firstLine,
+  isDomLibraryFile,
   memberDeclarations,
+  nameOf,
   moduleSpecifierOf,
   openProgram,
   parse,
   parseAll,
   parseText,
   staticPropertyName,
+  stringsIn,
   symbolOf,
   ts,
 } from "#/scripts/syntax.ts";
@@ -37,7 +41,7 @@ import { componentLibraries, repositoryRoot, scriptFiles } from "#/tests/support
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
-  /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
+  /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.tsx?|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
 const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
@@ -174,8 +178,9 @@ function rendered(children: readonly ts.JsxChild[]): ts.JsxChild[] {
 }
 
 function isStyleElement(node: ts.Node): boolean {
-  const shown = ts.isParenthesizedExpression(node) ? unwrapped(node) : node;
-  return tagOf(shown)?.tagName.getText() === "style";
+  const tag = tagOf(ts.isParenthesizedExpression(node) ? unwrapped(node) : node);
+  const declaration = tag && symbolOf(librarySources, tag.tagName)?.declarations?.[0]?.resolve();
+  return declaration !== undefined && relativePath(fileOf(declaration)) === libraryStyleModule;
 }
 
 function isShowOfRules(child: ts.JsxChild): boolean {
@@ -197,7 +202,7 @@ function besideProblems(tag: JsxTag): string[] {
   return at === children.length - 1 && before.length <= 1 && before.every(isShowOfRules)
     ? []
     : [
-        `render nothing beside <${tag.tagName.getText()}> but, before it, one <Show> whose child is a <style> of its rules.`,
+        `render nothing beside <${tag.tagName.getText()}> but, before it, one <Show> whose child is a LibraryStyle of its rules.`,
       ];
 }
 
@@ -752,38 +757,160 @@ test("no source file of the library but parts.ts calls stylex.attrs or stylex.pr
   expect(violations).toEqual([]);
 });
 
-test("every other source file is the barrel, a StyleX definition, or a kebab-case module", () => {
+const libraryStyleModule = "packages/core/src/library-style.tsx";
+const styleElement = "style";
+const styleSheetClass = "CSSStyleSheet";
+const adoptedStyleSheets = "adoptedStyleSheets";
+const elementNameAt: Record<string, number> = { createElement: 0, createElementNS: 1 };
+
+function domMembersOf(node: ts.Node): string[] {
+  return memberDeclarations(librarySources, node).flatMap((declaration) =>
+    ts.isBindingElement(declaration)
+      ? domMembersOf(declaration)
+      : isDomLibraryFile(fileOf(declaration))
+        ? [nameOf(declaration)]
+        : [],
+  );
+}
+
+function writesAStyle(node: ts.Node): boolean {
+  if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+    return node.tagName.getText() === styleElement;
+  }
+  if (domMembersOf(node).includes(adoptedStyleSheets)) return true;
+  if (
+    constructedClass(librarySources, node).some(
+      ({ name, file }) => name === styleSheetClass && isDomLibraryFile(file),
+    )
+  ) {
+    return true;
+  }
+  if (!ts.isCallExpression(node)) return false;
+  return domMembersOf(unwrapped(node.expression)).some((member) =>
+    stringsIn(librarySources, node.arguments[elementNameAt[member] ?? -1]).some(
+      (name) => name.toLowerCase() === styleElement,
+    ),
+  );
+}
+
+function styleWritesIn(file: string, source: ts.SourceFile): string[] {
+  return descendants(source)
+    .filter(writesAStyle)
+    .map(
+      (node) =>
+        `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)} writes a style element or a style sheet. Render LibraryStyle from ${libraryStyleModule}.`,
+    );
+}
+
+test("no source of a library but library-style.tsx renders a <style>, creates a style element, or constructs or adopts a style sheet", () => {
+  expect(
+    librarySourceFiles
+      .filter((file) => relativePath(file) !== libraryStyleModule)
+      .flatMap((file) => styleWritesIn(file, typedSource(file))),
+  ).toEqual([]);
+  expect(
+    styleWritesIn(libraryStyleModule, typedSource(join(repositoryRoot, libraryStyleModule))),
+  ).toHaveLength(1);
+});
+
+function callsCreateParts(node: ts.Node): boolean {
+  if (!ts.isCallExpression(node)) return false;
+  const called = calledDeclaration(librarySources, node);
+  return (
+    called !== undefined &&
+    relativePath(fileOf(called)) === partsHelperFile &&
+    ts.isFunctionDeclaration(called) &&
+    called.name?.text === partsHelper
+  );
+}
+
+test("only a Component.tsx calls createParts, so a module that renders a styled element is held to the component checks", () => {
+  const componentFiles = components.map(({ file }) => file);
+  const violations = librarySourceFiles
+    .filter((file) => !componentFiles.includes(file))
+    .flatMap((file) =>
+      descendants(typedSource(file))
+        .filter(callsCreateParts)
+        .map(
+          (call) =>
+            `${relativePath(file)}:${lineOf(call)}: ${firstLine(call)} styles an element outside a component. Move it into a Component.tsx of its own.`,
+        ),
+    );
+
+  expect(components.some(({ source }) => descendants(source).some(callsCreateParts))).toBe(true);
+  expect(violations).toEqual([]);
+});
+
+test("every other source file is the barrel, a StyleX definition, or a kebab-case module, with JSX or without", () => {
   const violations = libraries.flatMap(({ source }) =>
     readdirSync(source)
       .filter((entry) => !componentFile.test(entry) && !helperFile.test(entry))
       .map(
         (entry) =>
-          `${relativePath(join(source, entry))}: name it Component.tsx for a component, kebab-case.ts for a module, or name.stylex.ts for StyleX variables.`,
+          `${relativePath(join(source, entry))}: name it Component.tsx for a component, kebab-case.ts or kebab-case.tsx for a module, or name.stylex.ts for StyleX variables.`,
       ),
   );
 
   expect(violations).toEqual([]);
 });
 
-test("the barrel exports every component and its props type once, in alphabetical order, and nothing else", () => {
+const barrelLine = /^export \{ [^}]+ \} from "([^"]+)";$/;
+
+function moduleNameOf(file: string): string {
+  return basename(file).replace(/\.tsx?$/, "");
+}
+
+test("the barrel exports every component and its props type once, and by name what other modules give consumers, one line per module in the order of the module names, and nothing else", () => {
   for (const { source } of libraries) {
     const barrel = join(source, "index.ts");
-    const exportLine = (name: string, file: string | undefined) =>
-      `export { ${name}, type ${name}Props } from ${file ? relativePath(file) : "no file"};`;
-    const expected = components
+    const where = relativePath(barrel);
+    const names = components
       .filter(({ file }) => file.startsWith(source))
-      .sort((left, right) => (left.name < right.name ? -1 : 1))
-      .map(({ name, file }) => exportLine(name, file));
-    const actual = readFileSync(barrel, "utf8")
-      .trim()
-      .split("\n")
-      .map((line) => {
-        const [, name, specifier] =
-          /^export \{ (\w+), type \1Props \} from "([^"]+)";$/.exec(line) ?? [];
-        return name && specifier ? exportLine(name, fileNamedBy(barrel, specifier)) : line;
-      });
+      .map(({ name }) => name)
+      .sort();
+    const lines = readFileSync(barrel, "utf8").trim().split("\n");
+    const files = lines.map((line) => {
+      const specifier = barrelLine.exec(line)?.[1];
+      return specifier === undefined ? undefined : fileNamedBy(barrel, specifier);
+    });
+    const modules = files.map((file) => (file === undefined ? undefined : moduleNameOf(file)));
+    const notModules = files.filter(
+      (file) =>
+        file !== undefined &&
+        (dirname(file) !== source ||
+          (!names.includes(moduleNameOf(file)) && !helperFile.test(basename(file)))),
+    );
 
-    expect(actual, `${relativePath(barrel)}`).toEqual(expected);
+    expect(
+      lines.filter((_, index) => files[index] === undefined),
+      `${where}: write each line as export { names } from "<specifier of a module in src>";`,
+    ).toEqual([]);
+    expect(modules, `${where}: order the lines by module name`).toEqual(
+      modules.toSorted(
+        (one, other) => Number((one ?? "") > (other ?? "")) - Number((one ?? "") < (other ?? "")),
+      ),
+    );
+    expect(new Set(modules).size, `${where}: re-export each module on one line`).toBe(
+      modules.length,
+    );
+    expect(
+      notModules.map((file) => (file === undefined ? "" : relativePath(file))),
+      `${where}: re-export only components and kebab-case modules of src`,
+    ).toEqual([]);
+    expect(
+      lines.flatMap((line, index) => {
+        const module = modules[index];
+        return module !== undefined && names.includes(module) ? [[module, line]] : [];
+      }),
+      where,
+    ).toEqual(
+      names.map((name) => [
+        name,
+        expect.stringMatching(
+          new RegExp(`^export \\{ ${name}, type ${name}Props \\} from "[^"]+";$`),
+        ),
+      ]),
+    );
   }
 });
 

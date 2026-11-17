@@ -3,6 +3,7 @@ import type { JSX } from "@solidjs/web";
 import { createUniqueId, Show } from "solid-js";
 import { GridCol } from "#/src/GridCol.tsx";
 import { GridContext } from "#/src/grid-context.ts";
+import { LibraryStyle } from "#/src/library-style.tsx";
 import { createParts, type ElementProps } from "#/src/parts.ts";
 import { type Breakpoint, breakpoints } from "#/src/style-prop-table.ts";
 import {
@@ -101,7 +102,7 @@ export function Grid(props: GridProps) {
   );
   return (
     <Show when={container.queries()?.widths.length} fallback={grid}>
-      <Show when={container.rules()}>{(rules) => <style data-solix-rules>{rules()}</style>}</Show>
+      <Show when={container.rules()}>{(rules) => <LibraryStyle of="grid" css={rules()} />}</Show>
       <div {...part("container")}>{grid}</div>
     </Show>
   );
