@@ -38,7 +38,9 @@ export function GridSection() {
         <Grid.Col span={3}>Fixed column</Grid.Col>
       </Grid>
       <Grid mt="md" columns={24} grow justify="center" align="flex-end" overflow="hidden">
-        <Grid.Col span={6}>Grows to half</Grid.Col>
+        <Grid.Col span={6} h={80}>
+          Grows to half
+        </Grid.Col>
         <Grid.Col span={6}>Grows to the other half</Grid.Col>
       </Grid>
       <Box w={480} mt="md">

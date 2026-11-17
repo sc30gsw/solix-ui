@@ -420,7 +420,10 @@ const journeys = {
     observe("Content column is as wide as its content", await style(column("Content column"), "flex-basis"), "auto");
     observe("Auto column grows into the rest of its row", await style(column("Auto column"), "flex-grow"), "1");
     observe("with grow, two columns of 6 out of 24 each fill half the row", near((await boxOf(column("Grows to half"))).width, await spanWidth(column("Grows to half"), 12, 24)), true);
-    observe("justify, align and overflow reach the grid", `${await style(column("Grows to half").locator("xpath=.."), "justify-content")} ${await style(column("Grows to half").locator("xpath=.."), "align-items")} ${await style(column("Grows to half").locator("xpath=../.."), "overflow")}`, "center flex-end hidden");
+    observe("justify and overflow reach the grid", `${await style(column("Grows to half").locator("xpath=.."), "justify-content")} ${await style(column("Grows to half").locator("xpath=../.."), "overflow")}`, "center hidden");
+    const extentOf = (element) => element.evaluate((node) => { const { top, bottom } = node.getBoundingClientRect(); return { top, bottom }; });
+    const [tall, short] = [await extentOf(column("Grows to half")), await extentOf(column("Grows to the other half"))];
+    observe("align flex-end puts the shorter column level with the bottom of the taller one", near(short.bottom, tall.bottom) && short.top > tall.top + 1, true);
     observe("in a 480 pixel container, past 20em, a column spans 6 of 12", near((await boxOf(column("Half of a wide container"))).width, await spanWidth(column("Half of a wide container"), 6, 12)), true);
     observe("in a 240 pixel container, short of 20em, a column spans 12 of 12", near((await boxOf(column("All of a narrow container"))).width, await spanWidth(column("All of a narrow container"), 12, 12)), true);
     observe("below md: without breakpoints, in a 1024 pixel container, past md, a column spans 6 of 12", near((await boxOf(column("Half of a container past md"))).width, await spanWidth(column("Half of a container past md"), 6, 12)), true);

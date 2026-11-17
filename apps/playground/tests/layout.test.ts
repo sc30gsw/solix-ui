@@ -43,12 +43,12 @@ function gridAround(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true }).locator("xpath=..");
 }
 
-type Box = { left: number; top: number; width: number };
+type Box = { left: number; top: number; bottom: number; width: number };
 
 function boxOf(element: Locator): Promise<Box> {
   return element.evaluate((node) => {
-    const { left, top, width } = node.getBoundingClientRect();
-    return { left, top, width };
+    const { left, top, bottom, width } = node.getBoundingClientRect();
+    return { left, top, bottom, width };
   });
 }
 
@@ -319,9 +319,13 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
           near(grows[0].width, await spanWidth(column("Grows to half"), 12, 24)),
         "with grow, two columns of 6 out of 24 fill the row",
       ).toBe(true);
+      const [tall, short] = grows;
+      expect(
+        near(short.bottom, tall.bottom) && short.top > tall.top + 1,
+        "align flex-end puts the shorter column level with the bottom of the taller one",
+      ).toBe(true);
       const grown = column("Grows to half").locator("xpath=..");
       expect(await computed(grown, "justify-content")).toBe("center");
-      expect(await computed(grown, "align-items")).toBe("flex-end");
       expect(await computed(grown.locator("xpath=.."), "overflow")).toBe("hidden");
       expect(
         near(
