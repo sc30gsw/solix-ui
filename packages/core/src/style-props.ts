@@ -33,7 +33,7 @@ import { tokens } from "./tokens.stylex";
 
 const pixelsPerRem = 16;
 const characterThatEndsADeclaration = /[;{}]/;
-const containerWidth = /^(\d*\.?\d+)(px|em|rem)$/;
+const containerWidthUnits = ["rem", "px", "em"] as const;
 const characterOutsideAClassName = /[^\w-]/g;
 
 type Absent = null | undefined;
@@ -54,7 +54,7 @@ export type ScaleValue<Of extends Scale> = ScaleKey<Of> | number | (string & {})
 export type Spacing = ScaleValue<"spacing">;
 
 /** A container width that a value keyed for container queries applies from, such as `"40em"`. */
-export type ContainerWidth = `${number}${"px" | "em" | "rem"}`;
+export type ContainerWidth = `${number}${(typeof containerWidthUnits)[number]}`;
 
 /** A value for every width, or one for each container width it applies from. */
 export type ContainerProp<V> =
@@ -258,12 +258,24 @@ export function resolveVariables(
 
 export function containerWidthsOf(value: Keyed<unknown>): ContainerWidth[] {
   if (value === undefined || value === null || typeof value !== "object") return [];
-  return Object.keys(value).filter((key): key is ContainerWidth => containerWidth.test(key));
+  return Object.keys(value).filter((key): key is ContainerWidth => isContainerWidth(key));
+}
+
+function widthOf(written: string): { amount: number; unit: string } | undefined {
+  const unit = containerWidthUnits.find((found) => written.endsWith(found));
+  const amount = unit === undefined ? "" : written.slice(0, -unit.length);
+  return unit !== undefined && amount !== "" && Number.isFinite(Number(amount))
+    ? { amount: Number(amount), unit }
+    : undefined;
+}
+
+export function isContainerWidth(written: string): written is ContainerWidth {
+  return widthOf(written) !== undefined;
 }
 
 function pixelsOf(width: string): number {
-  const [, amount = "0", unit] = containerWidth.exec(width) ?? [];
-  return Number(amount) * (unit === "px" ? 1 : pixelsPerRem);
+  const { amount = 0, unit = "px" } = widthOf(width) ?? {};
+  return amount * (unit === "px" ? 1 : pixelsPerRem);
 }
 
 function rulesFor(queries: ContainerQueries, used: readonly Used[]): string | undefined {
@@ -314,7 +326,10 @@ export function createQueryContainer(
     return {
       scope: scope.replace(characterOutsideAClassName, "_"),
       widths: given
-        .filter(([, width]) => containerWidth.test(width))
+        .flatMap(([key, width]): [string, string][] => {
+          const parsed = widthOf(width);
+          return parsed ? [[key, `${parsed.amount}${parsed.unit}`]] : [];
+        })
         .toSorted(([, narrower], [, wider]) => pixelsOf(narrower) - pixelsOf(wider)),
     };
   });

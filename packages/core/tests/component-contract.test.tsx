@@ -531,7 +531,7 @@ test("the contract skill covers every component's source file with a glob row th
   expect(uncovered).toEqual([]);
 });
 
-const containerQuery = /^\(min-width: (\d*\.?\d+)(px|em|rem)\)$/;
+const containerQuery = /^\(min-width: (-?\d*\.?\d+(?:e[+-]?\d+)?)(px|em|rem)\)$/;
 const pixelsPerEm = 16;
 
 function containerClassParts(className: string): { name: string; scope: string } | undefined {

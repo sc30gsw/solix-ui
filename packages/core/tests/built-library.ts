@@ -34,7 +34,7 @@ export const { handledKeys, rootPart, stylesApiPropKeys } = (await import(
 
 export const { stableClass } = (await import(join(dist, "stable-class.js"))) as typeof StableClass;
 
-export const { resolveVariables } = (await import(
+export const { isContainerWidth, resolveVariables } = (await import(
   join(dist, "style-props.js")
 )) as typeof StyleProps;
 

@@ -12,7 +12,8 @@ import type {
   SpaceProps,
   StackProps,
 } from "../src/index";
-import { library } from "./built-library";
+import type { ContainerWidth } from "../src/style-props";
+import { isContainerWidth, library } from "./built-library";
 import { render } from "./fixtures";
 import {
   classesOf,
@@ -684,4 +685,44 @@ test("a grid with container queries and no value keyed by a width renders its co
   expect(grid).toContain("solix-Grid-container");
   expect(rulesOf(simple)).toEqual([]);
   expect(rulesOf(grid)).toEqual([]);
+});
+
+const writtenWidths = [
+  "30em",
+  "480px",
+  "2.5rem",
+  ".5em",
+  "1e2px",
+  "-5em",
+  "0x10px",
+  "px",
+  "em",
+  "5",
+  "5 em",
+  "fivepx",
+  "Infinitypx",
+  "5pt",
+] as const;
+
+type Written = (typeof writtenWidths)[number];
+type AcceptedByTheType = {
+  [Width in Written]: Width extends ContainerWidth ? Width : never;
+}[Written];
+
+test("a container width the type takes is one the run time takes, and the other way round", () => {
+  const acceptedAtRunTime = writtenWidths.filter((width) => isContainerWidth(width));
+
+  expectTypeOf<AcceptedByTheType>().toEqualTypeOf<
+    "30em" | "480px" | "2.5rem" | ".5em" | "1e2px" | "-5em" | "0x10px" | "5 em"
+  >();
+  expect(acceptedAtRunTime).toEqual([
+    "30em",
+    "480px",
+    "2.5rem",
+    ".5em",
+    "1e2px",
+    "-5em",
+    "0x10px",
+    "5 em",
+  ]);
 });
