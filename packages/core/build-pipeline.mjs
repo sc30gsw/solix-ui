@@ -124,7 +124,7 @@ export function behaviourSdkHiddenRule(packageRoot) {
   return cssTexts[0];
 }
 
-export function scopedToLibraryParts(css) {
+function scopedToLibraryParts(css) {
   const parsed = postcss.parse(css);
   parsed.walkRules((rule) => {
     rule.selectors = rule.selectors.map((selector) => `${selector}${LIBRARY_PART_CONDITION}`);

@@ -47,7 +47,7 @@ inEveryEngine((browser) => {
     await page.setContent(
       [
         `<style>${stylesheet}</style>`,
-        '<div data-slot="x" hidden style="display:block">Another library</div>',
+        '<div data-slot="x" hidden class="tp-flex" style="display:block">Another library</div>',
         `<div data-slot="tabs-panel" hidden class="${stableClass("TabsPanel", rootPart)}" style="display:grid">A part</div>`,
       ].join(""),
     );

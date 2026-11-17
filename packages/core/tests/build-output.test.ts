@@ -7,10 +7,8 @@ import {
   BEHAVIOUR_SDK_LAYER,
   behaviourSdkHiddenRule,
   HIDDEN_LAYER,
-  HIDDEN_PART_SELECTOR,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
-  scopedToLibraryParts,
   sdkHiddenRuleSource,
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
@@ -19,6 +17,7 @@ import {
   stylePropClassPrefix,
   stylePropNames,
 } from "../src/style-prop-table";
+import { stableClassPrefix } from "../src/stable-class";
 import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
 import { parse, ts } from "../../../scripts/syntax";
 import {
@@ -30,6 +29,7 @@ import {
 
 const stylesheet = builtStylesheet.trim();
 const realHiddenRule = behaviourSdkHiddenRule(join(import.meta.dirname, ".."));
+const libraryPartCondition = `:where([class*="${stableClassPrefix}"])`;
 const ownerBreakpoints: [name: string, width: string][] = [
   ["xs", "36em"],
   ["sm", "48em"],
@@ -147,10 +147,21 @@ function depthAfterEachCharacter(css: string): number[] {
   });
 }
 
+function sdkSelectors(): string[] {
+  const selectors: string[] = [];
+  postcss.parse(realHiddenRule).walkRules((rule) => {
+    selectors.push(rule.selector);
+  });
+  return selectors;
+}
+
 test("the stylesheet first orders the behaviour SDK's layer before the library's, then holds the rule the SDK writes at run time to keep a hidden part hidden, read from the SDK's package and narrowed to an element that carries a library part class, and then every other rule inside the one library cascade layer", () => {
-  const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n${scopedToLibraryParts(realHiddenRule)}\n`;
+  const [selector, ...others] = sdkSelectors();
+  const narrowed = realHiddenRule.replace(selector, `${selector}${libraryPartCondition}`);
+  const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n${narrowed}\n`;
   const layer = stylesheet.slice(order.length);
 
+  expect(others).toEqual([]);
   expect(stylesheet.startsWith(order)).toBe(true);
   expect(layer.startsWith(`@layer ${LIBRARY_CASCADE_LAYER} {`)).toBe(true);
 
@@ -304,7 +315,9 @@ test("the hidden layer holds one rule, the build's selector for a hidden part wi
     });
   });
 
-  expect(rules).toEqual([`${HIDDEN_PART_SELECTOR}{display:none}`]);
+  expect(rules).toEqual([
+    `[hidden]${libraryPartCondition}:not([hidden="until-found"]){display:none}`,
+  ]);
 });
 
 test("the style-prop table uses the build's class prefix", () => {
