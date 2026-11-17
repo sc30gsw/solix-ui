@@ -36,7 +36,7 @@ export type PinComparison =
 
 export type Report = { comparisons: PinComparison[]; problems: string[] };
 
-type Published = { version: string; eligibleAt: number };
+export type Published = { version: string; eligibleAt: number };
 
 type Releases = {
   newest: string;
@@ -60,7 +60,7 @@ const packageAndVersion = /^((?:@[^/@]+\/)?[^@]+)@(.+)$/;
 const packageName = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/;
 const nodeChannel = "Node's newest LTS";
 
-function isStable({ version }: Published): boolean {
+export function isStable({ version }: Published): boolean {
   return semver.prerelease(version) === null;
 }
 
@@ -209,7 +209,7 @@ function publishedAt(document: RegistryDocument, version: string): number | unde
   return Number.isNaN(at) ? undefined : at;
 }
 
-function publishedIn(
+export function publishedIn(
   registryName: string,
   document: RegistryDocument,
   policy: ReleasePolicy,
@@ -231,7 +231,7 @@ function publishedIn(
   return published;
 }
 
-function newestFirst(published: readonly Published[]): Published[] {
+export function newestFirst(published: readonly Published[]): Published[] {
   return published.toSorted((left, right) => semver.rcompare(left.version, right.version));
 }
 
