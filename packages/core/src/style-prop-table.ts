@@ -34,6 +34,14 @@ export const hiddenLayer = "hidden";
 export const behaviourSdkLayer = "ui-sdk";
 export const libraryStyleMark = "data-solix-rules";
 
+export const colorSchemeAttribute = "data-color-scheme";
+
+export const colorSchemeOf = {
+  light: "light",
+  dark: "dark",
+  auto: "light dark",
+} as const;
+
 export const breakpointWidths = {
   xs: "36em",
   sm: "48em",
@@ -387,8 +395,12 @@ export function stylePropRules(): string {
       ]),
     ),
   );
+  const schemes = Object.entries(colorSchemeOf).map(
+    ([scheme, colorScheme]) => `[${colorSchemeAttribute}="${scheme}"]{color-scheme:${colorScheme}}`,
+  );
   return [
     `@layer ${childRuleLayer}{\n${childRules().join("\n")}\n}`,
+    ...schemes,
     ...registrations,
     ...ordered,
     ...visibility,
