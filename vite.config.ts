@@ -68,6 +68,7 @@ export default defineConfig({
   test: {
     testTimeout: 30_000,
     hookTimeout: 30_000,
+    setupFiles: ["tests/support/property-reports.ts"],
     projects: [
       {
         extends: true,
