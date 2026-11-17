@@ -11,6 +11,7 @@ import {
   type RovingList,
   type RovingListState,
 } from "#/tests/support/roving-list-model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 15;
@@ -94,10 +95,11 @@ inEveryEngine((browser) => {
   test(
     "for every generated sequence of clicks and keys on a list of tabs, the selected tab, the focused tab, the panel shown and the one tab stop agree with a model of that list, and the selected tab alone carries data-active",
     { timeout: generatedSequencesTimeout },
-    async () => {
+    async (context) => {
       const page = await browser().newPage();
 
-      await fc.assert(
+      await assertProperty(
+        context,
         fc.asyncProperty(
           fc.constantFrom(...tabLists),
           fc.commands(steps, { maxCommands: longestSequence }),

@@ -8,6 +8,7 @@ import {
 } from "#/src/index.ts";
 import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 type Call = [value: string, payload: number];
 
@@ -248,8 +249,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of requests, consumer writes and flushes, it agrees with a model of the two values", () => {
-  fc.assert(
+test("for every generated sequence of requests, consumer writes and flushes, it agrees with a model of the two values", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.record({
         follows: fc.boolean(),

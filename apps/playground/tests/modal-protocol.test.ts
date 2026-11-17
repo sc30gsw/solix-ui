@@ -2,6 +2,7 @@ import fc from "fast-check";
 import type { Locator, Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
 import { inEveryEngine } from "#/tests/support/playground.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 15;
@@ -171,10 +172,11 @@ inEveryEngine((browser) => {
   test(
     "for fixed sequences that take every action, and for every generated sequence of user actions, the modal agrees with a model of open and closed",
     { timeout: generatedSequencesTimeout },
-    async () => {
+    async (context) => {
       const page = await browser().newPage();
 
-      await fc.assert(
+      await assertProperty(
+        context,
         fc.asyncProperty(fc.commands(steps, { maxCommands: longestSequence }), async (sequence) => {
           await page.goto(url, { waitUntil: "networkidle" });
           const real: Real = {

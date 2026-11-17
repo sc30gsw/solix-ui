@@ -1,10 +1,4 @@
-import { join, resolve } from "node:path";
-import fc from "fast-check";
-import {
-  mergeConfig,
-  type TestProjectConfiguration,
-  type TestProjectInlineConfiguration,
-} from "vite-plus";
+import { join } from "node:path";
 import { afterAll, expect, test } from "vite-plus/test";
 import {
   calledDeclaration,
@@ -16,56 +10,39 @@ import {
   openProgram,
   ts,
 } from "#/scripts/syntax.ts";
+import { definePropertyRunnerTests } from "#/tests/support/property-runner-cases.ts";
 import { located } from "#/tests/support/primitive-rules/library.ts";
 import { repositoryRoot, scriptFiles } from "#/tests/support/workspace.ts";
 import config from "#/vite.config.ts";
 
-const pluginInstaller = "installGlobalPlugin";
-const runners = ["assert", "configureGlobal"];
-const parametersThatReportOrInterrupt = [
-  "reporter",
-  "asyncReporter",
-  "interruptAfterTimeLimit",
-  "skipAllAfterTimeLimit",
-  "plugins",
-];
-const shortTimeout = 5_000;
-const runTime = 100;
-const slowRuns = 100;
+type RestrictedImport = { name: string; importNames: string[] };
 
-function isInline(
-  definition: TestProjectConfiguration,
-): definition is TestProjectInlineConfiguration {
-  return (
-    typeof definition === "object" &&
-    !(definition instanceof Promise) &&
-    typeof definition.extends !== "string"
-  );
+const restrictedImport = "no-restricted-imports";
+
+function restrictedRunners(): RestrictedImport {
+  const rule: unknown = config.lint?.rules?.[restrictedImport];
+  const options: unknown = Array.isArray(rule) ? rule[1] : undefined;
+  const paths: unknown =
+    typeof options === "object" && options !== null ? Reflect.get(options, "paths") : undefined;
+  const [first]: unknown[] = Array.isArray(paths) ? paths : [];
+  if (typeof first !== "object" || first === null) {
+    throw new Error(`vite.config.ts: ${restrictedImport} names no restricted package.`);
+  }
+  return {
+    name: String(Reflect.get(first, "name")),
+    importNames: [...(Reflect.get(first, "importNames") as string[])],
+  };
 }
 
-const { projects: definitions = [], ...shared } = config.test ?? {};
-
-async function resolvedProject(
-  definition: TestProjectConfiguration,
-  index: number,
-): Promise<TestProjectInlineConfiguration> {
-  if (typeof definition === "string") {
-    const { default: loaded } = await import(join(repositoryRoot, definition));
-    return loaded;
-  }
-  if (!isInline(definition)) {
-    throw new Error(`vite.config.ts: project ${index} is not a project this check reads.`);
-  }
-  return definition.extends === false ? definition : mergeConfig({ test: shared }, definition);
+function exemptFiles(): string[] {
+  return (config.lint?.overrides ?? [])
+    .filter(({ rules }) => rules?.[restrictedImport] === "off")
+    .flatMap(({ files }) => [files].flat())
+    .map((file) => join(repositoryRoot, file));
 }
 
-const projects = (
-  await Promise.all(definitions.map((definition, index) => resolvedProject(definition, index)))
-).map((resolved, index) => ({
-  name: JSON.stringify(resolved.test?.name ?? index),
-  setupFiles: [resolved.test?.setupFiles ?? []].flat().map((file) => resolve(repositoryRoot, file)),
-}));
-
+const runners = restrictedRunners();
+const exempt = exemptFiles();
 const checkedFiles = scriptFiles.map((file) => join(repositoryRoot, file));
 const program = openProgram(checkedFiles);
 afterAll(program.dispose);
@@ -76,110 +53,33 @@ function callsIn(file: string): ts.CallExpression[] {
   return descendants(source).filter((node) => ts.isCallExpression(node));
 }
 
-function declarationOf(call: ts.CallExpression): ts.Node | undefined {
+function runnerCalled(call: ts.CallExpression): ts.Node | undefined {
   const declaration = calledDeclaration(program, call);
-  return declaration && isPackageFile(fileOf(declaration)) ? declaration : undefined;
+  if (!declaration || !isPackageFile(fileOf(declaration))) return undefined;
+  const inThePackage = fileOf(declaration).split(/[\\/]/).includes(runners.name);
+  return inThePackage && runners.importNames.includes(nameOf(declaration))
+    ? declaration
+    : undefined;
 }
 
-const installers = checkedFiles.flatMap((file) =>
-  callsIn(file).flatMap((call) => {
-    const declaration = declarationOf(call);
-    return declaration && nameOf(declaration) === pluginInstaller
-      ? [{ file, library: fileOf(declaration) }]
-      : [];
-  }),
-);
-const configured = new Set(installers.map(({ library }) => library));
+test("the lint rule that refuses fast-check's runners exempts exactly one module, and that module runs properties", () => {
+  expect(exempt).toHaveLength(1);
+  expect(callsIn(exempt[0]).filter((call) => runnerCalled(call) !== undefined)).not.toEqual([]);
+});
 
-function isRunner(declaration: ts.Node): boolean {
-  return runners.includes(nameOf(declaration)) && configured.has(fileOf(declaration));
-}
-
-function parametersOf(call: ts.CallExpression, declaration: ts.Node): ts.Expression | undefined {
-  if (!ts.isFunctionDeclaration(declaration)) return undefined;
-  const index = declaration.parameters.length - 1;
-  return call.arguments[index];
-}
-
-function escapes(call: ts.CallExpression): string[] {
-  const declaration = declarationOf(call);
-  if (!declaration || !isRunner(declaration)) return [];
-  if (call.arguments.some((argument) => ts.isSpreadElement(argument))) {
-    return ["pass the property and its parameters as arguments of their own, not spread"];
-  }
-  const parameters = parametersOf(call, declaration);
-  if (!parameters) return [];
-  const type = program.checker.getTypeAtLocation(parameters);
-  return parametersThatReportOrInterrupt
-    .filter((name) => type && program.checker.getPropertyOfType(type, name))
-    .map(
-      (name) =>
-        `${name} reports or interrupts a run by itself, which the time limit in the setup file cannot see`,
-    );
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-test("every test project loads the setup file that installs the time limit on generated tests", () => {
-  expect(installers.map(({ file }) => file)).not.toEqual([]);
+test("no call outside the property runner reaches one of fast-check's runners, by any name", () => {
   expect(
-    projects.flatMap(({ name, setupFiles: loaded }) =>
-      installers
-        .filter(({ file }) => !loaded.includes(file))
-        .map(
-          ({ file }) =>
-            `${name}: load ${file} in setupFiles, so its generated tests report in time`,
-        ),
-    ),
+    checkedFiles
+      .filter((file) => !exempt.includes(file))
+      .flatMap((file) =>
+        callsIn(file)
+          .filter((call) => runnerCalled(call) !== undefined)
+          .map(
+            (call) =>
+              `${located(call)}: ${firstLine(call)}: run the property with assertProperty from the property runner, which gives it its test's time limit.`,
+          ),
+      ),
   ).toEqual([]);
 });
 
-test("every fast-check run or global setting that a test reaches goes through the time limit the setup file installs", () => {
-  const runs = checkedFiles.flatMap(callsIn).filter((call) => {
-    const declaration = declarationOf(call);
-    return declaration !== undefined && isRunner(declaration);
-  });
-  expect(runs).not.toEqual([]);
-  expect(
-    checkedFiles.flatMap((file) =>
-      callsIn(file).flatMap((call) =>
-        escapes(call).map((reason) => `${located(call)}: ${firstLine(call)}: ${reason}.`),
-      ),
-    ),
-  ).toEqual([]);
-});
-
-test(
-  "a property that fails and is still shrinking when its time runs out reports its seed, its path and its counterexample before the test's timeout",
-  { timeout: shortTimeout },
-  async () => {
-    await expect(
-      fc.assert(
-        fc.asyncProperty(fc.maxSafeNat(), async (value) => {
-          await delay(runTime);
-          expect(value).toBe(0);
-        }),
-        { examples: [[Number.MAX_SAFE_INTEGER]] },
-      ),
-    ).rejects.toThrow(
-      /^Property failed after 1 tests\n\{ seed: -?\d+, path: "0(?::\d+)*", endOnFailure: true \}\nCounterexample: \[\d+\]\nShrunk \d+ time\(s\)/,
-    );
-  },
-);
-
-test(
-  "a property that passes but runs out of time fails, with its seed, before the test's timeout",
-  { timeout: shortTimeout },
-  async () => {
-    await expect(
-      fc.assert(
-        fc.asyncProperty(fc.nat(), async () => {
-          await delay(runTime);
-        }),
-        { numRuns: slowRuns },
-      ),
-    ).rejects.toThrow(/^Property interrupted after \d+ tests\n\{ seed: -?\d+ \}/);
-  },
-);
+definePropertyRunnerTests();

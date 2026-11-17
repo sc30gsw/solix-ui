@@ -3,7 +3,6 @@ import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { defineConfig } from "vite-plus";
 import { browserInEveryEngine } from "../../scripts/browser-instances.ts";
 import { allowedRuntimeDependencyNames } from "../../scripts/runtime-dependencies.ts";
-import { testSetupFiles } from "../../scripts/test-setup-files.ts";
 
 type StoriesServer = { project: string; port: number };
 
@@ -21,7 +20,6 @@ export function storiesProject({ project, port }: StoriesServer, configDir: stri
       name: project,
       testTimeout: storyTimeout,
       hookTimeout: storyTimeout,
-      setupFiles: testSetupFiles,
       api: { port, strictPort: true },
       browser: browserInEveryEngine(),
     },

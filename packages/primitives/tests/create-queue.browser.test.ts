@@ -4,6 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { createQueue, type QueueReturn } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 function lists<T>(queue: QueueReturn<T>): [T[], T[]] {
   return [queue.state(), queue.queue()];
@@ -161,8 +162,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of commands, limit changes and flushes, it agrees with a model of the two lists and shows a list only when its items change", () => {
-  fc.assert(
+test("for every generated sequence of commands, limit changes and flushes, it agrees with a model of the two lists and shows a list only when its items change", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.array(item, { maxLength: 5 }),
       limits,

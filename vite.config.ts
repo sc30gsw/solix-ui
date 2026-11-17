@@ -1,7 +1,6 @@
 import solid from "@solidjs/vite-plugin";
 import { defineConfig, lazyPlugins } from "vite-plus";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
-import { testSetupFiles } from "#/scripts/test-setup-files.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
@@ -11,6 +10,16 @@ const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
 const storiesProjectConfig = "apps/storybook/vite.config.ts";
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
+const propertyRunner = "tests/support/properties.ts";
+const fastCheckRunners = [
+  "assert",
+  "check",
+  "configureGlobal",
+  "installGlobalPlugin",
+  "sample",
+  "statistics",
+];
+const runPropertiesThroughTheWrapper = `Run a property with assertProperty from ${propertyRunner}, which gives it the time limit of the test that runs it and makes a failure report its seed, path and counterexample.`;
 
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
@@ -44,8 +53,32 @@ export default defineConfig({
       "import/no-default-export": "error",
       "import/no-duplicates": "error",
       "unicorn/no-array-for-each": "error",
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "fast-check",
+              importNames: fastCheckRunners,
+              message: runPropertiesThroughTheWrapper,
+            },
+          ],
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...fastCheckRunners.map((property) => ({
+          object: "fc",
+          property,
+          message: runPropertiesThroughTheWrapper,
+        })),
+      ],
     },
     overrides: [
+      {
+        files: [propertyRunner],
+        rules: { "no-restricted-imports": "off", "no-restricted-properties": "off" },
+      },
       {
         files: ["scripts/**", "packages/*/build.mjs"],
         rules: { "no-console": "off" },
@@ -69,7 +102,6 @@ export default defineConfig({
   test: {
     testTimeout: 30_000,
     hookTimeout: 30_000,
-    setupFiles: testSetupFiles,
     projects: [
       {
         extends: true,

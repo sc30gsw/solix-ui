@@ -3,6 +3,7 @@ import { expect, test } from "vite-plus/test";
 import { createListState, type ListStateHandlers } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 type Item = { id: number; label: string };
 
@@ -280,8 +281,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of commands and flushes, it agrees with a model of the list and shows a list only when its items change", () => {
-  fc.assert(
+test("for every generated sequence of commands and flushes, it agrees with a model of the list and shows a list only when its items change", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.array(item, { maxLength: 4 }),
       fc.commands(commands, { maxCommands: 30, size: "medium" }),

@@ -77,7 +77,7 @@ No model checker or verifier runs on a Solid component or on the SDK, so this is
 - **The SDK test fails on `aria-labelledby`.** The SDK no longer labels the panel by the id it was told. A component's own id reaches the SDK only through `bindSlot`'s attributes.
 - **`vp check` fails in `headless.test.tsx` with `Expected: literal boolean`.** The type of `bind` began to take a map it refused, or to refuse one it took. The line names which.
 - **The browser test fails on `its own`.** An `aria-controls` or `aria-labelledby` names no element, or more than one. fast-check prints the tab values; a value with a space or a `%` points at `partId`.
-- To replay one failure, add the printed `seed` and `path` to the options object passed to `fc.assert`, run again, and remove them afterwards.
+- To replay one failure, add the printed `seed` and `path` to the parameters passed to `assertProperty`, run again, and remove them afterwards.
 
 ## When the change is intended
 

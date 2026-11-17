@@ -12,6 +12,7 @@ import {
 } from "#/build-pipeline.mjs";
 import { libraryLayers, stylePropRules } from "#/src/style-prop-table.ts";
 import { layersAroundDeclaration, nestedLayerOrder } from "#/tests/cascade-layers.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const packageRoot = join(import.meta.dirname, "..");
 const generatedRuns = 300;
@@ -147,8 +148,9 @@ function sourceFor(definitions: Definition[]): string {
 test(
   "for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its container queries and then the hidden layer last, and nothing important in the library's layer",
   { timeout: generatedDefinitionsTimeout },
-  async () => {
-    await fc.assert(
+  async (context) => {
+    await assertProperty(
+      context,
       fc.asyncProperty(styleDefinitions, async (definitions) => {
         const { rules } = await compileLibrarySource({
           filename: join(packageRoot, "src/Generated.tsx"),

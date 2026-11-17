@@ -4,6 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { createMap } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 function mapOf(entries?: [string, number][]) {
   return mount(() => {
@@ -145,8 +146,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of mutations on any instance it showed, and flushes, it agrees with a model of the entries and shows a new map once per tick that changed it", () => {
-  fc.assert(
+test("for every generated sequence of mutations on any instance it showed, and flushes, it agrees with a model of the entries and shows a new map once per tick that changed it", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.uniqueArray(fc.tuple(key, value), { maxLength: 3, selector: ([name]) => name }),
       fc.commands(commands, { maxCommands: 30, size: "medium" }),
