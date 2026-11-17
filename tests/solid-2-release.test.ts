@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
 import {
   newestSolidRelease,
-  solidBuildNames,
+  exactlyRequiredNames,
   solidCatalogMove,
   solidReleaseParts,
 } from "#/scripts/solid-2-release.ts";
@@ -52,7 +52,7 @@ test("the Solid 2 canary takes one release for every Solid package, old enough f
   ).toBe("2.0.1");
 });
 
-test("the Solid 2 canary refuses a peer range it cannot read instead of passing over that release, and says when no release will do", () => {
+test("the Solid 2 canary refuses a peer range it cannot read instead of passing over that release, fails by name when the registry answer holds no document for a Solid package, and says when no release will do", () => {
   const unreadable = solidLine(
     (version) => (version === "2.0.1" ? "workspace:^" : "*"),
     [
@@ -74,7 +74,7 @@ test("the Solid 2 canary refuses a peer range it cannot read instead of passing 
       now,
     ),
   ).toThrow(
-    "No stable Solid 2 release is published for solid-js, @solidjs/web, @solidjs/compiler and @solidjs/signals alike, with every build they require at that version, old enough to install and accepted by their peer ranges.",
+    "No stable Solid 2 release is published for solid-js, @solidjs/web, @solidjs/compiler and @solidjs/signals alike, with every release they list at an exact version, old enough to install and accepted by their peer ranges.",
   );
 });
 
@@ -91,7 +91,7 @@ function withBuilds(listings: Listing[], builds: Listing[]) {
   };
 }
 
-test("the Solid 2 canary waits until every build a Solid package requires at that exact version is old enough too, and fails by name when the registry answer holds no document for one", () => {
+test("the Solid 2 canary waits until every release a Solid package lists at an exact version is old enough too, and fails by name when the registry answer holds no document for one", () => {
   const releases: Listing[] = [
     ["2.0.0", 20],
     ["2.0.1", 3],
@@ -102,7 +102,7 @@ test("the Solid 2 canary waits until every build a Solid package requires at tha
   ]);
   const { "a-compiler-build": _dropped, ...noBuildDocument } = buildTooYoung;
 
-  expect(solidBuildNames(buildTooYoung)).toEqual(["a-compiler-build"]);
+  expect(exactlyRequiredNames(buildTooYoung)).toEqual(["a-compiler-build"]);
   expect(newestSolidRelease(buildTooYoung, policy, now)).toBe("2.0.0");
   expect(
     newestSolidRelease(
@@ -118,7 +118,7 @@ test("the Solid 2 canary waits until every build a Solid package requires at tha
   );
 });
 
-test("the Solid 2 canary stays on Solid 2 when next moves to Solid 3, and takes 2.x stable once it is old enough to install", () => {
+test("the Solid 2 canary takes the newest stable 2.x release, not a 2.x prerelease and not a Solid 3 prerelease", () => {
   const releases: Listing[] = [
     ["2.0.0-rc.22", 30],
     ["2.0.0", 20],

@@ -32,7 +32,7 @@ export function solidReleaseParts(documents: Documents, version: string): Releas
   ]);
 }
 
-export function solidBuildNames(documents: Documents): string[] {
+export function exactlyRequiredNames(documents: Documents): string[] {
   return unique(
     stableSolidVersions(documents).flatMap((version) =>
       solidReleaseParts(documents, version)
@@ -84,7 +84,7 @@ export function newestSolidRelease(
     .find(({ version }) => solidPeersAccept(documents, version));
   if (release === undefined) {
     throw new Error(
-      `No stable Solid ${solidMajor} release is published for ${listed(solidPackages)} alike, with every build they require at that version, old enough to install and accepted by their peer ranges.`,
+      `No stable Solid ${solidMajor} release is published for ${listed(solidPackages)} alike, with every release they list at an exact version, old enough to install and accepted by their peer ranges.`,
     );
   }
   return release.version;
