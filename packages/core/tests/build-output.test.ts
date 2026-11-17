@@ -28,6 +28,8 @@ import {
   variableNames,
   variableRow,
   variablesOf,
+  colorSchemeVisibilityClass,
+  colorSchemeVisibilityPropNames,
   visibilityClass,
   visibilityPropNames,
 } from "#/src/style-prop-table.ts";
@@ -64,6 +66,16 @@ const ownerColorSchemes: [scheme: string, colorScheme: string][] = [
 ];
 const colorSchemeSelectors = ownerColorSchemes.map(([scheme]) => `[data-color-scheme="${scheme}"]`);
 const stylePropClass = `.${LIBRARY_CLASS_PREFIX}-`;
+const ownerSchemeHiding: [className: string, scheme: string][] = [
+  [`${LIBRARY_CLASS_PREFIX}-light-hidden`, "light"],
+  [`${LIBRARY_CLASS_PREFIX}-dark-hidden`, "dark"],
+];
+const schemeHidingSelectors = ownerSchemeHiding.map(
+  ([className, scheme]) => `[data-color-scheme="${scheme}"] .${className}`,
+);
+const autoHidingSelectors = ownerSchemeHiding.map(
+  ([className]) => `[data-color-scheme="auto"] .${className}`,
+);
 const stylePropCustomProperty = `--${LIBRARY_CLASS_PREFIX}-`;
 const builtStylePropTable = "style-prop-table.js";
 const boxSides = ["top", "right", "bottom", "left"];
@@ -359,7 +371,9 @@ test("the style-prop layer holds the style-prop classes and the registrations of
     inside.filter(
       ({ selector }) =>
         (!/^\.[\w-]+$/.test(selector) || !selector.startsWith(stylePropClass)) &&
-        !colorSchemeSelectors.includes(selector),
+        !colorSchemeSelectors.includes(selector) &&
+        !schemeHidingSelectors.includes(selector) &&
+        !autoHidingSelectors.includes(selector),
     ),
   ).toEqual([]);
   expect(outside.filter(({ selector }) => selector.includes(stylePropClass))).toEqual([]);
@@ -524,8 +538,10 @@ test("each style prop reads its own custom property, at its base and then at eac
 
 test("each value of data-color-scheme sets color-scheme on its element, both schemes for auto so the operating system chooses, once, in the style-prop layer and outside any media query", () => {
   const { inside, outside } = stylePropLayerRules();
+  const setsColorScheme = ({ declarations }: PlacedRule) =>
+    declarations.some((declaration) => declaration.startsWith("color-scheme:"));
   const written = inside
-    .filter(({ selector }) => selector.startsWith("[data-color-scheme"))
+    .filter(setsColorScheme)
     .map(({ selector, media, declarations }) => ({ selector, media, declarations }));
 
   expect(written).toEqual(
@@ -535,9 +551,7 @@ test("each value of data-color-scheme sets color-scheme on its element, both sch
       declarations: [`color-scheme:${colorScheme}`],
     })),
   );
-  expect(
-    outside.filter(({ declarations }) => declarations.some((d) => d.startsWith("color-scheme:"))),
-  ).toEqual([]);
+  expect(outside.filter(setsColorScheme)).toEqual([]);
 });
 
 test("hiddenFrom and visibleFrom hide the element from, or below, each breakpoint, after every style-prop rule", () => {
@@ -577,6 +591,34 @@ test("hiddenFrom and visibleFrom hide the element from, or below, each breakpoin
   expect(violations).toEqual([]);
 });
 
+test("lightHidden and darkHidden hide the element inside an element whose data-color-scheme names that scheme, and inside auto while the operating system prefers it, after every style-prop rule", () => {
+  const { inside } = stylePropLayerRules();
+  const lastStyleProp = inside.findLastIndex(
+    ({ selector }) => /^\.[\w-]+$/.test(selector) && selector.startsWith(stylePropClass),
+  );
+  const written = inside
+    .map((rule, index) => ({ ...rule, index }))
+    .filter(({ selector }) => / \./.test(selector) && selector.startsWith("[data-color-scheme"));
+
+  expect(
+    written.map(({ selector, media, declarations }) => ({ selector, media, declarations })),
+  ).toEqual(
+    ownerSchemeHiding.flatMap(([className, scheme]) => [
+      {
+        selector: `[data-color-scheme="${scheme}"] .${className}`,
+        media: undefined,
+        declarations: ["display:none"],
+      },
+      {
+        selector: `[data-color-scheme="auto"] .${className}`,
+        media: `(prefers-color-scheme: ${scheme})`,
+        declarations: ["display:none"],
+      },
+    ]),
+  );
+  expect(written.filter(({ index }) => index < lastStyleProp)).toEqual([]);
+});
+
 test("every variable is named apart from every other variable and every style-prop class, so its class and custom property are its own", () => {
   const stylePropClasses = [
     ...canonicalStylePropNames.flatMap((name) => [
@@ -586,6 +628,7 @@ test("every variable is named apart from every other variable and every style-pr
     ...visibilityPropNames.flatMap((name) =>
       breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
     ),
+    ...colorSchemeVisibilityPropNames.map(colorSchemeVisibilityClass),
   ];
   const variableClasses = variableNames.flatMap((name) =>
     responsiveKeys.map((key) => variableClass(name, key)),

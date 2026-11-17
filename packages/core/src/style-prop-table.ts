@@ -188,6 +188,11 @@ const visibilityTable = {
   visibleFrom: { className: "visible-from", query: (width: string) => `(width < ${width})` },
 } satisfies Record<string, { className: string; query: (width: string) => string }>;
 
+const colorSchemeVisibilityTable = {
+  lightHidden: { className: "light-hidden", scheme: "light" },
+  darkHidden: { className: "dark-hidden", scheme: "dark" },
+} as const satisfies Record<string, { className: string; scheme: "light" | "dark" }>;
+
 export const baseKey = "base";
 
 type Rows = typeof stylePropTable;
@@ -203,6 +208,7 @@ export type RowOf<Name extends StylePropName> = Rows[Name] extends {
 export type Breakpoint = keyof typeof breakpointWidths;
 export type ResponsiveKey = typeof baseKey | Breakpoint;
 export type VisibilityPropName = keyof typeof visibilityTable;
+export type ColorSchemeVisibilityPropName = keyof typeof colorSchemeVisibilityTable;
 type Groups = typeof variableTable;
 export type VariableGroup = keyof Groups;
 export type VariablesOf<Group extends VariableGroup> = keyof Groups[Group] & string;
@@ -230,6 +236,10 @@ function isVisibilityPropName(name: string): name is VisibilityPropName {
   return Object.hasOwn(visibilityTable, name);
 }
 
+function isColorSchemeVisibilityPropName(name: string): name is ColorSchemeVisibilityPropName {
+  return Object.hasOwn(colorSchemeVisibilityTable, name);
+}
+
 const variableRows: Record<string, VariableRow> = Object.assign(
   {},
   ...Object.values(variableTable),
@@ -244,6 +254,9 @@ export const canonicalStylePropNames = stylePropNames.filter(isCanonical);
 export const breakpoints = Object.keys(breakpointWidths).filter(isBreakpoint);
 export const responsiveKeys: ResponsiveKey[] = [baseKey, ...breakpoints];
 export const visibilityPropNames = Object.keys(visibilityTable).filter(isVisibilityPropName);
+export const colorSchemeVisibilityPropNames = Object.keys(colorSchemeVisibilityTable).filter(
+  isColorSchemeVisibilityPropName,
+);
 export const variableGroups = Object.keys(variableTable).filter(isVariableGroup);
 export const variableNames = Object.keys(variableRows).filter(isVariableName);
 
@@ -276,11 +289,19 @@ function setsDisplay(name: StylePropName): name is DisplayStylePropName {
   return stylePropTable[canonicalOf(name)].property === "display";
 }
 
-export const displayPropNames = [...stylePropNames.filter(setsDisplay), ...visibilityPropNames];
+export const displayPropNames = [
+  ...stylePropNames.filter(setsDisplay),
+  ...visibilityPropNames,
+  ...colorSchemeVisibilityPropNames,
+];
 
 export type DisplayPropName = (typeof displayPropNames)[number];
 
-export const stylePropKeys = [...stylePropNames, ...visibilityPropNames];
+export const stylePropKeys = [
+  ...stylePropNames,
+  ...visibilityPropNames,
+  ...colorSchemeVisibilityPropNames,
+];
 
 function shorthandDepth(name: CanonicalStylePropName): number {
   const row = stylePropTable[name];
@@ -307,6 +328,10 @@ export function containerVariableClass(name: VariableName, scope: string, slot: 
 
 export function visibilityClass(name: VisibilityPropName, breakpoint: Breakpoint): string {
   return `${stylePropClassPrefix}-${visibilityTable[name].className}-${breakpoint}`;
+}
+
+export function colorSchemeVisibilityClass(name: ColorSchemeVisibilityPropName): string {
+  return `${stylePropClassPrefix}-${colorSchemeVisibilityTable[name].className}`;
 }
 
 function media(query: string, rules: string[]): string {
@@ -398,11 +423,20 @@ export function stylePropRules(): string {
   const schemes = Object.entries(colorSchemeOf).map(
     ([scheme, colorScheme]) => `[${colorSchemeAttribute}="${scheme}"]{color-scheme:${colorScheme}}`,
   );
+  const hiddenInScheme = colorSchemeVisibilityPropNames.flatMap((name) => {
+    const hidden = `.${colorSchemeVisibilityClass(name)}{display:none}`;
+    const { scheme } = colorSchemeVisibilityTable[name];
+    return [
+      `[${colorSchemeAttribute}="${scheme}"] ${hidden}`,
+      media(`(prefers-color-scheme: ${scheme})`, [`[${colorSchemeAttribute}="auto"] ${hidden}`]),
+    ];
+  });
   return [
     `@layer ${childRuleLayer}{\n${childRules().join("\n")}\n}`,
     ...schemes,
     ...registrations,
     ...ordered,
     ...visibility,
+    ...hiddenInScheme,
   ].join("\n");
 }

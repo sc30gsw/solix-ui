@@ -6,6 +6,9 @@ import {
   breakpointWidths,
   breakpoints,
   canonicalOf,
+  colorSchemeVisibilityClass,
+  type ColorSchemeVisibilityPropName,
+  colorSchemeVisibilityPropNames,
   containerVariableClass,
   isBreakpoint,
   layerOrder,
@@ -128,7 +131,9 @@ export type ResolvedVariables = ResolvedStyleProps & { readonly used: readonly U
 
 export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
-} & { [Name in VisibilityPropName]?: Breakpoint | Absent };
+} & { [Name in VisibilityPropName]?: Breakpoint | Absent } & {
+  [Name in ColorSchemeVisibilityPropName]?: boolean | Absent;
+};
 
 export type ResolvedStyleProps = {
   classes: string[];
@@ -209,6 +214,9 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
     if (breakpoint !== undefined && breakpoint !== null) {
       classes.add(visibilityClass(name, breakpoint));
     }
+  }
+  for (const name of colorSchemeVisibilityPropNames) {
+    if (props[name] === true) classes.add(colorSchemeVisibilityClass(name));
   }
   return { classes: [...classes], properties };
 }

@@ -181,6 +181,8 @@ export const stylePropCases: fc.Arbitrary<StylePropCase> = fc
       {
         hiddenFrom: fc.option(fc.constantFrom(...breakpoints), { nil: null }),
         visibleFrom: fc.option(fc.constantFrom(...breakpoints), { nil: null }),
+        lightHidden: fc.option(fc.boolean(), { nil: null }),
+        darkHidden: fc.option(fc.boolean(), { nil: null }),
       },
       { requiredKeys: [] },
     ),

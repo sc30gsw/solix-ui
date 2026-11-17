@@ -40,9 +40,12 @@ const resolvedCases: [
     { "--sx-ms": "0.5rem" },
   ],
   ["hiddenFrom adds its class and no property", { hiddenFrom: "md" }, ["sx-hidden-from-md"], {}],
+  ["lightHidden adds its class and no property", { lightHidden: true }, ["sx-light-hidden"], {}],
+  ["darkHidden adds its class and no property", { darkHidden: true }, ["sx-dark-hidden"], {}],
+  ["lightHidden false adds nothing", { lightHidden: false }, [], {}],
   [
     "null is the same as leaving the prop out",
-    { mt: null, p: { base: null, md: 4 }, hiddenFrom: null },
+    { mt: null, p: { base: null, md: 4 }, hiddenFrom: null, darkHidden: null },
     ["sx-p-md"],
     { "--sx-p-md": "0.25rem" },
   ],
