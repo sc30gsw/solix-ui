@@ -25,27 +25,41 @@ function valueOf(value: string, names: readonly string[]): number {
   return /^\d+$/.test(value) ? Number(value) : Number.NaN;
 }
 
-function inRange(field: string, low: number, high: number, names: readonly string[] = []): boolean {
-  return field.split(",").every((part) => {
+function outOfRange(
+  field: string,
+  low: number,
+  high: number,
+  names: readonly string[] = [],
+): boolean {
+  return !field.split(",").every((part) => {
     const [span = "", step, ...rest] = part.split("/");
     if (rest.length > 0 || (step !== undefined && !/^[1-9]\d*$/.test(step))) return false;
     if (span === "*") return true;
     const bounds = span.split("-").map((value) => valueOf(value, names));
-    return bounds.length <= 2 && bounds.every((value) => value >= low && value <= high);
+    const [first = Number.NaN, last = first] = bounds;
+    return (
+      bounds.length <= 2 && bounds.every((value) => value >= low && value <= high) && first <= last
+    );
   });
 }
 
-function firesWeekly(cron: string | undefined): boolean {
+function cronProblems(cron: string | undefined): string[] {
   const fields = cron?.trim().split(/\s+/) ?? [];
-  const [minute = "", hour = "", dayOfMonth, month, dayOfWeek = ""] = fields;
-  return (
-    fields.length === 5 &&
-    dayOfMonth === "*" &&
-    month === "*" &&
-    inRange(minute, 0, 59) &&
-    inRange(hour, 0, 23) &&
-    inRange(dayOfWeek, 0, 6, dayNames)
-  );
+  if (fields.length !== 5) return [`cron "${cron}": give it five fields.`];
+  const [minute = "", hour = "", dayOfMonth = "", month = "", dayOfWeek = ""] = fields;
+  const wrong: [string, string, string][] = [
+    ["minute", minute, outOfRange(minute, 0, 59) ? "0-59" : ""],
+    ["hour", hour, outOfRange(hour, 0, 23) ? "0-23" : ""],
+    ["day of month", dayOfMonth, dayOfMonth === "*" ? "" : "*"],
+    ["month", month, month === "*" ? "" : "*"],
+    ["day of week", dayOfWeek, outOfRange(dayOfWeek, 0, 6, dayNames) ? "0-6 or SUN-SAT" : ""],
+  ];
+  return wrong
+    .filter(([, , allowed]) => allowed !== "")
+    .map(
+      ([name, value, allowed]) =>
+        `cron "${cron}": the ${name} field "${value}" is not ${allowed === "*" ? "*" : `within ${allowed}, with no range reversed`}.`,
+    );
 }
 
 const refusedBecause: Record<string, string> = {
@@ -66,7 +80,17 @@ export function expectEveryJobToRunWeeklyAndFailTheRun(): void {
   ]);
 
   expect(Object.keys(jobs).length).toBeGreaterThan(0);
-  expect((on?.schedule ?? []).some(({ cron }) => firesWeekly(cron))).toBe(true);
+  const schedules = on?.schedule ?? [];
+  const weekly = schedules.some(({ cron }) => cronProblems(cron).length === 0);
+
+  expect(
+    weekly
+      ? []
+      : [
+          `${weeklyWorkflow}: no schedule entry fires weekly.`,
+          ...schedules.flatMap(({ cron }) => cronProblems(cron)),
+        ],
+  ).toEqual([]);
   expect(held).toEqual([]);
 }
 

@@ -53,11 +53,12 @@ function userConfigWith(lines: readonly string[]): string {
   return configHome;
 }
 
-test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true, ignores every pnpmfile, and does not trust the lockfile past the release-age check`, () => {
+test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true, ignores every pnpmfile, loads no config dependency, and does not trust the lockfile past the release-age check`, () => {
   expect(pnpmSettings().minimumReleaseAge).toBeGreaterThan(0);
   expect(pnpmSettings().minimumReleaseAgeStrict).toBe(true);
   expect(pnpmSettings().trustLockfile).toBe(false);
   expect(pnpmSettings().ignorePnpmfile).toBe(true);
+  expect(pnpmSettings().configDependencies).toEqual({});
 });
 
 function logicalLines(text: string): { number: number; line: string }[] {
@@ -112,6 +113,7 @@ test("the settings are the workspace file's own: the user's pnpm config and pnpm
     minimumReleaseAgeExclude: [],
     trustLockfile: false,
     ignorePnpmfile: false,
+    configDependencies: {},
     approvedSkills: {},
   });
   vi.stubEnv("XDG_CONFIG_HOME", userConfigWith([]));

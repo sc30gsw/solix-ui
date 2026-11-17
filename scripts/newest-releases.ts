@@ -30,7 +30,13 @@ type RegistryPin = {
 
 export type Pin = RegistryPin | { source: "node"; name: typeof nodePinName; pinned: string };
 
-export type HeldBack = { name: string; reason: string; liftWhen: string };
+export type HeldBack = { name: string; reason: string; liftWhen: string; holds?: string };
+
+const heldDirections = ["behind", "ahead"];
+
+function directionOf(held: HeldBack): string {
+  return held.holds ?? "behind";
+}
 
 export type Release = { name: string; version: string };
 
@@ -415,12 +421,12 @@ function compared(
   held: HeldBack | undefined,
 ): PinComparison {
   if (semver.gt(pin.pinned, newest)) {
-    return held
+    return held && directionOf(held) === "ahead"
       ? { pin, channel, newest, status: "held ahead", held }
       : { pin, channel, newest, status: "ahead" };
   }
   if (eligible !== undefined && semver.gt(eligible, pin.pinned)) {
-    return held
+    return held && directionOf(held) === "behind"
       ? { pin, channel, newest, status: "held back", eligible, held }
       : { pin, channel, newest, status: "behind", eligible };
   }
@@ -433,24 +439,30 @@ export function holdsOfNothing(
   heldBack: readonly HeldBack[],
   comparisons: readonly PinComparison[],
 ): string[] {
-  return heldBack
-    .filter(
-      ({ name }) =>
-        !comparisons.some(
-          ({ pin, status }) =>
-            pin.name === name && (status === "held back" || status === "held ahead"),
-        ),
-    )
-    .map(
-      ({ name }) =>
-        `${name}: the held-back list holds it, but it is neither behind nor ahead of its channel; remove the entry.`,
-    );
+  return heldBack.flatMap((held) => {
+    const status = comparisons.find(({ pin }) => pin.name === held.name)?.status;
+    if (status === "held back" || status === "held ahead") return [];
+    const now = status === "behind" || status === "ahead" ? status : undefined;
+    return [
+      now === undefined
+        ? `${held.name}: the held-back list holds it, but it is neither behind nor ahead of its channel; remove the entry.`
+        : `${held.name}: the held-back list holds it ${directionOf(held) === "ahead" ? "ahead of" : "behind"} its channel, but it is ${now}; remove the entry, or rewrite it to hold the pin ${now} with a reason and a liftWhen for that.`,
+    ];
+  });
 }
 
 export function holdsWithoutReason(heldBack: readonly HeldBack[]): string[] {
   return heldBack
-    .filter(({ reason, liftWhen }) => !reason?.trim() || !liftWhen?.trim())
-    .map(({ name }) => `${name}: give the entry in ${heldBackFile} a reason and a liftWhen.`);
+    .filter(
+      (held) =>
+        !held.reason?.trim() ||
+        !held.liftWhen?.trim() ||
+        !heldDirections.includes(directionOf(held)),
+    )
+    .map(
+      ({ name }) =>
+        `${name}: give the entry in ${heldBackFile} a reason, a liftWhen and, for a pin ahead of its channel, holds: "ahead".`,
+    );
 }
 
 export function registryNamesToFetch(pins: readonly Pin[], policy: ReleasePolicy): string[] {

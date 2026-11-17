@@ -480,7 +480,7 @@ test("a held-back entry that holds nothing back, or has no reason or no liftWhen
     "vite: the held-back list holds it, but it is neither behind nor ahead of its channel; remove the entry.",
   ]);
   expect(holdsWithoutReason([idle, unexplained])).toEqual([
-    `playwright: give the entry in ${heldBackFile} a reason and a liftWhen.`,
+    `playwright: give the entry in ${heldBackFile} a reason, a liftWhen and, for a pin ahead of its channel, holds: "ahead".`,
   ]);
   expect(check({ heldBack: [idle, unexplained] }).problems).toEqual(
     expect.arrayContaining([
@@ -690,6 +690,7 @@ test("a pin ahead of its channel passes while the held-back list holds it with a
     name: "a-package",
     reason: "A release candidate tried ahead of the stable release.",
     liftWhen: "the stable release is out.",
+    holds: "ahead",
   };
   const ahead = () =>
     check({
@@ -703,4 +704,42 @@ test("a pin ahead of its channel passes while the held-back list holds it with a
   expect(checkOf("a-package", "2.1.0-rc.1", [["2.0.1", 10]]).problems[0]).toMatch(
     /^a-package: 2\.1\.0-rc\.1 is ahead of 2\.0\.1, the newest release on its channel \(.+\)\. Pin 2\.0\.1\.$/,
   );
+});
+
+test("a held-back entry says which way it holds: one written for a pin ahead fails by name once the pin falls behind, one with no direction holds a pin behind and not one ahead, and an unknown direction fails", () => {
+  const aheadHold = {
+    name: "a-package",
+    reason: "Tried ahead.",
+    liftWhen: "2.1.0 is out.",
+    holds: "ahead",
+  };
+  const behindHold = { name: "a-package", reason: "Waiting.", liftWhen: "it is fixed." };
+  const run = (pinned: string, held: HeldBack) =>
+    check({
+      pins: pinsOf(manifest, { "a-package": pinned }),
+      documents: {
+        ...documents,
+        "a-package": registryDocument([
+          ["2.0.1", 30],
+          ["2.1.0", 10],
+        ]),
+      },
+      heldBack: [held],
+    });
+  const aboutThePackage = (pinned: string, held: HeldBack) =>
+    run(pinned, held).problems.filter((problem) => problem.startsWith("a-package"));
+
+  expect(aboutThePackage("2.1.0-rc.1", aheadHold)).toEqual([
+    expect.stringMatching(/^a-package: 2\.1\.0-rc\.1 is behind 2\.1\.0/),
+    "a-package: the held-back list holds it ahead of its channel, but it is behind; remove the entry, or rewrite it to hold the pin behind with a reason and a liftWhen for that.",
+  ]);
+  expect(run("2.1.0-rc.1", behindHold).comparisons[0]).toMatchObject({ status: "held back" });
+  expect(aboutThePackage("2.1.0-rc.1", behindHold)).toEqual([]);
+  expect(aboutThePackage("2.2.0", behindHold)).toEqual([
+    expect.stringMatching(/^a-package: 2\.2\.0 is ahead of 2\.1\.0/),
+    "a-package: the held-back list holds it behind its channel, but it is ahead; remove the entry, or rewrite it to hold the pin ahead with a reason and a liftWhen for that.",
+  ]);
+  expect(holdsWithoutReason([{ ...behindHold, holds: "sideways" }])).toEqual([
+    `a-package: give the entry in ${heldBackFile} a reason, a liftWhen and, for a pin ahead of its channel, holds: "ahead".`,
+  ]);
 });
