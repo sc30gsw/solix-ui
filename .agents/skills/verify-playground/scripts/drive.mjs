@@ -382,6 +382,7 @@ const journeys = {
     observe("the grid in a 560 pixel container has 4 columns, past 30em", await columnsOf(gridAround("Cell of the wide container")), 4);
     observe("the grid in one cell of it queries its own container and has 1 column", await columnsOf(gridAround("Cell of the nested container")), 1);
     observe("below md: the grid in a 1024 pixel container, past md, has the 2 columns of its md value", await columnsOf(gridAround("Cell of a container past md")), 2);
+    observe("the grid in a 1100 pixel container with 20 pixel type is past md and has 2 columns", await columnsOf(gridAround("Cell of a container past md in larger type")), 2);
     observe("the auto-filled grid makes columns at least 160 pixels wide",(await widthOf(page.getByText("Auto-filled cell", { exact: true }))) >= 160, true);
 
     await page.setViewportSize({ width: mdWidth, height: 720 });

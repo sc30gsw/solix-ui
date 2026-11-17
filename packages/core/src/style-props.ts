@@ -262,9 +262,15 @@ export function resolveVariables(
 export function containerKeysOf(value: Keyed<unknown>): [key: string, width: string][] {
   if (value === undefined || value === null || typeof value !== "object") return [];
   return Object.keys(value).flatMap((key): [string, string][] => {
-    if (isBreakpoint(key)) return [[key, breakpointWidths[key]]];
+    if (isBreakpoint(key)) return [[key, containerWidthOf(key)]];
     return isContainerWidth(key) ? [[key, key]] : [];
   });
+}
+
+export function containerWidthOf(breakpoint: Breakpoint): string {
+  const written = breakpointWidths[breakpoint];
+  const parsed = widthOf(written);
+  return parsed?.unit === "em" ? `${parsed.amount}rem` : written;
 }
 
 function widthOf(written: string): { amount: number; unit: string } | undefined {

@@ -252,6 +252,10 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
         `a 1024 pixel container is past the library's md, ${breakpointWidths.md}, whatever the viewport`,
       ).toBe(2);
       expect(
+        await columnsOf(gridAround(page, "Cell of a container past md in larger type")),
+        "a 1100 pixel container whose type is 20 pixels is past md, as a media query measures it",
+      ).toBe(2);
+      expect(
         await columnsOf(gridAround(page, "Cell of a container short of md")),
         `a 960 pixel container is short of the library's md, ${breakpointWidths.md}, whatever the viewport`,
       ).toBe(1);

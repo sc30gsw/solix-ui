@@ -51,6 +51,12 @@ export function SimpleGridSection() {
             <Box bg="surface">Cell</Box>
           </SimpleGrid>
         </Box>
+        <Box w={1100} mt="md" style={{ "font-size": "20px" }}>
+          <SimpleGrid type="container" cols={{ base: 1, md: 2 }}>
+            <Box bg="surface">Cell of a container past md in larger type</Box>
+            <Box bg="surface">Cell</Box>
+          </SimpleGrid>
+        </Box>
       </Box>
       <SimpleGrid minColWidth={160} mt="md">
         <Box bg="surface">Auto-filled cell</Box>

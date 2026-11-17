@@ -29,6 +29,8 @@ import {
   valuesOf,
 } from "./markup";
 
+const mdInRem = `${Number.parseFloat(breakpointWidths.md)}rem`;
+
 type Rendered = { classes: string[]; style: Record<string, string> };
 
 function libraryOf(name: string, props: Record<string, unknown>): Rendered {
@@ -464,7 +466,7 @@ test("SimpleGrid: with container queries, takes a breakpoint key as the library'
     "--sx-sg-cols-c0-1": "3",
     "--sx-sg-spacing-x": "var(--solix-spacing-md)",
   });
-  expect(widths).toEqual(["40em", breakpointWidths.md]);
+  expect(widths).toEqual(["40em", mdInRem]);
 });
 
 test("SimpleGrid: with minColWidth, fills the row with columns at least that wide and ignores cols, or fits them with autoFlow", () => {
@@ -743,7 +745,7 @@ test("GridCol: in a grid with container queries and no breakpoints, keys its val
   const [rules = ""] = rulesOf(html);
 
   expect(classes).toContain("sx-col-flex-basis-c0-2");
-  expect(rules).toContain(`@container (min-width: ${breakpointWidths.md}){`);
+  expect(rules).toContain(`@container (min-width: ${mdInRem}){`);
   expect(rules).not.toContain("@media");
   expect(html).toContain("solix-Grid-container");
 });
