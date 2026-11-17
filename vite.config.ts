@@ -51,7 +51,13 @@ export default defineConfig({
         rules: { "no-console": "off" },
       },
       {
-        files: ["vite.config.ts", "apps/*/vite.config.ts", "apps/*/src/App.tsx"],
+        files: [
+          "vite.config.ts",
+          "apps/*/vite.config.ts",
+          "apps/*/src/App.tsx",
+          "apps/storybook/.storybook/*.ts",
+          "apps/storybook/src/*.stories.tsx",
+        ],
         rules: { "import/no-default-export": "off" },
       },
     ],

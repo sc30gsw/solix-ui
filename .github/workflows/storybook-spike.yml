@@ -1,0 +1,54 @@
+name: Storybook spike
+
+on:
+  push:
+    branches: [cursor/storybook-spike-*]
+
+permissions:
+  contents: read
+
+jobs:
+  stories:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    env:
+      STORYBOOK_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          node-version-file: package.json
+          cache: true
+      - run: vp exec playwright install --with-deps chromium firefox webkit
+      - run: vp run -r build
+      - name: Stories pass in every engine
+        working-directory: apps/storybook
+        run: vp test run
+      - name: Each broken story fails in every engine
+        working-directory: apps/storybook
+        env:
+          SPIKE_BREAKS: "1"
+        run: |
+          vp test run --reporter=default --reporter=json --outputFile=breaks.json || true
+          node -e '
+            const expected = {
+              "Axe Violation": "button-name",
+              "Target Too Small": "target-size",
+              "Play Fails": "toHaveTextContent",
+              "Solid Warning": "NO_OWNER_EFFECT",
+              "Solid Diagnostic": "REACTIVE_WRITE_IN_OWNED_SCOPE",
+            };
+            const report = JSON.parse(require("node:fs").readFileSync("breaks.json", "utf8"));
+            const results = report.testResults.flatMap((file) => file.assertionResults);
+            const wrong = results.filter(
+              (r) => r.status !== "failed" || !r.failureMessages.join("\n").includes(expected[r.title]),
+            );
+            console.log(results.map((r) => `${r.status} ${r.fullName}`).join("\n"));
+            if (results.length !== Object.keys(expected).length * 3 || wrong.length > 0) {
+              console.error(`expected ${Object.keys(expected).length * 3} failures for the expected reasons, got ${results.length} results, ${wrong.length} wrong`);
+              process.exit(1);
+            }
+          '
+      - name: Static build
+        working-directory: apps/storybook
+        run: vp exec storybook build -o storybook-static
