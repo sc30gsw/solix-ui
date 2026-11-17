@@ -209,28 +209,32 @@ inEveryEngine((browser) => {
         .toMatchObject({ selected: near, focused: near, shown: [panelOf(near)] });
     });
 
-    test("typing tab values moves neither the page nor the field, since the tabs it drives grow and shrink below it", async () => {
+    test("typing tab values while the generated list wraps over several rows moves neither the page nor the field", async () => {
       const { page } = opened;
-      const values = page.getByRole("textbox", { name: "Tab values" });
-      const many = Array.from({ length: 5 }, (_, index) => `a wide tab number ${index}`);
+      const field = page.getByRole("textbox", { name: "Tab values" });
+      const list = tabList(page, generated);
+      const wrapping = Array.from({ length: 5 }, (_, index) => `a wide tab number ${index}`);
       const where = () =>
-        values.evaluate((field) => ({
+        field.evaluate((element) => ({
           scrolled: window.scrollY,
-          fieldTop: field.getBoundingClientRect().top,
+          fieldTop: element.getBoundingClientRect().top,
         }));
-      const show = async (drawn: string[]) => {
-        await values.fill(JSON.stringify(drawn));
-        await expect
-          .poll(() => elementsNamedBy(page, generated).then((named) => named.length))
-          .toBe(drawn.length);
+      const listHeight = () => list.evaluate((element) => element.getBoundingClientRect().height);
+      const show = async (labels: string[]) => {
+        await field.fill(JSON.stringify(labels));
+        await expect.poll(() => list.getByRole("tab").count()).toBe(labels.length);
       };
-      await show(many);
+      await show(["x"]);
+      const oneTabHigh = await listHeight();
+      await show(wrapping);
       const before = await where();
 
-      for (const drawn of [["x"], many, ["y"], many]) {
-        await show(drawn);
+      expect(await listHeight()).toBeGreaterThan(oneTabHigh);
 
-        expect(await where(), JSON.stringify(drawn)).toEqual(before);
+      for (const labels of [["x"], wrapping, ["y"], wrapping]) {
+        await show(labels);
+
+        expect(await where(), JSON.stringify(labels)).toEqual(before);
       }
     });
 
