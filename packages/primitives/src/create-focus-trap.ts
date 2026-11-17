@@ -128,10 +128,11 @@ function trap(container: HTMLElement): () => void {
  * first tab stop if the element that took it follows the container in the document, and to its
  * last tab stop if it comes before. So Tab wraps at both ends. In an engine that starts Shift+Tab
  * from the document's selection, Shift+Tab from a trap with no tab stop while that selection lies
- * inside it can still take focus off the page to the browser's own controls, as it can from a
- * modal `<dialog>`. Focus that lands outside the container with nothing focused before it in the
- * page moves to the first tab stop, so focus that comes back from the browser's own controls lands
- * in the trap. Each move is confirmed, and an
+ * inside it can still take focus out of the trap's document to whatever precedes it, as it can
+ * from a modal `<dialog>`: to the page that embeds the document when the trap is in a frame, and,
+ * by inference, to the browser's own controls when nothing embeds it. Focus that lands outside the
+ * container with nothing focused before it in the document moves to the first tab stop, so focus
+ * that comes back lands in the trap. Each move is confirmed, and an
  * element that does not take focus, such as a link without `href`, is passed over for the next
  * one. With no tab stop that takes focus, focus moves to the container, so keep the container
  * focusable with `tabindex="-1"`. Engines report a move into a frame at different times, so the

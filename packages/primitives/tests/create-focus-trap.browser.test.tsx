@@ -367,7 +367,7 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   fc.record({ type: fc.constant("toggle"), at: fc.nat(), change: fc.constantFrom(...changes) }),
 ) as fc.Arbitrary<Step>;
 
-const enginesThatLeaveThePageOnTheseSequences = ["firefox"];
+const enginesThatLeaveTheDocumentOnTheseSequences = ["firefox"];
 
 function described(node: Node | null): string {
   if (node === null) return "nothing";
@@ -376,12 +376,13 @@ function described(node: Node | null): string {
   return `<${node.localName}${node.id === "" ? "" : `#${node.id}`}> "${label}"`;
 }
 
-function theRunnerHasFocus(): boolean {
-  return (window.top ?? window).document.hasFocus();
+function leftTheDocument(): boolean {
+  return !document.hasFocus() && document.activeElement === document.body;
 }
 
 function whereFocusIs(): string {
-  return `the active element is ${described(document.activeElement)}, the test's page ${document.hasFocus() ? "has" : "does not have"} focus, and the browser's page ${theRunnerHasFocus() ? "has" : "does not have"} focus`;
+  const top = (window.top ?? window).document;
+  return `the active element is ${described(document.activeElement)}, the trap's document ${document.hasFocus() ? "has" : "does not have"} focus, and the top document ${top.hasFocus() ? "has" : "does not have"} focus with ${described(top.activeElement)} active`;
 }
 
 function selectionInside(container: HTMLElement): boolean {
@@ -395,20 +396,20 @@ function inTheTrap(container: HTMLElement): boolean {
 
 async function holdsTheContract(
   container: HTMLElement,
-  mayLeaveThePage: boolean,
+  mayLeaveTheDocument: boolean,
   comeBackBackwards: boolean,
 ): Promise<boolean> {
-  if (mayLeaveThePage && !theRunnerHasFocus()) {
+  if (mayLeaveTheDocument && leftTheDocument()) {
     await tab(comeBackBackwards);
     expect(
       inTheTrap(container),
-      `focus that comes back from the browser's own controls lands in the trap: ${whereFocusIs()}`,
+      `focus that comes back to the trap's document lands in the trap: ${whereFocusIs()}`,
     ).toBe(true);
     return false;
   }
   expect(
     inTheTrap(container),
-    `focus stays in the trap, and leaves the page only on Shift+Tab from a trap with no tab stop while the document selection lies inside it: ${whereFocusIs()}`,
+    `focus stays in the trap, and leaves its document only on Shift+Tab from a trap with no tab stop while the document selection lies inside it: ${whereFocusIs()}`,
   ).toBe(true);
   return true;
 }
@@ -463,10 +464,15 @@ async function followTheEngineOrder(
         slots,
         container,
       );
-      const mayLeaveThePage = current.backwards && order.length === 0 && selectionInside(container);
+      const mayLeaveTheDocument =
+        current.backwards && order.length === 0 && selectionInside(container);
       await tab(current.backwards);
-      const keptThePage = await holdsTheContract(container, mayLeaveThePage, comeBackBackwards);
-      if (keptThePage && expected !== undefined) {
+      const keptTheDocument = await holdsTheContract(
+        container,
+        mayLeaveTheDocument,
+        comeBackBackwards,
+      );
+      if (keptTheDocument && expected !== undefined) {
         expect(document.activeElement, "focus lands where the engine's order says").toBe(expected);
       }
     }
@@ -476,7 +482,7 @@ async function followTheEngineOrder(
   }
 }
 
-test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus stays in the trap and lands where the engine's own Tab order says, except that Shift+Tab from a trap with no tab stop while the document selection lies inside it may take focus to the browser's own controls, from which the next Tab or Shift+Tab brings it back into the trap", async (context) => {
+test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus stays in the trap and lands where the engine's own Tab order says, except that Shift+Tab from a trap with no tab stop while the document selection lies inside it may take focus out of the trap's document, to whatever precedes it, from which the next Tab or Shift+Tab brings it back into the trap", async (context) => {
   await assertProperty(
     context,
     fc.asyncProperty(
@@ -507,33 +513,33 @@ const removes: Step[] = [
   { type: "tab", backwards: true },
 ];
 
-const leaveThePage: Record<string, Step[]> = {
+const leaveTheDocument: Record<string, Step[]> = {
   "its focused textarea is disabled and hidden, its button removed, and the textarea shown again still disabled":
     showsAgain,
   "its button and its focused textarea are disabled and the textarea is removed": removes,
 };
 
-for (const [sequence, steps] of Object.entries(leaveThePage)) {
+for (const [sequence, steps] of Object.entries(leaveTheDocument)) {
   const allButTheLastKey = steps.slice(0, -1);
 
-  test(`after ${sequence}, Shift+Tab from the container keeps focus in the trap or takes it to the browser's own controls, and the next Tab, or the next Shift+Tab, brings it back into the trap`, async () => {
+  test(`after ${sequence}, Shift+Tab from the container keeps focus in the trap or takes it out of the trap's document, and the next Tab, or the next Shift+Tab, brings it back into the trap`, async () => {
     await followTheEngineOrder(["textarea", "button"], steps, false);
     await followTheEngineOrder(["textarea", "button"], steps, true);
   });
 
-  test(`after ${sequence}, Shift+Tab from the container takes focus to the browser's own controls in exactly the engines listed as doing so`, async () => {
+  test(`after ${sequence}, Shift+Tab from the container takes focus out of the trap's document in exactly the engines listed as doing so`, async () => {
     await followTheEngineOrder(
       ["textarea", "button"],
       allButTheLastKey,
       false,
       async ({ container }) => {
         await tab(true);
-        const left = !theRunnerHasFocus();
+        const left = leftTheDocument();
         if (left) await tab(false);
         expect(
           left,
-          `in ${server.browser}, listed: ${enginesThatLeaveThePageOnTheseSequences.join(", ")}; ${whereFocusIs()}`,
-        ).toBe(enginesThatLeaveThePageOnTheseSequences.includes(server.browser));
+          `in ${server.browser}, listed: ${enginesThatLeaveTheDocumentOnTheseSequences.join(", ")}; ${whereFocusIs()}`,
+        ).toBe(enginesThatLeaveTheDocumentOnTheseSequences.includes(server.browser));
         expect(inTheTrap(container), whereFocusIs()).toBe(true);
       },
     );
@@ -552,7 +558,7 @@ for (const [sequence, steps] of Object.entries(leaveThePage)) {
     );
   });
 
-  test(`after ${sequence}, in a native modal dialog in place of the trap with the same stops and steps, the same Shift+Tab leaves the browser's page without focus`, async () => {
+  test(`after ${sequence}, in a native modal dialog in place of the trap with the same stops and steps, the same Shift+Tab leaves the dialog's document without focus`, async () => {
     document.body.replaceChildren();
     html(`<button>Before</button>`);
     const dialog = html<HTMLDialogElement>(`<dialog tabindex="-1" aria-label="Dialog"></dialog>`);
@@ -567,10 +573,29 @@ for (const [sequence, steps] of Object.entries(leaveThePage)) {
       else apply(current, slots, dialog, `dialog step ${index}`);
       await settled();
     }
-    const left = !theRunnerHasFocus();
+    const left = !document.hasFocus();
     const where = whereFocusIs();
     dialog.close();
     await tab(false);
     expect(left, where).toBe(true);
+  });
+}
+
+const wrapsPast: Record<string, Step[]> = {
+  "an inert stop": [
+    { type: "add", at: 0, kind: "button" },
+    { type: "toggle", at: 0, change: "inert" },
+    { type: "tab", backwards: false },
+  ],
+  "a hidden stop": [
+    { type: "add", at: 0, kind: "button" },
+    { type: "toggle", at: 0, change: "hidden" },
+    { type: "tab", backwards: false },
+  ],
+};
+
+for (const [stop, steps] of Object.entries(wrapsPast)) {
+  test(`with only ${stop} in the trap, Tab from the container keeps focus in the trap and in its document`, async () => {
+    await followTheEngineOrder([], steps, false);
   });
 }
