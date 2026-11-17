@@ -6,6 +6,7 @@ import {
   behaviourSdkHiddenRule,
   LIBRARY_CASCADE_LAYER,
 } from "../../../packages/core/build-pipeline.mjs";
+import { rootPart, stableClass, stylesheet } from "../../../packages/core/tests/built-library";
 import {
   computed,
   inEveryEngine,
@@ -41,6 +42,22 @@ const tabValues = fc.uniqueArray(
 );
 
 inEveryEngine((browser) => {
+  test("the library's stylesheet alone, with no behaviour component mounted, leaves a hidden element of another library that a style displays alone, and keeps a hidden part that carries a library part class hidden whatever display its style gives", async () => {
+    const page = await browser().newPage();
+    await page.setContent(
+      [
+        `<style>${stylesheet}</style>`,
+        '<div data-slot="x" hidden style="display:block">Another library</div>',
+        `<div data-slot="tabs-panel" hidden class="${stableClass("TabsPanel", rootPart)}" style="display:grid">A part</div>`,
+      ].join(""),
+    );
+
+    expect(await computed(page.getByText("Another library"), "display")).toBe("block");
+    expect(await computed(page.getByText("A part"), "display")).toBe("none");
+
+    await page.close();
+  });
+
   describe.each(scriptModes)("with scripts %s", (_, javaScriptEnabled) => {
     let opened: OpenPage;
 
@@ -61,7 +78,7 @@ inEveryEngine((browser) => {
       );
     });
 
-    test("before a script runs the page adds no style, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the SDK's hidden rule the stylesheet carries, and every important declaration on the page sits in that layer", async () => {
+    test("before a script runs the page adds no style, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, and every important declaration on the page sits in that layer", async () => {
       const plain = await browser().newContext({ javaScriptEnabled });
       const page = await plain.newPage();
       await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });

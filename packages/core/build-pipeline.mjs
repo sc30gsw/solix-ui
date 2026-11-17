@@ -12,7 +12,8 @@ export const LIBRARY_CLASS_PREFIX = "sx";
 export const STYLE_PROP_LAYER = "style-props";
 export const HIDDEN_LAYER = "hidden";
 export const BEHAVIOUR_SDK_LAYER = "ui-sdk";
-export const HIDDEN_PART_SELECTOR = `[hidden]:where([class*="${stableClassPrefix}"]):not([hidden="until-found"])`;
+export const LIBRARY_PART_CONDITION = `:where([class*="${stableClassPrefix}"])`;
+export const HIDDEN_PART_SELECTOR = `[hidden]${LIBRARY_PART_CONDITION}:not([hidden="until-found"])`;
 
 export const sdkHiddenRuleSource = {
   dependency: "@ui-sdk/core",
@@ -123,11 +124,19 @@ export function behaviourSdkHiddenRule(packageRoot) {
   return cssTexts[0];
 }
 
+export function scopedToLibraryParts(css) {
+  const parsed = postcss.parse(css);
+  parsed.walkRules((rule) => {
+    rule.selectors = rule.selectors.map((selector) => `${selector}${LIBRARY_PART_CONDITION}`);
+  });
+  return parsed.toString();
+}
+
 export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
   const css = stylexPlugin.processStylexRules(rules, { useLayers: true });
   return [
     `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};`,
-    behaviourSdkRules,
+    scopedToLibraryParts(behaviourSdkRules),
     `@layer ${LIBRARY_CASCADE_LAYER} {`,
     css,
     `@layer ${STYLE_PROP_LAYER} {`,

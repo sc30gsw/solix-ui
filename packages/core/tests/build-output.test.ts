@@ -10,6 +10,7 @@ import {
   HIDDEN_PART_SELECTOR,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
+  scopedToLibraryParts,
   sdkHiddenRuleSource,
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
@@ -146,8 +147,8 @@ function depthAfterEachCharacter(css: string): number[] {
   });
 }
 
-test("the stylesheet first orders the behaviour SDK's layer before the library's, then holds the rule the SDK writes at run time to keep a hidden part hidden, read from the SDK's package, and then every other rule inside the one library cascade layer", () => {
-  const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n${realHiddenRule}\n`;
+test("the stylesheet first orders the behaviour SDK's layer before the library's, then holds the rule the SDK writes at run time to keep a hidden part hidden, read from the SDK's package and narrowed to an element that carries a library part class, and then every other rule inside the one library cascade layer", () => {
+  const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n${scopedToLibraryParts(realHiddenRule)}\n`;
   const layer = stylesheet.slice(order.length);
 
   expect(stylesheet.startsWith(order)).toBe(true);
