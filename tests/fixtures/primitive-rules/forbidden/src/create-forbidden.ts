@@ -1,8 +1,8 @@
 import * as solid from "solid-js";
 import { createRenderEffect } from "solid-js";
 import { isServer } from "@solidjs/web";
-import { accessUntracked } from "../../../../../packages/primitives/src/internal-access";
-import type { MaybeAccessor, ReadOnce } from "../../../../../packages/primitives/src/types";
+import { accessUntracked } from "#/packages/primitives/src/internal-access.ts";
+import type { MaybeAccessor, ReadOnce } from "#/packages/primitives/src/types.ts";
 
 let instances = 0;
 const cache = new Map<string, number>();

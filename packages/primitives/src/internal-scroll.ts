@@ -1,8 +1,8 @@
-import { lookUp } from "./internal-browser-api";
-import { type BrowserCallback, createBrowserValue } from "./internal-browser-value";
-import type { LiveConfig } from "./internal-equal";
-import { watchEvents } from "./internal-listener";
-import type { BrowserValue } from "./types";
+import { lookUp } from "#/src/internal-browser-api.ts";
+import { type BrowserCallback, createBrowserValue } from "#/src/internal-browser-value.ts";
+import type { LiveConfig } from "#/src/internal-equal.ts";
+import { watchEvents } from "#/src/internal-listener.ts";
+import type { BrowserValue } from "#/src/types.ts";
 
 export const resizeSettleMs = 300;
 

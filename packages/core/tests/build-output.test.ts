@@ -11,21 +11,26 @@ import {
   LIBRARY_CLASS_PREFIX,
   sdkHiddenRuleSource,
   STYLE_PROP_LAYER,
-} from "../build-pipeline.mjs";
+} from "#/build-pipeline.mjs";
 import {
   canonicalStylePropNames,
   stylePropClassPrefix,
   stylePropNames,
-} from "../src/style-prop-table";
-import { stableClassPrefix } from "../src/stable-class";
-import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
+} from "#/src/style-prop-table.ts";
+import { stableClassPrefix } from "#/src/stable-class.ts";
+import {
+  builtComponents,
+  builtSource,
+  dist,
+  stylesheet as builtStylesheet,
+} from "#/tests/built-library.ts";
 import { parse, ts } from "../../../scripts/syntax";
 import {
   enclosingAtRules,
   inStylePropLayer,
   layersAroundDeclaration,
   nestedLayerOrder,
-} from "./cascade-layers";
+} from "#/tests/cascade-layers.ts";
 
 const stylesheet = builtStylesheet.trim();
 const realHiddenRule = behaviourSdkHiddenRule(join(import.meta.dirname, ".."));

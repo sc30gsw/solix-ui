@@ -1,4 +1,4 @@
-import { isBrowserOnlyGlobal, reachedFrom, type ts } from "../../../scripts/syntax";
+import { isBrowserOnlyGlobal, reachedFrom, type ts } from "#/scripts/syntax.ts";
 import {
   browserOnlyRoles,
   exportedFunction,
@@ -9,7 +9,7 @@ import {
   publicModules,
   type Rule,
   stateCommandRole,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const leftToCommandKinds = [stateCommandRole];
 

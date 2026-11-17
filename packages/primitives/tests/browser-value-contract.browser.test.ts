@@ -1,11 +1,11 @@
 import { type Accessor, createSignal } from "solid-js";
 import { describe, expect, test } from "vite-plus/test";
-import type { PageValuePrimitive } from "../fixtures/primitive-kinds";
-import { startValueCase } from "../fixtures/server-cases";
-import * as primitives from "../src/index";
-import { attachmentsDuring, flush, mount } from "./support/browser-harness";
-import { replaced } from "./support/replace";
-import { applied, stubbedScroll } from "./support/scroll";
+import type { PageValuePrimitive } from "#/fixtures/primitive-kinds.ts";
+import { startValueCase } from "#/fixtures/server-cases.ts";
+import * as primitives from "#/src/index.ts";
+import { attachmentsDuring, flush, mount } from "#/tests/support/browser-harness.ts";
+import { replaced } from "#/tests/support/replace.ts";
+import { applied, stubbedScroll } from "#/tests/support/scroll.ts";
 
 type ValueContract = {
   create: (raw: Accessor<number>) => () => unknown;

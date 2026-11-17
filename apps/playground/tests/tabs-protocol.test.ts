@@ -1,8 +1,8 @@
 import fc from "fast-check";
 import type { Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
-import { inEveryEngine } from "./support/playground";
-import { activeAndSelected, panelOf, stateOf, tabLists, tabNamed } from "./support/tabs";
+import { inEveryEngine } from "#/tests/support/playground.ts";
+import { activeAndSelected, panelOf, stateOf, tabLists, tabNamed } from "#/tests/support/tabs.ts";
 import {
   afterKey,
   afterPressOn,
@@ -10,7 +10,7 @@ import {
   keys,
   type RovingList,
   type RovingListState,
-} from "./support/roving-list-model";
+} from "#/tests/support/roving-list-model.ts";
 
 const url = inject("playgroundUrl");
 const generatedRuns = 15;

@@ -1,14 +1,17 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, relative } from "node:path";
+import { dirname, extname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { outputPathOf } from "../../scripts/dist-specifiers.ts";
 import {
   behaviourSdkHiddenRule,
   compileLibrarySource,
+  libraryLayout,
   libraryStylesheet,
-} from "./build-pipeline.mjs";
+} from "#/build-pipeline.mjs";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
-const sourceDirectory = join(packageRoot, "src");
+const layout = libraryLayout(packageRoot);
+const { sourceDirectory } = layout;
 const outputDirectory = join(packageRoot, "dist");
 
 await rm(outputDirectory, { recursive: true, force: true });
@@ -16,7 +19,7 @@ await mkdir(outputDirectory, { recursive: true });
 
 const rules = [];
 for (const name of await readdir(sourceDirectory)) {
-  if (!/\.tsx?$/.test(name)) continue;
+  if (!Object.hasOwn(layout.outputExtensions, extname(name))) continue;
   const filename = join(sourceDirectory, name);
   const compiled = await compileLibrarySource({
     filename,
@@ -24,9 +27,9 @@ for (const name of await readdir(sourceDirectory)) {
     packageRoot,
   });
   rules.push(...compiled.rules);
-  const outputName = name.replace(/\.tsx$/, ".jsx").replace(/\.ts$/, ".js");
-  await writeFile(join(outputDirectory, outputName), compiled.code);
-  console.log(`${relative(packageRoot, filename)} -> dist/${outputName}`);
+  const output = join(outputDirectory, relative(sourceDirectory, outputPathOf(filename, layout)));
+  await writeFile(output, compiled.code);
+  console.log(`${relative(packageRoot, filename)} -> ${relative(packageRoot, output)}`);
 }
 
 const { stylePropRules } = await import(

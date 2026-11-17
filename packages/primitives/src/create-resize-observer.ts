@@ -1,9 +1,9 @@
-import { access } from "./internal-access";
-import { createElementValue } from "./internal-browser-value";
-import { lookUp } from "./internal-browser-api";
-import { observe } from "./internal-dom-observer";
-import { viewOf } from "./internal-node";
-import type { BrowserValue, MaybeAccessor, ObserverRect, RefSetter } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { createElementValue } from "#/src/internal-browser-value.ts";
+import { lookUp } from "#/src/internal-browser-api.ts";
+import { observe } from "#/src/internal-dom-observer.ts";
+import { viewOf } from "#/src/internal-node.ts";
+import type { BrowserValue, MaybeAccessor, ObserverRect, RefSetter } from "#/src/types.ts";
 
 /** The ref to put on the element, and its box as `ObserverRect` says. */
 export type ResizeObserverReturn<E extends Element> = [

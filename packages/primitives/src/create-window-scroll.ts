@@ -1,7 +1,7 @@
-import { lookUp } from "./internal-browser-api";
-import { createBrowserValue, readOn } from "./internal-browser-value";
-import { createBrowserCommand } from "./internal-command";
-import type { BrowserValue } from "./types";
+import { lookUp } from "#/src/internal-browser-api.ts";
+import { createBrowserValue, readOn } from "#/src/internal-browser-value.ts";
+import { createBrowserCommand } from "#/src/internal-command.ts";
+import type { BrowserValue } from "#/src/types.ts";
 
 /** A scroll position of the window, in CSS pixels. */
 export type ScrollPosition = { x: number; y: number };

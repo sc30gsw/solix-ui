@@ -5,8 +5,8 @@ import {
   nameOf,
   ts,
   unwrapped,
-} from "../../../scripts/syntax";
-import { forbidOutside } from "./library";
+} from "#/scripts/syntax.ts";
+import { forbidOutside } from "#/tests/support/primitive-rules/library.ts";
 
 const serverFlag = "isServer";
 const serverEnvironment = "import.meta.env.SSR";

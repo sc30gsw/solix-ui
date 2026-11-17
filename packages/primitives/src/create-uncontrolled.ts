@@ -1,8 +1,8 @@
 import { type Accessor, createMemo, untrack } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { createRequest } from "./internal-request";
-import { createValue } from "./internal-value";
-import type { ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { createRequest } from "#/src/internal-request.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { ReadOnce } from "#/src/types.ts";
 
 export type UncontrolledOptions<T, P extends unknown[] = []> = {
   /** While it reads anything but `undefined`, the state is controlled and this is its value. */

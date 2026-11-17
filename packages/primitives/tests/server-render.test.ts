@@ -1,11 +1,11 @@
 import { expect, test } from "vite-plus/test";
-import { type Primitive, serialized, serverCases, startCase } from "../fixtures/server-cases";
-import { library } from "./built-library";
+import { type Primitive, serialized, serverCases, startCase } from "#/fixtures/server-cases.ts";
+import { library } from "#/tests/built-library.ts";
 import {
   browserResourcesReadDuring,
   plainValuesIn,
   renderedOnTheServer,
-} from "./support/server-harness";
+} from "#/tests/support/server-harness.ts";
 
 const primitivePrefix = "create";
 

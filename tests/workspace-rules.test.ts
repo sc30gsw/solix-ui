@@ -6,21 +6,23 @@ import { expect, test } from "vite-plus/test";
 import {
   commentsIn,
   descendants,
+  moduleSpecifierOf,
   parse,
   parseAll,
   parseText,
   parseWithoutLibrariesOrImports,
   sharedSettings,
+  typeCheckedWithScripts,
   staticPropertyName,
   ts,
-} from "../scripts/syntax";
-import { solidPackages } from "../scripts/newest-releases";
-import { type PnpmSettings, pnpmSettings } from "../scripts/pnpm-settings";
+} from "#/scripts/syntax.ts";
+import { solidPackages } from "#/scripts/newest-releases.ts";
+import { type PnpmSettings, pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   type AllowedRuntimeDependency,
   allowedRuntimeDependencies,
   runtimeDependencyList,
-} from "../scripts/runtime-dependencies";
+} from "#/scripts/runtime-dependencies.ts";
 import {
   type Installed,
   type Manifest,
@@ -37,8 +39,7 @@ import {
   scriptFiles,
   workflowFiles,
   workspaceFile,
-} from "./support/workspace";
-import { moduleSpecifierOf } from "./support/module-specifiers";
+} from "#/tests/support/workspace.ts";
 
 const vitePlusCommandFor: Record<string, string> = {
   vitest: "vp test",
@@ -75,6 +76,7 @@ const typeScriptApiList = "scripts/syntax/ast.ts";
 const typeScriptProjectOpener = "scripts/syntax/program.ts";
 const sharedSettingsFile = "tsconfig.base.json";
 const optionsOfTheParseOnlyProject = ["allowJs", "noLib", "noResolve"];
+const optionsOfTheTypeCheckedProject = ["allowJs"];
 const pnpmSettingsReader = "scripts/pnpm-settings.ts";
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
@@ -203,7 +205,7 @@ function hasProperty(name: string): (property: ts.ObjectLiteralElementLike) => b
   return (property) => staticPropertyName(property) === name;
 }
 
-test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFile} and sets no option it sets, and the parse-only project adds ${optionsOfTheParseOnlyProject.join(", ")}`, () => {
+test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFile} and sets no option it sets, the type-checked project adds ${optionsOfTheTypeCheckedProject.join(", ")}, and the parse-only project adds ${optionsOfTheParseOnlyProject.join(", ")}`, () => {
   const source = parse(join(repositoryRoot, typeScriptProjectOpener));
   const nodes = descendants(source);
   const settingsWritten = nodes
@@ -226,11 +228,16 @@ test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFil
   expect(sharedSettings).toBe(join(repositoryRoot, sharedSettingsFile));
   expect(settingsWritten.length).toBeGreaterThan(0);
   expect(withoutTheSharedSettings.map((settings) => settings.getText())).toEqual([]);
-  expect(optionsOfEachProject).toEqual(["parseWithoutLibrariesOrImports", "{}"]);
+  expect(optionsOfEachProject).toEqual([
+    "parseWithoutLibrariesOrImports",
+    "typeCheckedWithScripts",
+  ]);
   expect(Object.keys(parseWithoutLibrariesOrImports)).toEqual(optionsOfTheParseOnlyProject);
-  expect(
-    optionsTheSharedSettingsOwn(typeScriptProjectOpener, parseWithoutLibrariesOrImports),
-  ).toEqual([]);
+  expect(Object.keys(typeCheckedWithScripts)).toEqual(optionsOfTheTypeCheckedProject);
+  expect([
+    ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, parseWithoutLibrariesOrImports),
+    ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, typeCheckedWithScripts),
+  ]).toEqual([]);
 });
 
 function runtimeDependencyProblems(
@@ -422,7 +429,7 @@ test("the TypeScript API rule flags each way a file can load typescript, and an 
     'const later = await import("typescript");',
     'const required = require("typescript");',
     'type Tree = import("typescript/unstable/ast").Node;',
-    'import { parse } from "../scripts/syntax";',
+    'import { parse } from "#/scripts/syntax.ts";',
     'const named = "typescript";',
   ];
   const source = parseText(lines.join("\n"), ".ts");

@@ -1,8 +1,8 @@
 import { type Accessor, createEffect, createMemo, createSignal, from, untrack } from "solid-js";
-import { type Attach, createElementAttachment } from "./internal-attachment";
-import { type LiveConfig, sameValue } from "./internal-equal";
-import { watchEvents } from "./internal-listener";
-import type { BrowserValue, RefSetter } from "./types";
+import { type Attach, createElementAttachment } from "#/src/internal-attachment.ts";
+import { type LiveConfig, sameValue } from "#/src/internal-equal.ts";
+import { watchEvents } from "#/src/internal-listener.ts";
+import type { BrowserValue, RefSetter } from "#/src/types.ts";
 
 export type Deliver<T> = (value: T) => void;
 

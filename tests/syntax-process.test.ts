@@ -3,8 +3,8 @@ import { once } from "node:events";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "vite-plus/test";
-import { descendants, parse, ts } from "../scripts/syntax";
-import { repositoryRoot } from "./support/workspace";
+import { descendants, parse, ts } from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const compilerModule = pathToFileURL(join(repositoryRoot, "scripts/syntax/program.ts")).href;
 const driveScript = ".agents/skills/verify-playground/scripts/drive.mjs";

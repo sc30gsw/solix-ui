@@ -1,9 +1,14 @@
 import * as stylex from "@stylexjs/stylex";
 import { createMemo, merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
-import { stableClass } from "./stable-class";
-import { stylePropKeys } from "./style-prop-table";
-import { presentStyle, resolveStyleProps, type StyleProps, withConsumerStyle } from "./style-props";
+import { stableClass } from "#/src/stable-class.ts";
+import { stylePropKeys } from "#/src/style-prop-table.ts";
+import {
+  presentStyle,
+  resolveStyleProps,
+  type StyleProps,
+  withConsumerStyle,
+} from "#/src/style-props.ts";
 
 export const rootPart = "root";
 

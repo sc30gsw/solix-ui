@@ -1,10 +1,11 @@
 import { existsSync, globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { stylePropKeys, stylePropTable } from "../packages/core/src/style-prop-table";
-import { carriedComponents } from "../packages/core/tests/built-library";
-import { allowedRuntimeDependencies, loads } from "../scripts/runtime-dependencies";
-import { tokenValues } from "../scripts/tokens";
+import { stylePropKeys, stylePropTable } from "#/packages/core/src/style-prop-table.ts";
+import { carriedComponents } from "#/packages/core/tests/built-library.ts";
+import { allowedRuntimeDependencies, loads } from "#/scripts/runtime-dependencies.ts";
+import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
+import { tokenValues } from "#/scripts/tokens.ts";
 import {
   calledDeclaration,
   descendants,
@@ -13,6 +14,7 @@ import {
   findAncestor,
   firstLine,
   memberDeclarations,
+  moduleSpecifierOf,
   openProgram,
   parse,
   parseAll,
@@ -20,9 +22,8 @@ import {
   staticPropertyName,
   symbolOf,
   ts,
-} from "../scripts/syntax";
-import { moduleSpecifierOf } from "./support/module-specifiers";
-import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
+} from "#/scripts/syntax.ts";
+import { componentLibraries, repositoryRoot, scriptFiles } from "#/tests/support/workspace.ts";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
 const helperFile =
@@ -33,8 +34,7 @@ const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
 const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
-const partsImport = "./parts";
-const libraryEntry = /(?:^|\/)src\/index$/;
+const libraryEntry = /(?:^|\/)src\/index\.ts$/;
 const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
 const rootBinding = "root";
 const partBinding = "part";
@@ -190,6 +190,10 @@ type PropsShape = {
 };
 
 function importedFromParts(source: ts.SourceFile, name: string): boolean {
+  const partsImport = subpathSpecifierOf(
+    source.fileName,
+    join(dirname(source.fileName), partsModule),
+  );
   return source.statements.some((statement) => {
     if (
       !ts.isImportDeclaration(statement) ||
@@ -623,7 +627,7 @@ test("no file but its seam loads a runtime dependency the allow-list names with 
         `const later = await import("${dependency}");`,
         `const required = require("${dependency}");`,
         `type Handle = import("${dependency}/primitive").PrimitiveHandle<never>;`,
-        'import { createBehaviour } from "./headless";',
+        'import { createBehaviour } from "#/src/headless.ts";',
         `const named = "${dependency}";`,
         `import { other } from "${dependency}-and-more";`,
       ].join("\n"),
@@ -681,14 +685,17 @@ test("every other source file is the barrel, a StyleX definition, or a kebab-cas
 
 test("the barrel exports every component and its props type once, in alphabetical order, and nothing else", () => {
   for (const { source } of libraries) {
-    const names = components
+    const barrel = join(source, "index.ts");
+    const expected = components
       .filter(({ file }) => file.startsWith(source))
-      .map(({ name }) => name)
-      .sort();
-    const expected = names.map((name) => `export { ${name}, type ${name}Props } from "./${name}";`);
-    const actual = readFileSync(join(source, "index.ts"), "utf8").trim().split("\n");
+      .sort((left, right) => (left.name < right.name ? -1 : 1))
+      .map(
+        ({ name, file }) =>
+          `export { ${name}, type ${name}Props } from "${subpathSpecifierOf(barrel, file)}";`,
+      );
+    const actual = readFileSync(barrel, "utf8").trim().split("\n");
 
-    expect(actual, `${relativePath(join(source, "index.ts"))}`).toEqual(expected);
+    expect(actual, `${relativePath(barrel)}`).toEqual(expected);
   }
 });
 

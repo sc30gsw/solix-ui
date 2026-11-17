@@ -1,12 +1,24 @@
-import { importsOf } from "../../../scripts/syntax";
-import { browserTests, type PrimitiveRule, type Rule, solidModule, testAt } from "./library";
+import { join } from "node:path";
+import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
+import { importsOf } from "#/scripts/syntax.ts";
+import {
+  browserTests,
+  type PrimitiveRule,
+  type Rule,
+  solidModule,
+  testAt,
+} from "#/tests/support/primitive-rules/library.ts";
 
-const browserHarness = "./support/browser-harness";
+const browserHarnessFile = "support/browser-harness.ts";
 
 const flushName = "flush";
 
 const browserTestsUseTheHarness: Rule = (library) =>
   browserTests(library).flatMap(([file, source]) => {
+    const browserHarness = subpathSpecifierOf(
+      join(library.testDirectory, file),
+      join(library.testDirectory, browserHarnessFile),
+    );
     const imports = importsOf(source);
     const harness = imports.some(({ specifier }) => specifier === browserHarness)
       ? []

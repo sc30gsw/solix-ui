@@ -3,9 +3,9 @@ import fc from "fast-check";
 import { type Accessor, createSignal, onCleanup } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
-import { createFocusTrap, getHotkeyHandler } from "../src/index";
-import { expectNoAxeViolations } from "./support/accessibility";
-import { flush, mount, mountOn, record, unmount } from "./support/browser-harness";
+import { createFocusTrap, getHotkeyHandler } from "#/src/index.ts";
+import { expectNoAxeViolations } from "#/tests/support/accessibility.ts";
+import { flush, mount, mountOn, record, unmount } from "#/tests/support/browser-harness.ts";
 import {
   attached,
   button,
@@ -15,7 +15,7 @@ import {
   settled,
   tab,
   engineWait,
-} from "./support/dom";
+} from "#/tests/support/dom.ts";
 import {
   apply,
   changes,
@@ -24,7 +24,7 @@ import {
   kinds,
   type Slot,
   type Step,
-} from "./support/tab-order";
+} from "#/tests/support/tab-order.ts";
 
 async function trapped(container: HTMLElement, active?: Accessor<boolean>): Promise<void> {
   mountOn(() => createFocusTrap(active), container);

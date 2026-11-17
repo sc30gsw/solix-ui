@@ -1,22 +1,24 @@
 import { join, relative } from "node:path";
-import { descendants, importsOf, nameOf, ts } from "../../../scripts/syntax";
-import { repositoryRoot } from "../workspace";
+import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
+import { descendants, importsOf, nameOf, ts } from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   at,
   browserTestSuffixes,
   exportedFunction,
   forbidOutside,
+  type Library,
   type PrimitiveRule,
   publicModules,
   reaches,
   refersToDomMember,
   type Rule,
   testNamed,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const focusMethod = "focus";
 const focusMover = { file: "internal-focus.ts", name: "moveFocus" };
-const accessibilityModule = "./support/accessibility";
+const accessibilityFile = "support/accessibility.ts";
 const axeAssertion = "expectNoAxeViolations";
 
 export const focusMovesRule = forbidOutside({
@@ -27,7 +29,11 @@ export const focusMovesRule = forbidOutside({
   advice: `move focus with ${focusMover.name} from ${focusMover.file}, which confirms the element took it and which the accessibility rule follows.`,
 });
 
-function awaitsTheAxeAssertion(test: ts.SourceFile): boolean {
+function awaitsTheAxeAssertion(library: Library, test: ts.SourceFile): boolean {
+  const accessibilityModule = subpathSpecifierOf(
+    test.fileName,
+    join(library.testDirectory, accessibilityFile),
+  );
   const imported = importsOf(test)
     .filter(({ specifier }) => specifier === accessibilityModule)
     .flatMap(({ names }) => names)
@@ -50,11 +56,11 @@ const accessibilityTests: Rule = (library) =>
     })
     .filter((module) => {
       const browserTest = testNamed(library, module.file, browserTestSuffixes);
-      return !(browserTest && awaitsTheAxeAssertion(browserTest));
+      return !(browserTest && awaitsTheAxeAssertion(library, browserTest));
     })
     .map(
       (module) =>
-        `${at(module)}: it reaches ${focusMover.name}, so its browser test awaits ${axeAssertion} from ${relative(repositoryRoot, join(library.testDirectory, `${accessibilityModule}.ts`))} on the region it manages.`,
+        `${at(module)}: it reaches ${focusMover.name}, so its browser test awaits ${axeAssertion} from ${relative(repositoryRoot, join(library.testDirectory, accessibilityFile))} on the region it manages.`,
     );
 
 export const accessibilityTestsRule: PrimitiveRule = {

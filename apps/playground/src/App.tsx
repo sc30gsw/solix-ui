@@ -1,13 +1,13 @@
-import { BoxSection } from "./sections/BoxSection";
-import { ButtonSection } from "./sections/ButtonSection";
-import { ChangingPropsSection } from "./sections/ChangingPropsSection";
-import { DisclosureSection } from "./sections/DisclosureSection";
-import { ModalSection } from "./sections/ModalSection";
-import { PrimitivesSection } from "./sections/PrimitivesSection";
-import { StylesApiSection } from "./sections/StylesApiSection";
-import { TabsSection } from "./sections/TabsSection";
-import { TextInputSection } from "./sections/TextInputSection";
-import "./app.css";
+import { BoxSection } from "#/src/sections/BoxSection.tsx";
+import { ButtonSection } from "#/src/sections/ButtonSection.tsx";
+import { ChangingPropsSection } from "#/src/sections/ChangingPropsSection.tsx";
+import { DisclosureSection } from "#/src/sections/DisclosureSection.tsx";
+import { ModalSection } from "#/src/sections/ModalSection.tsx";
+import { PrimitivesSection } from "#/src/sections/PrimitivesSection.tsx";
+import { StylesApiSection } from "#/src/sections/StylesApiSection.tsx";
+import { TabsSection } from "#/src/sections/TabsSection.tsx";
+import { TextInputSection } from "#/src/sections/TextInputSection.tsx";
+import "#/src/app.css";
 import "@solix/core/styles.css";
 
 export default function App() {

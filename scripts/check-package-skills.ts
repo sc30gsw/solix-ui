@@ -1,4 +1,8 @@
-import { approvedSkills, packageSkillProblems, reviewedSkillsFile } from "./package-skills.ts";
+import {
+  approvedSkills,
+  packageSkillProblems,
+  reviewedSkillsFile,
+} from "#/scripts/package-skills.ts";
 
 const problems = packageSkillProblems();
 

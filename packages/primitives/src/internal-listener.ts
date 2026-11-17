@@ -1,4 +1,4 @@
-import type { ListenerOptions } from "./types";
+import type { ListenerOptions } from "#/src/types.ts";
 
 type EventMapOf<T> = T extends Window
   ? WindowEventMap

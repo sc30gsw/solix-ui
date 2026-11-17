@@ -5,7 +5,8 @@ import syntaxJsx from "@babel/plugin-syntax-jsx";
 import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
 import postcss from "postcss";
-import { stableClassPrefix } from "./src/stable-class.ts";
+import { distSpecifiers } from "../../scripts/dist-specifiers.ts";
+import { stableClassPrefix } from "#/src/stable-class.ts";
 
 export const LIBRARY_CASCADE_LAYER = "solix";
 export const LIBRARY_CLASS_PREFIX = "sx";
@@ -21,6 +22,14 @@ export const sdkHiddenRuleSource = {
   writer: "enforceHidden",
 };
 
+export function libraryLayout(packageRoot) {
+  return {
+    packageRoot,
+    sourceDirectory: join(packageRoot, "src"),
+    outputExtensions: { ".ts": ".js", ".tsx": ".jsx" },
+  };
+}
+
 const typesStripped = [presetTypescript];
 const jsxKeptInTsx = [{ test: /\.tsx$/, plugins: [syntaxJsx] }];
 
@@ -32,6 +41,7 @@ export async function compileLibrarySource({ filename, source, packageRoot }) {
     presets: typesStripped,
     overrides: jsxKeptInTsx,
     plugins: [
+      distSpecifiers(libraryLayout(packageRoot)),
       [
         stylexPlugin,
         {

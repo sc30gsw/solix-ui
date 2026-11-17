@@ -5,9 +5,9 @@ import {
   publishedIn,
   type RegistryDocument,
   type ReleasePolicy,
-} from "./newest-releases.ts";
-import { listed } from "./repository.ts";
-import { type Line, linesOf, readRoadmapText, roadmapFile, where } from "./roadmap.ts";
+} from "#/scripts/newest-releases.ts";
+import { listed } from "#/scripts/repository.ts";
+import { type Line, linesOf, readRoadmapText, roadmapFile, where } from "#/scripts/roadmap.ts";
 
 export type Requirement = { name: string; range: string };
 

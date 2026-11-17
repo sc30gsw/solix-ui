@@ -1,8 +1,8 @@
 import { expect, test } from "vite-plus/test";
-import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
-import type { BoxProps } from "../src/index";
-import { render } from "./fixtures";
-import { classesOf, declarationsIn, rootElementOf, valuesOf } from "./markup";
+import { LIBRARY_CLASS_PREFIX } from "#/build-pipeline.mjs";
+import type { BoxProps } from "#/src/index.ts";
+import { render } from "#/tests/fixtures.ts";
+import { classesOf, declarationsIn, rootElementOf, valuesOf } from "#/tests/markup.ts";
 
 const resolvedCases: [
   what: string,

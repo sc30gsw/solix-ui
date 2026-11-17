@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
-import { keyboardTable, tabLists } from "./support/tabs";
-import { afterKey, type RovingListState, singleSteps } from "./support/roving-list-model";
+import { keyboardTable, tabLists } from "#/tests/support/tabs.ts";
+import { afterKey, type RovingListState, singleSteps } from "#/tests/support/roving-list-model.ts";
 
 function listNamed(name: string) {
   const list = tabLists.find((candidate) => candidate.name === name);

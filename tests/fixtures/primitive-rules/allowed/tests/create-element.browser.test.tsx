@@ -1,1 +1,1 @@
-import "./support/browser-harness";
+import "#/tests/fixtures/primitive-rules/allowed/tests/support/browser-harness.ts";

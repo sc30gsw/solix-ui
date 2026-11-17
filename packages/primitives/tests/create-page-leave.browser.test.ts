@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
-import { createPageLeave } from "../src/index";
-import { mount, unmount } from "./support/browser-harness";
-import { box } from "./support/dom";
+import { createPageLeave } from "#/src/index.ts";
+import { mount, unmount } from "#/tests/support/browser-harness.ts";
+import { box } from "#/tests/support/dom.ts";
 
 function leave(target: Element): void {
   target.dispatchEvent(new MouseEvent("mouseleave", { relatedTarget: null }));

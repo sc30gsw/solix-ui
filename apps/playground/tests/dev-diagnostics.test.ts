@@ -5,7 +5,7 @@ import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import { installedVp } from "../../../scripts/repository";
-import { account, optional, panelOf, tabNamed, tabNames } from "./support/tabs";
+import { account, optional, panelOf, tabNamed, tabNames } from "#/tests/support/tabs.ts";
 
 const { overview, security } = tabNames.account;
 const { notes } = tabNames.optional;

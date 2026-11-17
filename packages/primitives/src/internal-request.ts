@@ -1,5 +1,5 @@
 import { untrack } from "solid-js";
-import { createValue } from "./internal-value";
+import { createValue } from "#/src/internal-value.ts";
 
 export type Request<T> = (next: T) => boolean;
 

@@ -1,5 +1,5 @@
 import type postcss from "postcss";
-import { STYLE_PROP_LAYER } from "../build-pipeline.mjs";
+import { STYLE_PROP_LAYER } from "#/build-pipeline.mjs";
 
 function isAtRule(node: postcss.Node | postcss.Document | undefined): node is postcss.AtRule {
   return node?.type === "atrule";

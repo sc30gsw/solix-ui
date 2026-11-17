@@ -8,8 +8,8 @@ import {
   realpathSync,
 } from "node:fs";
 import { join } from "node:path";
-import { pnpmSettings, workspaceFile } from "./pnpm-settings.ts";
-import { repositoryRoot } from "./repository.ts";
+import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
 
 export const reviewedSkillsFile = "scripts/reviewed-skills.json";
 export const skillDirectories = [".agents/skills", ".claude/skills"];

@@ -3,10 +3,10 @@ import { join, matchesGlob } from "node:path";
 import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
-import type * as Library from "../src/index";
-import type { PolymorphicProps } from "../src/parts";
-import { canonicalOf, type DisplayPropName, displayPropNames } from "../src/style-prop-table";
+import { LIBRARY_CLASS_PREFIX } from "#/build-pipeline.mjs";
+import type * as Library from "#/src/index.ts";
+import type { PolymorphicProps } from "#/src/parts.ts";
+import { canonicalOf, type DisplayPropName, displayPropNames } from "#/src/style-prop-table.ts";
 import {
   classTokens,
   declarationsByPart,
@@ -15,7 +15,7 @@ import {
   partClassTokens,
   stringAttributes,
   stylePropCases,
-} from "./arbitraries";
+} from "#/tests/arbitraries.ts";
 import {
   builtComponents,
   carriedComponents,
@@ -25,7 +25,7 @@ import {
   rootPart,
   stableClass,
   stylesheet,
-} from "./built-library";
+} from "#/tests/built-library.ts";
 import {
   classesPropsFrom,
   classProp,
@@ -37,7 +37,7 @@ import {
   type StylePropCase,
   stylePropPropsOf,
   styleWritten,
-} from "./consumer-props";
+} from "#/tests/consumer-props.ts";
 import {
   components,
   fixtures,
@@ -45,7 +45,7 @@ import {
   readsInOneRender,
   render,
   type TakesDisplay,
-} from "./fixtures";
+} from "#/tests/fixtures.ts";
 import {
   classesOf,
   declarationsIn,
@@ -53,7 +53,7 @@ import {
   elementsOf,
   rootElementOf,
   valuesOf,
-} from "./markup";
+} from "#/tests/markup.ts";
 
 const generatedRuns = 300;
 const repositoryRoot = join(import.meta.dirname, "../../..");

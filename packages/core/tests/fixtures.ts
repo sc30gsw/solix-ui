@@ -1,15 +1,15 @@
 import type { JSX } from "@solidjs/web";
 import { expect } from "vite-plus/test";
-import type * as Library from "../src/index";
-import type { DisplayPropName } from "../src/style-prop-table";
+import type * as Library from "#/src/index.ts";
+import type { DisplayPropName } from "#/src/style-prop-table.ts";
 import {
   carriedComponents,
   type ConsumerProps,
   handledKeys,
   renderBuilt,
   renderBuiltWithin,
-} from "./built-library";
-import { elementsOf } from "./markup";
+} from "#/tests/built-library.ts";
+import { elementsOf } from "#/tests/markup.ts";
 
 type PropsOf<Component> = Component extends (props: infer Props) => unknown ? Props : never;
 

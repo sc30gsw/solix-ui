@@ -1,5 +1,5 @@
-import { createAttachment } from "../../../../../packages/primitives/src/internal-attachment";
-import { browserMethod, lookUp } from "../../../../../packages/primitives/src/internal-browser-api";
+import { createAttachment } from "#/packages/primitives/src/internal-attachment.ts";
+import { browserMethod, lookUp } from "#/packages/primitives/src/internal-browser-api.ts";
 
 /** Holds what the rules forbid. */
 export function createRespelled(element: HTMLElement, listener: () => void): void {

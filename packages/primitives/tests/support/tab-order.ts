@@ -1,4 +1,4 @@
-import { tab } from "./dom";
+import { tab } from "#/tests/support/dom.ts";
 
 export type Kind = "button" | "input" | "textarea" | "div";
 export type Change = "disabled" | "minus" | "hidden" | "inert";

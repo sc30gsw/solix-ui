@@ -1,9 +1,9 @@
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { createMutationObserver } from "../src/index";
-import { flush, mount } from "./support/browser-harness";
-import { box, nextTask } from "./support/dom";
-import { withoutGlobal } from "./support/replace";
+import { createMutationObserver } from "#/src/index.ts";
+import { flush, mount } from "#/tests/support/browser-harness.ts";
+import { box, nextTask } from "#/tests/support/dom.ts";
+import { withoutGlobal } from "#/tests/support/replace.ts";
 
 function recorder() {
   const seen: string[] = [];

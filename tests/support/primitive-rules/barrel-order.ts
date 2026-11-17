@@ -1,6 +1,7 @@
-import { basename, join, relative } from "node:path";
-import { exportsOf, ts } from "../../../scripts/syntax";
-import { repositoryRoot } from "../workspace";
+import { join, relative } from "node:path";
+import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
+import { exportsOf, ts } from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   barrelModule,
   isPublic,
@@ -8,12 +9,12 @@ import {
   type PrimitiveRule,
   type Rule,
   typesModule,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
-function barrelLine(module: Module): string {
+function barrelLine(barrel: string, module: Module): string {
   const { functions, types } = exportsOf(module.source);
   const names = [...functions, ...types.sort().map((type) => `type ${type}`)];
-  return `export { ${names.join(", ")} } from "./${basename(module.file, ".ts")}";`;
+  return `export { ${names.join(", ")} } from "${subpathSpecifierOf(barrel, module.path)}";`;
 }
 
 function barrelLinesIn(barrel: ts.SourceFile): string[] {
@@ -38,11 +39,12 @@ const barrelOrder: Rule = (library) => {
   const exported = library.modules.filter(({ file }) => isPublic(file) || file === typesModule);
   const barrel = library.modules.find(({ file }) => file === barrelModule);
   const actual = barrel ? barrelLinesIn(barrel.source) : [];
-  const expected = exported.map(barrelLine);
+  const barrelFile = join(library.source, barrelModule);
+  const expected = exported.map((module) => barrelLine(barrelFile, module));
   return actual.join("\n") === expected.join("\n")
     ? []
     : [
-        `${relative(repositoryRoot, join(library.source, barrelModule))}: re-export each public module and its types, then ${typesModule}, sorted by file name, and no internal-* module. Expected:\n${expected.join("\n")}`,
+        `${relative(repositoryRoot, barrelFile)}: re-export each public module and its types, then ${typesModule}, sorted by file name, and no internal-* module. Expected:\n${expected.join("\n")}`,
       ];
 };
 

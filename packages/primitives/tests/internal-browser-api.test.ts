@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { browserMethod, lookUp } from "../src/internal-browser-api";
+import { browserMethod, lookUp } from "#/src/internal-browser-api.ts";
 
 test("lookUp reads a member of an owner, and nothing where the owner or the member is missing", () => {
   const owner = { matchMedia: () => true };

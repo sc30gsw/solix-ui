@@ -1,11 +1,11 @@
-import { access } from "./internal-access";
-import { createElementAttachmentWhen } from "./internal-attachment";
-import { activeElementOf, containsComposed, deepActiveElement } from "./internal-active";
-import { focusFirst, moveFocus } from "./internal-focus";
-import { disposeAll, watchEvents } from "./internal-listener";
-import { isHtmlElement, isNode, isShadowRoot, viewOf } from "./internal-node";
-import { initialFocusCandidates, tabStopCandidates } from "./internal-tabbable";
-import type { MaybeAccessor, RefSetter } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { createElementAttachmentWhen } from "#/src/internal-attachment.ts";
+import { activeElementOf, containsComposed, deepActiveElement } from "#/src/internal-active.ts";
+import { focusFirst, moveFocus } from "#/src/internal-focus.ts";
+import { disposeAll, watchEvents } from "#/src/internal-listener.ts";
+import { isHtmlElement, isNode, isShadowRoot, viewOf } from "#/src/internal-node.ts";
+import { initialFocusCandidates, tabStopCandidates } from "#/src/internal-tabbable.ts";
+import type { MaybeAccessor, RefSetter } from "#/src/types.ts";
 
 const activated = "solix-focus-trap-activated";
 const released = "solix-focus-trap-released";

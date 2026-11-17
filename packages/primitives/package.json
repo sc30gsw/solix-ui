@@ -9,6 +9,9 @@
   ],
   "type": "module",
   "sideEffects": false,
+  "imports": {
+    "#/*": "./*"
+  },
   "exports": {
     ".": {
       "types": "./src/index.ts",

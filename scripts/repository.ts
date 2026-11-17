@@ -1,10 +1,29 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { type Dirent, globSync, readFileSync } from "node:fs";
+import { join, sep } from "node:path";
 
 export const repositoryRoot = join(import.meta.dirname, "..");
 export const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
 export const packageManagerAnswerTimeout = 30_000;
+
+const generatedOrInstalled = new Set(["node_modules", "dist", ".git"]);
+
+export function outsideGeneratedOrInstalled(entry: string | Dirent): boolean {
+  return (typeof entry === "string" ? entry : entry.name)
+    .split(sep)
+    .some((segment) => generatedOrInstalled.has(segment));
+}
+
+export function manifestPaths(root: string = repositoryRoot): string[] {
+  return globSync("**/package.json", { cwd: root, exclude: outsideGeneratedOrInstalled });
+}
+
+export function scriptFilesIn(root: string = repositoryRoot): string[] {
+  return globSync("**/*.{ts,tsx,mjs,cjs,js}", {
+    cwd: root,
+    exclude: outsideGeneratedOrInstalled,
+  });
+}
 
 export type Installed = { name: string; version: string };
 

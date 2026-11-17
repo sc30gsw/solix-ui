@@ -8,8 +8,8 @@ import {
   matchesHotkey,
   parseHotkey,
   runHotkeys,
-} from "../src/internal-hotkey";
-import type { HotkeyItem } from "../src/types";
+} from "#/src/internal-hotkey.ts";
+import type { HotkeyItem } from "#/src/types.ts";
 
 type Modifiers = { alt: boolean; ctrl: boolean; meta: boolean; shift: boolean };
 type Key = { names: readonly string[]; key: string; code: string };

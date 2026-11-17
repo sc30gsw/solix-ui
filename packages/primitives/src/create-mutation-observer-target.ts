@@ -1,8 +1,8 @@
-import { access } from "./internal-access";
-import { createAttachment } from "./internal-attachment";
-import { createBrowserMemo } from "./internal-browser-value";
-import { observe } from "./internal-dom-observer";
-import type { MaybeAccessor } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { createAttachment } from "#/src/internal-attachment.ts";
+import { createBrowserMemo } from "#/src/internal-browser-value.ts";
+import { observe } from "#/src/internal-dom-observer.ts";
+import type { MaybeAccessor } from "#/src/types.ts";
 
 /**
  * Calls `callback` with the mutations of `target` that `options` asks for, as

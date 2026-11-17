@@ -1,4 +1,4 @@
-import { descendants, findAncestor, parameterAliases, ts } from "../../../scripts/syntax";
+import { descendants, findAncestor, parameterAliases, ts } from "#/scripts/syntax.ts";
 import {
   at,
   browserOnlyRoles,
@@ -9,7 +9,7 @@ import {
   type PrimitiveRule,
   publicModules,
   type Rule,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const optionReader = { file: "internal-access.ts", name: "access" };
 const configRole = "LiveConfig";

@@ -13,8 +13,12 @@ import {
   openPage,
   type OpenPage,
   scriptModes,
-} from "./support/playground";
-import { pageStyleRules, type PageStyleRule, stylesAddedToThePage } from "./support/page-styles";
+} from "#/tests/support/playground.ts";
+import {
+  pageStyleRules,
+  type PageStyleRule,
+  stylesAddedToThePage,
+} from "#/tests/support/page-styles.ts";
 import {
   controlled,
   elementsNamedBy,
@@ -25,7 +29,7 @@ import {
   tabList,
   tabNamed,
   tabNames,
-} from "./support/tabs";
+} from "#/tests/support/tabs.ts";
 
 const url = inject("playgroundUrl");
 const { inbox, drafts, locked } = tabNames.controlled;

@@ -1,5 +1,5 @@
 import semver from "semver";
-import { listed } from "./repository.ts";
+import { listed } from "#/scripts/repository.ts";
 
 export const heldBackFile = "scripts/held-back-releases.json";
 export const packageManagerPinName = "packageManager";

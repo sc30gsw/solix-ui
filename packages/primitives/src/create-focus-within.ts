@@ -1,8 +1,8 @@
-import { createElementValue } from "./internal-browser-value";
-import { observe } from "./internal-dom-observer";
-import { disposeAll, watchEvents } from "./internal-listener";
-import { isNode, isShadowRoot } from "./internal-node";
-import type { BrowserValue, RefSetter } from "./types";
+import { createElementValue } from "#/src/internal-browser-value.ts";
+import { observe } from "#/src/internal-dom-observer.ts";
+import { disposeAll, watchEvents } from "#/src/internal-listener.ts";
+import { isNode, isShadowRoot } from "#/src/internal-node.ts";
+import type { BrowserValue, RefSetter } from "#/src/types.ts";
 
 /**
  * What to call when focus enters the element or leaves it. Each is read when it is called.

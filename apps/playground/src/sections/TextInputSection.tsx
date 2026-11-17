@@ -1,5 +1,5 @@
 import { TextInput } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 export function TextInputSection() {
   return (

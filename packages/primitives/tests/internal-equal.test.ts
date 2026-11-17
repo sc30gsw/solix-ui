@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { sameValue, sameItems, sameKeys } from "../src/internal-equal";
+import { sameValue, sameItems, sameKeys } from "#/src/internal-equal.ts";
 
 test("sameItems compares two lists item by item with Object.is", () => {
   const shared = {};

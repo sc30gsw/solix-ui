@@ -1,4 +1,4 @@
-import { descendants, ts } from "../../../scripts/syntax";
+import { descendants, ts } from "#/scripts/syntax.ts";
 import {
   at,
   browserTestSuffixes,
@@ -11,7 +11,7 @@ import {
   reaches,
   type Rule,
   testNamed,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const valueHelper = { file: "internal-value.ts", name: "createValue" };
 const scrollFold = { file: "internal-scroll.ts", name: "createScrollFold" };

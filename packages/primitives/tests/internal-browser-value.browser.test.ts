@@ -8,9 +8,15 @@ import {
   mapBrowserValue,
   readOn,
   type Subscription,
-} from "../src/internal-browser-value";
-import { flush, mount, reportAfterDispose, unmount, watch } from "./support/browser-harness";
-import { box, nextTask } from "./support/dom";
+} from "#/src/internal-browser-value.ts";
+import {
+  flush,
+  mount,
+  reportAfterDispose,
+  unmount,
+  watch,
+} from "#/tests/support/browser-harness.ts";
+import { box, nextTask } from "#/tests/support/dom.ts";
 
 const ping = "solix-ping";
 

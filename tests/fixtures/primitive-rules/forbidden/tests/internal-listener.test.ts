@@ -1,1 +1,1 @@
-import "../src/internal-listener";
+import "#/tests/fixtures/primitive-rules/forbidden/src/internal-listener.ts";

@@ -1,6 +1,6 @@
-import { createIntersection } from "./create-intersection";
-import { mapBrowserValue } from "./internal-browser-value";
-import type { BrowserValue, RefSetter } from "./types";
+import { createIntersection } from "#/src/create-intersection.ts";
+import { mapBrowserValue } from "#/src/internal-browser-value.ts";
+import type { BrowserValue, RefSetter } from "#/src/types.ts";
 
 /** The ref to put on the element, and whether any of it is in the viewport. */
 export type InViewportReturn<E extends Element> = {

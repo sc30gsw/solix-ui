@@ -1,5 +1,5 @@
-import { lookUp } from "./internal-browser-api";
-import { viewOf } from "./internal-node";
+import { lookUp } from "#/src/internal-browser-api.ts";
+import { viewOf } from "#/src/internal-node.ts";
 
 export const observerNames = Object.freeze([
   "IntersectionObserver",

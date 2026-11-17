@@ -1,4 +1,4 @@
-import type * as Primitives from "../src/index";
+import type * as Primitives from "#/src/index.ts";
 
 type Library = typeof Primitives;
 

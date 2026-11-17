@@ -1,6 +1,6 @@
-import { lookUp } from "./internal-browser-api";
-import { createBrowserValue, readOn } from "./internal-browser-value";
-import type { BrowserValue } from "./types";
+import { lookUp } from "#/src/internal-browser-api.ts";
+import { createBrowserValue, readOn } from "#/src/internal-browser-value.ts";
+import type { BrowserValue } from "#/src/types.ts";
 
 /**
  * Whether the document is visible, `document.visibilityState`, read again on every

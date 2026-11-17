@@ -6,7 +6,7 @@ import {
   symbolOf,
   ts,
   unwrapped,
-} from "../../../scripts/syntax";
+} from "#/scripts/syntax.ts";
 import {
   at,
   type Library,
@@ -14,7 +14,7 @@ import {
   type PrimitiveRule,
   publicModules,
   type Rule,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 type ModuleLevelFunction = ts.FunctionDeclaration | ts.ArrowFunction | ts.FunctionExpression;
 

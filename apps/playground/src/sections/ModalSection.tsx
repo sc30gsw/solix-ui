@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import { Button, Modal, TextInput } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 export function ModalSection() {
   const [modalOpened, setModalOpened] = createSignal(false);

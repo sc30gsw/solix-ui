@@ -1,8 +1,8 @@
-import { type Dirent, globSync } from "node:fs";
-import { dirname, join, sep } from "node:path";
-import { manifestAt, repositoryRoot } from "../../scripts/repository";
+import { globSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { manifestAt, manifestPaths, repositoryRoot, scriptFilesIn } from "#/scripts/repository.ts";
 
-export { workspaceFile } from "../../scripts/pnpm-settings";
+export { workspaceFile } from "#/scripts/pnpm-settings.ts";
 export {
   type ExportTarget,
   type Installed,
@@ -10,26 +10,19 @@ export {
   installedVersions,
   installedVp,
   listed,
+  outsideGeneratedOrInstalled,
   packageManagerAnswerTimeout,
   repositoryRoot,
   rootManifest,
-} from "../../scripts/repository";
+} from "#/scripts/repository.ts";
 
 export const primitivesDirectory = join(repositoryRoot, "packages/primitives");
 
-const generatedOrInstalled = new Set(["node_modules", "dist", ".git"]);
 const peerDependencyThatMarksALibrary = "solid-js";
 
-export function outsideGeneratedOrInstalled(entry: string | Dirent): boolean {
-  return (typeof entry === "string" ? entry : entry.name)
-    .split(sep)
-    .some((segment) => generatedOrInstalled.has(segment));
-}
+export const scriptFiles = scriptFilesIn();
 
-export const packages = globSync("**/package.json", {
-  cwd: repositoryRoot,
-  exclude: outsideGeneratedOrInstalled,
-}).map((path) => ({
+export const packages = manifestPaths().map((path) => ({
   path,
   directory: join(repositoryRoot, dirname(path)),
   manifest: manifestAt(path),
@@ -56,10 +49,5 @@ export const componentLibraries = libraryPackages.filter(
 export const libraryNames = libraryPackages.flatMap(({ manifest }) =>
   manifest.name === undefined ? [] : [manifest.name],
 );
-
-export const scriptFiles = globSync("**/*.{ts,tsx,mjs,cjs,js}", {
-  cwd: repositoryRoot,
-  exclude: outsideGeneratedOrInstalled,
-});
 
 export const workflowFiles = globSync(".github/workflows/*.{yml,yaml}", { cwd: repositoryRoot });

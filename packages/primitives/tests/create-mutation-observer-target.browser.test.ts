@@ -1,9 +1,9 @@
 import { createSignal } from "solid-js";
 import { afterEach, expect, test } from "vite-plus/test";
-import { createMutationObserverTarget } from "../src/index";
-import { flush, mount, unmount } from "./support/browser-harness";
-import { box, nextTask } from "./support/dom";
-import { withoutGlobal } from "./support/replace";
+import { createMutationObserverTarget } from "#/src/index.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
+import { box, nextTask } from "#/tests/support/dom.ts";
+import { withoutGlobal } from "#/tests/support/replace.ts";
 
 const marker = "data-solix-observed";
 
