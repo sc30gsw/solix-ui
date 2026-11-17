@@ -396,7 +396,7 @@ const journeys = {
   grid: async ({ page, observe, shot, expected }) => {
     const section = page.getByRole("region", { name: "Grid", exact: true });
     const column = (text) => page.getByText(text, { exact: true });
-    const boxOf = (element) => element.evaluate((node) => { const { left, top, width } = node.getBoundingClientRect(); return { left, top, width }; });
+    const boxOf = (element) => element.evaluate((node) => { const { left, top, bottom, width } = node.getBoundingClientRect(); return { left, top, bottom, width }; });
     const spanWidth = async (element, span, columns) => {
       const inner = element.locator("xpath=..");
       const { width } = await boxOf(inner);
@@ -421,8 +421,7 @@ const journeys = {
     observe("Auto column grows into the rest of its row", await style(column("Auto column"), "flex-grow"), "1");
     observe("with grow, two columns of 6 out of 24 each fill half the row", near((await boxOf(column("Grows to half"))).width, await spanWidth(column("Grows to half"), 12, 24)), true);
     observe("justify and overflow reach the grid", `${await style(column("Grows to half").locator("xpath=.."), "justify-content")} ${await style(column("Grows to half").locator("xpath=../.."), "overflow")}`, "center hidden");
-    const extentOf = (element) => element.evaluate((node) => { const { top, bottom } = node.getBoundingClientRect(); return { top, bottom }; });
-    const [tall, short] = [await extentOf(column("Grows to half")), await extentOf(column("Grows to the other half"))];
+    const [tall, short] = [await boxOf(column("Grows to half")), await boxOf(column("Grows to the other half"))];
     observe("align flex-end puts the shorter column level with the bottom of the taller one", near(short.bottom, tall.bottom) && short.top > tall.top + 1, true);
     observe("in a 480 pixel container, past 20em, a column spans 6 of 12", near((await boxOf(column("Half of a wide container"))).width, await spanWidth(column("Half of a wide container"), 6, 12)), true);
     observe("in a 240 pixel container, short of 20em, a column spans 12 of 12", near((await boxOf(column("All of a narrow container"))).width, await spanWidth(column("All of a narrow container"), 12, 12)), true);

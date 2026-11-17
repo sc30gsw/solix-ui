@@ -310,16 +310,15 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
       );
       expect(await computed(content, "flex-basis")).toBe("auto");
       expect(await computed(column("Auto column"), "flex-grow")).toBe("1");
-      const grows = await Promise.all([
+      const [tall, short] = await Promise.all([
         boxOf(column("Grows to half")),
         boxOf(column("Grows to the other half")),
       ]);
       expect(
-        near(grows[0].width, grows[1].width) &&
-          near(grows[0].width, await spanWidth(column("Grows to half"), 12, 24)),
+        near(tall.width, short.width) &&
+          near(tall.width, await spanWidth(column("Grows to half"), 12, 24)),
         "with grow, two columns of 6 out of 24 fill the row",
       ).toBe(true);
-      const [tall, short] = grows;
       expect(
         near(short.bottom, tall.bottom) && short.top > tall.top + 1,
         "align flex-end puts the shorter column level with the bottom of the taller one",
