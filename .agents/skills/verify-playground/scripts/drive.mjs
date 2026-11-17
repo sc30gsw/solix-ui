@@ -654,6 +654,7 @@ const observe = (what, actual, expected) => observations.push({ what, actual, ex
 const browser = await browserType(engine).launch();
 const browserVersion = browser.version();
 const recorded = await browser.newContext({
+  bypassCSP: true,
   viewport: { width: 640, height: 360 },
   recordVideo: { dir: directory, size: { width: 640, height: 360 } },
 });

@@ -23,6 +23,7 @@ Preconditions:
 
 ## Gotchas
 
+- `drive.mjs` opens its recorded page with Playwright's `bypassCSP`, because in WebKit Playwright appends a `<style>` of its own before every screenshot, which the page's policy refuses and the console reports. The observations here read each element's `nonce`, which the bypass leaves alone; whether the engine accepts each style is what `style-nonce.test.ts` checks, under the policy and with no screenshot.
 - The journey reads the page's nonce from the `nonce` of a `<script>`, because the browser hides the `nonce` attribute of an element once the page has a policy from a header, and an element's `nonce` property still gives it.
 - The theme's style sits in the library's cascade layer, so the token sentinels that the tests write on `:root` outside any layer still win there; the selector here names an element, whose own declaration wins over a value it would inherit.
 - `apps/playground/tests/style-nonce.test.ts` checks the nonce in the server's markup, and in every engine with scripts off, hydrated, and hydrated from a page whose head lost the `csp-nonce` meta, where the library writes the meta that UI SDK reads its nonce from.
