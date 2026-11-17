@@ -1,13 +1,13 @@
 import { createUncontrolled } from "@solix/primitives";
 import * as stylex from "@stylexjs/stylex";
-import { createBehaviour, tabs } from "./headless";
-import { createParts, type ElementProps } from "./parts";
-import { stepOverDisabled } from "./step-over-disabled";
-import { TabsContext, type TabsOrientation } from "./tabs-context";
-import { TabsList } from "./TabsList";
-import { TabsPanel } from "./TabsPanel";
-import { TabsTab } from "./TabsTab";
-import { tokens } from "./tokens.stylex";
+import { createBehaviour, tabs } from "#/src/headless.ts";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import { stepOverDisabled } from "#/src/step-over-disabled.ts";
+import { TabsContext, type TabsOrientation } from "#/src/tabs-context.ts";
+import { TabsList } from "#/src/TabsList.tsx";
+import { TabsPanel } from "#/src/TabsPanel.tsx";
+import { TabsTab } from "#/src/TabsTab.tsx";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const tab = '[role="tab"]';
 

@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import { expect, test, vi } from "vite-plus/test";
-import { createClickOutside } from "../src/index";
-import { flush, mount, mountOn, record, unmount } from "./support/browser-harness";
-import { box, pointer, press } from "./support/dom";
+import { createClickOutside } from "#/src/index.ts";
+import { flush, mount, mountOn, record, unmount } from "#/tests/support/browser-harness.ts";
+import { box, pointer, press } from "#/tests/support/dom.ts";
 
 function region(label: string) {
   const inside = box(label);

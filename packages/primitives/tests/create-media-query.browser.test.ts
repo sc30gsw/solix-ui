@@ -1,10 +1,10 @@
 import { createSignal } from "solid-js";
 import { afterEach, expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
-import { createMediaQuery } from "../src/index";
-import { flush, mount, record, unmount } from "./support/browser-harness";
-import { engineWait, witnessed } from "./support/dom";
-import { replaced } from "./support/replace";
+import { createMediaQuery } from "#/src/index.ts";
+import { flush, mount, record, unmount } from "#/tests/support/browser-harness.ts";
+import { engineWait, witnessed } from "#/tests/support/dom.ts";
+import { replaced } from "#/tests/support/replace.ts";
 
 const viewport = { width: 414, height: 896 };
 

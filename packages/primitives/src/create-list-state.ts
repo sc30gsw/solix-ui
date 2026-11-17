@@ -1,8 +1,8 @@
 import type { Accessor } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { sameItems } from "./internal-equal";
-import { createValue } from "./internal-value";
-import type { ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { sameItems } from "#/src/internal-equal.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { ReadOnce } from "#/src/types.ts";
 
 /** Two positions in the list, for `reorder` and `swap`. */
 export type ListMove = { from: number; to: number };

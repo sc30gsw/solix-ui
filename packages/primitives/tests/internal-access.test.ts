@@ -1,6 +1,6 @@
 import { createRoot, createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { access, accessUntracked } from "../src/internal-access";
+import { access, accessUntracked } from "#/src/internal-access.ts";
 
 test("access gives a value as it is and calls an accessor", () => {
   expect([access(1), access(() => 2)]).toEqual([1, 2]);

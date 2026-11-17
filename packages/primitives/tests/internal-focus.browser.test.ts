@@ -1,8 +1,8 @@
 import { expect, test } from "vite-plus/test";
-import { activeElementOf, containsComposed, deepActiveElement } from "../src/internal-active";
-import { focusFirst, isFocusTarget, moveFocus } from "../src/internal-focus";
-import "./support/browser-harness";
-import { attached, button, html } from "./support/dom";
+import { activeElementOf, containsComposed, deepActiveElement } from "#/src/internal-active.ts";
+import { focusFirst, isFocusTarget, moveFocus } from "#/src/internal-focus.ts";
+import "#/tests/support/browser-harness.ts";
+import { attached, button, html } from "#/tests/support/dom.ts";
 
 test("moveFocus focuses an element and confirms it holds focus, and an element that does not take it is not confirmed", () => {
   const region = html(

@@ -1,9 +1,9 @@
 import fc from "fast-check";
 import { createSignal } from "solid-js";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { createHeadroom, type HeadroomOptions, type HeadroomReturn } from "../src/index";
-import { flush, mount, unmount } from "./support/browser-harness";
-import { applied, onScrollGrid, type ScrollStub, stubbedScroll } from "./support/scroll";
+import { createHeadroom, type HeadroomOptions, type HeadroomReturn } from "#/src/index.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
+import { applied, onScrollGrid, type ScrollStub, stubbedScroll } from "#/tests/support/scroll.ts";
 
 afterEach(() => {
   vi.useRealTimers();

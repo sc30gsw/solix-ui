@@ -1,5 +1,5 @@
 import type { Accessor } from "solid-js";
-import { createBrowserValue } from "../../src/internal-browser-value";
+import { createBrowserValue } from "#/src/internal-browser-value.ts";
 
 export function createLeakySubscription(): Accessor<boolean> {
   return createBrowserValue(

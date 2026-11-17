@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
-import { createParts, type ElementProps } from "./parts";
-import { useTabs } from "./tabs-context";
-import { tokens } from "./tokens.stylex";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import { useTabs } from "#/src/tabs-context.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   root: {

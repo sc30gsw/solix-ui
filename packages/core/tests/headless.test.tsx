@@ -3,10 +3,10 @@ import { createComponent, type JSX, renderToString } from "@solidjs/web";
 import type { CompiledStyles } from "@stylexjs/stylex";
 import fc from "fast-check";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import type * as Headless from "../src/headless";
-import type * as Parts from "../src/parts";
-import { dist } from "./built-library";
-import { classesOf, declarationsIn, elementsOf, valuesOf } from "./markup";
+import type * as Headless from "#/src/headless.ts";
+import type * as Parts from "#/src/parts.ts";
+import { dist } from "#/tests/built-library.ts";
+import { classesOf, declarationsIn, elementsOf, valuesOf } from "#/tests/markup.ts";
 
 const { bindSlot, createBehaviour, tabs } = (await import(
   join(dist, "headless.js")

@@ -1,7 +1,12 @@
 import type { Browser, Locator } from "playwright";
 import { afterAll, beforeAll, describe } from "vite-plus/test";
-import { browserType, enginesToVerify } from "../../scripts/browser-engines.mjs";
-import { localUrl, type RunningServer, type ServedApp, startServer } from "./server-process";
+import { browserType, enginesToVerify } from "#/scripts/browser-engines.mjs";
+import {
+  localUrl,
+  type RunningServer,
+  type ServedApp,
+  startServer,
+} from "#/tests/support/server-process.ts";
 
 export function serveApp(app: ServedApp): string {
   let running: RunningServer | undefined;

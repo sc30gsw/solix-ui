@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
-import { initialFocusCandidates, tabStopCandidates } from "../src/internal-tabbable";
-import "./support/browser-harness";
-import { html } from "./support/dom";
+import { initialFocusCandidates, tabStopCandidates } from "#/src/internal-tabbable.ts";
+import "#/tests/support/browser-harness.ts";
+import { html } from "#/tests/support/dom.ts";
 
 function ids(elements: readonly Element[]): string[] {
   return elements.map((element) => element.id);

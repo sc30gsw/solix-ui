@@ -1,4 +1,4 @@
-import { isDocument, isShadowRoot } from "./internal-node";
+import { isDocument, isShadowRoot } from "#/src/internal-node.ts";
 
 export type ActivePath = { element: Element | null; roots: ShadowRoot[] };
 

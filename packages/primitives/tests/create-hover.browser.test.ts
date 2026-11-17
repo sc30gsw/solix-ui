@@ -1,8 +1,8 @@
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
-import { createHover } from "../src/index";
-import { flush, mount, record } from "./support/browser-harness";
-import { box, engineWait, witnessed } from "./support/dom";
+import { createHover } from "#/src/index.ts";
+import { flush, mount, record } from "#/tests/support/browser-harness.ts";
+import { box, engineWait, witnessed } from "#/tests/support/dom.ts";
 
 test("it is false until the pointer enters the element, true while it is over it, and false once it leaves", async () => {
   const { ref, hovered } = mount(() => createHover<HTMLElement>());

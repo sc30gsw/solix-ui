@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { parse as parseYaml } from "yaml";
-import type { RegistryDocument, ReleasePolicy } from "../scripts/newest-releases";
-import { repositoryRoot } from "../scripts/repository";
+import type { RegistryDocument, ReleasePolicy } from "#/scripts/newest-releases.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
 import {
   evaluateRevisits,
   parseRevisits,
@@ -11,8 +11,8 @@ import {
   type Revisit,
   revisitTable,
   revisitsWithoutReasonOrCondition,
-} from "../scripts/revisits";
-import { roadmapFile } from "../scripts/roadmap";
+} from "#/scripts/revisits.ts";
+import { roadmapFile } from "#/scripts/roadmap.ts";
 
 const fixtureFile = "tests/fixtures/registry/2026-11-16.json";
 const weeklyWorkflow = ".github/workflows/newest-releases.yml";

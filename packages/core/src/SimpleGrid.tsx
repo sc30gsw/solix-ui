@@ -1,13 +1,13 @@
 import * as stylex from "@stylexjs/stylex";
 import { createUniqueId, Show } from "solid-js";
-import { createParts, type ElementProps } from "./parts";
+import { createParts, type ElementProps } from "#/src/parts.ts";
 import {
   type ContainerVariableProp,
   containerKeysOf,
   createQueryContainer,
   type VariableProp,
-} from "./style-props";
-import { tokens } from "./tokens.stylex";
+} from "#/src/style-props.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   container: {

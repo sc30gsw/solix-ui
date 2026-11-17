@@ -1,8 +1,8 @@
-import { access } from "../../../../../packages/primitives/src/internal-access";
-import { createBrowserValue } from "../../../../../packages/primitives/src/internal-browser-value";
-import { lookUp } from "../../../../../packages/primitives/src/internal-browser-api";
-import { observe } from "../../../../../packages/primitives/src/internal-dom-observer";
-import type { BrowserValue, MaybeAccessor } from "../../../../../packages/primitives/src/types";
+import { access } from "#/packages/primitives/src/internal-access.ts";
+import { createBrowserValue } from "#/packages/primitives/src/internal-browser-value.ts";
+import { lookUp } from "#/packages/primitives/src/internal-browser-api.ts";
+import { observe } from "#/packages/primitives/src/internal-dom-observer.ts";
+import type { BrowserValue, MaybeAccessor } from "#/packages/primitives/src/types.ts";
 
 function matches(text: string): number {
   const { scrollY } = window;

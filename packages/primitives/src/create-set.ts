@@ -1,7 +1,7 @@
 import type { Accessor } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { createValue } from "./internal-value";
-import type { ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { ReadOnce } from "#/src/types.ts";
 
 /**
  * A `Set` whose `add`, `delete` and `clear` update it. Read it through the accessor,

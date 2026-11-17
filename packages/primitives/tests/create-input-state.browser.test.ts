@@ -2,10 +2,10 @@ import fc from "fast-check";
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
-import { createInputState, type InputChange } from "../src/index";
-import { flush, mount, unmount, watch } from "./support/browser-harness";
-import { attached } from "./support/dom";
-import { command, flushCommand, type Tick } from "./support/model";
+import { createInputState, type InputChange } from "#/src/index.ts";
+import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
+import { attached } from "#/tests/support/dom.ts";
+import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
 
 function listened<E extends HTMLElement>(
   element: E,

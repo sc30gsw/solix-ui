@@ -1,5 +1,5 @@
-import type * as Primitives from "../src/index";
-import type { BrowserValuePrimitive } from "./primitive-kinds";
+import type * as Primitives from "#/src/index.ts";
+import type { BrowserValuePrimitive } from "#/fixtures/primitive-kinds.ts";
 
 type Library = typeof Primitives;
 

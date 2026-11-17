@@ -5,9 +5,9 @@ import {
   createUncontrolled,
   type UncontrolledOptions,
   type UncontrolledReturn,
-} from "../src/index";
-import { flush, mount, unmount } from "./support/browser-harness";
-import { command, flushCommand, type Tick } from "./support/model";
+} from "#/src/index.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
+import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
 
 type Call = [value: string, payload: number];
 

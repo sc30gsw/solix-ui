@@ -9,9 +9,9 @@ import {
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
   libraryStylesheet,
-} from "../build-pipeline.mjs";
-import { libraryLayers, stylePropRules } from "../src/style-prop-table";
-import { layersAroundDeclaration, nestedLayerOrder } from "./cascade-layers";
+} from "#/build-pipeline.mjs";
+import { libraryLayers, stylePropRules } from "#/src/style-prop-table.ts";
+import { layersAroundDeclaration, nestedLayerOrder } from "#/tests/cascade-layers.ts";
 
 const packageRoot = join(import.meta.dirname, "..");
 const generatedRuns = 300;
@@ -140,7 +140,7 @@ function sourceFor(definitions: Definition[]): string {
     }
     return `namespace${index}: { ${body.join(", ")} }`;
   });
-  return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "./disclosure-state.stylex";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
+  return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "#/src/disclosure-state.stylex.ts";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
 }
 
 test("for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its container queries and then the hidden layer last, and nothing important in the library's layer", async () => {

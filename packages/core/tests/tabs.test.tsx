@@ -1,8 +1,8 @@
 import { createComponent, renderToString } from "@solidjs/web";
 import fc from "fast-check";
 import { expect, test } from "vite-plus/test";
-import { library } from "./built-library";
-import { elementsOf, valuesOf } from "./markup";
+import { library } from "#/tests/built-library.ts";
+import { elementsOf, valuesOf } from "#/tests/markup.ts";
 
 const generatedRuns = 200;
 const value = fc.stringMatching(/^[a-z]{1,6}$/);

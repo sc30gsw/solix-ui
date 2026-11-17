@@ -1,7 +1,7 @@
 import { render } from "@solidjs/web";
 import { Box, Button, Tabs, TextInput } from "@solix/core";
 import { createSignal, For, Show } from "solid-js";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 import {
   controlled as controlledList,
   displayedByTheApp,
@@ -12,7 +12,7 @@ import {
   tabNames,
   tabsSetups,
   valueOf,
-} from "./tabs-setups";
+} from "#/src/sections/tabs-setups.ts";
 
 const { inbox, drafts, locked } = tabNames.controlled;
 const { kept, asked, styled, classed } = tabNames.held;

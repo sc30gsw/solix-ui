@@ -1,5 +1,5 @@
 import type fc from "fast-check";
-import { flush } from "./browser-harness";
+import { flush } from "#/tests/support/browser-harness.ts";
 
 export type Tick<S> = { staged: S; committed: S };
 

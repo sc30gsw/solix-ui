@@ -31,8 +31,8 @@ import {
   visibilityClass,
   type VisibilityPropName,
   visibilityPropNames,
-} from "./style-prop-table";
-import { tokens } from "./tokens.stylex";
+} from "#/src/style-prop-table.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const pixelsPerRem = 16;
 const characterThatEndsADeclaration = /[;{}]/;

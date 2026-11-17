@@ -9,8 +9,8 @@ import {
 import { usePrimitive } from "@ui-sdk/solid/primitive";
 import type { JSX } from "@solidjs/web";
 import { merge, omit, untrack } from "solid-js";
-import { rootPart } from "./parts";
-import { withConsumerStyle } from "./style-props";
+import { rootPart } from "#/src/parts.ts";
+import { withConsumerStyle } from "#/src/style-props.ts";
 
 export { tabs } from "@ui-sdk/core/tabs";
 

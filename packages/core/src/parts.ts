@@ -1,14 +1,14 @@
 import * as stylex from "@stylexjs/stylex";
 import { createMemo, merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
-import { stableClass } from "./stable-class";
+import { stableClass } from "#/src/stable-class.ts";
 import {
   hasChildRules,
   isVariableGroup,
   stylePropKeys,
   type VariableGroup,
   type VariablesOf,
-} from "./style-prop-table";
+} from "#/src/style-prop-table.ts";
 import {
   presentStyle,
   type QueryContainer,
@@ -18,7 +18,7 @@ import {
   type StyleProps,
   type VariableValue,
   withConsumerStyle,
-} from "./style-props";
+} from "#/src/style-props.ts";
 
 export const rootPart = "root";
 

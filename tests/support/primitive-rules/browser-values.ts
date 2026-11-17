@@ -1,4 +1,4 @@
-import { assertedType, returnsAlias } from "../../../scripts/syntax";
+import { assertedType, returnsAlias } from "#/scripts/syntax.ts";
 import {
   at,
   exportedFunction,
@@ -8,7 +8,7 @@ import {
   publicModules,
   reaches,
   type Rule,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const browserValueType = "BrowserValue";
 const brandHome = { file: "internal-browser-value.ts", fn: "branded" };

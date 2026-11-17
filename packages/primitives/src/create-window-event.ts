@@ -1,7 +1,7 @@
-import { access } from "./internal-access";
-import { createAttachment } from "./internal-attachment";
-import { type EventOf, listenAsAsked, listenerSettings } from "./internal-listener";
-import type { ListenerOptions, MaybeAccessor } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { createAttachment } from "#/src/internal-attachment.ts";
+import { type EventOf, listenAsAsked, listenerSettings } from "#/src/internal-listener.ts";
+import type { ListenerOptions, MaybeAccessor } from "#/src/types.ts";
 
 /**
  * Listens to `type` on `window` while its owner lives. The listener is added once the owner's

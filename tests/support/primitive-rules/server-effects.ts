@@ -1,5 +1,5 @@
-import { declarationsOf, isInTypePosition, stringsIn, ts } from "../../../scripts/syntax";
-import { forbidOutside, isFromSolid } from "./library";
+import { declarationsOf, isInTypePosition, stringsIn, ts } from "#/scripts/syntax.ts";
+import { forbidOutside, isFromSolid } from "#/tests/support/primitive-rules/library.ts";
 
 const effectsAPrimitiveAvoids = ["createRenderEffect", "createTrackedEffect"];
 

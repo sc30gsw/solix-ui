@@ -8,7 +8,7 @@ import {
   rewriteCatalog,
   settingsFrom,
   workspaceFile,
-} from "../scripts/pnpm-settings";
+} from "#/scripts/pnpm-settings.ts";
 
 const catalogOnly = ["catalog:", '  "@solidjs/web": 2.0.0-rc.21', "  solid-js: 2.0.0-rc.21", ""];
 const agePolicy = ["minimumReleaseAge: 99", "minimumReleaseAgeStrict: true", ""];

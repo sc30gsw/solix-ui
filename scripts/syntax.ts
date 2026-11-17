@@ -1,4 +1,4 @@
-export * as ts from "./syntax/ast.ts";
+export * as ts from "#/scripts/syntax/ast.ts";
 export {
   assertedType,
   calledDeclaration,
@@ -21,17 +21,19 @@ export {
   type AssertedType,
   type ClassRef,
   type Reach,
-} from "./syntax/checker.ts";
+} from "#/scripts/syntax/checker.ts";
 export {
   openProgram,
   parse,
   parseAll,
   parseText,
   parseWithoutLibrariesOrImports,
+  rereadFiles,
   sharedSettings,
+  typeCheckedWithScripts,
   stringLiteralTypesOf,
   type Program,
-} from "./syntax/program.ts";
+} from "#/scripts/syntax/program.ts";
 export {
   commentsIn,
   descendants,
@@ -41,6 +43,7 @@ export {
   findAncestor,
   firstLine,
   importsOf,
+  moduleSpecifierOf,
   isAsConst,
   isCallTo,
   isExported,
@@ -57,4 +60,4 @@ export {
   type Exports,
   type Import,
   type ImportedName,
-} from "./syntax/walk.ts";
+} from "#/scripts/syntax/walk.ts";

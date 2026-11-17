@@ -1,5 +1,5 @@
-import type { Focusable } from "./internal-focus";
-import { isHtmlElement, isHtmlOrSvgElement, isInputOfType } from "./internal-node";
+import type { Focusable } from "#/src/internal-focus.ts";
+import { isHtmlElement, isHtmlOrSvgElement, isInputOfType } from "#/src/internal-node.ts";
 
 const autofocus = "[data-autofocus]";
 const inert = "[inert]";

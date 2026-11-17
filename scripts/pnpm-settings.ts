@@ -3,7 +3,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { installedVp, listed, packageManagerAnswerTimeout, repositoryRoot } from "./repository.ts";
+import {
+  installedVp,
+  listed,
+  packageManagerAnswerTimeout,
+  repositoryRoot,
+} from "#/scripts/repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
 

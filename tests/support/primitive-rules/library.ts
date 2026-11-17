@@ -17,8 +17,8 @@ import {
   type Program,
   reachedFrom,
   ts,
-} from "../../../scripts/syntax";
-import { repositoryRoot } from "../workspace";
+} from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 export const kebabCaseModule = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts$/;
 export const typesModule = "types.ts";

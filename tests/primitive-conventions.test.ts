@@ -1,14 +1,15 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, relative } from "node:path";
 import { afterAll, expect, test } from "vite-plus/test";
 import {
   loadLibrary,
   primitiveRules,
   type PrimitiveRuleName,
   publicModules,
-} from "./support/primitive-rules/index";
-import { importsOf, isTypeOnlyImport, parse, ts } from "../scripts/syntax";
-import { primitivesPackage, repositoryRoot } from "./support/workspace";
+} from "#/tests/support/primitive-rules/index.ts";
+import { fileNamedBy, namesAPackage } from "#/scripts/subpath.ts";
+import { importsOf, isTypeOnlyImport, parse, ts } from "#/scripts/syntax.ts";
+import { primitivesPackage, repositoryRoot } from "#/tests/support/workspace.ts";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
 const viteConfig = "vite.config.ts";
@@ -282,13 +283,12 @@ function bareImportsReachedFrom(entries: readonly string[]): string[] {
     const source = parse(file);
     for (const { specifier, node } of importsOf(source)) {
       if (isTypeOnlyImport(node.importClause)) continue;
-      if (!specifier.startsWith(".")) {
-        bare.add(specifier);
-        continue;
+      const target = fileNamedBy(file, specifier);
+      if (namesAPackage(specifier)) bare.add(specifier);
+      else {
+        const found = target && [target, `${target}.ts`, `${target}.tsx`].find(existsSync);
+        if (found) queue.push(found);
       }
-      const target = resolve(dirname(file), specifier);
-      const found = [`${target}.ts`, `${target}.tsx`].find((candidate) => existsSync(candidate));
-      if (found) queue.push(found);
     }
   }
   return [...bare].sort();

@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "vite-plus/test";
-import { createDocumentVisibility } from "../src/index";
-import { mount, unmount } from "./support/browser-harness";
-import { nextTask } from "./support/dom";
-import { replaced } from "./support/replace";
+import { createDocumentVisibility } from "#/src/index.ts";
+import { mount, unmount } from "#/tests/support/browser-harness.ts";
+import { nextTask } from "#/tests/support/dom.ts";
+import { replaced } from "#/tests/support/replace.ts";
 
 const restores: (() => void)[] = [];
 

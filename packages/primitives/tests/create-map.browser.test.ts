@@ -1,9 +1,9 @@
 import fc from "fast-check";
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { createMap } from "../src/index";
-import { flush, mount, unmount, watch } from "./support/browser-harness";
-import { command, flushCommand, type Tick } from "./support/model";
+import { createMap } from "#/src/index.ts";
+import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
+import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
 
 function mapOf(entries?: [string, number][]) {
   return mount(() => {

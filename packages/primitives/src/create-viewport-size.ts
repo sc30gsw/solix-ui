@@ -1,6 +1,6 @@
-import { lookUp } from "./internal-browser-api";
-import { createBrowserValue, mapBrowserValue, readOn } from "./internal-browser-value";
-import type { BrowserValue } from "./types";
+import { lookUp } from "#/src/internal-browser-api.ts";
+import { createBrowserValue, mapBrowserValue, readOn } from "#/src/internal-browser-value.ts";
+import type { BrowserValue } from "#/src/types.ts";
 
 /** The width and height of the window's viewport, in CSS pixels. */
 export type ViewportSize = { width: BrowserValue<number>; height: BrowserValue<number> };

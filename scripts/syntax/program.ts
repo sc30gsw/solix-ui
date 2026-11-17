@@ -1,6 +1,6 @@
 import { resolve, sep } from "node:path";
 import { API, type Checker, type CompilerOptions } from "typescript/unstable/sync";
-import type { Node, SourceFile } from "./ast.ts";
+import type { Node, SourceFile } from "#/scripts/syntax/ast.ts";
 
 export type Program = {
   sourceFile: (file: string) => SourceFile | undefined;
@@ -13,6 +13,9 @@ export const parseWithoutLibrariesOrImports: CompilerOptions = {
   allowJs: true,
   noLib: true,
   noResolve: true,
+};
+export const typeCheckedWithScripts: CompilerOptions = {
+  allowJs: true,
 };
 const virtualFiles = new Map<string, string>();
 const parsed = new Map<string, SourceFile>();
@@ -87,8 +90,14 @@ export function parseText(text: string, extension: string): SourceFile {
   return parse(file);
 }
 
+export function rereadFiles(files: readonly string[]): void {
+  startedCompiler()
+    .updateSnapshot({ fileChanges: { changed: files.map(normalised) } })
+    .dispose();
+}
+
 export function openProgram(rootFiles: readonly string[]): Program {
-  return openProject(rootFiles.map(normalised), {});
+  return openProject(rootFiles.map(normalised), typeCheckedWithScripts);
 }
 
 export function stringLiteralTypesOf(checker: Checker, node: Node): string[] {

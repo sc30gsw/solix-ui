@@ -2,7 +2,7 @@ import solid from "@solidjs/vite-plugin";
 import { defineConfig, lazyPlugins } from "vite-plus";
 import { playwright } from "vite-plus/test/browser-playwright";
 import type { BrowserInstanceOption } from "vite-plus/test/node";
-import { enginesToVerify } from "./scripts/browser-engines.mjs";
+import { enginesToVerify } from "#/scripts/browser-engines.mjs";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];

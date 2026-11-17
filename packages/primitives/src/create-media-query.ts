@@ -1,7 +1,7 @@
-import { access, accessUntracked } from "./internal-access";
-import { browserMethod } from "./internal-browser-api";
-import { createBrowserValue, readOn } from "./internal-browser-value";
-import type { BrowserValue, MaybeAccessor, ReadOnce } from "./types";
+import { access, accessUntracked } from "#/src/internal-access.ts";
+import { browserMethod } from "#/src/internal-browser-api.ts";
+import { createBrowserValue, readOn } from "#/src/internal-browser-value.ts";
+import type { BrowserValue, MaybeAccessor, ReadOnce } from "#/src/types.ts";
 
 /**
  * Whether the media query `query` matches, followed through the query list's `change` event. A

@@ -1,13 +1,27 @@
 import { type Accessor, createRoot, createSignal } from "solid-js";
 import { describe, expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
-import { replaced } from "./support/replace";
-import type { BrowserValuePrimitive, ElementPrimitive } from "../fixtures/primitive-kinds";
-import { startCase } from "../fixtures/server-cases";
-import * as primitives from "../src/index";
-import { attachmentsDuring, flush, mount, record, unmount } from "./support/browser-harness";
-import { observers } from "./support/browser-resources";
-import { box, button, controlFor, nextTask, press, settled, witnessed } from "./support/dom";
+import { replaced } from "#/tests/support/replace.ts";
+import type { BrowserValuePrimitive, ElementPrimitive } from "#/fixtures/primitive-kinds.ts";
+import { startCase } from "#/fixtures/server-cases.ts";
+import * as primitives from "#/src/index.ts";
+import {
+  attachmentsDuring,
+  flush,
+  mount,
+  record,
+  unmount,
+} from "#/tests/support/browser-harness.ts";
+import { observers } from "#/tests/support/browser-resources.ts";
+import {
+  box,
+  button,
+  controlFor,
+  nextTask,
+  press,
+  settled,
+  witnessed,
+} from "#/tests/support/dom.ts";
 
 type Contracted = {
   ref: primitives.RefSetter<HTMLElement>;

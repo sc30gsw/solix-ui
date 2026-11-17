@@ -1,10 +1,16 @@
 import fc from "fast-check";
 import type { Accessor } from "solid-js";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { createScrollDirection, type ScrollDirection } from "../src/index";
-import { mount, unmount } from "./support/browser-harness";
-import { engineWait } from "./support/dom";
-import { applied, onScrollGrid, type ScrollStub, stubbedScroll, tallPage } from "./support/scroll";
+import { createScrollDirection, type ScrollDirection } from "#/src/index.ts";
+import { mount, unmount } from "#/tests/support/browser-harness.ts";
+import { engineWait } from "#/tests/support/dom.ts";
+import {
+  applied,
+  onScrollGrid,
+  type ScrollStub,
+  stubbedScroll,
+  tallPage,
+} from "#/tests/support/scroll.ts";
 
 afterEach(() => {
   vi.useRealTimers();

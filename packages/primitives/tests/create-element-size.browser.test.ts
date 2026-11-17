@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
-import { createElementSize } from "../src/index";
-import { flush, mount } from "./support/browser-harness";
-import { box, engineWait } from "./support/dom";
+import { createElementSize } from "#/src/index.ts";
+import { flush, mount } from "#/tests/support/browser-harness.ts";
+import { box, engineWait } from "#/tests/support/dom.ts";
 
 test("width and height are those of the box createResizeObserver reports, 0 until it does", async () => {
   const size = mount(() => createElementSize<HTMLElement>({ box: "border-box" }));

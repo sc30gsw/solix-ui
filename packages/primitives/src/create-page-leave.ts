@@ -1,5 +1,5 @@
-import { createAttachment } from "./internal-attachment";
-import { handleEvent } from "./internal-listener";
+import { createAttachment } from "#/src/internal-attachment.ts";
+import { handleEvent } from "#/src/internal-listener.ts";
 
 /**
  * Calls `onPageLeave` when the pointer leaves the page, on `mouseleave` of the document element,

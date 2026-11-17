@@ -1,9 +1,9 @@
 import { expect, test } from "vite-plus/test";
-import { observe, observerNames } from "../src/internal-dom-observer";
-import { mount, reportAfterDispose } from "./support/browser-harness";
-import { observers } from "./support/browser-resources";
-import { box, nextTask } from "./support/dom";
-import { withoutGlobal } from "./support/replace";
+import { observe, observerNames } from "#/src/internal-dom-observer.ts";
+import { mount, reportAfterDispose } from "#/tests/support/browser-harness.ts";
+import { observers } from "#/tests/support/browser-resources.ts";
+import { box, nextTask } from "#/tests/support/dom.ts";
+import { withoutGlobal } from "#/tests/support/replace.ts";
 
 test("the leak harness and the server trap read the observer classes from observerNames", () => {
   expect(observers).toBe(observerNames);

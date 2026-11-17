@@ -1,1 +1,1 @@
-export { createForbidden, type ForbiddenOptions } from "./create-forbidden";
+export { createForbidden, type ForbiddenOptions } from "#/tests/fixtures/primitive-rules/forbidden/src/create-forbidden.ts";

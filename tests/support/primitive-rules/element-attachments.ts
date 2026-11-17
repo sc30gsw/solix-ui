@@ -4,7 +4,7 @@ import {
   isInTypePosition,
   returnsAlias,
   ts,
-} from "../../../scripts/syntax";
+} from "#/scripts/syntax.ts";
 import {
   at,
   exportedFunction,
@@ -13,7 +13,7 @@ import {
   publicModules,
   reaches,
   type Rule,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const attachmentHelper = { file: "internal-attachment.ts", name: "createElementAttachmentWhen" };
 const refSetterType = "RefSetter";

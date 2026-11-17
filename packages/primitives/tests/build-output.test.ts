@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "vite-plus/test";
-import { dist, library } from "./built-library";
+import { dist, library } from "#/tests/built-library.ts";
 
 const builtEntry = join(dist, "index.js");
 
