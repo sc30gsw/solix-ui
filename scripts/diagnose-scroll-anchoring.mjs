@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { chromium, firefox } from "playwright";
 
 const engines = { chromium, firefox };
@@ -5,168 +6,95 @@ const [engineName = "firefox", url = "http://127.0.0.1:4400/", runs = "3"] = pro
 const executablePath = process.env.DIAG_EXECUTABLE || undefined;
 const browser = await engines[engineName].launch({ executablePath });
 
-function instrument() {
-  const log = [];
-  window.__anchorLog = log;
-  let last = 0;
-  let step = "load";
-  window.__anchorStep = (name) => {
-    step = name;
-    last = window.scrollY;
-  };
-  const shownPanels = () => {
-    const roots = [
-      document,
-      ...[...document.querySelectorAll("*")].flatMap((element) =>
-        element.shadowRoot ? [element.shadowRoot] : [],
-      ),
-    ];
-    return roots.flatMap((root) =>
-      [...root.querySelectorAll('[role="tabpanel"]')]
-        .filter((panel) => !panel.hidden)
-        .map((panel) => panel.id || panel.textContent.slice(0, 20)),
-    );
-  };
-  const note = (via) => {
-    const y = window.scrollY;
-    if (y !== last) {
-      log.push({
-        step,
-        via,
-        delta: y - last,
-        y,
-        t: Math.round(performance.now()),
-        shown: shownPanels(),
-        stack:
-          via === "frame" || via === "scroll"
-            ? undefined
-            : new Error().stack.split("\n").slice(2, 12).join(" | "),
-      });
-      last = y;
-    }
-  };
-  const wrapMethod = (owner, name) => {
-    const original = owner[name];
-    owner[name] = function (...args) {
-      const result = original.apply(this, args);
-      note(name);
-      return result;
-    };
-  };
-  const wrapGetter = (owner, name) => {
-    const descriptor = Object.getOwnPropertyDescriptor(owner, name);
-    Object.defineProperty(owner, name, {
-      ...descriptor,
-      get() {
-        const result = descriptor.get.call(this);
-        note(name);
-        return result;
-      },
-    });
-  };
-  wrapMethod(Element.prototype, "getBoundingClientRect");
-  wrapMethod(Element.prototype, "getClientRects");
-  wrapMethod(HTMLElement.prototype, "focus");
-  wrapMethod(Element.prototype, "scrollIntoView");
-  for (const name of [
-    "scrollWidth",
-    "scrollHeight",
-    "clientWidth",
-    "clientHeight",
-    "scrollTop",
-    "scrollLeft",
-  ]) {
-    wrapGetter(Element.prototype, name);
-  }
-  for (const name of ["offsetWidth", "offsetHeight", "offsetTop", "offsetLeft"]) {
-    wrapGetter(HTMLElement.prototype, name);
-  }
-  const frame = () => {
-    note("frame");
-    requestAnimationFrame(frame);
-  };
-  requestAnimationFrame(frame);
-  addEventListener("scroll", () => note("scroll"), { capture: true, passive: true });
-}
+const tabValues = fc.uniqueArray(
+  fc.oneof(
+    fc.string({ minLength: 1 }),
+    fc.string({ unit: "grapheme", minLength: 1 }),
+    fc.constantFrom(" ", "%", "\t", "\n", "a b", "100%", "%20", "a%20b"),
+  ),
+  { minLength: 1, maxLength: 5 },
+);
 
-const tabValues = [
-  ["my tab"],
-  ["a"],
-  ["b", "c"],
-  ["\n"],
-  ["%20", "a b"],
-  ["x"],
-  ["100%"],
-  ["y", "z", "w"],
-  ["q"],
-  ["r"],
-  ["😀😀", "e\u0301"],
-  ["s"],
-];
+function measure() {
+  const list = document.querySelector('[role="tablist"][aria-label="Generated"]');
+  const input = document.querySelector('[aria-label="Tab values"]');
+  const tabs = [...list.querySelectorAll('[role="tab"]')];
+  const tops = new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top)));
+  const listBox = list.getBoundingClientRect();
+  const firstVisible = [...document.querySelectorAll("main *")].find((element) => {
+    const box = element.getBoundingClientRect();
+    return (
+      box.bottom > 0 && box.top < innerHeight && box.height > 0 && element.children.length === 0
+    );
+  });
+  return {
+    y: Math.round(scrollY * 10) / 10,
+    rows: tops.size,
+    listTop: Math.round(listBox.top),
+    listHeight: Math.round(listBox.height),
+    listWidth: Math.round(listBox.width),
+    inputTop: Math.round(input.getBoundingClientRect().top),
+    firstVisible: firstVisible?.outerHTML.slice(0, 80),
+  };
+}
 
 for (let run = 0; run < Number(runs); run += 1) {
   const context = await browser.newContext();
   const page = await context.newPage();
-  await page.addInitScript(instrument);
   let step = "load";
   const warnings = [];
   page.on("console", (message) => {
     if (message.type() === "error" || message.type() === "warning") {
-      warnings.push({ step, text: message.text() });
+      warnings.push({ step, text: message.text().slice(0, 140) });
+      console.log("WARNING at", step);
     }
   });
   await page.goto(url, { waitUntil: "networkidle" });
-  const begin = async (name) => {
-    step = name;
-    await page.evaluate((label) => window.__anchorStep(label), name);
-  };
   const tab = (list, name) =>
     page
       .getByRole("tablist", { name: list, exact: true })
       .getByRole("tab")
       .filter({ has: page.getByText(name, { exact: true }) });
 
-  await begin("hover drafts");
+  step = "earlier tests";
   await tab("Controlled", "Drafts").hover();
   await page.getByRole("button", { name: "Count hovers over Drafts" }).click();
   await tab("Controlled", "Drafts").hover();
-  await begin("click inbox");
   await tab("Controlled", "Inbox").click();
-  await begin("arrow right controlled");
   await page.keyboard.press("ArrowRight");
-  await page.waitForTimeout(100);
-  await begin("list hovers");
   await page.getByRole("button", { name: "Count hovers over the list" }).click();
   await page.mouse.move(0, 0);
   await tab("Controlled", "Locked").hover();
-  await begin("render shadow");
   await page.getByRole("button", { name: "Render tabs in a shadow root" }).click();
-  await begin("click near");
   await tab("In a shadow root", "Near").click();
-  await begin("arrow right shadow");
   await page.keyboard.press("ArrowRight");
-  await page.waitForTimeout(100);
-  await begin("arrow left shadow");
   await page.keyboard.press("ArrowLeft");
-  await page.waitForTimeout(100);
-  const values = page.getByRole("textbox", { name: "Tab values" });
-  for (const [index, drawn] of tabValues.entries()) {
-    await begin(`fill ${index} ${JSON.stringify(drawn)}`);
-    await values.fill(JSON.stringify(drawn));
-  }
-  await page.waitForTimeout(300);
-  await begin("end");
-  const log = await page.evaluate(() => window.__anchorLog);
-  const viewport = await page.evaluate(() => ({
-    y: window.scrollY,
-    height: window.innerHeight,
-    top: document.elementFromPoint(10, 2)?.outerHTML.slice(0, 200),
-  }));
   console.log(
-    `=== ${engineName} run ${run}: ${log.length} scroll changes, ${warnings.length} warnings, viewport ${JSON.stringify(viewport)}`,
+    `=== ${engineName} run ${run} before fills`,
+    JSON.stringify(await page.evaluate(measure)),
   );
-  for (const entry of log) console.log(JSON.stringify(entry));
-  for (const warning of warnings) console.log("WARNING", JSON.stringify(warning));
+  const values = page.getByRole("textbox", { name: "Tab values" });
+  let index = 0;
+  await fc.assert(
+    fc.asyncProperty(tabValues, async (drawn) => {
+      step = `fill ${index}`;
+      index += 1;
+      await values.fill(JSON.stringify(drawn));
+      const lengths = drawn.map((value) => [...value].length);
+      for (;;) {
+        const count = await page
+          .getByRole("tablist", { name: "Generated", exact: true })
+          .evaluate((list) => list.querySelectorAll('[role="tab"]').length);
+        if (count === drawn.length) break;
+      }
+      console.log(step, JSON.stringify(lengths), JSON.stringify(await page.evaluate(measure)));
+    }),
+    { numRuns: 25, examples: [[["my tab"]]] },
+  );
+  console.log(
+    `=== ${engineName} run ${run}: ${warnings.length} warnings`,
+    JSON.stringify(warnings),
+  );
   await context.close();
 }
 await browser.close();
