@@ -44,9 +44,9 @@ vp run -r build
 
 ## Not covered
 
-- The stylesheet imported into a layer of the consumer's own, as `@import url(...) layer(vendor)`, together with a component that queries its container. The component's `<style>` adds its rules to a top-level `solix` layer, which ranks below `vendor`, so a container query's value loses to the component's default: a column given 6 of 12 takes its whole row. `apps/playground/tests/layer-order.test.ts` pins this.
+- The stylesheet imported into a layer of the consumer's own, as `@import url(...) layer(vendor)` after the markup, together with a component that queries its container. The component's `<style>` adds its rules to a top-level `solix` layer, which ranks below `vendor`, so a container query's value loses to the component's default: a column given 6 of 12 takes its whole row. `apps/playground/tests/layer-order.test.ts` pins this.
 
-- A page whose content security policy allows only `<style>` elements that carry a nonce. The `<style>` that a component with container queries renders carries none, so such a policy blocks it, and its values keyed by a width do not apply. A future `SolixProvider` is to hand the nonce down.
+- A page whose content security policy allows only `<style>` elements that carry a nonce. The `<style>` that a component with container queries renders carries none, so such a policy blocks it, and its values keyed by a width do not apply.
 
 - A consumer passing StyleX style objects, rather than the classes `stylex.attrs` compiles them to, to `class` or `classes`. `styles` takes inline declarations only.
 - A precompiled entry for tools that do not know the `solid` condition

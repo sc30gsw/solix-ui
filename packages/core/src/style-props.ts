@@ -77,8 +77,8 @@ export type ContainerWidth =
   | `.${FractionDigits}${ContainerWidthUnit}`;
 
 /**
- * A value for every width, or one for each width of its container it applies from: a container
- * width, or a breakpoint, whose width the library's breakpoints give.
+ * A value for every width, or values keyed by the container width each applies from: a length
+ * such as `"40em"`, or a breakpoint, which stands for the library's width for it, in rem.
  */
 export type ContainerProp<V> =
   | V
