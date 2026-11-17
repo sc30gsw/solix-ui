@@ -55,8 +55,7 @@ jobs:
         id: skills
         continue-on-error: true
         run: node scripts/check-package-skills.ts
-      - name: Wait for the browser engines
-        wait: browsers
+      - wait: browsers
       - run: vp run verify
         env:
           SOLIX_PRIVATE_TERMS: ${{ secrets.SOLIX_PRIVATE_TERMS }}

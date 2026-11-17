@@ -48,7 +48,7 @@ jobs:
         with:
           node-version-file: package.json
           cache: true
-      - name: Wait for ffmpeg, which holds the apt lock that the browser dependencies need
+      - name: Wait for the ffmpeg install, which holds the apt lock that the browser dependencies need
         wait: ffmpeg
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp run evidence
