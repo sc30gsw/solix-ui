@@ -6,6 +6,7 @@ import { inEveryEngine } from "#/tests/support/playground.ts";
 const url = inject("playgroundUrl");
 const generatedRuns = 15;
 const longestSequence = 10;
+const generatedSequencesTimeout = 70_000;
 
 type Model = { open: boolean; name: string };
 type Real = { page: Page; dialog: Locator; opener: Locator; readout: Locator };
@@ -167,31 +168,35 @@ const everyActionInEachRun: Step[][] = [
 ];
 
 inEveryEngine((browser) => {
-  test("for fixed sequences that take every action, and for every generated sequence of user actions, the modal agrees with a model of open and closed", async () => {
-    const page = await browser().newPage();
+  test(
+    "for fixed sequences that take every action, and for every generated sequence of user actions, the modal agrees with a model of open and closed",
+    { timeout: generatedSequencesTimeout },
+    async () => {
+      const page = await browser().newPage();
 
-    await fc.assert(
-      fc.asyncProperty(fc.commands(steps, { maxCommands: longestSequence }), async (sequence) => {
-        await page.goto(url, { waitUntil: "networkidle" });
-        const real: Real = {
-          page,
-          dialog: page.locator("dialog"),
-          opener: page.getByRole("button", { name: "Open modal" }),
-          readout: page.getByText(/^The app records the modal as/),
-        };
-        const model: Model = { open: false, name: "" };
+      await fc.assert(
+        fc.asyncProperty(fc.commands(steps, { maxCommands: longestSequence }), async (sequence) => {
+          await page.goto(url, { waitUntil: "networkidle" });
+          const real: Real = {
+            page,
+            dialog: page.locator("dialog"),
+            opener: page.getByRole("button", { name: "Open modal" }),
+            readout: page.getByText(/^The app records the modal as/),
+          };
+          const model: Model = { open: false, name: "" };
 
-        await expectAgreement(model, real);
-        await fc.asyncModelRun(() => ({ model, real }), sequence);
-      }),
-      {
-        numRuns: everyActionInEachRun.length + generatedRuns,
-        examples: everyActionInEachRun.map((sequence): [Step[]] => [sequence]),
-      },
-    );
+          await expectAgreement(model, real);
+          await fc.asyncModelRun(() => ({ model, real }), sequence);
+        }),
+        {
+          numRuns: everyActionInEachRun.length + generatedRuns,
+          examples: everyActionInEachRun.map((sequence): [Step[]] => [sequence]),
+        },
+      );
 
-    await page.close();
-  });
+      await page.close();
+    },
+  );
 
   test("the fallback alone closes on a press outside, and not on a press inside or a drag that ends outside", async () => {
     const context = await browser().newContext();

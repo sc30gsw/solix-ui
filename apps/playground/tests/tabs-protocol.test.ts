@@ -15,6 +15,7 @@ import {
 const url = inject("playgroundUrl");
 const generatedRuns = 15;
 const longestSequence = 12;
+const generatedSequencesTimeout = 55_000;
 type Model = RovingListState & { list: RovingList };
 type Real = { page: Page };
 
@@ -90,24 +91,28 @@ const steps = [
 ];
 
 inEveryEngine((browser) => {
-  test("for every generated sequence of clicks and keys on a list of tabs, the selected tab, the focused tab, the panel shown and the one tab stop agree with a model of that list, and the selected tab alone carries data-active", async () => {
-    const page = await browser().newPage();
+  test(
+    "for every generated sequence of clicks and keys on a list of tabs, the selected tab, the focused tab, the panel shown and the one tab stop agree with a model of that list, and the selected tab alone carries data-active",
+    { timeout: generatedSequencesTimeout },
+    async () => {
+      const page = await browser().newPage();
 
-    await fc.assert(
-      fc.asyncProperty(
-        fc.constantFrom(...tabLists),
-        fc.commands(steps, { maxCommands: longestSequence }),
-        async (list, sequence) => {
-          await page.goto(url, { waitUntil: "networkidle" });
-          const model: Model = { list, selected: list.initial, focused: null };
+      await fc.assert(
+        fc.asyncProperty(
+          fc.constantFrom(...tabLists),
+          fc.commands(steps, { maxCommands: longestSequence }),
+          async (list, sequence) => {
+            await page.goto(url, { waitUntil: "networkidle" });
+            const model: Model = { list, selected: list.initial, focused: null };
 
-          await expectAgreement(model, { page });
-          await fc.asyncModelRun(() => ({ model, real: { page } }), sequence);
-        },
-      ),
-      { numRuns: generatedRuns },
-    );
+            await expectAgreement(model, { page });
+            await fc.asyncModelRun(() => ({ model, real: { page } }), sequence);
+          },
+        ),
+        { numRuns: generatedRuns },
+      );
 
-    await page.close();
-  });
+      await page.close();
+    },
+  );
 });

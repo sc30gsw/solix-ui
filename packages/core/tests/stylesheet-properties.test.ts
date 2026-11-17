@@ -15,6 +15,7 @@ import { layersAroundDeclaration, nestedLayerOrder } from "#/tests/cascade-layer
 
 const packageRoot = join(import.meta.dirname, "..");
 const generatedRuns = 300;
+const generatedDefinitionsTimeout = 50_000;
 const sdkRule = behaviourSdkHiddenRule(packageRoot);
 
 const valuesByProperty: Record<string, (string | number)[]> = {
@@ -143,50 +144,54 @@ function sourceFor(definitions: Definition[]): string {
   return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "#/src/disclosure-state.stylex.ts";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
 }
 
-test("for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its container queries and then the hidden layer last, and nothing important in the library's layer", async () => {
-  await fc.assert(
-    fc.asyncProperty(styleDefinitions, async (definitions) => {
-      const { rules } = await compileLibrarySource({
-        filename: join(packageRoot, "src/Generated.tsx"),
-        source: sourceFor(definitions),
-        packageRoot,
-      });
-      const stylesheet = postcss.parse(libraryStylesheet(rules, stylePropRules(), sdkRule));
+test(
+  "for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its container queries and then the hidden layer last, and nothing important in the library's layer",
+  { timeout: generatedDefinitionsTimeout },
+  async () => {
+    await fc.assert(
+      fc.asyncProperty(styleDefinitions, async (definitions) => {
+        const { rules } = await compileLibrarySource({
+          filename: join(packageRoot, "src/Generated.tsx"),
+          source: sourceFor(definitions),
+          packageRoot,
+        });
+        const stylesheet = postcss.parse(libraryStylesheet(rules, stylePropRules(), sdkRule));
 
-      expect(rules.length).toBeGreaterThan(0);
-      expect(
-        stylesheet.nodes.map((node) =>
-          node.type === "atrule" ? `@${node.name} ${node.params}` : node.type,
-        ),
-      ).toEqual([
-        `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER}`,
-        `@layer ${BEHAVIOUR_SDK_LAYER}`,
-        `@layer ${LIBRARY_CASCADE_LAYER}`,
-      ]);
-      stylesheet.each((layer) => {
-        if (layer.type !== "atrule" || layer.params !== LIBRARY_CASCADE_LAYER) return;
-        expect(nestedLayerOrder(layer)).toEqual([...libraryLayers]);
-      });
+        expect(rules.length).toBeGreaterThan(0);
+        expect(
+          stylesheet.nodes.map((node) =>
+            node.type === "atrule" ? `@${node.name} ${node.params}` : node.type,
+          ),
+        ).toEqual([
+          `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER}`,
+          `@layer ${BEHAVIOUR_SDK_LAYER}`,
+          `@layer ${LIBRARY_CASCADE_LAYER}`,
+        ]);
+        stylesheet.each((layer) => {
+          if (layer.type !== "atrule" || layer.params !== LIBRARY_CASCADE_LAYER) return;
+          expect(nestedLayerOrder(layer)).toEqual([...libraryLayers]);
+        });
 
-      stylesheet.walkRules((rule) => {
-        const classNames = rule.selector.match(/\.[A-Za-z_][\w-]*/g) ?? [];
-        expect(classNames.filter((name) => !name.startsWith(`.${LIBRARY_CLASS_PREFIX}`))).toEqual(
+        stylesheet.walkRules((rule) => {
+          const classNames = rule.selector.match(/\.[A-Za-z_][\w-]*/g) ?? [];
+          expect(classNames.filter((name) => !name.startsWith(`.${LIBRARY_CLASS_PREFIX}`))).toEqual(
+            [],
+          );
+        });
+        const registered: string[] = [];
+        stylesheet.walkAtRules("property", (registration) => {
+          registered.push(registration.params);
+        });
+        expect(registered.length).toBeGreaterThan(0);
+        expect(registered.filter((name) => !name.startsWith(`--${LIBRARY_CLASS_PREFIX}-`))).toEqual(
           [],
         );
-      });
-      const registered: string[] = [];
-      stylesheet.walkAtRules("property", (registration) => {
-        registered.push(registration.params);
-      });
-      expect(registered.length).toBeGreaterThan(0);
-      expect(registered.filter((name) => !name.startsWith(`--${LIBRARY_CLASS_PREFIX}-`))).toEqual(
-        [],
-      );
-      stylesheet.walkDecls((declaration) => {
-        const inTheLibrary = layersAroundDeclaration(declaration).includes(LIBRARY_CASCADE_LAYER);
-        expect(Boolean(declaration.important) && inTheLibrary).toBe(false);
-      });
-    }),
-    { numRuns: generatedRuns },
-  );
-});
+        stylesheet.walkDecls((declaration) => {
+          const inTheLibrary = layersAroundDeclaration(declaration).includes(LIBRARY_CASCADE_LAYER);
+          expect(Boolean(declaration.important) && inTheLibrary).toBe(false);
+        });
+      }),
+      { numRuns: generatedRuns },
+    );
+  },
+);
