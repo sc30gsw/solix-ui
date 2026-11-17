@@ -1,6 +1,11 @@
 import { join, relative } from "node:path";
-import { repositoryRoot } from "../workspace";
-import { kebabCaseModule, type PrimitiveRule, type Rule, typesModule } from "./library";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
+import {
+  kebabCaseModule,
+  type PrimitiveRule,
+  type Rule,
+  typesModule,
+} from "#/tests/support/primitive-rules/library.ts";
 
 const sourceFileKinds: Rule = (library) =>
   library.entries

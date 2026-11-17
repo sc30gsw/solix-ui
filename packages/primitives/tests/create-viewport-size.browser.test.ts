@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from "vite-plus/test";
 import { page } from "vite-plus/test/browser";
-import { createViewportSize } from "../src/index";
-import { mount } from "./support/browser-harness";
-import { engineWait, nextTask } from "./support/dom";
-import { replaced } from "./support/replace";
+import { createViewportSize } from "#/src/index.ts";
+import { mount } from "#/tests/support/browser-harness.ts";
+import { engineWait, nextTask } from "#/tests/support/dom.ts";
+import { replaced } from "#/tests/support/replace.ts";
 
 const viewport = { width: 414, height: 896 };
 

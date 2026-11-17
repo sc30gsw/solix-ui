@@ -5,7 +5,7 @@ import {
   listenAsAsked,
   listenerSettings,
   watchEvents,
-} from "../src/internal-listener";
+} from "#/src/internal-listener.ts";
 
 test("listenerSettings reads a boolean as capture and fills every option an object leaves out", () => {
   const signal = new AbortController().signal;

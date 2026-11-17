@@ -1,8 +1,8 @@
 import type { Accessor } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { sameKeys } from "./internal-equal";
-import { createValue } from "./internal-value";
-import type { ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { sameKeys } from "#/src/internal-equal.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { ReadOnce } from "#/src/types.ts";
 
 /** What `setState` takes: some of the keys, or an updater that returns them. */
 export type SetStatePatch<T> = Partial<T> | ((current: T) => Partial<T>);

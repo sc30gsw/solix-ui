@@ -1,9 +1,9 @@
 import { createSignal } from "solid-js";
 import { expect, test, vi } from "vite-plus/test";
-import { createResizeObserver } from "../src/index";
-import { flush, mount, unmount } from "./support/browser-harness";
-import { box, engineWait, settled } from "./support/dom";
-import { fakeObserver } from "./support/fake-observer";
+import { createResizeObserver } from "#/src/index.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
+import { box, engineWait, settled } from "#/tests/support/dom.ts";
+import { fakeObserver } from "#/tests/support/fake-observer.ts";
 
 const zeros = { x: 0, y: 0, width: 0, height: 0, top: 0, left: 0, bottom: 0, right: 0 };
 

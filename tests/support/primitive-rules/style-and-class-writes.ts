@@ -1,5 +1,10 @@
-import { descendants, stringsIn, ts, unwrapped } from "../../../scripts/syntax";
-import { at, type Library, type PrimitiveRule, type Rule } from "./library";
+import { descendants, stringsIn, ts, unwrapped } from "#/scripts/syntax.ts";
+import {
+  at,
+  type Library,
+  type PrimitiveRule,
+  type Rule,
+} from "#/tests/support/primitive-rules/library.ts";
 
 const styleAndClassMembers = ["style", "className", "classList", "attributeStyleMap"];
 

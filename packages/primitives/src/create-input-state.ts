@@ -1,8 +1,8 @@
 import type { Accessor } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { isEvent, isInputOfType } from "./internal-node";
-import { createValue } from "./internal-value";
-import type { ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { isEvent, isInputOfType } from "#/src/internal-node.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { ReadOnce } from "#/src/types.ts";
 
 /** What `onChange` takes: a value, an updater, or the event of a form control. */
 export type InputChange<T> = T | ((current: T) => T) | Event;

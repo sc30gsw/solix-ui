@@ -1,12 +1,12 @@
-import { compareWithNewest, pinsOf, reportTable } from "./newest-releases.ts";
-import { pnpmSettings } from "./pnpm-settings.ts";
+import { compareWithNewest, pinsOf, reportTable } from "#/scripts/newest-releases.ts";
+import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   heldBackEntries,
   nodeReleases,
   registryDocuments,
   releasePolicy,
-} from "./release-sources.ts";
-import { rootManifest } from "./repository.ts";
+} from "#/scripts/release-sources.ts";
+import { rootManifest } from "#/scripts/repository.ts";
 
 const settings = pnpmSettings();
 const pins = pinsOf(rootManifest(), settings.catalog);

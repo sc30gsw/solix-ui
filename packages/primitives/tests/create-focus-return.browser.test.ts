@@ -1,10 +1,10 @@
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
-import { createClickOutside, createFocusReturn } from "../src/index";
-import { expectNoAxeViolations } from "./support/accessibility";
-import { flush, mount, unmount } from "./support/browser-harness";
-import { attached, button, focusedId } from "./support/dom";
+import { createClickOutside, createFocusReturn } from "#/src/index.ts";
+import { expectNoAxeViolations } from "#/tests/support/accessibility.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
+import { attached, button, focusedId } from "#/tests/support/dom.ts";
 
 function surface() {
   const trigger = button("trigger");

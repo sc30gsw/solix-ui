@@ -1,11 +1,11 @@
-import { access } from "./internal-access";
-import { activePath } from "./internal-active";
-import { lookUp } from "./internal-browser-api";
-import { createBrowserValue } from "./internal-browser-value";
-import { observe } from "./internal-dom-observer";
-import { sameItems } from "./internal-equal";
-import { disposeAll, watchEvents } from "./internal-listener";
-import type { BrowserValue, MaybeAccessor } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { activePath } from "#/src/internal-active.ts";
+import { lookUp } from "#/src/internal-browser-api.ts";
+import { createBrowserValue } from "#/src/internal-browser-value.ts";
+import { observe } from "#/src/internal-dom-observer.ts";
+import { sameItems } from "#/src/internal-equal.ts";
+import { disposeAll, watchEvents } from "#/src/internal-listener.ts";
+import type { BrowserValue, MaybeAccessor } from "#/src/types.ts";
 
 /** How deep to look for the focused element, and whether to notice it being removed. */
 export type ActiveElementOptions = {

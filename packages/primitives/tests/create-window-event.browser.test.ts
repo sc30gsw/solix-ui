@@ -1,8 +1,8 @@
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { createWindowEvent, type ListenerOptions } from "../src/index";
-import { flush, mount, unmount } from "./support/browser-harness";
-import { attached } from "./support/dom";
+import { createWindowEvent, type ListenerOptions } from "#/src/index.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
+import { attached } from "#/tests/support/dom.ts";
 
 const ping = "solix-ping";
 

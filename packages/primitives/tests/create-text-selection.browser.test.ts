@@ -1,8 +1,8 @@
 import { expect, test } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
-import { createTextSelection } from "../src/index";
-import { mount, record, unmount, watch } from "./support/browser-harness";
-import { box, html, witnessed } from "./support/dom";
+import { createTextSelection } from "#/src/index.ts";
+import { mount, record, unmount, watch } from "#/tests/support/browser-harness.ts";
+import { box, html, witnessed } from "#/tests/support/dom.ts";
 
 test("it reads the document's selection at once, and reports every change to the same Selection object", async () => {
   const text = box("Some text to select");

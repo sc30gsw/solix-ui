@@ -1,6 +1,6 @@
 import { join, relative } from "node:path";
-import { repositoryRoot } from "../workspace";
-import { type PrimitiveRule, type Rule } from "./library";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
+import { type PrimitiveRule, type Rule } from "#/tests/support/primitive-rules/library.ts";
 
 const serverRenderTest = "server-render.test.ts";
 

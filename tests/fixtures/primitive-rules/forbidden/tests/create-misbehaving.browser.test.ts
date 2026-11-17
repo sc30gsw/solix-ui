@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
-import { lookUp } from "../../../../../packages/primitives/src/internal-browser-api";
-import "./support/browser-harness";
+import { lookUp } from "#/packages/primitives/src/internal-browser-api.ts";
+import "#/tests/fixtures/primitive-rules/forbidden/tests/support/browser-harness.ts";
 
 test("waits by itself", async () => {
   const seen: string[] = [];

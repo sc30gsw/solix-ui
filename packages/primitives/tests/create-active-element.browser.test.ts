@@ -1,6 +1,6 @@
 import { createSignal } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { createActiveElement } from "../src/index";
+import { createActiveElement } from "#/src/index.ts";
 import {
   flush,
   mount,
@@ -8,9 +8,9 @@ import {
   reportAfterDispose,
   unmount,
   watch,
-} from "./support/browser-harness";
-import { box, button, engineWait, nextTask, tab, witnessed } from "./support/dom";
-import { replaced, withoutGlobal } from "./support/replace";
+} from "#/tests/support/browser-harness.ts";
+import { box, button, engineWait, nextTask, tab, witnessed } from "#/tests/support/dom.ts";
+import { replaced, withoutGlobal } from "#/tests/support/replace.ts";
 
 function shadowHost(): { host: HTMLDivElement; inner: HTMLButtonElement } {
   const host = box("host");

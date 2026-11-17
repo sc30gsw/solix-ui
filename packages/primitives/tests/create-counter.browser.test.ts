@@ -1,9 +1,9 @@
 import fc from "fast-check";
 import { createSignal, type Setter } from "solid-js";
 import { expect, test } from "vite-plus/test";
-import { type CounterHandlers, createCounter } from "../src/index";
-import { flush, mount, unmount, watch } from "./support/browser-harness";
-import { command, flushCommand, type Tick } from "./support/model";
+import { type CounterHandlers, createCounter } from "#/src/index.ts";
+import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
+import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
 
 test("by default it starts at 0 and moves by 1 with no bounds", () => {
   const [count, { increment, decrement }] = mount(() => createCounter());

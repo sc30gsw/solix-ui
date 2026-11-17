@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
-import { createValue } from "../src/internal-value";
-import { flush, mount, unmount } from "./support/browser-harness";
+import { createValue } from "#/src/internal-value.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
 
 test("an update decides on the value staged before it, writes only a change, and the read shows the committed value until the flush", () => {
   const value = mount(() => createValue(1));

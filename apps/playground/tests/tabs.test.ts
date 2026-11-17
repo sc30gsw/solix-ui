@@ -3,7 +3,7 @@ import type { Locator } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
-import { computed, inEveryEngine, openPage, type OpenPage } from "./support/playground";
+import { computed, inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 import {
   account,
   controlled,
@@ -23,8 +23,8 @@ import {
   tabsSetups,
   valueOf,
   vertical,
-} from "./support/tabs";
-import { pathBetween, singleSteps } from "./support/roving-list-model";
+} from "#/tests/support/tabs.ts";
+import { pathBetween, singleSteps } from "#/tests/support/roving-list-model.ts";
 
 const url = inject("playgroundUrl");
 const { overview, billing, members, security } = tabNames.account;

@@ -1,4 +1,4 @@
-import { observerNames } from "../../src/internal-dom-observer";
+import { observerNames } from "#/src/internal-dom-observer.ts";
 
 export type Timer = { schedule: string; cancel: string; kind: string; firesOnce: boolean };
 

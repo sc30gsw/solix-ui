@@ -1,4 +1,4 @@
-import type { HotkeyItem } from "./types";
+import type { HotkeyItem } from "#/src/types.ts";
 
 export type ParsedHotkey = {
   readonly alt: boolean;

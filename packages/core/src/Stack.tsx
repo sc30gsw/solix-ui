@@ -1,8 +1,8 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
-import { createParts, type ElementProps } from "./parts";
-import type { VariableProp } from "./style-props";
-import { tokens } from "./tokens.stylex";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import type { VariableProp } from "#/src/style-props.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   root: {

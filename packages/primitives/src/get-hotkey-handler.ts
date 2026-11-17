@@ -1,6 +1,6 @@
-import { access } from "./internal-access";
-import { runHotkeys } from "./internal-hotkey";
-import type { HotkeyItem, MaybeAccessor } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { runHotkeys } from "#/src/internal-hotkey.ts";
+import type { HotkeyItem, MaybeAccessor } from "#/src/types.ts";
 
 /**
  * A `keydown` handler for one element, for a shortcut that belongs to one widget:

@@ -20,8 +20,8 @@ import {
   reviewedSkillsFile,
   reviewProblems,
   skillDirectories,
-} from "../scripts/package-skills";
-import { repositoryRoot, workflowFiles, workspaceFile } from "./support/workspace";
+} from "#/scripts/package-skills.ts";
+import { repositoryRoot, workflowFiles, workspaceFile } from "#/tests/support/workspace.ts";
 
 const packageSkillIgnoreFile = ".gitignore";
 const skillFolders = skillDirectories.join(" and ");

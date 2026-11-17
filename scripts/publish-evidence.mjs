@@ -8,7 +8,7 @@ import {
   evidenceDirectory,
   evidenceMarker,
   summaryFile,
-} from "./evidence-summary.mjs";
+} from "#/scripts/evidence-summary.mjs";
 
 const root = join(import.meta.dirname, "..");
 

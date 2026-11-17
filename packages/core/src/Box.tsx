@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
-import { createParts, type PolymorphicProps } from "./parts";
+import { createParts, type PolymorphicProps } from "#/src/parts.ts";
 
 const styles = stylex.create({
   root: {},

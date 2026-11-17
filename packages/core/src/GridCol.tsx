@@ -1,10 +1,10 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { Show } from "solid-js";
-import { useGrid } from "./grid-context";
-import { createParts, type ElementProps } from "./parts";
-import { variableProperty } from "./style-prop-table";
-import { eachValue, type StyleProp, type VariableProp, withBase } from "./style-props";
+import { useGrid } from "#/src/grid-context.ts";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import { variableProperty } from "#/src/style-prop-table.ts";
+import { eachValue, type StyleProp, type VariableProp, withBase } from "#/src/style-props.ts";
 
 const styles = stylex.create({
   root: {

@@ -1,8 +1,8 @@
 import fc from "fast-check";
 import { onTestFinished } from "vite-plus/test";
-import { flush } from "./browser-harness";
-import { nextTask } from "./dom";
-import { replaced } from "./replace";
+import { flush } from "#/tests/support/browser-harness.ts";
+import { nextTask } from "#/tests/support/dom.ts";
+import { replaced } from "#/tests/support/replace.ts";
 
 export type ScrollStub = {
   to: (y: number) => void;

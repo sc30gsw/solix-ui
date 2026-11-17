@@ -1,9 +1,9 @@
-import { access } from "./internal-access";
-import { createAttachment } from "./internal-attachment";
-import { handleEvent } from "./internal-listener";
-import { runHotkeys } from "./internal-hotkey";
-import { isElement, isHtmlElement } from "./internal-node";
-import type { HotkeyItem, MaybeAccessor } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { createAttachment } from "#/src/internal-attachment.ts";
+import { handleEvent } from "#/src/internal-listener.ts";
+import { runHotkeys } from "#/src/internal-hotkey.ts";
+import { isElement, isHtmlElement } from "#/src/internal-node.ts";
+import type { HotkeyItem, MaybeAccessor } from "#/src/types.ts";
 
 const defaultTagsToIgnore = ["INPUT", "TEXTAREA", "SELECT"] as const;
 const keydown = "keydown";

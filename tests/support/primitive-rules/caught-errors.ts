@@ -1,5 +1,5 @@
-import { ts } from "../../../scripts/syntax";
-import { forbidOutside } from "./library";
+import { ts } from "#/scripts/syntax.ts";
+import { forbidOutside } from "#/tests/support/primitive-rules/library.ts";
 
 const errorBoundary = { file: "internal-browser-value.ts", fn: "whereAllowed" };
 

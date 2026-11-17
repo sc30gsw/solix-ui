@@ -1,7 +1,7 @@
-import { access } from "./internal-access";
-import { createElementAttachment } from "./internal-attachment";
-import { observe } from "./internal-dom-observer";
-import type { MaybeAccessor, RefSetter } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { createElementAttachment } from "#/src/internal-attachment.ts";
+import { observe } from "#/src/internal-dom-observer.ts";
+import type { MaybeAccessor, RefSetter } from "#/src/types.ts";
 
 /**
  * Calls `callback` with the mutations of the element its ref is on that `options` asks for, and

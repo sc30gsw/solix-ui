@@ -1,6 +1,6 @@
-import { browserMethod } from "./internal-browser-api";
-import { createBrowserValue, readOn } from "./internal-browser-value";
-import type { BrowserValue } from "./types";
+import { browserMethod } from "#/src/internal-browser-api.ts";
+import { createBrowserValue, readOn } from "#/src/internal-browser-value.ts";
+import type { BrowserValue } from "#/src/types.ts";
 
 /**
  * The document's selection, `document.getSelection()`, read again on every `selectionchange`.

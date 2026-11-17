@@ -1,11 +1,11 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { children } from "solid-js";
-import { createParts, type ElementProps } from "./parts";
-import { rendersSomething } from "./renders-something";
-import { variableProperty } from "./style-prop-table";
-import type { VariableProp } from "./style-props";
-import { tokens } from "./tokens.stylex";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import { rendersSomething } from "#/src/renders-something.ts";
+import { variableProperty } from "#/src/style-prop-table.ts";
+import type { VariableProp } from "#/src/style-props.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   root: {

@@ -1,6 +1,7 @@
-import { basename, join, relative } from "node:path";
-import { exportsOf, ts } from "../../../scripts/syntax";
-import { repositoryRoot } from "../workspace";
+import { join, relative } from "node:path";
+import { fileNamedBy } from "#/scripts/subpath.ts";
+import { exportsOf, ts } from "#/scripts/syntax.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   barrelModule,
   isPublic,
@@ -8,12 +9,15 @@ import {
   type PrimitiveRule,
   type Rule,
   typesModule,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
+
+function exportLine(names: readonly string[], file: string | undefined): string {
+  return `export { ${names.join(", ")} } from ${file ? relative(repositoryRoot, file) : "a module that names no file"};`;
+}
 
 function barrelLine(module: Module): string {
   const { functions, types } = exportsOf(module.source);
-  const names = [...functions, ...types.sort().map((type) => `type ${type}`)];
-  return `export { ${names.join(", ")} } from "./${basename(module.file, ".ts")}";`;
+  return exportLine([...functions, ...types.sort().map((type) => `type ${type}`)], module.path);
 }
 
 function barrelLinesIn(barrel: ts.SourceFile): string[] {
@@ -30,7 +34,7 @@ function barrelLinesIn(barrel: ts.SourceFile): string[] {
     const names = statement.exportClause.elements.map((element) =>
       statement.isTypeOnly || element.isTypeOnly ? `type ${element.name.text}` : element.name.text,
     );
-    return `export { ${names.join(", ")} } from "${statement.moduleSpecifier.text}";`;
+    return exportLine(names, fileNamedBy(barrel.fileName, statement.moduleSpecifier.text));
   });
 }
 
@@ -38,11 +42,12 @@ const barrelOrder: Rule = (library) => {
   const exported = library.modules.filter(({ file }) => isPublic(file) || file === typesModule);
   const barrel = library.modules.find(({ file }) => file === barrelModule);
   const actual = barrel ? barrelLinesIn(barrel.source) : [];
+  const barrelFile = join(library.source, barrelModule);
   const expected = exported.map(barrelLine);
   return actual.join("\n") === expected.join("\n")
     ? []
     : [
-        `${relative(repositoryRoot, join(library.source, barrelModule))}: re-export each public module and its types, then ${typesModule}, sorted by file name, and no internal-* module. Expected:\n${expected.join("\n")}`,
+        `${relative(repositoryRoot, barrelFile)}: re-export each public module and its types, then ${typesModule}, sorted by file name, and no internal-* module. Expected:\n${expected.join("\n")}`,
       ];
 };
 

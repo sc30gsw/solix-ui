@@ -1,8 +1,8 @@
 import fc from "fast-check";
 import { expect, test } from "vite-plus/test";
-import { createListState, type ListStateHandlers } from "../src/index";
-import { flush, mount, unmount, watch } from "./support/browser-harness";
-import { command, flushCommand, type Tick } from "./support/model";
+import { createListState, type ListStateHandlers } from "#/src/index.ts";
+import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
+import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
 
 type Item = { id: number; label: string };
 

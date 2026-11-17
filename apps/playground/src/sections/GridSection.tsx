@@ -1,5 +1,5 @@
 import { Box, Grid } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 const containerBreakpoints = {
   xs: "10em",

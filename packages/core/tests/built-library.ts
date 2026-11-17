@@ -2,12 +2,12 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createComponent, renderToString } from "@solidjs/web";
 import type { Component } from "solid-js";
-import type * as Library from "../src/index";
-import type * as Parts from "../src/parts";
-import type * as StableClass from "../src/stable-class";
-import type * as StyleProps from "../src/style-props";
+import type * as Library from "#/src/index.ts";
+import type * as Parts from "#/src/parts.ts";
+import type * as StableClass from "#/src/stable-class.ts";
+import type * as StyleProps from "#/src/style-props.ts";
 import { parse, staticPropertyName, ts } from "../../../scripts/syntax";
-import { memberMarkupOf } from "./markup";
+import { memberMarkupOf } from "#/tests/markup.ts";
 
 export type ConsumerProps = Record<string, unknown>;
 

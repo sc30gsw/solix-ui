@@ -4,9 +4,9 @@ import {
   createAttachment,
   createElementAttachment,
   createElementAttachmentWhen,
-} from "../src/internal-attachment";
-import { flush, mount, unmount } from "./support/browser-harness";
-import { box } from "./support/dom";
+} from "#/src/internal-attachment.ts";
+import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
+import { box } from "#/tests/support/dom.ts";
 
 test("createAttachment attaches a defined config, keeps one equal by value, detaches when it turns undefined or changes, and detaches on dispose", () => {
   const seen: string[] = [];

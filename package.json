@@ -3,10 +3,14 @@
   "private": true,
   "license": "MIT",
   "type": "module",
+  "imports": {
+    "#/*": "./*"
+  },
   "scripts": {
     "check:private-terms": "node scripts/check-private-terms.mjs",
     "evidence": "node .agents/skills/verify-playground/scripts/evidence.mjs",
     "lint:solid": "solid2-kit check --dir . && solid2-kit doctor",
+    "migrate:subpath-imports": "node scripts/migrate-to-subpath-imports.ts",
     "prepare": "vp config --no-agent",
     "verify": "vp check --deny-warnings && vp run lint:solid && vp run check:private-terms && vp test",
     "web-guidance": "DISABLE_TELEMETRY=1 modern-web-guidance"

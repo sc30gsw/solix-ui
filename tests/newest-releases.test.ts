@@ -13,10 +13,10 @@ import {
   pinsOf,
   type RegistryDocument,
   type ReleasePolicy,
-} from "../scripts/newest-releases";
-import { pnpmSettings } from "../scripts/pnpm-settings";
-import { heldBackEntries, releasePolicy } from "../scripts/release-sources";
-import { rootManifest } from "../scripts/repository";
+} from "#/scripts/newest-releases.ts";
+import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
+import { heldBackEntries, releasePolicy } from "#/scripts/release-sources.ts";
+import { rootManifest } from "#/scripts/repository.ts";
 
 const now = Date.parse("2026-11-14T12:00:00Z");
 const day = 24 * 60 * 60_000;

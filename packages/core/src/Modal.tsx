@@ -1,9 +1,9 @@
 import * as stylex from "@stylexjs/stylex";
 import { createEffect, createUniqueId, onSettled } from "solid-js";
-import { dismissOnOutsidePress, supportsClosedBy } from "./light-dismiss";
-import { createParts, type ElementProps } from "./parts";
-import { type DisplayPropName, displayPropNames } from "./style-prop-table";
-import { tokens } from "./tokens.stylex";
+import { dismissOnOutsidePress, supportsClosedBy } from "#/src/light-dismiss.ts";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import { type DisplayPropName, displayPropNames } from "#/src/style-prop-table.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   root: {

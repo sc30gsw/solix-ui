@@ -1,5 +1,5 @@
 import { type Accessor, createMemo, createSignal, untrack } from "solid-js";
-import { createStateCommand } from "./internal-command";
+import { createStateCommand } from "#/src/internal-command.ts";
 
 export type Equals<T> = (left: T, right: T) => boolean;
 

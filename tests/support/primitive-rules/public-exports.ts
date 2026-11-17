@@ -1,4 +1,4 @@
-import { commentsIn, exportsOf, type ts } from "../../../scripts/syntax";
+import { commentsIn, exportsOf, type ts } from "#/scripts/syntax.ts";
 import {
   at,
   exportedFunction,
@@ -8,7 +8,7 @@ import {
   publicModules,
   type Rule,
   typesModule,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const docCommentStart = "/**";
 

@@ -1,7 +1,7 @@
-import { access } from "../../../../../packages/primitives/src/internal-access";
-import { createElementAttachment } from "../../../../../packages/primitives/src/internal-attachment";
-import { listenAsAsked, type ListenerSettings, listenerSettings } from "../../../../../packages/primitives/src/internal-listener";
-import type { ListenerOptions, MaybeAccessor, RefSetter } from "../../../../../packages/primitives/src/types";
+import { access } from "#/packages/primitives/src/internal-access.ts";
+import { createElementAttachment } from "#/packages/primitives/src/internal-attachment.ts";
+import { listenAsAsked, type ListenerSettings, listenerSettings } from "#/packages/primitives/src/internal-listener.ts";
+import type { ListenerOptions, MaybeAccessor, RefSetter } from "#/packages/primitives/src/types.ts";
 
 /** Holds what the rules allow. */
 export function createEventListener(

@@ -1,5 +1,5 @@
 import { Box, Button, Flex } from "@solix/core";
-import { refOf } from "../ref-of";
+import { refOf } from "#/src/ref-of.ts";
 
 export function FlexSection() {
   return (

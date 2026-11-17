@@ -1,7 +1,7 @@
 import { type Accessor, createMemo } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { createValue } from "./internal-value";
-import type { ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { ReadOnce } from "#/src/types.ts";
 
 /** What `toggle` takes: nothing to move to the next option, an option, or an updater that returns one. */
 export type ToggleRequest<T> = T | ((current: T) => T);

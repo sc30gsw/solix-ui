@@ -1,7 +1,7 @@
 import type { CompiledStyles } from "@stylexjs/stylex";
 import { createComponent, renderToString } from "@solidjs/web";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
+import { LIBRARY_CLASS_PREFIX } from "#/build-pipeline.mjs";
 import type {
   CenterProps,
   ContainerProps,
@@ -12,12 +12,12 @@ import type {
   SimpleGridProps,
   SpaceProps,
   StackProps,
-} from "../src/index";
-import type { createParts } from "../src/parts";
-import { breakpointWidths } from "../src/style-prop-table";
-import type { ContainerWidth } from "../src/style-props";
-import { isContainerWidth, library } from "./built-library";
-import { render } from "./fixtures";
+} from "#/src/index.ts";
+import type { createParts } from "#/src/parts.ts";
+import { breakpointWidths } from "#/src/style-prop-table.ts";
+import type { ContainerWidth } from "#/src/style-props.ts";
+import { isContainerWidth, library } from "#/tests/built-library.ts";
+import { render } from "#/tests/fixtures.ts";
 import {
   classesOf,
   declarationsIn,
@@ -27,7 +27,7 @@ import {
   rootElementOf,
   rulesOf,
   valuesOf,
-} from "./markup";
+} from "#/tests/markup.ts";
 
 const mdInRem = `${Number.parseFloat(breakpointWidths.md)}rem`;
 

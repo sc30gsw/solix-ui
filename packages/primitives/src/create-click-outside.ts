@@ -1,8 +1,13 @@
-import { access } from "./internal-access";
-import { createElementAttachmentWhen } from "./internal-attachment";
-import { disposeAll, listenAsAsked, listenerSettings, watchEvents } from "./internal-listener";
-import { isNode } from "./internal-node";
-import type { MaybeAccessor, RefSetter } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { createElementAttachmentWhen } from "#/src/internal-attachment.ts";
+import {
+  disposeAll,
+  listenAsAsked,
+  listenerSettings,
+  watchEvents,
+} from "#/src/internal-listener.ts";
+import { isNode } from "#/src/internal-node.ts";
+import type { MaybeAccessor, RefSetter } from "#/src/types.ts";
 
 type Exactly<T, U> = [T] extends [U] ? ([U] extends [T] ? true : false) : false;
 

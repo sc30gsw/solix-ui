@@ -1,11 +1,11 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { children, Show } from "solid-js";
-import { partId } from "./headless";
-import { createParts, type ElementProps } from "./parts";
-import { rendersSomething } from "./renders-something";
-import { useTabs } from "./tabs-context";
-import { tokens } from "./tokens.stylex";
+import { partId } from "#/src/headless.ts";
+import { createParts, type ElementProps } from "#/src/parts.ts";
+import { rendersSomething } from "#/src/renders-something.ts";
+import { useTabs } from "#/src/tabs-context.ts";
+import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   root: {

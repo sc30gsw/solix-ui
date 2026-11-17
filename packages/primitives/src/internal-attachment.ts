@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal } from "solid-js";
-import { type LiveConfig, sameValue } from "./internal-equal";
-import type { RefSetter } from "./types";
+import { type LiveConfig, sameValue } from "#/src/internal-equal.ts";
+import type { RefSetter } from "#/src/types.ts";
 
 export type Attach<Args extends unknown[]> = (...args: Args) => () => void;
 

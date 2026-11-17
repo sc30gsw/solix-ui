@@ -1,5 +1,5 @@
-import { declarationsOf, ts } from "../../../scripts/syntax";
-import { forbidOutside, isFromSolid } from "./library";
+import { declarationsOf, ts } from "#/scripts/syntax.ts";
+import { forbidOutside, isFromSolid } from "#/tests/support/primitive-rules/library.ts";
 
 const policyModule = "internal-browser-value.ts";
 const hydrationNames = ["ssrSource", "from"];

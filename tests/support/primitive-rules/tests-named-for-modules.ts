@@ -9,9 +9,9 @@ import {
   type PrimitiveRule,
   type Rule,
   testNamed,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 import { basename } from "node:path";
-import { exportsOf } from "../../../scripts/syntax";
+import { exportsOf } from "#/scripts/syntax.ts";
 
 function exportsAFunction(module: Module): boolean {
   return exportsOf(module.source).functions.length > 0;

@@ -1,8 +1,8 @@
 import { type Accessor, createMemo } from "solid-js";
-import { accessUntracked } from "./internal-access";
-import { sameItems } from "./internal-equal";
-import { createValue } from "./internal-value";
-import type { MaybeAccessor, ReadOnce } from "./types";
+import { accessUntracked } from "#/src/internal-access.ts";
+import { sameItems } from "#/src/internal-equal.ts";
+import { createValue } from "#/src/internal-value.ts";
+import type { MaybeAccessor, ReadOnce } from "#/src/types.ts";
 
 export type QueueOptions<T> = {
   /** The items it starts with, split by `limit`. */

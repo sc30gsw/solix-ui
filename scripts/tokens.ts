@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { repositoryRoot } from "./repository.ts";
-import { parse, ts } from "./syntax.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
+import { parse, ts } from "#/scripts/syntax.ts";
 
 export const tokensFile = "packages/core/src/tokens.stylex.ts";
 

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { repositoryRoot } from "./support/workspace";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const script = join(repositoryRoot, "scripts/check-private-terms.mjs");
 const commitMessageHook = join(repositoryRoot, ".vite-hooks/commit-msg");

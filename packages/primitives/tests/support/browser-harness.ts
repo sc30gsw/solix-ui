@@ -6,9 +6,14 @@ import {
   OBSERVE,
 } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
-import type { EventOf } from "../../src/internal-listener";
-import type { RefSetter } from "../../src/types";
-import { eventHandlerProperty, listenerMethods, observers, timers } from "./browser-resources";
+import type { EventOf } from "#/src/internal-listener.ts";
+import type { RefSetter } from "#/src/types.ts";
+import {
+  eventHandlerProperty,
+  listenerMethods,
+  observers,
+  timers,
+} from "#/tests/support/browser-resources.ts";
 
 type Listener = {
   target: EventTarget;

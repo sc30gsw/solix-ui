@@ -1,6 +1,6 @@
 import { describe, expect, inject, test } from "vite-plus/test";
 import { breakpointWidths } from "../../../packages/core/src/style-prop-table";
-import { computed, inEveryEngine, openPage, scriptModes } from "./support/playground";
+import { computed, inEveryEngine, openPage, scriptModes } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
 const pixelsPerMediaQueryEm = 16;

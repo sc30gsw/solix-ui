@@ -1,8 +1,8 @@
 import { expect, test } from "vite-plus/test";
-import { createFocusWithin, type FocusWithinOptions } from "../src/index";
-import { flush, mount, record } from "./support/browser-harness";
-import { attached, box, button, nextTask, reported, tab, witnessed } from "./support/dom";
-import { replaced } from "./support/replace";
+import { createFocusWithin, type FocusWithinOptions } from "#/src/index.ts";
+import { flush, mount, record } from "#/tests/support/browser-harness.ts";
+import { attached, box, button, nextTask, reported, tab, witnessed } from "#/tests/support/dom.ts";
+import { replaced } from "#/tests/support/replace.ts";
 
 function region(): {
   element: HTMLDivElement;

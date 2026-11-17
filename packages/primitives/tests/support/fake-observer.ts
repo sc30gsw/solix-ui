@@ -1,4 +1,4 @@
-import { replaced } from "./replace";
+import { replaced } from "#/tests/support/replace.ts";
 
 type Deliver = (entries: unknown[], observer: unknown) => void;
 

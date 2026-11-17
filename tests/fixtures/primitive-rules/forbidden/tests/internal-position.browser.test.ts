@@ -1,3 +1,3 @@
-import { flush } from "./support/browser-harness";
+import { flush } from "#/tests/fixtures/primitive-rules/forbidden/tests/support/browser-harness.ts";
 
 flush();

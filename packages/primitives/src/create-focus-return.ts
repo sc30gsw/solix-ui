@@ -1,9 +1,9 @@
 import { type Accessor, createEffect, untrack } from "solid-js";
-import { access } from "./internal-access";
-import { containsComposed, deepActiveElement } from "./internal-active";
-import { createBrowserCommand } from "./internal-command";
-import { isFocusTarget, moveFocus } from "./internal-focus";
-import type { MaybeAccessor } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { containsComposed, deepActiveElement } from "#/src/internal-active.ts";
+import { createBrowserCommand } from "#/src/internal-command.ts";
+import { isFocusTarget, moveFocus } from "#/src/internal-focus.ts";
+import type { MaybeAccessor } from "#/src/types.ts";
 
 /** Each option is live. */
 export type FocusReturnOptions = {

@@ -1,4 +1,4 @@
-import { descendants, findAncestor, firstLine, nameOf, ts } from "../../../scripts/syntax";
+import { descendants, findAncestor, firstLine, nameOf, ts } from "#/scripts/syntax.ts";
 import {
   browserTests,
   type Library,
@@ -6,7 +6,7 @@ import {
   refersToDomMember,
   type Rule,
   testAt,
-} from "./library";
+} from "#/tests/support/primitive-rules/library.ts";
 
 const timeoutOption = "timeout";
 const timers = ["setTimeout", "setInterval"];

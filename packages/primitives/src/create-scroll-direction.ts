@@ -1,5 +1,5 @@
-import { createScrollFold } from "./internal-scroll";
-import type { BrowserValue } from "./types";
+import { createScrollFold } from "#/src/internal-scroll.ts";
+import type { BrowserValue } from "#/src/types.ts";
 
 /** Which way the window last scrolled, or `"unknown"` before it has. */
 export type ScrollDirection = "up" | "down" | "unknown";

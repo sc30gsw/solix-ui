@@ -1,6 +1,12 @@
-import { descendants } from "../../../scripts/syntax";
-import { browserGlobalsReached } from "./browser-global-reads";
-import { at, hasRole, type PrimitiveRule, type Rule, stateCommandRole } from "./library";
+import { descendants } from "#/scripts/syntax.ts";
+import { browserGlobalsReached } from "#/tests/support/primitive-rules/browser-global-reads.ts";
+import {
+  at,
+  hasRole,
+  type PrimitiveRule,
+  type Rule,
+  stateCommandRole,
+} from "#/tests/support/primitive-rules/library.ts";
 
 const commandKinds: Rule = (library) =>
   library.modules.flatMap((module) =>

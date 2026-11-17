@@ -1,7 +1,7 @@
-import { access } from "./internal-access";
-import { mapBrowserValue } from "./internal-browser-value";
-import { createScrollFold, type ScrollMove } from "./internal-scroll";
-import type { BrowserValue, MaybeAccessor } from "./types";
+import { access } from "#/src/internal-access.ts";
+import { mapBrowserValue } from "#/src/internal-browser-value.ts";
+import { createScrollFold, type ScrollMove } from "#/src/internal-scroll.ts";
+import type { BrowserValue, MaybeAccessor } from "#/src/types.ts";
 
 /** Where the element is fixed, how far a scroll reveals or hides it, and what to call. */
 export type HeadroomOptions = {
