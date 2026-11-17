@@ -10,6 +10,7 @@ import {
   nodeReleases,
   registryDocuments,
   releasePolicy,
+  untilStableMembers,
 } from "#/scripts/release-sources.ts";
 import { rootManifest } from "#/scripts/repository.ts";
 
@@ -23,6 +24,7 @@ const { comparisons, problems } = compareWithNewest({
   policy,
   now: Date.now(),
   heldBack: heldBackEntries(),
+  untilStablePackages: untilStableMembers(settings.catalog),
 });
 
 console.log(reportTable(comparisons));

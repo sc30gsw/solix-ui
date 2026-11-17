@@ -1,8 +1,11 @@
-import { expect, test } from "vite-plus/test";
+import { expect, inject, test } from "vite-plus/test";
 import { builtComponents, library } from "#/packages/core/tests/built-library.ts";
 import {
   type Built,
   carriersIn,
+  type ConditionState,
+  conditionProblems,
+  conditionStateIn,
   parseRoadmap,
   readRoadmap,
   roadmapFile,
@@ -147,4 +150,103 @@ test("the roadmap refuses every step, leaving or duplicate line it cannot read, 
       ),
     ),
   ).toThrow(`${roadmapFile}:9 and ${roadmapFile}:10: Doohickey is placed twice.`);
+});
+
+const withCondition = [
+  "## v1.0",
+  "",
+  "1. **Gadgets** (merged): Gadget.",
+  "2. **Tooling** (merged).",
+  "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.",
+  "3. **Docs** (not started).",
+  "   - Merged when: `tests/docs.test.ts` exists and `vp run verify` lists it.",
+  "",
+].join("\n");
+
+function statesOf(states: Readonly<Record<string, ConditionState>>) {
+  return (file: string): ConditionState => states[file] ?? "missing";
+}
+
+test(`every step of ${roadmapFile} that adds no component and is merged names its test, and every condition says the truth about the files the test runner lists for vp run verify`, () => {
+  const { steps } = readRoadmap();
+
+  expect(steps.filter(({ mergedWhen }) => mergedWhen !== undefined).length).toBeGreaterThan(0);
+  expect(conditionProblems(steps, conditionStateIn(inject("testFilesOfEachProject")))).toEqual([]);
+});
+
+test("a condition's test is missing when no file has its path, not listed when no project of the run lists it, and listed otherwise", () => {
+  const stateOf = conditionStateIn({ node: ["tests/roadmap.test.ts"], other: [] });
+
+  expect(stateOf("tests/roadmap.test.ts")).toBe("listed");
+  expect(stateOf(roadmapFile)).toBe("not listed");
+  expect(stateOf("tests/no-such.test.ts")).toBe("missing");
+});
+
+test("a step that adds no component reads the condition on the line under it", () => {
+  expect(parseRoadmap(withCondition).steps).toEqual([
+    { name: "Gadgets", status: "merged", components: ["Gadget"] },
+    {
+      name: "Tooling",
+      status: "merged",
+      components: [],
+      mergedWhen: "tests/tooling.test.ts",
+    },
+    { name: "Docs", status: "not started", components: [], mergedWhen: "tests/docs.test.ts" },
+  ]);
+});
+
+test("a step says merged exactly when its condition's test exists and the runner lists it for verify", () => {
+  const { steps } = parseRoadmap(withCondition);
+
+  expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "listed" }))).toEqual([]);
+  expect(conditionProblems(steps, statesOf({}))).toEqual([
+    `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts does not exist. Mark it in progress, or land it.`,
+  ]);
+  expect(conditionProblems(steps, statesOf({ "tests/tooling.test.ts": "not listed" }))).toEqual([
+    `${roadmapFile}: Tooling is marked merged, but tests/tooling.test.ts is not a file \`vp run verify\` lists. Mark it in progress, or land it.`,
+  ]);
+  expect(
+    conditionProblems(
+      steps,
+      statesOf({ "tests/tooling.test.ts": "listed", "tests/docs.test.ts": "listed" }),
+    ),
+  ).toEqual([
+    `${roadmapFile}: Docs is marked not started, but tests/docs.test.ts exists and \`vp run verify\` lists it. Mark it merged.`,
+  ]);
+});
+
+test("the roadmap refuses every condition it cannot read, or that has no step right above it or decides a step with components, by line number", () => {
+  const refusals: [string, string, string][] = [
+    [
+      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.",
+      "   - Merged when: tests/tooling.test.ts exists.",
+      ":5: write the condition as",
+    ],
+    [
+      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.",
+      "- Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.",
+      ":5: write the condition as",
+    ],
+    [
+      "2. **Tooling** (merged).\n",
+      "2. **Tooling** (merged).\n\n",
+      ":6: a condition goes on the line right under its step.",
+    ],
+    [
+      "1. **Gadgets** (merged): Gadget.",
+      "1. **Gadgets** (merged): Gadget.\n   - Merged when: `tests/gadget.test.ts` exists and `vp run verify` lists it.",
+      ":4: Gadgets adds components",
+    ],
+    [
+      "   - Merged when: `tests/tooling.test.ts` exists and `vp run verify` lists it.\n",
+      "",
+      ":4: Tooling adds no component, so give it the condition",
+    ],
+  ];
+
+  for (const [from, to, refusal] of refusals) {
+    expect(() => parseRoadmap(withLine(withCondition, from, to)), to).toThrow(
+      `${roadmapFile}${refusal}`,
+    );
+  }
 });

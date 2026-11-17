@@ -1,26 +1,61 @@
 import { execFileSync } from "node:child_process";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { TestProject } from "vite-plus/test/node";
 import { installedVp, repositoryRoot } from "#/scripts/repository.ts";
 import { localUrl, startServer } from "#/tests/support/server-process.ts";
+import { withoutTestRunnerVariables } from "#/tests/support/test-runner-environment.ts";
 
 const playgroundDirectory = join(repositoryRoot, "apps/playground");
 const playgroundPort = 4319;
 
+export type TestFilesOfEachProject = Readonly<Record<string, readonly string[]>>;
+
+export type RunSettings = { testNamePattern: string | null; env: Record<string, string> };
+
 declare module "vite-plus/test" {
   interface ProvidedContext {
     playgroundUrl: string;
+    testFilesOfEachProject: Record<string, string[]>;
+    runTestNamePattern: string | null;
+    runSettingsOfEachProject: Record<string, RunSettings>;
   }
 }
 
-function productionEnvironment(): NodeJS.ProcessEnv {
-  const withoutTestRunnerVariables = Object.fromEntries(
-    Object.entries(process.env).filter(([name]) => !/^(VITEST|VITE_|TEST$|MODE$)/.test(name)),
+function patternOf(pattern: RegExp | string | undefined): string | null {
+  return pattern === undefined ? null : String(pattern);
+}
+
+function runSettingsOfEachProject(project: TestProject): Record<string, RunSettings> {
+  return Object.fromEntries(
+    project.vitest.projects.map(({ name, config }) => [
+      name,
+      {
+        testNamePattern: patternOf(config.testNamePattern),
+        env: Object.fromEntries(
+          Object.entries(config.env ?? {}).map(([key, value]) => [key, String(value)]),
+        ),
+      },
+    ]),
   );
-  return { ...withoutTestRunnerVariables, NODE_ENV: "production" };
+}
+
+function productionEnvironment(): NodeJS.ProcessEnv {
+  return { ...withoutTestRunnerVariables(), NODE_ENV: "production" };
+}
+
+async function testFilesOfEachProject(project: TestProject): Promise<Record<string, string[]>> {
+  const listed: Record<string, string[]> = {};
+  for (const specification of await project.vitest.globTestSpecifications()) {
+    const name = specification.project.name;
+    listed[name] = [...(listed[name] ?? []), relative(repositoryRoot, specification.moduleId)];
+  }
+  return listed;
 }
 
 export async function setup(project: TestProject): Promise<() => void> {
+  project.provide("testFilesOfEachProject", await testFilesOfEachProject(project));
+  project.provide("runTestNamePattern", patternOf(project.vitest.config.testNamePattern));
+  project.provide("runSettingsOfEachProject", runSettingsOfEachProject(project));
   execFileSync(installedVp, ["run", "-r", "build"], {
     cwd: repositoryRoot,
     env: productionEnvironment(),

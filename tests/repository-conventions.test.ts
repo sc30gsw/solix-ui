@@ -7,6 +7,7 @@ import {
   readFileSync,
   readlinkSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
@@ -20,6 +21,7 @@ import {
   workflowFiles,
   workspaceFile,
 } from "#/tests/support/workspace.ts";
+import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -259,16 +261,58 @@ test("every path a verification skill tells you to diff is in its covered-code t
   expect(violations).toEqual([]);
 });
 
-function ancestryOf(commit: string): "ancestor" | "not an ancestor" | "unknown" {
-  const { status } = spawnSync("git", ["merge-base", "--is-ancestor", commit, "HEAD"], {
-    cwd: repositoryRoot,
-    stdio: "ignore",
-  });
-  if (status === 0) return "ancestor";
-  return status === 1 ? "not an ancestor" : "unknown";
+function withoutGitVariables(): NodeJS.ProcessEnv {
+  return Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")),
+  );
 }
 
-test("every verification skill was last confirmed against a commit that HEAD contains, and CI checks out the history to tell", () => {
+function gitStatus(directory: string, args: readonly string[]): number | null {
+  return spawnSync("git", args, { cwd: directory, env: withoutGitVariables(), stdio: "ignore" })
+    .status;
+}
+
+function ancestryOf(
+  commit: string,
+  directory: string = repositoryRoot,
+): "ancestor" | "not an ancestor" | "unknown" {
+  const merging = gitStatus(directory, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]) === 0;
+  const statuses = (merging ? ["HEAD", "MERGE_HEAD"] : ["HEAD"]).map((head) =>
+    gitStatus(directory, ["merge-base", "--is-ancestor", commit, head]),
+  );
+  if (statuses.includes(0)) return "ancestor";
+  return statuses.every((status) => status === 1) ? "not an ancestor" : "unknown";
+}
+
+test("while a merge is being committed, a commit it brings in counts as one HEAD contains, and not once the merge is aborted", async () => {
+  await inTemporaryTree({ "file.txt": "base\n" }, (root) => {
+    const git = (...args: string[]) =>
+      spawnSync("git", ["-c", "user.name=probe", "-c", "user.email=probe@example.com", ...args], {
+        cwd: root,
+        env: withoutGitVariables(),
+        encoding: "utf8",
+      }).stdout.trim();
+    git("init", "--quiet", "--initial-branch=main");
+    git("add", "file.txt");
+    git("commit", "--quiet", "--message=base");
+    git("switch", "--quiet", "--create", "incoming");
+    writeFileSync(join(root, "incoming.txt"), "incoming\n");
+    git("add", "incoming.txt");
+    git("commit", "--quiet", "--message=incoming");
+    const incoming = git("rev-parse", "HEAD");
+    git("switch", "--quiet", "main");
+    writeFileSync(join(root, "file.txt"), "main\n");
+    git("commit", "--quiet", "--all", "--message=main");
+
+    expect(ancestryOf(incoming, root)).toBe("not an ancestor");
+    git("merge", "--quiet", "--no-commit", "--no-ff", "incoming");
+    expect(ancestryOf(incoming, root)).toBe("ancestor");
+    git("merge", "--abort");
+    expect(ancestryOf(incoming, root)).toBe("not an ancestor");
+  });
+});
+
+test("every verification skill was last confirmed against a commit that HEAD contains, or, while a merge is being committed, that the merged commit contains, and CI checks out the history to tell", () => {
   const violations = skillNames
     .filter((name) => name.startsWith("verify-"))
     .flatMap((name) => {

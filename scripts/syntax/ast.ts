@@ -103,6 +103,7 @@ export {
   type ObjectLiteralElementLike,
   type ObjectLiteralExpression,
   type ParameterDeclaration,
+  type PropertyAccessExpression,
   type PropertyName,
   type PropertySignatureDeclaration,
   type SourceFile,

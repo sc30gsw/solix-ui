@@ -26,6 +26,8 @@ catalog:
   "@solidjs/signals": 2.0.0
   "@solidjs/vite-plugin": 3.0.0
   "@solidjs/web": 2.0.0
+  "@storybook/addon-a11y": 11.0.0-beta.3
+  "@storybook/addon-vitest": 11.0.0-beta.3
   "@stylexjs/babel-plugin": 0.19.2
   "@stylexjs/stylex": 0.19.2
   "@stylexjs/unplugin": 0.19.2
@@ -42,6 +44,8 @@ catalog:
   semver: 7.8.6
   solid-js: 2.0.0
   solid2-agent-kit: 0.26.1
+  storybook: 11.0.0-beta.3
+  storybook-solidjs-vite: 11.0.0-next-20261105190313
   typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   vite-plus: 1.6.0
@@ -68,3 +72,5 @@ permissions:
       - reactivity-diagnostics
   modern-web-guidance:
     skills: false
+allowBuilds:
+  esbuild: false

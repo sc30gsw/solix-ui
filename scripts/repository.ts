@@ -58,10 +58,18 @@ export function listed(names: readonly string[]): string {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
-export function installedVersions(
+export type Dependent = {
+  name: string;
+  version?: string;
+  path?: string;
+  depField?: string;
+  dependents?: Dependent[];
+};
+
+export function whyInstalled(
   names: readonly string[],
   directory: string = repositoryRoot,
-): Installed[] {
+): Dependent[] {
   const answer = execFileSync(installedVp, ["why", ...names, "-r", "--json"], {
     cwd: directory,
     encoding: "utf8",
@@ -70,5 +78,16 @@ export function installedVersions(
   });
   const installed: unknown = JSON.parse(answer);
   if (!Array.isArray(installed)) throw new Error(`The package manager answered: ${answer}`);
-  return installed.map(({ name, version, path }: Installed) => ({ name, version, path }));
+  return installed;
+}
+
+export function installedVersions(
+  names: readonly string[],
+  directory: string = repositoryRoot,
+): Installed[] {
+  return whyInstalled(names, directory).map(({ name, version = "", path = "" }) => ({
+    name,
+    version,
+    path,
+  }));
 }
