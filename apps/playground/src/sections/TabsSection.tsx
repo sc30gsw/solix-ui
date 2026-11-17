@@ -179,6 +179,15 @@ export function TabsSection() {
       </Tabs>
       <output aria-label="Held requests">{heldRequests()}</output>
 
+      <TextInput
+        aria-label="Tab values"
+        onInput={(event) =>
+          setGenerated((current) => tabValuesIn(event.currentTarget.value) ?? current)
+        }
+      />
+      <Button onClick={() => setPanelsMounted((mounted) => !mounted)}>
+        {panelsMounted() ? "Unmount the panels" : "Mount the panels"}
+      </Button>
       <Tabs id="generated">
         <Tabs.List aria-label={generatedList}>
           <For each={generated()}>{(value) => <Tabs.Tab value={value}>{value}</Tabs.Tab>}</For>
@@ -189,15 +198,6 @@ export function TabsSection() {
           </For>
         </Show>
       </Tabs>
-      <TextInput
-        aria-label="Tab values"
-        onInput={(event) =>
-          setGenerated((current) => tabValuesIn(event.currentTarget.value) ?? current)
-        }
-      />
-      <Button onClick={() => setPanelsMounted((mounted) => !mounted)}>
-        {panelsMounted() ? "Unmount the panels" : "Mount the panels"}
-      </Button>
 
       <Button onClick={(event) => renderInAShadowRootOf(event.currentTarget.nextElementSibling)}>
         Render tabs in a shadow root
