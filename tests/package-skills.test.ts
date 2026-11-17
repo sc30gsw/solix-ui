@@ -22,6 +22,7 @@ import {
   skillDirectories,
 } from "#/scripts/package-skills.ts";
 import { repositoryRoot, workflowFiles, workspaceFile } from "#/tests/support/workspace.ts";
+import { git } from "#/tests/support/git.ts";
 
 const packageSkillIgnoreFile = ".gitignore";
 const skillFolders = skillDirectories.join(" and ");
@@ -155,13 +156,13 @@ test(`${reviewedSkillsFile} records a reviewed hash for exactly the package skil
 });
 
 function trackedFiles(directory: string): string[] {
-  return spawnSync("git", ["ls-files", "--", directory], { cwd: repositoryRoot, encoding: "utf8" })
+  return git(["ls-files", "--", directory], { cwd: repositoryRoot })
     .stdout.split("\n")
     .filter((line) => line !== "");
 }
 
 function isIgnored(path: string): boolean {
-  return spawnSync("git", ["check-ignore", "-q", path], { cwd: repositoryRoot }).status === 0;
+  return git(["check-ignore", "-q", path], { cwd: repositoryRoot }).status === 0;
 }
 
 test(`in ${skillFolders}, git ignores the approved package skills and tracks every other entry`, () => {

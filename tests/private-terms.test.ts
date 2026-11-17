@@ -1,20 +1,19 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
+import { git, withoutGitVariables } from "#/tests/support/git.ts";
 
 const script = join(repositoryRoot, "scripts/check-private-terms.mjs");
 const commitMessageHook = join(repositoryRoot, ".vite-hooks/commit-msg");
 const madeUpTerm = "zorblax";
 const otherMadeUpTerm = "quindle widgets";
 const scissors = "# ------------------------ >8 ------------------------";
-const gitVariable = /^GIT_/;
-
 function environment(terms: string | undefined): NodeJS.ProcessEnv {
-  const inherited = Object.entries(process.env).filter(
-    ([name]) => !gitVariable.test(name) && name !== "SOLIX_PRIVATE_TERMS",
+  const inherited = Object.entries(withoutGitVariables()).filter(
+    ([name]) => name !== "SOLIX_PRIVATE_TERMS",
   );
   return {
     ...Object.fromEntries(inherited),
@@ -41,8 +40,7 @@ function check(args: string[], terms: string | undefined, cwd = repositoryRoot) 
 }
 
 function gitIn(repository: string, args: string[]): void {
-  execFileSync(
-    "git",
+  const result = git(
     [
       "-c",
       "user.name=Test",
@@ -54,6 +52,7 @@ function gitIn(repository: string, args: string[]): void {
     ],
     { cwd: repository, env: environment(undefined) },
   );
+  if (result.status !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
 }
 
 test("text names a term in any case, and the report gives each line but never the term", () => {

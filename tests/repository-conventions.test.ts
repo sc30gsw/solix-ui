@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import {
   existsSync,
   globSync,
@@ -22,6 +21,15 @@ import {
   workspaceFile,
 } from "#/tests/support/workspace.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
+import { git } from "#/tests/support/git.ts";
+import {
+  calledDeclaration,
+  descendants,
+  fileOf,
+  openProgram,
+  stringsIn,
+  ts,
+} from "#/scripts/syntax.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -261,15 +269,8 @@ test("every path a verification skill tells you to diff is in its covered-code t
   expect(violations).toEqual([]);
 });
 
-function withoutGitVariables(): NodeJS.ProcessEnv {
-  return Object.fromEntries(
-    Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")),
-  );
-}
-
 function gitStatus(directory: string, args: readonly string[]): number | null {
-  return spawnSync("git", args, { cwd: directory, env: withoutGitVariables(), stdio: "ignore" })
-    .status;
+  return git(args, { cwd: directory }).status;
 }
 
 function ancestryOf(
@@ -286,28 +287,35 @@ function ancestryOf(
 
 test("while a merge is being committed, a commit it brings in counts as one HEAD contains, and not once the merge is aborted", async () => {
   await inTemporaryTree({ "file.txt": "base\n" }, (root) => {
-    const git = (...args: string[]) =>
-      spawnSync("git", ["-c", "user.name=probe", "-c", "user.email=probe@example.com", ...args], {
-        cwd: root,
-        env: withoutGitVariables(),
-        encoding: "utf8",
-      }).stdout.trim();
-    git("init", "--quiet", "--initial-branch=main");
-    git("add", "file.txt");
-    git("commit", "--quiet", "--message=base");
-    git("switch", "--quiet", "--create", "incoming");
+    const probe = (...args: string[]) =>
+      git(
+        [
+          "-c",
+          "user.name=probe",
+          "-c",
+          "user.email=probe@example.com",
+          "-c",
+          "core.hooksPath=/dev/null",
+          ...args,
+        ],
+        { cwd: root },
+      ).stdout.trim();
+    probe("init", "--quiet", "--initial-branch=main");
+    probe("add", "file.txt");
+    probe("commit", "--quiet", "--message=base");
+    probe("switch", "--quiet", "--create", "incoming");
     writeFileSync(join(root, "incoming.txt"), "incoming\n");
-    git("add", "incoming.txt");
-    git("commit", "--quiet", "--message=incoming");
-    const incoming = git("rev-parse", "HEAD");
-    git("switch", "--quiet", "main");
+    probe("add", "incoming.txt");
+    probe("commit", "--quiet", "--message=incoming");
+    const incoming = probe("rev-parse", "HEAD");
+    probe("switch", "--quiet", "main");
     writeFileSync(join(root, "file.txt"), "main\n");
-    git("commit", "--quiet", "--all", "--message=main");
+    probe("commit", "--quiet", "--all", "--message=main");
 
     expect(ancestryOf(incoming, root)).toBe("not an ancestor");
-    git("merge", "--quiet", "--no-commit", "--no-ff", "incoming");
+    probe("merge", "--quiet", "--no-commit", "--no-ff", "incoming");
     expect(ancestryOf(incoming, root)).toBe("ancestor");
-    git("merge", "--abort");
+    probe("merge", "--abort");
     expect(ancestryOf(incoming, root)).toBe("not an ancestor");
   });
 });
@@ -416,4 +424,54 @@ test("every check in the repository runs through vp run verify, before a commit,
   }
   expect(read(".github/workflows/ci.yml")).toMatch(/- run: vp run verify$/m);
   expect(read("AGENTS.md")).toContain("`vp run verify`");
+});
+
+const gitModule = "tests/support/git.ts";
+const testCode = "{tests,apps/*/tests,packages/*/tests}/**/*.{ts,tsx,mts,mjs}";
+const childProcessDeclarations = /[\\/]@types[\\/]node[\\/]child_process\.d\.ts$/;
+
+function spawnsGit(program: ReturnType<typeof openProgram>, call: ts.CallExpression): boolean {
+  const called = calledDeclaration(program, call);
+  return (
+    called !== undefined &&
+    childProcessDeclarations.test(fileOf(called)) &&
+    stringsIn(program, call.arguments[0]).some(
+      (command) => command === "git" || command.startsWith("git "),
+    )
+  );
+}
+
+test(`a test or a test-support module spawns git only through ${gitModule}, which removes every GIT_ variable`, () => {
+  const files = globSync(testCode, { cwd: repositoryRoot, exclude: outsideGeneratedOrInstalled });
+  const program = openProgram(files.map((file) => join(repositoryRoot, file)));
+  try {
+    const violations = files
+      .filter((file) => file !== gitModule)
+      .flatMap((file) => {
+        const source = program.sourceFile(join(repositoryRoot, file));
+        if (!source) return [`${file}: TypeScript could not read this file.`];
+        return descendants(source)
+          .filter((node): node is ts.CallExpression => ts.isCallExpression(node))
+          .filter((call) => spawnsGit(program, call))
+          .map(
+            (call) =>
+              `${file}:${source.getLineAndCharacterOfPosition(call.getStart()).line + 1}: spawn git through \`git\` in ${gitModule}, so a hook's GIT_DIR cannot point it at this repository.`,
+          );
+      });
+
+    expect(files).toContain(gitModule);
+    expect(violations).toEqual([]);
+  } finally {
+    program.dispose();
+  }
+});
+
+test(`git in ${gitModule} acts on the repository its directory names, whatever GIT_ variables the caller carries`, () => {
+  const answer = git(["rev-parse", "--show-toplevel"], {
+    cwd: repositoryRoot,
+    env: { ...process.env, GIT_DIR: join(repositoryRoot, "no-such-git-directory") },
+  });
+
+  expect(answer.status).toBe(0);
+  expect(answer.stdout.trim()).toBe(repositoryRoot);
 });
