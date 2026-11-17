@@ -2,20 +2,26 @@ import { mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { manifestPaths } from "#/scripts/repository.ts";
+import { manifestAt, manifestPaths } from "#/scripts/repository.ts";
 import {
   filesTheRuleCovers,
   migrateToSubpathImports,
   misspelt,
   type ModuleReference,
   moduleReferences,
+  unresolvedPaths,
 } from "#/scripts/subpath-imports.ts";
-import { subpathPattern, subpathPatternTarget, subpathPrefix } from "#/scripts/subpath.ts";
-import { rereadFiles } from "#/scripts/syntax.ts";
+import {
+  insideOf,
+  subpathPattern,
+  subpathPatternTarget,
+  subpathPrefix,
+} from "#/scripts/subpath.ts";
 import { inTemporaryTree, type Tree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const codemod = "vp run migrate:subpath-imports";
+const ruleFixtures = join(repositoryRoot, "tests/fixtures");
 const outsideThePackage = "#outside/*";
 
 function problems(references: readonly ModuleReference[], root: string): string[] {
@@ -37,9 +43,7 @@ function errorCodeOf(attempt: () => unknown): unknown {
 test(`every package's manifest maps ${subpathPattern} to its root in "imports"`, () => {
   const paths = manifestPaths();
   const violations = paths.flatMap((path) => {
-    const { imports } = JSON.parse(readFileSync(join(repositoryRoot, path), "utf8")) as {
-      imports?: Record<string, string>;
-    };
+    const { imports } = manifestAt(path);
     return imports?.[subpathPattern] === subpathPatternTarget
       ? []
       : [
@@ -51,11 +55,19 @@ test(`every package's manifest maps ${subpathPattern} to its root in "imports"`,
   expect(violations).toEqual([]);
 });
 
-test(`every module specifier that reaches a file of its own package is ${subpathPrefix} and the file's path from the package root, whether it imports, exports, loads it later or names its type`, () => {
+test(`every module specifier that reaches a file of its own package is ${subpathPrefix} and the file's path from the package root, whether it imports, exports, loads it later or names its type, and every path a specifier names outside the rule fixtures reaches a file`, () => {
   const references = moduleReferences(filesTheRuleCovers());
 
   expect(references.some(({ specifier }) => specifier.startsWith(subpathPrefix))).toBe(true);
   expect(problems(references, repositoryRoot)).toEqual([]);
+  expect(
+    unresolvedPaths(references)
+      .filter(({ file }) => !insideOf(ruleFixtures, file))
+      .map(
+        ({ file, line, statement }) =>
+          `${relative(repositoryRoot, file)}:${line}: ${statement} names a path that reaches no file.`,
+      ),
+  ).toEqual([]);
 });
 
 const probe: Tree = {
@@ -106,7 +118,6 @@ test(`the rule flags every way a file can reach a file of its own package withou
     ]);
 
     const migrated = migrateToSubpathImports(root);
-    rereadFiles(migrated);
     const changed = migrated.map((file) => relative(root, file));
     const after = moduleReferences(filesTheRuleCovers(root));
     const reachedAt = (references: readonly ModuleReference[]) =>

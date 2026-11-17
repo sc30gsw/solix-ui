@@ -1,6 +1,13 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
-import { insideOf, isRelative, posix, subpathPrefix, subpathTarget } from "#/scripts/subpath.ts";
+import {
+  insideOf,
+  isRelative,
+  namesAPackage,
+  posix,
+  subpathPrefix,
+  subpathTarget,
+} from "#/scripts/subpath.ts";
 
 export type SourceLayout = {
   packageRoot: string;
@@ -18,13 +25,6 @@ type ProgramPath = {
   ) => void;
 };
 type PluginState = { filename?: string };
-
-const loadingNodes = [
-  "ImportDeclaration",
-  "ExportNamedDeclaration",
-  "ExportAllDeclaration",
-  "ImportExpression",
-].join("|");
 
 export function libraryLayout(
   packageRoot: string,
@@ -56,8 +56,13 @@ export function distSpecifier(specifier: string, importer: string, layout: Sourc
       `${importer}: ${specifier} is relative. Name a file of this package with ${subpathPrefix} and its path from the package root, or run vp run migrate:subpath-imports.`,
     );
   }
+  if (namesAPackage(specifier)) return specifier;
   const target = subpathTarget(importer, specifier);
-  if (target === undefined) return specifier;
+  if (target === undefined) {
+    throw new Error(
+      `${importer}: ${specifier} names neither a package nor a file through ${subpathPrefix}, so a consumer could not resolve it from dist.`,
+    );
+  }
   if (!insideOf(layout.sourceDirectory, target)) {
     throw new Error(
       `${importer}: ${specifier} reaches ${relative(layout.packageRoot, target)}, outside ${relative(layout.packageRoot, layout.sourceDirectory)}, so dist holds no file for it. Import only sources the build compiles.`,
@@ -78,10 +83,12 @@ export function distSpecifiers(layout: SourceLayout) {
       }
       literal.value = distSpecifier(literal.value, state.filename, layout);
     };
+    const rewriteSource = (path: NodePath, state: PluginState) => rewrite(path.node.source, state);
     const visitor = {
-      [loadingNodes](path: NodePath, state: PluginState) {
-        rewrite(path.node.source, state);
-      },
+      ImportDeclaration: rewriteSource,
+      ExportNamedDeclaration: rewriteSource,
+      ExportAllDeclaration: rewriteSource,
+      ImportExpression: rewriteSource,
     };
     return {
       visitor: {
@@ -96,16 +103,17 @@ export function distSpecifiers(layout: SourceLayout) {
 export async function buildSources(
   layout: SourceLayout,
   compile: (filename: string, source: string) => Promise<string>,
+  report: (line: string) => void = console.log,
 ): Promise<void> {
   await rm(layout.outputDirectory, { recursive: true, force: true });
   await mkdir(layout.outputDirectory, { recursive: true });
-  for (const name of await readdir(layout.sourceDirectory)) {
+  const names = await readdir(layout.sourceDirectory, { recursive: true });
+  for (const name of names.toSorted()) {
     if (!Object.hasOwn(layout.outputExtensions, extname(name))) continue;
     const filename = join(layout.sourceDirectory, name);
     const output = outputPathOf(filename, layout);
+    await mkdir(dirname(output), { recursive: true });
     await writeFile(output, await compile(filename, await readFile(filename, "utf8")));
-    console.log(
-      `${relative(layout.packageRoot, filename)} -> ${relative(layout.packageRoot, output)}`,
-    );
+    report(`${relative(layout.packageRoot, filename)} -> ${relative(layout.packageRoot, output)}`);
   }
 }

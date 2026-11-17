@@ -1,11 +1,12 @@
 import { transformAsync } from "@babel/core";
 import presetTypescript from "@babel/preset-typescript";
 import fc from "fast-check";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
+  buildSources,
   distSpecifier,
   distSpecifiers,
   outputPathOf,
@@ -109,18 +110,20 @@ test(`for generated layouts, the build rewrites every ${subpathPrefix} specifier
             outputDirectory: join(root, outputDirectory),
             outputExtensions: extensions,
           };
-          for (const [path, text] of sources) {
-            const filename = join(root, path);
-            const output = await transformAsync(text, {
-              filename,
-              babelrc: false,
-              configFile: false,
-              presets: [presetTypescript],
-              plugins: [distSpecifiers(layout)],
-            });
-            mkdirSync(dirname(outputPathOf(filename, layout)), { recursive: true });
-            writeFileSync(outputPathOf(filename, layout), output?.code ?? "");
-          }
+          await buildSources(
+            layout,
+            async (filename, source) =>
+              (
+                await transformAsync(source, {
+                  filename,
+                  babelrc: false,
+                  configFile: false,
+                  presets: [presetTypescript],
+                  plugins: [distSpecifiers(layout)],
+                })
+              )?.code ?? "",
+            () => {},
+          );
           for (const [path, text] of sources) {
             const filename = join(root, path);
             const output = outputPathOf(filename, layout);
@@ -158,6 +161,8 @@ test(`the build refuses a relative specifier, and a ${subpathPrefix} specifier t
     );
     expect(() => distSpecifier("./b.ts", importer, layout)).toThrow(/is relative/);
     expect(() => distSpecifier("../src/b.ts", importer, layout)).toThrow(/is relative/);
+    expect(() => distSpecifier("#internal/b.ts", importer, layout)).toThrow(/neither a package/);
+    expect(distSpecifier("solid-js", importer, layout)).toBe("solid-js");
     expect(() => distSpecifier(`${subpathPrefix}src/style.css`, importer, layout)).toThrow(
       /no output for a \.css file/,
     );

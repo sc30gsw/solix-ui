@@ -33,6 +33,7 @@ export type Manifest = {
   name?: string;
   license?: string;
   exports?: ExportTarget;
+  imports?: Record<string, string>;
   engines?: Record<string, string>;
   packageManager?: string;
   devEngines?: Record<string, unknown>;

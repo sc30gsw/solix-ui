@@ -15,11 +15,11 @@ export function insideOf(directory: string, file: string): boolean {
 }
 
 export function namesAPackage(specifier: string): boolean {
-  return !/^(?:\.{1,2}\/|\/|#)/.test(specifier) && !URL.canParse(specifier);
+  return !/^(?:\.{1,2}(?:\/|$)|\/|#)/.test(specifier) && !URL.canParse(specifier);
 }
 
 export function isRelative(specifier: string): boolean {
-  return /^\.{1,2}\//.test(specifier);
+  return /^\.{1,2}(?:\/|$)/.test(specifier);
 }
 
 export function packageRootOf(file: string): string {

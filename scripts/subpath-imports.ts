@@ -1,7 +1,12 @@
 import { globSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join, relative, sep } from "node:path";
-import { manifestPaths, repositoryRoot, scriptFilesIn } from "#/scripts/repository.ts";
+import {
+  type Manifest,
+  manifestPaths,
+  repositoryRoot,
+  scriptFilesIn,
+} from "#/scripts/repository.ts";
 import {
   insideOf,
   namesAPackage,
@@ -15,14 +20,13 @@ import {
   firstLine,
   moduleSpecifierOf,
   openProgram,
+  rereadFiles,
   symbolOf,
   ts,
 } from "#/scripts/syntax.ts";
 
 const installedPackages = "node_modules";
 const projectSkillScripts = ".agents/skills/*/scripts/**/*.{ts,tsx,mjs,cjs,js}";
-
-type Manifest = Record<string, unknown> & { imports?: Record<string, string> };
 
 export type ModuleReference = {
   file: string;
@@ -81,6 +85,12 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
   }
 }
 
+export function unresolvedPaths(references: readonly ModuleReference[]): ModuleReference[] {
+  return references.filter(
+    ({ reached, specifier }) => reached === undefined && !namesAPackage(specifier),
+  );
+}
+
 export function misspelt(
   references: readonly ModuleReference[],
   root: string = repositoryRoot,
@@ -134,5 +144,7 @@ function sourceWrites(root: string): [file: string, text: string][] {
 export function migrateToSubpathImports(root: string = repositoryRoot): string[] {
   const writes = [...manifestWrites(root), ...sourceWrites(root)];
   for (const [file, text] of writes) writeFileSync(file, text);
-  return writes.map(([file]) => file);
+  const written = writes.map(([file]) => file);
+  rereadFiles(written);
+  return written;
 }

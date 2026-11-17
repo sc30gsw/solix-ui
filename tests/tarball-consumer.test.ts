@@ -20,7 +20,7 @@ import { solidPackages } from "#/scripts/newest-releases.ts";
 import { allowedRuntimeDependencyNames } from "#/scripts/runtime-dependencies.ts";
 import { stateOf, tabNamed } from "#/apps/playground/tests/support/tabs.ts";
 import { browserType, enginesToVerify } from "#/scripts/browser-engines.mjs";
-import { isRelative, subpathPrefix } from "#/scripts/subpath.ts";
+import { isRelative } from "#/scripts/subpath.ts";
 import {
   descendants,
   firstLine,
@@ -51,6 +51,7 @@ const installAndBuildTimeout = 240_000;
 const packTimeout = packageManagerAnswerTimeout * libraryPackages.length;
 const fromOutsideTheRepository = allowedRuntimeDependencyNames();
 const settingsAConsumerWrites = ["plugins"];
+const subpathImportPrefix = "#";
 const settingsOfAnAppInThisRepository = join(repositoryRoot, "apps/playground/tsconfig.json");
 const [engine] = enginesToVerify();
 const servers: [label: string, port: number, command: string[]][] = [
@@ -344,7 +345,7 @@ describe("installed into a consumer outside the workspace", () => {
           const specifier = moduleSpecifierOf(node);
           if (!specifier || !ts.isStringLiteralLikeNode(specifier)) return [];
           const where = `${manifest.name}/${file}: ${firstLine(node)}`;
-          if (specifier.text.startsWith(subpathPrefix)) {
+          if (specifier.text.startsWith(subpathImportPrefix)) {
             return [`${where} names a subpath import, which a consumer's tools may not resolve.`];
           }
           return isRelative(specifier.text) &&
