@@ -11,11 +11,10 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
-const { baseKey, breakpointWidths, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
+const { baseKey, breakpointWidths, libraryStyleMark, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
-const { runTimeStyleAttribute } = await repositoryModule("packages/core/src/run-time-style.ts");
-const { themedSpacing, themeNames, themeSection } = await repositoryModule("apps/playground/src/sections/theme-setups.ts");
-const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { themedByTheProvider, themedSpacing, themeNames, themeSection } = await repositoryModule("apps/playground/src/sections/theme-setups.ts");
 const { pageStyleRules, stylesAddedToThePage } = await repositoryModule("apps/playground/tests/support/page-styles.ts");
 const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabNames, tabsRegion, valueOf } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
@@ -29,6 +28,8 @@ const mdWidth = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 
 const style = (locator, property) =>
   locator.evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
+const widthOf = (locator) => locator.evaluate((node) => node.getBoundingClientRect().width);
+const elementAfter = (page, text) => page.getByText(text, { exact: true }).locator("xpath=following-sibling::*[1]");
 
 const writtenAtRunTime = (page, region, classOfTheLibrary) =>
   page.evaluate(
@@ -77,13 +78,13 @@ const journeys = {
     observe("the box under the provider's selector reads the theme's spacing", (await style(themed, "--solix-spacing-md")).trim(), themedSpacing.md);
     observe("the box outside it keeps the default padding", await style(untouched, "padding-top"), expected("--solix-spacing-md"));
     observe("the theme changes the padding of the box under the selector", (await style(themed, "padding-top")) !== (await style(untouched, "padding-top")), true);
-    const styles = await page.evaluate((byTheLibrary) => {
+    const styles = await page.evaluate(([mark, selected]) => {
       const nonce = document.querySelector("script[nonce]")?.nonce;
       const all = [...document.querySelectorAll("style")];
-      return { withoutTheNonce: all.filter((element) => element.nonce !== nonce).length, theLibrarys: all.filter((element) => element.hasAttribute(byTheLibrary)).length };
-    }, runTimeStyleAttribute);
+      return { withoutTheNonce: all.filter((element) => element.nonce !== nonce).length, theme: all.filter((element) => element.hasAttribute(mark) && (element.textContent ?? "").includes(selected)).length };
+    }, [libraryStyleMark, themedByTheProvider]);
     observe("style elements without the page's nonce", styles.withoutTheNonce, 0);
-    observe("style elements the library added", styles.theLibrarys, 1);
+    observe("library style elements that hold the provider's theme", styles.theme, 1);
   },
   "changing-props": async ({ page, observe, shot, expected }) => {
     const emphasise = page.getByRole("button", { name: "Emphasise" });
@@ -289,6 +290,192 @@ const journeys = {
     observe("open: styles.summary still beats the library's open background", await style(summary, "background-color"), expected("partBackground"));
     observe("open: styles.summary still beats the library's open text colour", await style(summary, "color"), expected("partText"));
   },
+  space: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Space" });
+    await page.setViewportSize({ width: mdWidth - 1, height: 360 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Space.`, section);
+    observe("below md: the space between Above the space and Below the space is at least its h, md", await style(elementAfter(page, "Above the space"), "min-height"), expected("--solix-spacing-md"));
+    observe("the space between Before the space and After the space keeps its w, lg, as its minimum width in a flex row", await style(elementAfter(page, "Before the space"), "min-width"), expected("--solix-spacing-lg"));
+    observe("the pinned space takes its mih, xs, as its minimum height instead of its h", await style(elementAfter(page, "Above the pinned space"), "min-height"), expected("--solix-spacing-xs"));
+
+    await page.setViewportSize({ width: mdWidth, height: 360 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The first space grows.`, section);
+    observe("at md: the space between Above the space and Below the space is at least its h, xl", await style(elementAfter(page, "Above the space"), "min-height"), expected("--solix-spacing-xl"));
+  },
+  center: async ({ page, observe, shot }) => {
+    const section = page.getByRole("region", { name: "Center" });
+    const content = page.getByText("Centered content", { exact: true });
+    const center = content.locator("xpath=..");
+    const link = page.getByRole("link", { name: "Inline centered link" });
+    await section.scrollIntoViewIfNeeded();
+    await shot("center", "Open the page and scroll to the section named Center.", section);
+    observe("the Center is a flex container", await style(center, "display"), "flex");
+    observe(
+      "Centered content sits in the middle of the Center, as far from each edge as from the one opposite",
+      await center.evaluate((parent, child) => {
+        const around = parent.getBoundingClientRect();
+        const within = child.getBoundingClientRect();
+        const even = (before, after) => Math.abs(before - after) <= 1;
+        return even(within.left - around.left, around.right - within.right) && even(within.top - around.top, around.bottom - within.bottom);
+      }, await content.elementHandle()),
+      true,
+    );
+    observe("the inline Center is an inline flex container", await style(link, "display"), "inline-flex");
+    observe("the inline Center is the link its component prop names", await link.getAttribute("href"), "#center");
+  },
+  stack: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Stack" });
+    const first = page.getByRole("button", { name: "First in the stack" });
+    const second = page.getByRole("button", { name: "Second in the stack" });
+    const stack = first.locator("xpath=..");
+    const centred = page.getByText("Top of the centred stack", { exact: true }).locator("xpath=..");
+    await section.scrollIntoViewIfNeeded();
+    await shot("stack", "Open the page and scroll to the section named Stack.", section);
+    observe("the Stack lays its children out in a column", await style(stack, "flex-direction"), "column");
+    observe("the Stack's gap is md by default", await style(stack, "row-gap"), expected("--solix-spacing-md"));
+    observe("the Stack stretches its children by default", await style(stack, "align-items"), "stretch");
+    observe(
+      "Second in the stack sits below First in the stack",
+      await second.evaluate((node, above) => node.getBoundingClientRect().top >= above.getBoundingClientRect().bottom, await first.elementHandle()),
+      true,
+    );
+    observe("the centred Stack takes the gap it is given, xl", await style(centred, "row-gap"), expected("--solix-spacing-xl"));
+    observe("the centred Stack centres its children", await style(centred, "align-items"), "center");
+  },
+  group: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Group" });
+    const first = page.getByRole("button", { name: "First in the group" });
+    const group = first.locator("xpath=..");
+    const growing = ["Grows", "Grows too", "Grows as well"].map((name) => page.getByRole("button", { name, exact: true }));
+    const wide = page.getByRole("button", { name: /^A label wide enough/ });
+    const short = page.getByRole("button", { name: "Short", exact: true });
+    await section.scrollIntoViewIfNeeded();
+    await shot("group", "Open the page and scroll to the section named Group.", section);
+    observe("the Group lays its children out in a row", await style(group, "flex-direction"), "row");
+    observe("the Group wraps by default", await style(group, "flex-wrap"), "wrap");
+    observe("the Group's gap is md by default", await style(group, "column-gap"), expected("--solix-spacing-md"));
+    observe("the Group centres its children across the row by default", await style(group, "align-items"), "center");
+    observe("the growing Group carries data-grow", await growing[0].locator("xpath=..").getAttribute("data-grow"), "true");
+    const widths = await Promise.all(growing.map(widthOf));
+    observe("each child of the growing Group takes the same share of the row", Math.max(...widths) - Math.min(...widths) <= 1, true);
+    observe("a child of the growing Group grows", await style(growing[0], "flex-grow"), "1");
+    observe("with preventGrowOverflow false a child has no maximum width", await style(wide, "max-width"), "none");
+    observe("with preventGrowOverflow false the wide child takes more of the row than the short one", (await widthOf(wide)) > (await widthOf(short)) + 1, true);
+  },
+  flex: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Flex" });
+    const flex = page.getByRole("button", { name: "First in the flex" }).locator("xpath=..");
+    const list = page.getByRole("list", { name: "Flex list" });
+    await page.setViewportSize({ width: mdWidth - 1, height: 360 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Flex.`, section);
+    observe("below md: the Flex lays its buttons out in a column", await style(flex, "flex-direction"), "column");
+    observe("below md: the gap between columns is xs", await style(flex, "column-gap"), expected("--solix-spacing-xs"));
+    observe("the gap between rows is rowGap, sm, not gap", await style(flex, "row-gap"), expected("--solix-spacing-sm"));
+    observe("align centres the buttons across the main axis", await style(flex, "align-items"), "center");
+    observe("justify spreads the buttons along the main axis", await style(flex, "justify-content"), "space-between");
+    observe("wrap lets the buttons wrap", await style(flex, "flex-wrap"), "wrap");
+    observe("the Flex list is the <ul> its component prop names, a flex container", await style(list, "display"), "flex");
+    observe("the Flex list's gap is lg", await style(list, "column-gap"), expected("--solix-spacing-lg"));
+
+    await page.setViewportSize({ width: mdWidth, height: 360 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The buttons move into a row.`, section);
+    observe("at md: the Flex lays its buttons out in a row", await style(flex, "flex-direction"), "row");
+    observe("at md: the gap between columns is xl", await style(flex, "column-gap"), expected("--solix-spacing-xl"));
+    observe("at md: the gap between rows is still rowGap, sm", await style(flex, "row-gap"), expected("--solix-spacing-sm"));
+  },
+  container: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Container" });
+    const container = (text) => page.getByText(text, { exact: true }).locator("xpath=..");
+    const plain = container("Inside the default container");
+    const grid = container("In the middle column of the grid container");
+    const breakout = container("Breaks out of the grid container");
+    const back = container("Back to the width of the grid container");
+    const middle = page.getByText("In the middle column of the grid container", { exact: true });
+    await section.scrollIntoViewIfNeeded();
+    await shot("container", "Open the page and scroll to the section named Container.", section);
+    observe("the default container is at most the md container size wide", await style(plain, "max-width"), expected("--solix-container-size-md"));
+    observe("the default container pads its sides by md", await style(plain, "padding-left"), expected("--solix-spacing-md"));
+    observe("the default container carries data-strategy=block", await plain.getAttribute("data-strategy"), "block");
+    observe("the extra small container is at most the xs container size wide", await style(container("Inside the extra small container"), "max-width"), expected("--solix-container-size-xs"));
+    observe("the fluid container takes the whole width", await style(container("Inside the fluid container"), "max-width"), "100%");
+    observe("the grid container is a grid with no maximum width", `${await style(grid, "display")} ${await style(grid, "max-width")}`, "grid none");
+    observe("a child of the grid container is as wide as its size, the middle column", Math.abs((await widthOf(middle)) - (await widthOf(back))) <= 1, true);
+    observe("the breakout child spans the whole grid container", Math.abs((await widthOf(breakout)) - (await widthOf(grid))) <= 1, true);
+    observe("the data-container inside the breakout is at most the xs container size wide", await style(back, "max-width"), expected("--solix-container-size-xs"));
+  },
+  "simple-grid": async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Simple grid" });
+    const gridAround = (text) => page.getByText(text, { exact: true }).locator("xpath=..");
+    const columnsOf = (grid) => grid.evaluate((node) => getComputedStyle(node).gridTemplateColumns.split(" ").filter(Boolean).length);
+    const media = gridAround("First cell");
+    await page.setViewportSize({ width: mdWidth - 1, height: 720 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Simple grid.`, section);
+    observe("below md: the first grid has the 2 columns of its sm value", await columnsOf(media), 2);
+    observe("below md: the gap between its columns is xs", await style(media, "column-gap"), expected("--solix-spacing-xs"));
+    observe("the gap between its rows is verticalSpacing, xl", await style(media, "row-gap"), expected("--solix-spacing-xl"));
+    observe("the grid in a 320 pixel container has 2 columns, past 18em", await columnsOf(gridAround("Cell of the narrow container")), 2);
+    observe("the grid in a 560 pixel container has 4 columns, past 30em", await columnsOf(gridAround("Cell of the wide container")), 4);
+    observe("the grid in one cell of it queries its own container and has 1 column", await columnsOf(gridAround("Cell of the nested container")), 1);
+    observe("below md: the grid in a 1024 pixel container, past md, has the 2 columns of its md value", await columnsOf(gridAround("Cell of a container past md")), 2);
+    observe("the grid in a 1100 pixel container with 20 pixel type is past md and has 2 columns", await columnsOf(gridAround("Cell of a container past md in larger type")), 2);
+    observe("the auto-filled grid makes columns at least 160 pixels wide",(await widthOf(page.getByText("Auto-filled cell", { exact: true }))) >= 160, true);
+
+    await page.setViewportSize({ width: mdWidth, height: 720 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The first grid takes a third column.`, section);
+    observe("at md: the first grid has the 3 columns of its md value", await columnsOf(media), 3);
+    observe("at md: the gap between its columns is lg", await style(media, "column-gap"), expected("--solix-spacing-lg"));
+    observe("at md: the grids in containers keep their columns", `${await columnsOf(gridAround("Cell of the narrow container"))} ${await columnsOf(gridAround("Cell of the wide container"))}`, "2 4");
+    observe("at md: the grid in a 960 pixel container, short of md, has 1 column", await columnsOf(gridAround("Cell of a container short of md")), 1);
+  },
+  grid: async ({ page, observe, shot, expected }) => {
+    const section = page.getByRole("region", { name: "Grid", exact: true });
+    const column = (text) => page.getByText(text, { exact: true });
+    const boxOf = (element) => element.evaluate((node) => { const { left, top, bottom, width } = node.getBoundingClientRect(); return { left, top, bottom, width }; });
+    const spanWidth = async (element, span, columns) => {
+      const inner = element.locator("xpath=..");
+      const { width } = await boxOf(inner);
+      const gap = await inner.evaluate((node) => Number.parseFloat(getComputedStyle(node).columnGap));
+      return ((width + gap) * span) / columns - gap;
+    };
+    const near = (actual, wanted) => Math.abs(actual - wanted) <= 1;
+    const half = column("Half from md");
+    await page.setViewportSize({ width: mdWidth - 1, height: 720 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("below-md", `Open the page ${mdWidth - 1} pixels wide, one pixel below the md breakpoint, and scroll to the section named Grid.`, section);
+    observe("below md: Half from md spans all 12 columns", near((await boxOf(half)).width, await spanWidth(half, 12, 12)), true);
+    observe("below md: the gap is xs", await style(half.locator("xpath=.."), "column-gap"), expected("--solix-spacing-xs"));
+    observe("A third spans 4 of 12 columns", near((await boxOf(column("A third"))).width, await spanWidth(column("A third"), 4, 12)), true);
+    const third = await boxOf(column("A third"));
+    const gap = Number.parseFloat(await style(column("A third").locator("xpath=.."), "column-gap"));
+    observe("A third after an offset leaves 4 columns empty before it", near((await boxOf(column("A third after an offset"))).left - (third.left + third.width), (await spanWidth(column("A third"), 4, 12)) + 2 * gap), true);
+    const ordered = async () => [await boxOf(column("Ordered one")), await boxOf(column("Ordered two"))];
+    const [oneBelow, twoBelow] = await ordered();
+    observe("below md: Ordered two comes before Ordered one, in one row", oneBelow.top === twoBelow.top && twoBelow.left < oneBelow.left, true);
+    observe("Content column is as wide as its content", await style(column("Content column"), "flex-basis"), "auto");
+    observe("Auto column grows into the rest of its row", await style(column("Auto column"), "flex-grow"), "1");
+    observe("with grow, two columns of 6 out of 24 each fill half the row", near((await boxOf(column("Grows to half"))).width, await spanWidth(column("Grows to half"), 12, 24)), true);
+    observe("justify and overflow reach the grid", `${await style(column("Grows to half").locator("xpath=.."), "justify-content")} ${await style(column("Grows to half").locator("xpath=../.."), "overflow")}`, "center hidden");
+    const [tall, short] = [await boxOf(column("Grows to half")), await boxOf(column("Grows to the other half"))];
+    observe("align flex-end puts the shorter column level with the bottom of the taller one", near(short.bottom, tall.bottom) && short.top > tall.top + 1, true);
+    observe("in a 480 pixel container, past 20em, a column spans 6 of 12", near((await boxOf(column("Half of a wide container"))).width, await spanWidth(column("Half of a wide container"), 6, 12)), true);
+    observe("in a 240 pixel container, short of 20em, a column spans 12 of 12", near((await boxOf(column("All of a narrow container"))).width, await spanWidth(column("All of a narrow container"), 12, 12)), true);
+    observe("below md: without breakpoints, in a 1024 pixel container, past md, a column spans 6 of 12", near((await boxOf(column("Half of a container past md"))).width, await spanWidth(column("Half of a container past md"), 6, 12)), true);
+
+    await page.setViewportSize({ width: mdWidth, height: 720 });
+    await section.scrollIntoViewIfNeeded();
+    await shot("at-md", `Widen the page to ${mdWidth} pixels, the md breakpoint. The first two columns share a row, and the ordered columns swap.`, section);
+    observe("at md: Half from md spans 6 of 12 columns", near((await boxOf(half)).width, await spanWidth(half, 6, 12)), true);
+    observe("at md: the gap is lg", await style(half.locator("xpath=.."), "column-gap"), expected("--solix-spacing-lg"));
+    const [oneAtMd, twoAtMd] = await ordered();
+    observe("at md: Ordered one comes before Ordered two, in one row", oneAtMd.top === twoAtMd.top && oneAtMd.left < twoAtMd.left, true);
+    observe("at md: without breakpoints, in a 960 pixel container, short of md, a column spans 12 of 12", near((await boxOf(column("All of a container short of md"))).width, await spanWidth(column("All of a container short of md"), 12, 12)), true);
+  },
   tabs: async ({ page, observe, shot, expected }) => {
     const region = page.locator(tabsRegion);
     const press = async (key, list, description, name) => {
@@ -395,7 +582,8 @@ const journeys = {
       const rules = await pageStyleRules(page);
       const outsideTheSdkLayer = (rule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
       const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibraryOrTheApp);
-      observe(`${when}: rules the SDK added outside its layer`, rules.filter((rule) => rule.source === "added" && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
+      observe(`${when}: rules the SDK added outside its layer`, rules.filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
+      observe(`${when}: rules of the library's marked styles that name no solix layer`, rules.filter((rule) => rule.fromTheLibrary && !rule.layers.some((layer) => layer === LIBRARY_CASCADE_LAYER || layer.startsWith(`${LIBRARY_CASCADE_LAYER}.`))).map(({ text }) => text).join(" | "), "");
       observe(`${when}: important declarations outside the SDK's layer`, rules.filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
       observe(`${when}: the SDK added the hidden rule the build reads from it`, (await stylesAddedToThePage(page)).includes(sdkHiddenRule), true);
       observe(`${when}: style attributes on the parts`, written.partStyles, ["", styleOfTheOneStyleProp, displayedByTheApp.style].sort().join(" | "));

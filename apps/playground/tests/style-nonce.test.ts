@@ -2,10 +2,10 @@ import { join } from "node:path";
 import type { Browser, Page } from "playwright";
 import { describe, expect, inject, test } from "vite-plus/test";
 import { behaviourSdkHiddenRule } from "../../../packages/core/build-pipeline.mjs";
-import { runTimeStyleAttribute } from "../../../packages/core/src/run-time-style";
+import { libraryStyleMark } from "../../../packages/core/src/style-prop-table";
 import { elementsOf, valuesOf } from "../../../packages/core/tests/markup";
 import { policyHeader } from "../src/middleware";
-import { themedSpacing, themeNames } from "../src/sections/theme-setups";
+import { themedByTheProvider, themedSpacing, themeNames } from "../src/sections/theme-setups";
 import { inEveryEngine } from "./support/playground";
 
 const url = inject("playgroundUrl");
@@ -38,8 +38,9 @@ test("the server gives each page a nonce of its own, and every <style> in its ma
 
     expect(styles.map((style) => valuesOf(style, "nonce"))).toEqual(styles.map(() => [nonce]));
     expect(
-      styles.filter((style) => valuesOf(style, runTimeStyleAttribute).length > 0),
-    ).toHaveLength(1);
+      styles.filter((style) => valuesOf(style, libraryStyleMark).length > 0).length,
+    ).toBeGreaterThan(0);
+    expect(html).toContain(`[${themedByTheProvider}]{`);
   }
 });
 
@@ -93,7 +94,7 @@ function stylesOn(page: Page): Promise<FoundStyle[]> {
         byTheLibrary: style.hasAttribute(byTheLibrary),
         text: style.textContent ?? "",
       })),
-    runTimeStyleAttribute,
+    libraryStyleMark,
   );
 }
 
@@ -113,7 +114,9 @@ inEveryEngine((browser) => {
       await close();
 
       expect(styles.map((style) => style.nonce)).toEqual(styles.map(() => nonce));
-      expect(styles.filter((style) => style.byTheLibrary)).toHaveLength(1);
+      expect(
+        styles.filter((style) => style.byTheLibrary && style.text.includes(themedByTheProvider)),
+      ).toHaveLength(1);
       expect(styles.some((style) => style.text === sdkHiddenRule)).toBe(served.javaScriptEnabled);
       if (served.javaScriptEnabled) expect(refused).toEqual([]);
       expect(themed).toBe(themedSpacing.md);

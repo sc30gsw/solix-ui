@@ -1,5 +1,4 @@
-import { cascadeLayerOrder, libraryCascadeLayer } from "./cascade-layers";
-import type { Scale } from "./style-prop-table";
+import { layerOrder, libraryCascadeLayer, type Scale } from "./style-prop-table";
 import { characterThatEndsADeclaration, type ScaleKey, tokenOf } from "./style-props";
 
 export const scaleOfThemeKey = {
@@ -65,7 +64,7 @@ function declarationsOf(theme: SolixTheme): string[] {
 export function themeStyleSheet(theme: SolixTheme, selector: string): string | undefined {
   const declarations = declarationsOf(theme);
   if (declarations.length === 0 || !isWritable(selector)) return undefined;
-  return `${cascadeLayerOrder}@layer ${libraryCascadeLayer}{${selector}{${declarations.join("")}}}`;
+  return `${layerOrder}@layer ${libraryCascadeLayer}{${selector}{${declarations.join("")}}}`;
 }
 
 export function createTheme(theme: SolixTheme): SolixTheme {

@@ -1,12 +1,12 @@
 # Provider theme
 
-The app wraps the page in `SolixProvider`, with a theme made by `createTheme` that sets the `md` spacing, a `cssVariablesSelector` that names one part of the section named `Theme`, and a `getStyleNonce` that gives the provider the page's nonce. A `Box` with `md` padding under that selector takes the theme's spacing, and one outside it keeps the default. The server sends the page with a Content Security Policy whose `style-src` names a nonce of its own for each page, and every `<style>` on the page carries it: the provider's theme style and the one UI SDK adds after hydration. The user sees the wider padding; the nonce is not visible.
+The app wraps the page in `SolixProvider`, with a theme made by `createTheme` that sets the `md` spacing, a `cssVariablesSelector` that names one part of the section named `Theme`, and a `getStyleNonce` that gives the provider the page's nonce. A `Box` with `md` padding under that selector takes the theme's spacing, and one outside it keeps the default. The server sends the page with a Content Security Policy whose `style-src` names a nonce of its own for each page, and every `<style>` on the page carries it: the provider's theme style, the container-query style each `Grid` with breakpoints writes, and the one UI SDK adds after hydration. The user sees the wider padding; the nonce is not visible.
 
 ## Sub-features
 
 - `provider-theme-applies` shows the theme's spacing on the box under the selector, and a padding that differs from the box outside it.
 - `provider-theme-is-scoped` keeps the default padding on the box outside the selector.
-- `provider-theme-nonce` finds no `<style>` element whose nonce differs from the page's, and one `<style>` the library added.
+- `provider-theme-nonce` finds no `<style>` element whose nonce differs from the page's, and one library `<style>` that holds the provider's theme.
 
 ## How to get to it (user POV)
 
@@ -18,7 +18,7 @@ Preconditions:
 
 - `doctor.sh` exits 0.
 
-- **Theme and nonce.** Run `.agents/skills/verify-playground/scripts/drive.mjs provider-theme`. The observations `the box under the provider's selector reads the theme's spacing` (the `md` value of `themedSpacing` in `apps/playground/src/sections/theme-setups.ts`), `the box outside it keeps the default padding` (the `--solix-spacing-md` token), `the theme changes the padding of the box under the selector` (true), `style elements without the page's nonce` (0) and `style elements the library added` (1) pass.
+- **Theme and nonce.** Run `.agents/skills/verify-playground/scripts/drive.mjs provider-theme`. The observations `the box under the provider's selector reads the theme's spacing` (the `md` value of `themedSpacing` in `apps/playground/src/sections/theme-setups.ts`), `the box outside it keeps the default padding` (the `--solix-spacing-md` token), `the theme changes the padding of the box under the selector` (true), `style elements without the page's nonce` (0) and `library style elements that hold the provider's theme` (1) pass.
 - **Proof.** The evidence directory holds `01-page.png`, `02-theme-section.png`, `recording.webm` and `observations.json`.
 
 ## Gotchas

@@ -6,13 +6,11 @@ import {
   compileLibrarySource,
   BEHAVIOUR_SDK_LAYER,
   behaviourSdkHiddenRule,
-  HIDDEN_LAYER,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
   libraryStylesheet,
-  STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
-import { stylePropRules } from "../src/style-prop-table";
+import { libraryLayers, stylePropRules } from "../src/style-prop-table";
 import { layersAroundDeclaration, nestedLayerOrder } from "./cascade-layers";
 
 const packageRoot = join(import.meta.dirname, "..");
@@ -145,7 +143,7 @@ function sourceFor(definitions: Definition[]): string {
   return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "./disclosure-state.stylex";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
 }
 
-test("for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, the style-prop layer and then the hidden layer last, and nothing important in the library's layer", async () => {
+test("for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its container queries and then the hidden layer last, and nothing important in the library's layer", async () => {
   await fc.assert(
     fc.asyncProperty(styleDefinitions, async (definitions) => {
       const { rules } = await compileLibrarySource({
@@ -167,7 +165,7 @@ test("for every generated style definition, the stylesheet orders the behaviour 
       ]);
       stylesheet.each((layer) => {
         if (layer.type !== "atrule" || layer.params !== LIBRARY_CASCADE_LAYER) return;
-        expect(nestedLayerOrder(layer).slice(-2)).toEqual([STYLE_PROP_LAYER, HIDDEN_LAYER]);
+        expect(nestedLayerOrder(layer)).toEqual([...libraryLayers]);
       });
 
       stylesheet.walkRules((rule) => {

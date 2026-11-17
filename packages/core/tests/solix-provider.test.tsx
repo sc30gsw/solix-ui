@@ -4,9 +4,8 @@ import fc from "fast-check";
 import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import { tokenValues } from "../../../scripts/tokens";
-import { cascadeLayerOrder, libraryCascadeLayer } from "../src/cascade-layers";
 import type * as CreateTheme from "../src/create-theme";
-import { runTimeStyleAttribute } from "../src/run-time-style";
+import { layerOrder, libraryCascadeLayer, libraryStyleMark } from "../src/style-prop-table";
 import { dist, library } from "./built-library";
 import { elementsOf, valuesOf } from "./markup";
 
@@ -138,15 +137,14 @@ test("on the server, the provider writes its theme as one marked style with the 
         if (!written) return;
         const [style] = styles;
         expect(valuesOf(style, "nonce")).toEqual(drawn.nonce === undefined ? [] : [drawn.nonce]);
-        expect(valuesOf(style, runTimeStyleAttribute)).toHaveLength(1);
+        expect(valuesOf(style, libraryStyleMark)).toHaveLength(1);
         const css = styleOf(html) ?? "";
-        const [order, layer, ...others] = postcss.parse(css).nodes;
+        const [layer, ...others] = postcss.parse(css.slice(layerOrder.length)).nodes;
         const rules = layer?.type === "atrule" ? (layer.nodes ?? []) : [];
         const [rule] = rules;
 
         expect(others).toEqual([]);
-        expect(css.startsWith(cascadeLayerOrder)).toBe(true);
-        expect(order?.type).toBe("atrule");
+        expect(css.startsWith(layerOrder)).toBe(true);
         expect(layer?.type === "atrule" ? [layer.name, layer.params] : layer?.type).toEqual([
           "layer",
           libraryCascadeLayer,

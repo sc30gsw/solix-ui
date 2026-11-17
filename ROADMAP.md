@@ -6,7 +6,7 @@ Solix UI is a component library for Solid 2.0, styled with StyleX. This page say
 
 The work comes in this order. Each step has a status: not started, in progress or merged. Only the status merged is checked against the build. A part that a component carries as a static member goes with that component.
 
-1. **Layout** (in progress): Box, Center, Container, Flex, Grid, Group, SimpleGrid, Space, Stack.
+1. **Layout** (merged): Box, Center, Container, Flex, Grid, Group, SimpleGrid, Space, Stack.
 2. **UI SDK seam** (merged): Tabs.
 3. **`#/` subpath imports** (not started).
 4. **Storybook** (not started).

@@ -1,45 +1,45 @@
 import type { Page } from "playwright";
-import { runTimeStyleAttribute } from "../../../../packages/core/src/run-time-style.ts";
+import { libraryStyleMark } from "../../../../packages/core/src/style-prop-table.ts";
 
 export function stylesAddedToThePage(page: Page): Promise<string[]> {
   return page.evaluate(
-    (byTheLibrary) => [
-      ...[...document.querySelectorAll(`style:not([${byTheLibrary}])`)].map(
+    (mark) => [
+      ...[...document.querySelectorAll(`style:not([${mark}])`)].map(
         (style) => style.textContent ?? "",
       ),
       ...document.adoptedStyleSheets.flatMap((sheet) =>
         [...sheet.cssRules].map((rule) => rule.cssText),
       ),
     ],
-    runTimeStyleAttribute,
+    libraryStyleMark,
   );
 }
 
-export type PageStyleSource = "linked" | "library" | "added";
-
 export type PageStyleRule = {
-  source: PageStyleSource;
-  layerOrder: boolean;
+  addedAtRunTime: boolean;
+  fromTheLibrary: boolean;
   layers: string[];
   important: string[];
   text: string;
 };
 
 export function pageStyleRules(page: Page): Promise<PageStyleRule[]> {
-  return page.evaluate((byTheLibrary) => {
+  return page.evaluate((mark) => {
     const found: PageStyleRule[] = [];
-    const walk = (rules: CSSRuleList, layers: string[], source: PageStyleSource) => {
+    const walk = (
+      rules: CSSRuleList,
+      layers: string[],
+      source: Pick<PageStyleRule, "addedAtRunTime" | "fromTheLibrary">,
+    ) => {
       for (const rule of rules) {
         if (rule instanceof CSSLayerBlockRule) {
           walk(rule.cssRules, [...layers, rule.name], source);
           continue;
         }
         const style = rule instanceof CSSStyleRule ? rule.style : undefined;
-        const layerOrder = rule instanceof CSSLayerStatementRule;
         found.push({
-          source,
-          layerOrder,
-          layers: layerOrder ? [...layers, ...rule.nameList] : layers,
+          ...source,
+          layers: rule instanceof CSSLayerStatementRule ? [...layers, ...rule.nameList] : layers,
           important: style
             ? Array.from(style).filter((name) => style.getPropertyPriority(name) === "important")
             : [],
@@ -52,17 +52,15 @@ export function pageStyleRules(page: Page): Promise<PageStyleRule[]> {
     };
     for (const sheet of document.styleSheets) {
       const owner = sheet.ownerNode;
-      walk(
-        sheet.cssRules,
-        [],
-        !(owner instanceof HTMLStyleElement)
-          ? "linked"
-          : owner.hasAttribute(byTheLibrary)
-            ? "library"
-            : "added",
-      );
+      const fromTheLibrary = owner instanceof HTMLStyleElement && owner.hasAttribute(mark);
+      walk(sheet.cssRules, [], {
+        addedAtRunTime: owner instanceof HTMLStyleElement && !fromTheLibrary,
+        fromTheLibrary,
+      });
     }
-    for (const sheet of document.adoptedStyleSheets) walk(sheet.cssRules, [], "added");
+    for (const sheet of document.adoptedStyleSheets) {
+      walk(sheet.cssRules, [], { addedAtRunTime: true, fromTheLibrary: false });
+    }
     return found;
-  }, runTimeStyleAttribute);
+  }, libraryStyleMark);
 }

@@ -146,7 +146,7 @@ const drawnValue: fc.Arbitrary<Drawn> = fc.oneof(
   { arbitrary: valueThatEndsADeclaration.map((value) => ({ value, kept: false })), weight: 1 },
 );
 
-const declaredStyleProp: fc.Arbitrary<DeclaredStyleProp> = fc.oneof(
+export const declaredStyleProp: fc.Arbitrary<DeclaredStyleProp> = fc.oneof(
   drawnValue.map(({ value, kept }) => ({ written: value, keptKeys: kept ? [baseKey] : [] })),
   fc
     .record(Object.fromEntries(responsiveKeys.map((key) => [key, drawnValue])), {

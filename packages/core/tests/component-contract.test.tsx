@@ -2,17 +2,38 @@ import { readFileSync } from "node:fs";
 import { join, matchesGlob } from "node:path";
 import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
+import postcss from "postcss";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import { LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
+import { LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
 import type { PolymorphicProps } from "../src/parts";
-import { canonicalOf, type DisplayPropName, displayPropNames } from "../src/style-prop-table";
+import {
+  baseKey,
+  breakpoints,
+  canonicalOf,
+  layerOrder,
+  libraryStyleMark,
+  canonicalStylePropNames,
+  containerQueryLayer,
+  type DisplayPropName,
+  displayPropNames,
+  responsiveKeys,
+  stylePropClass,
+  variableClass,
+  variableGroups,
+  variableNames,
+  variableRow,
+  variablesOf,
+  visibilityClass,
+  visibilityPropNames,
+} from "../src/style-prop-table";
 import {
   classTokens,
   declarationsByPart,
   consumerStyles,
   elementsToRender,
   partClassTokens,
+  declaredStyleProp,
   stringAttributes,
   stylePropCases,
 } from "./arbitraries";
@@ -23,6 +44,7 @@ import {
   isBuiltComponent,
   library,
   renderBuilt,
+  resolveVariables,
   rootPart,
   stableClass,
   stylesheet,
@@ -45,6 +67,7 @@ import {
   polymorphicComponents,
   readsInOneRender,
   render,
+  renderTwiceOnOnePage,
   type TakesDisplay,
 } from "./fixtures";
 import {
@@ -52,11 +75,16 @@ import {
   declarationsIn,
   type Element,
   elementsOf,
+  elementCarrying,
   rootElementOf,
+  rulesOf,
+  topLevelTags,
   valuesOf,
+  withoutLeadingRules,
 } from "./markup";
 
 const generatedRuns = 300;
+const containerPart = "container";
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const contractSkill = ".agents/skills/verify-component-contract/SKILL.md";
 const styleOverride = new RegExp(`^--${LIBRARY_CLASS_PREFIX}-`);
@@ -68,6 +96,19 @@ const compiled: Record<string, Record<string, string[]>> = Object.fromEntries(
 );
 
 type TestStyles = { root: object };
+
+const stylePropClasses = new Set([
+  ...canonicalStylePropNames.flatMap((name) =>
+    responsiveKeys.map((key) => stylePropClass(name, key)),
+  ),
+  ...visibilityPropNames.flatMap((name) =>
+    breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
+  ),
+]);
+
+function rootOf(name: string, html: string): Element {
+  return elementCarrying(html, stableClass(name, rootPart));
+}
 
 function partsOf(name: string): string[] {
   return Object.keys(compiled[name]);
@@ -101,7 +142,8 @@ test.each(components)(
     const rootClasses = builtComponents.map((other) => stableClass(other, rootPart));
     fc.assert(
       fc.property(classTokens, stringAttributes, fc.boolean(), (tokens, attributes, flag) => {
-        const root = rootElementOf(
+        const root = rootOf(
+          name,
           render(name, {
             class: classValueFrom(tokens),
             ...attributes,
@@ -131,13 +173,18 @@ test.each(components)(
 );
 
 test.each(builtComponents)(
-  "%s renders, under its fixture, the root and every other key of its built styles object, each on one element that starts with exactly that key's compiled classes and then its stable class, the root first",
+  "%s renders, under its fixture, the root and every other key of its built styles object, each on one element that starts with exactly that key's compiled classes and then its stable class, the root first or the first part inside the container part",
   (name) => {
     const parts = partsOf(name);
-    const elements = elementsOf(render(name));
+    const html = render(name);
+    const elements = elementsOf(html);
     const rendered = elements.flatMap((element) => partsOn(name, element));
 
-    expect(partsOn(name, elements[0]), "the first element is the root").toEqual([rootPart]);
+    const partsInOrder = elements.flatMap((element) => partsOn(name, element));
+    expect(
+      partsInOrder.slice(0, partsInOrder[0] === containerPart ? 2 : 1),
+      "the first part is the root, or the container part, with the root the next part",
+    ).toEqual(partsInOrder[0] === containerPart ? [containerPart, rootPart] : [rootPart]);
     expect(
       elements.filter((element) => partsOn(name, element).length > 1),
       "an element carries one part",
@@ -243,7 +290,7 @@ test.each(builtComponents)(
 );
 
 test.each(builtComponents)(
-  "%s puts the declarations styles names for a part in exactly that part's style, leaves out an undefined or null one, and puts the consumer's style after styles.root, where an undefined or null one replaces nothing",
+  "%s puts the declarations styles names for a part in exactly that part's style, beside the custom property of each of its own variables, leaves out an undefined or null one, and puts the consumer's style after styles.root, where an undefined or null one replaces nothing",
   (name) => {
     fc.assert(
       fc.property(
@@ -268,9 +315,17 @@ test.each(builtComponents)(
               ...presentDeclarations((part === undefined ? undefined : byPart[part]) ?? []),
               ...(part === rootPart ? declaredBy(consumerStyle) : []),
             ];
+            const ownVariables = classesOf(element)
+              .filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`))
+              .filter((found) => !stylePropClasses.has(found))
+              .map((found) => `--${found}`);
             expect(valuesOf(element, "style").length).toBeLessThanOrEqual(1);
             expect(
-              Object.fromEntries(declarationsIn(valuesOf(element, "style")[0])),
+              Object.fromEntries(
+                declarationsIn(valuesOf(element, "style")[0]).filter(
+                  ([property]) => !ownVariables.includes(property),
+                ),
+              ),
               part === undefined
                 ? `<${element.tag}>, which is no part, has no style`
                 : `the ${part} part's style holds styles.${part} without its undefined and null values${part === rootPart ? ", and then the consumer's style without its undefined and null values, which wins" : ""}`,
@@ -344,7 +399,8 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
     (breakpoint) => breakpoint !== null && breakpoint !== undefined,
   ).length;
   const libraryClasses = classes.filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`));
-  const readByAClass = libraryClasses.filter((found) => declared.has(`--${found}`));
+  const styleClasses = libraryClasses.filter((found) => stylePropClasses.has(found));
+  const readByAClass = styleClasses.filter((found) => declared.has(`--${found}`));
 
   expect(valuesOf(root, "class")).toHaveLength(1);
   expect(classes).toContain(stableClass(name, rootPart));
@@ -358,9 +414,13 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
     "one class and one custom property for each kept value of a style prop at a breakpoint, and none for null or a value that holds ;, { or }",
   ).toBe(keptPairs.size);
   expect(
-    libraryClasses.length - readByAClass.length,
+    styleClasses.length - readByAClass.length,
     "one class and no custom property for each of hiddenFrom and visibleFrom given",
   ).toBe(visibilityGiven);
+  expect(
+    libraryClasses.filter((found) => !stylePropClasses.has(found) && !declared.has(`--${found}`)),
+    "each class of the component's own variables reads its custom property",
+  ).toEqual([]);
   expect(
     [...declared.keys()].filter(
       (property) =>
@@ -393,7 +453,7 @@ test.each(components)(
             ...(component === undefined ? {} : { component }),
           };
           const html = render(name, props);
-          const root = rootElementOf(html);
+          const root = rootOf(name, html);
 
           expect(render(name, props), "a second render gives the same markup").toBe(html);
           expect(root.tag).toBe(component ?? tag);
@@ -437,7 +497,7 @@ test("PolymorphicProps takes the attributes of the element component names and t
 test.each(polymorphicComponents)(
   "%s renders the element its component prop names, with that element's attributes",
   (name) => {
-    const root = rootElementOf(render(name, { component: "a", href: elsewhere }));
+    const root = rootOf(name, render(name, { component: "a", href: elsewhere }));
 
     expect(root.tag).toBe("a");
     expect(valuesOf(root, "href")).toEqual([elsewhere]);
@@ -452,7 +512,8 @@ function Card(props: JSX.HTMLAttributes<HTMLElement>) {
 test.each(polymorphicComponents)(
   "%s resolves every style prop, display ones included, for a function component its component prop names, which gets the sx- classes and custom properties and no display or hiddenFrom attribute",
   (name) => {
-    const root = rootElementOf(
+    const root = rootOf(
+      name,
       render(name, { component: Card, display: "flex", hiddenFrom: "sm", p: 4 }),
     );
 
@@ -516,4 +577,174 @@ test("every component's source file is covered by the contract skill's table", (
       .filter((file) => !covered(file))
       .map((file) => `${contractSkill}: no covered-code row covers ${file}.`),
   ).toEqual([]);
+});
+
+const containerQuery = /^\(min-width: (-?\d*\.?\d+(?:e[+-]?\d+)?)(px|em|rem)\)$/;
+const pixelsPerEm = 16;
+
+function containerClassParts(className: string): { name: string; scope: string } | undefined {
+  const [, name = "", scope = ""] =
+    new RegExp(`^${LIBRARY_CLASS_PREFIX}-(.+)-c(\\w+)-\\d+$`).exec(className) ?? [];
+  return variableNames.some((variable) => variable === name) ? { name, scope } : undefined;
+}
+
+function scopesOf(classes: Iterable<string>): Set<string> {
+  return new Set([...classes].flatMap((found) => containerClassParts(found)?.scope ?? []));
+}
+
+function containerRuleProblems(name: string, html: string): string[] {
+  const rendered = new Set(elementsOf(html).flatMap(classesOf));
+  const unmarked = elementsOf(html).filter(
+    ({ tag, attributes }) =>
+      tag === "style" && !attributes.some(([attribute]) => attribute === libraryStyleMark),
+  );
+  const markProblems = unmarked.map(
+    () => `${name}: mark each style element with ${libraryStyleMark}.`,
+  );
+  return [
+    ...markProblems,
+    ...rulesOf(html).flatMap((rules) => {
+      if (!rules.startsWith(layerOrder)) return [`${name}: start its rules with ${layerOrder}.`];
+      const [layer, ...others] = postcss.parse(rules.slice(layerOrder.length)).nodes;
+      if (
+        others.length > 0 ||
+        layer?.type !== "atrule" ||
+        layer.name !== "layer" ||
+        layer.params !== `${LIBRARY_CASCADE_LAYER}.${containerQueryLayer}`
+      ) {
+        return [
+          `${name}: put its container rules in one @layer ${LIBRARY_CASCADE_LAYER}.${containerQueryLayer} after the order.`,
+        ];
+      }
+      const problems: string[] = [];
+      const registered = new Set<string>();
+      const read: string[] = [];
+      const widths: number[] = [];
+      layer.each((node) => {
+        if (node.type === "atrule" && node.name === "property") {
+          registered.add(node.params);
+          const declared = Object.fromEntries(
+            (node.nodes ?? []).flatMap((part) =>
+              part.type === "decl" ? [[part.prop, part.value]] : [],
+            ),
+          );
+          if (declared.syntax !== '"*"' || declared.inherits !== "false") {
+            problems.push(`${node.params}: register it with syntax "*" and inherits: false.`);
+          }
+          return;
+        }
+        const [, amount, unit] =
+          node.type === "atrule" ? (containerQuery.exec(node.params) ?? []) : [];
+        if (node.type !== "atrule" || node.name !== "container" || amount === undefined) {
+          problems.push(
+            `${node.toString()}: write only @property and @container (min-width: <length>).`,
+          );
+          return;
+        }
+        widths.push(Number(amount) * (unit === "px" ? 1 : pixelsPerEm));
+        node.each((rule) => {
+          const className =
+            rule.type === "rule" ? /^\.([\w-]+)$/.exec(rule.selector)?.[1] : undefined;
+          const placed = className === undefined ? undefined : containerClassParts(className);
+          if (rule.type !== "rule" || className === undefined || placed === undefined) {
+            problems.push(
+              `${rule.toString()}: select one class a variable places for a container width.`,
+            );
+            return;
+          }
+          read.push(className);
+          const declarations = rule.nodes.flatMap((part) =>
+            part.type === "decl" ? [`${part.prop}:${part.value}`] : [],
+          );
+          if (
+            JSON.stringify(declarations) !==
+            JSON.stringify([`--${placed.name}:var(--${className})`])
+          ) {
+            problems.push(
+              `${className}: set --${placed.name} to var(--${className}) and nothing else.`,
+            );
+          }
+          if (!registered.has(`--${className}`)) problems.push(`--${className}: register it.`);
+        });
+      });
+      const scopes = scopesOf(read);
+      return [
+        ...problems,
+        ...(widths.every((width, index) => index === 0 || width > widths[index - 1])
+          ? []
+          : [`${name}: write its container widths in ascending order, not ${widths.join(", ")}.`]),
+        ...(scopes.size === 1 ? [] : [`${name}: scope one style element's rules to one instance.`]),
+        ...(read.some((className) => rendered.has(className))
+          ? []
+          : [`${name}: put at least one class its container rules read on its own elements.`]),
+      ];
+    }),
+  ];
+}
+
+test.each(builtComponents)(
+  "%s marks each style element it renders as the library's, and starts it with the library's layer order, then writes, in the container-queries layer, registrations not inherited and, in ascending container widths, rules that each set a variable's custom property from its own class, for one instance's classes",
+  (name) => {
+    expect(containerRuleProblems(name, render(name))).toEqual([]);
+  },
+);
+
+test.each(builtComponents)(
+  "%s rendered twice on one page scopes the container classes and rules of each copy apart",
+  (name) => {
+    const html = renderTwiceOnOnePage(name);
+    const scopes = scopesOf(elementsOf(html).flatMap(classesOf));
+    const ruleScopes = rulesOf(html).map((rules) =>
+      [...scopesOf(rules.match(/[\w-]+/g) ?? [])].join(" "),
+    );
+
+    expect([0, 2]).toContain(scopes.size);
+    expect(
+      ruleScopes.filter((scope) => scope === "" || scope.includes(" ")),
+      "each style element reads one copy's scope",
+    ).toEqual([]);
+    expect(new Set(ruleScopes), "the style elements read the copies' scopes").toEqual(scopes);
+  },
+);
+
+test.each(builtComponents)(
+  "%s renders under its fixture its rules first, if any, and then one element, the root or, when its styles have a container part, that part with the root as its only element child",
+  (name) => {
+    const html = render(name);
+    const outer = withoutLeadingRules(html);
+    const wrapped = containerPart in compiledClassesOf(name);
+    const first = rootElementOf(outer);
+    const inside = outer.slice(outer.indexOf(">") + 1, outer.lastIndexOf("</"));
+
+    expect(topLevelTags(html)).toEqual([...(outer === html ? [] : ["style"]), first.tag]);
+    expect(classesOf(first)).toContain(stableClass(name, wrapped ? containerPart : rootPart));
+    if (wrapped) {
+      expect(topLevelTags(inside)).toHaveLength(1);
+      expect(classesOf(rootElementOf(inside))).toContain(stableClass(name, rootPart));
+    }
+  },
+);
+
+test("every variable drops null and a value that holds ;, { or }, and writes each value it keeps as one class and the custom property that class reads", () => {
+  fc.assert(
+    fc.property(fc.constantFrom(...variableNames), declaredStyleProp, (name, declared) => {
+      const group = variableGroups.find((found) => variablesOf(found).some((own) => own === name));
+      if (group === undefined) throw new Error(`${name}: put it in a group.`);
+      const { classes, properties } = resolveVariables(
+        group,
+        { [name]: declared.written },
+        undefined,
+        () => false,
+      );
+      const kept = responsiveKeys.filter(
+        (key) =>
+          declared.keptKeys.includes(key) && (variableRow(name).responsive || key === baseKey),
+      );
+
+      expect(Object.values(properties).filter((css) => /[;{}]/.test(css))).toEqual([]);
+      expect(Object.keys(properties).sort()).toEqual(classes.map((found) => `--${found}`).sort());
+      expect(classes.sort()).toEqual(kept.map((key) => variableClass(name, key)).sort());
+    }),
+    { numRuns: generatedRuns },
+  );
 });

@@ -82,7 +82,7 @@ inEveryEngine((browser) => {
       );
     });
 
-    test("before a script runs the page holds no style but the library's own, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, every rule of the library's own styles sits in the library's layer, and every important declaration on the page sits in the SDK's layer", async () => {
+    test("before a script runs the page adds no style but the library's own, which it marks, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, every rule of a style the library marks names the library's layer, and every important declaration on the page sits in the SDK's layer", async () => {
       const plain = await browser().newContext({ javaScriptEnabled });
       const page = await plain.newPage();
       await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
@@ -90,27 +90,32 @@ inEveryEngine((browser) => {
       const added = await stylesAddedToThePage(page);
       await plain.close();
       const linkedLayerOrder = rules
-        .filter(({ source, layers }) => source === "linked" && layers.length > 0)
+        .filter(
+          ({ addedAtRunTime, fromTheLibrary, layers }) =>
+            !addedAtRunTime && !fromTheLibrary && layers.length > 0,
+        )
         .map(({ layers: [outermost] }) => outermost);
       const outsideTheSdkLayer = (rule: PageStyleRule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
+      const namesTheLibraryLayer = (rule: PageStyleRule) =>
+        rule.layers.some(
+          (layer) =>
+            layer === LIBRARY_CASCADE_LAYER || layer.startsWith(`${LIBRARY_CASCADE_LAYER}.`),
+        );
 
       expect(
         rules
-          .filter((rule) => rule.source === "added" && outsideTheSdkLayer(rule))
+          .filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule))
           .map(({ text }) => text),
       ).toEqual([]);
-      expect(
-        rules
-          .filter(
-            ({ source, layerOrder, layers }) =>
-              source === "library" && !layerOrder && layers[0] !== LIBRARY_CASCADE_LAYER,
-          )
-          .map(({ text }) => text),
-      ).toEqual([]);
-      expect(rules.some(({ source }) => source === "library")).toBe(true);
       expect(
         rules
           .filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule))
+          .map(({ text }) => text),
+      ).toEqual([]);
+      expect(rules.filter(({ fromTheLibrary }) => fromTheLibrary)).not.toEqual([]);
+      expect(
+        rules
+          .filter((rule) => rule.fromTheLibrary && !namesTheLibraryLayer(rule))
           .map(({ text }) => text),
       ).toEqual([]);
       expect(added.includes(sdkHiddenRule)).toBe(javaScriptEnabled);
