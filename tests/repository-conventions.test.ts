@@ -343,7 +343,7 @@ test("every row of the rules table in AGENTS.md is compact, so a rule edit chang
   ).toEqual([]);
 });
 
-test("every check in the repository runs through vp run verify, before a commit and in CI", () => {
+test("every check in the repository runs through vp run verify, before a commit, before a merge commit and in CI", () => {
   const verify = rootManifest().scripts?.verify ?? "";
 
   expect(verify.split(" && ")).toEqual([
@@ -353,6 +353,7 @@ test("every check in the repository runs through vp run verify, before a commit 
     "vp test",
   ]);
   expect(read(".vite-hooks/pre-commit").trim()).toBe("vp staged && vp run verify");
+  expect(read(".vite-hooks/pre-merge-commit").trim()).toBe("vp run verify");
   const everyEngine = `playwright install --with-deps ${engineNames.join(" ")}`;
   for (const file of workflowFiles) {
     const workflow = read(file);

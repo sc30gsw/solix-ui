@@ -1,8 +1,18 @@
 import { existsSync, globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { stylePropKeys, stylePropTable } from "#/packages/core/src/style-prop-table.ts";
-import { carriedComponents } from "#/packages/core/tests/built-library.ts";
+import {
+  stylePropKeys,
+  stylePropTable,
+  variableGroups,
+  variableNames,
+  variableRow,
+} from "#/packages/core/src/style-prop-table.ts";
+import {
+  builtComponents,
+  carriedComponents,
+  compiledClassesOf,
+} from "#/packages/core/tests/built-library.ts";
 import { allowedRuntimeDependencies, loads } from "#/scripts/runtime-dependencies.ts";
 import { subpathSpecifierOf } from "#/scripts/subpath-imports.ts";
 import { tokenValues } from "#/scripts/tokens.ts";
@@ -32,6 +42,8 @@ const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
+const containerPart = "container";
+const variablesOption = "variables";
 const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
 const libraryEntry = /(?:^|\/)src\/index\.ts$/;
@@ -152,12 +164,55 @@ function unwrapped(node: ts.Expression): ts.Expression {
   return ts.isParenthesizedExpression(node) ? unwrapped(node.expression) : node;
 }
 
+function tagOf(node: ts.Node): JsxTag | undefined {
+  if (ts.isJsxElement(node)) return node.openingElement;
+  return ts.isJsxSelfClosingElement(node) ? node : undefined;
+}
+
+function rendered(children: readonly ts.JsxChild[]): ts.JsxChild[] {
+  return children.filter((child) => !ts.isJsxText(child) || child.text.trim() !== "");
+}
+
+function isStyleElement(node: ts.Node): boolean {
+  const shown = ts.isParenthesizedExpression(node) ? unwrapped(node) : node;
+  return tagOf(shown)?.tagName.getText() === "style";
+}
+
+function isShowOfRules(child: ts.JsxChild): boolean {
+  if (!ts.isJsxElement(child) || child.openingElement.tagName.getText() !== "Show") return false;
+  const [only, ...others] = rendered(child.children);
+  if (only === undefined || others.length > 0) return false;
+  if (isStyleElement(only)) return true;
+  const shown = ts.isJsxExpression(only) ? only.expression : undefined;
+  return shown !== undefined && ts.isArrowFunction(shown) && isStyleElement(shown.body);
+}
+
+function besideProblems(tag: JsxTag): string[] {
+  const element = ts.isJsxOpeningElement(tag) ? tag.parent : tag;
+  const holder = element.parent;
+  if (!ts.isJsxFragment(holder) && !ts.isJsxElement(holder)) return [];
+  const children = rendered(holder.children);
+  const at = children.findIndex((child) => child === element);
+  const before = children.slice(0, at);
+  return at === children.length - 1 && before.length <= 1 && before.every(isShowOfRules)
+    ? []
+    : [
+        `render nothing beside <${tag.tagName.getText()}> but, before it, one <Show> whose child is a <style> of its rules.`,
+      ];
+}
+
+function rootAfterItsRules(fragment: ts.JsxFragment): JsxTag[] {
+  const root = tagOf(rendered(fragment.children).at(-1) ?? fragment);
+  return root && intrinsicElement.test(root.tagName.getText()) ? [root] : [];
+}
+
 function returnedRoots(fn: ts.FunctionDeclaration): JsxTag[] {
   return descendants(fn).flatMap((node): JsxTag[] => {
     if (!ts.isReturnStatement(node) || !node.expression) return [];
     const returned = unwrapped(node.expression);
-    if (ts.isJsxElement(returned)) return [returned.openingElement];
-    return ts.isJsxSelfClosingElement(returned) ? [returned] : [];
+    if (ts.isJsxFragment(returned)) return rootAfterItsRules(returned);
+    const tag = tagOf(returned);
+    return tag ? [tag] : [];
   });
 }
 
@@ -232,15 +287,19 @@ function propsShapeOf(alias: ts.TypeAliasDeclaration | undefined): PropsShape | 
 
 type OwnPropNames = { names: string[]; unread: string[] };
 
+function typeMembers(type: ts.TypeNode): ts.TypeNode[] {
+  if (ts.isParenthesizedTypeNode(type)) return typeMembers(type.type);
+  if (ts.isIntersectionTypeNode(type) || ts.isUnionTypeNode(type)) {
+    return type.types.flatMap(typeMembers);
+  }
+  return [type];
+}
+
 function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
-  const members = !ownProps
-    ? []
-    : ts.isIntersectionTypeNode(ownProps)
-      ? [...ownProps.types]
-      : [ownProps];
+  const members = ownProps ? typeMembers(ownProps) : [];
   const literalMembers = members.filter(ts.isTypeLiteralNode).flatMap((literal) => literal.members);
   return {
-    names: literalMembers.flatMap((member) => staticPropertyName(member) ?? []),
+    names: [...new Set(literalMembers.flatMap((member) => staticPropertyName(member) ?? []))],
     unread: [
       ...members.filter(
         (member) => !ts.isTypeLiteralNode(member) && member.getText() !== displayPropsRefused,
@@ -248,6 +307,21 @@ function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
       ...literalMembers.filter((member) => staticPropertyName(member) === undefined),
     ].map((member) => member.getText()),
   };
+}
+
+function propsGivenToVariables(argument: ts.Expression): string[] {
+  if (!ts.isObjectLiteralExpression(argument)) return [];
+  const option = argument.properties.find(
+    (property) => staticPropertyName(property) === variablesOption,
+  );
+  const given = option && ts.isPropertyAssignment(option) ? option.initializer : undefined;
+  return given && ts.isObjectLiteralExpression(given)
+    ? given.properties.flatMap((property) =>
+        ts.isPropertyAssignment(property) && ts.isStringLiteral(property.initializer)
+          ? [property.initializer.text]
+          : [],
+      )
+    : [];
 }
 
 function keptOffRootProblems(
@@ -258,7 +332,9 @@ function keptOffRootProblems(
 ): string[] {
   const kept = call.arguments
     .slice(3)
-    .flatMap((argument) => (ts.isStringLiteral(argument) ? [argument.text] : []));
+    .flatMap((argument) =>
+      ts.isStringLiteral(argument) ? [argument.text] : propsGivenToVariables(argument),
+    );
   const readsChildren = descendants(fn).some(
     (node) => ts.isPropertyAccessExpression(node) && node.getText() === `props.${childrenProp}`,
   );
@@ -348,19 +424,28 @@ function overloadProblems(
       ];
 }
 
-function rootProblems(fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
-  const roots = returnedRoots(fn);
-  const [root] = roots;
+function rootProblems(name: string, fn: ts.FunctionDeclaration, shape: PropsShape): string[] {
   const rootSpreads = jsxTags(fn).filter((tag) => spreadsOn(tag).includes(rootBinding));
+  const wrapped = builtComponents.includes(name) && containerPart in compiledClassesOf(name);
+  const roots = wrapped ? rootSpreads : returnedRoots(fn);
+  const [root] = roots;
   const problems: string[] = [];
   if (roots.length !== 1) {
-    return [`return one root element, and spread {...${rootBinding}} from ${partsHelper} on it.`];
+    return [
+      wrapped
+        ? `spread {...${rootBinding}} from ${partsHelper} on one element. Where it renders it, inside its ${containerPart} part or not, the component contract checks from the markup.`
+        : `return one root element, and spread {...${rootBinding}} from ${partsHelper} on it.`,
+    ];
   }
   if (rootSpreads.length !== 1 || rootSpreads[0] !== root) {
     problems.push(
       `spread {...${rootBinding}} once, on the returned root element, so it takes the consumer's attributes, the style props and its class and style.`,
     );
   }
+  const containers = jsxTags(fn).filter((found) =>
+    spreadsOn(found).includes(`${partBinding}("${containerPart}")`),
+  );
+  problems.push(...[root, ...containers].flatMap(besideProblems));
   const tag = root.tagName.getText();
   if (shape.kind === polymorphicPropsType) {
     const element = polymorphicDefault(fn) ?? "<element>";
@@ -520,7 +605,7 @@ function problemsWith({ name, file, source }: Component): string[] {
         shape,
       ),
       ...keptOffRootProblems(name, fn, call, shape),
-      ...rootProblems(fn, shape),
+      ...rootProblems(name, fn, shape),
       ...partProblems(fn),
       ...descendants(fn)
         .filter(
@@ -699,10 +784,11 @@ test("the barrel exports every component and its props type once, in alphabetica
   }
 });
 
-test("every public token is named --solix-*, is used by a component or a style-prop scale, and is defined once", () => {
-  const scalesOfStyleProps = Object.values(stylePropTable).flatMap((row) =>
-    "scale" in row ? [row.scale] : [],
-  );
+test("every public token is named --solix-*, is used by a component or the scale of a style prop or a variable, and is defined once", () => {
+  const scalesOfStyleProps = [
+    ...Object.values(stylePropTable),
+    ...variableNames.map(variableRow),
+  ].flatMap((row) => ("scale" in row && row.scale !== undefined ? [row.scale] : []));
   for (const { source } of libraries) {
     const tokensFile = relativePath(join(source, "tokens.stylex.ts"));
     const defined = Object.keys(tokenValues(tokensFile));
@@ -724,7 +810,7 @@ test("every public token is named --solix-*, is used by a component or a style-p
     ).toEqual([]);
     expect(
       defined.filter((name) => !used.includes(name)),
-      `tokens in ${tokensFile} that no component uses and no style-prop scale covers`,
+      `tokens in ${tokensFile} that no component uses and no scale of a style prop or a variable covers`,
     ).toEqual([]);
     expect(
       used.filter((name) => !defined.includes(name)),
@@ -862,4 +948,11 @@ test("no array or object in a test file lists the components by hand, unless the
   expect(names.length).toBeGreaterThan(0);
   expect(testFiles.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
+});
+
+test("each group of the variable table is named for a component, so createParts takes it by that component's name", () => {
+  const names = components.map(({ name }) => name);
+
+  expect(variableGroups.length).toBeGreaterThan(0);
+  expect(variableGroups.filter((group) => !names.includes(group))).toEqual([]);
 });

@@ -30,4 +30,9 @@ export const tokens = stylex.defineVars({
   "--solix-line-height-lg": "1.75rem",
   "--solix-line-height-xl": "2rem",
   "--solix-control-height-md": "2.5rem",
+  "--solix-container-size-xs": "34rem",
+  "--solix-container-size-sm": "45rem",
+  "--solix-container-size-md": "60rem",
+  "--solix-container-size-lg": "72rem",
+  "--solix-container-size-xl": "84rem",
 });
