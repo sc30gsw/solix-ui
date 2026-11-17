@@ -278,7 +278,7 @@ function ancestryOf(
   return statuses.every((status) => status === 1) ? "not an ancestor" : "unknown";
 }
 
-test("while a merge is being committed, a commit it brings in counts as one HEAD contains, and not once the merge is aborted", async () => {
+test("while a merge is being committed, a commit that HEAD or the merged commit contains counts as one HEAD contains, and one only the merged commit contains stops counting once the merge is aborted", async () => {
   await inTemporaryTree({ "file.txt": "base\n" }, (root) => {
     const probe = (...args: string[]) => gitInScratchRepository(root, args).trim();
     probe("init", "--quiet", "--initial-branch=main");
@@ -314,7 +314,7 @@ test("every verification skill was last confirmed against a commit that HEAD con
       return [
         ancestry === "unknown"
           ? `.agents/skills/${name}/SKILL.md: it was last confirmed against ${commit}, which this clone does not hold. Name a commit of this branch.`
-          : `.agents/skills/${name}/SKILL.md: it was last confirmed against ${commit}, which HEAD does not contain. Confirm the skill against a commit of this branch and name that one.`,
+          : `.agents/skills/${name}/SKILL.md: it was last confirmed against ${commit}, which neither HEAD nor, during a merge, the merged commit contains. Confirm the skill against a commit of this branch and name that one.`,
       ];
     });
   const shallow = workflowFiles
@@ -409,7 +409,7 @@ test("every check in the repository runs through vp run verify, before a commit,
   expect(read("AGENTS.md")).toContain("`vp run verify`");
 });
 
-test("no child process that a test of the node project starts sees a GIT_ variable, so a hook's GIT_DIR cannot point its git at this repository", () => {
+test("the process that runs the global setups and starts the test workers has no GIT_ variable, and a child that a test worker starts with the environment it inherits sees none, so a hook's GIT_DIR cannot point its git at this repository", () => {
   const inherited = spawnSync("sh", ["-c", "env"], { encoding: "utf8" })
     .stdout.split("\n")
     .filter((line) => line.startsWith("GIT_"))

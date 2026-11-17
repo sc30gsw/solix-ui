@@ -1,7 +1,9 @@
 const gitVariable = /^GIT_/;
 
+export function gitVariablesIn(environment: NodeJS.ProcessEnv): string[] {
+  return Object.keys(environment).filter((name) => gitVariable.test(name));
+}
+
 export function setup(): void {
-  for (const name of Object.keys(process.env).filter((each) => gitVariable.test(each))) {
-    Reflect.deleteProperty(process.env, name);
-  }
+  for (const name of gitVariablesIn(process.env)) Reflect.deleteProperty(process.env, name);
 }

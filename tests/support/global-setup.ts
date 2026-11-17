@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { join, relative } from "node:path";
 import type { TestProject } from "vite-plus/test/node";
 import { installedVp, repositoryRoot } from "#/scripts/repository.ts";
+import { gitVariablesIn } from "#/tests/support/git-free-environment.ts";
 import { localUrl, startServer } from "#/tests/support/server-process.ts";
 import { withoutTestRunnerVariables } from "#/tests/support/test-runner-environment.ts";
 
@@ -53,6 +54,12 @@ async function testFilesOfEachProject(project: TestProject): Promise<Record<stri
 }
 
 export async function setup(project: TestProject): Promise<() => void> {
+  const gitVariables = gitVariablesIn(process.env);
+  if (gitVariables.length > 0) {
+    throw new Error(
+      `tests/support/global-setup.ts: ${gitVariables.join(", ")} reach this setup, and every child it spawns would inherit them. List tests/support/git-free-environment.ts before it in globalSetup.`,
+    );
+  }
   project.provide("testFilesOfEachProject", await testFilesOfEachProject(project));
   project.provide("runTestNamePattern", patternOf(project.vitest.config.testNamePattern));
   project.provide("runSettingsOfEachProject", runSettingsOfEachProject(project));
