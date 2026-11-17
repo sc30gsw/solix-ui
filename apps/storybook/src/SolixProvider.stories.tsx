@@ -1,14 +1,25 @@
-import { Box, createTheme, SolixProvider } from "@solix/core";
+import {
+  Box,
+  createTheme,
+  isSolixColorScheme,
+  type SolixColorScheme,
+  SolixProvider,
+} from "@solix/core";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect } from "storybook/test";
 
 const themedPadding = "3rem";
 
+function schemeOfThePage(): SolixColorScheme | undefined {
+  const scheme = document.documentElement.getAttribute("data-color-scheme");
+  return isSolixColorScheme(scheme) ? scheme : undefined;
+}
+
 const meta = {
   component: SolixProvider,
   args: { theme: createTheme({ spacing: { md: themedPadding } }) },
   render: (args) => (
-    <SolixProvider {...args}>
+    <SolixProvider defaultColorScheme={schemeOfThePage()} {...args}>
       <Box p="md" data-testid="themed">
         Padded by the theme's md spacing
       </Box>

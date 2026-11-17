@@ -7,7 +7,7 @@ import type {
   RunSettings,
   TestFilesOfEachProject,
 } from "../../../../tests/support/global-setup.ts";
-import { storiesServer } from "#/tests/support/test-servers.ts";
+import { storiesServers } from "#/tests/support/test-servers.ts";
 
 export type StoriesRun = {
   listing: TestFilesOfEachProject;
@@ -39,12 +39,18 @@ export function storyFileOf({ importPath }: StoryIndexEntry): string {
   return relative(repositoryRoot, resolve(importPath));
 }
 
-export function storiesProjectIn(engine: string): string {
-  return `${storiesServer.project} (${engine})`;
+export type StoriesServer = (typeof storiesServers)[number];
+
+export function storiesProjectIn(engine: string, server: StoriesServer): string {
+  return `${server.project} (${engine})`;
 }
 
 export function refuseARunWithoutTheStoriesProjects({ listing, engines }: StoriesRun): void {
-  const missing = engines.filter((engine) => listing[storiesProjectIn(engine)] === undefined);
+  const missing = engines.flatMap((engine) =>
+    storiesServers
+      .map((server) => storiesProjectIn(engine, server))
+      .filter((project) => listing[project] === undefined),
+  );
   if (missing.length > 0) {
     throw new Error(
       `The run holds no stories project for ${missing.join(", ")}, so it cannot tell which stories run. Run it without --project.`,

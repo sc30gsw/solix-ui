@@ -10,6 +10,7 @@
     ".storybook/*.ts",
     "fixtures/.storybook/*.ts",
     "vite.config.ts",
+    "dark/vite.config.ts",
     "stories-project.ts"
   ]
 }
