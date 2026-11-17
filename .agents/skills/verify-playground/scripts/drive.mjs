@@ -355,10 +355,9 @@ const journeys = {
     await startAt(page, manual, two);
     await startAt(page, account, security);
     const last = tabNamed(page, account, security);
-    await last.focus();
     await page.keyboard.press("Shift+Tab");
     await page.keyboard.press("Tab");
-    await shot("focus-ring", `Click ${two} in ${manual} and ${security} in ${account}, and put focus on ${security}. Leave the ${account} list with Shift+Tab and come back with Tab. Focus returns to the selected tab, ${security}, which shows a focus ring.`, region);
+    await shot("focus-ring", `Click ${two} in ${manual} and ${security} in ${account}. Leave the ${account} list with Shift+Tab and come back with Tab. Focus returns to the selected tab, ${security}, which shows a focus ring.`, region);
     observe("Tab into the list: focused tab", (await stateOf(page, account)).focused, security);
     observe("focus ring: outline style", await style(last, "outline-style"), "solid");
     observe("focus ring: outline colour", await style(last, "outline-color"), expected("--solix-color-primary"));

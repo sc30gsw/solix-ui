@@ -114,6 +114,12 @@ export function TabsTab(props: TabsTabProps) {
             return tabs.selected() === props.value ? "" : undefined;
           },
           ref: tabs.steps.item(() => props.value),
+          onPointerUp: (event: PointerEvent & { currentTarget: HTMLButtonElement }) => {
+            const tab = event.currentTarget;
+            if (event.target === tab || !tab.matches(":focus")) return;
+            tab.blur();
+            tab.focus({ preventScroll: true });
+          },
           onClick: (event: MouseEvent & { currentTarget: HTMLButtonElement }) => {
             if (!tabs.allowTabDeactivation()) return;
             if (tabs.behaviour.api.getValue() !== props.value) return;
