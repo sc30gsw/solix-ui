@@ -28,7 +28,10 @@ import {
 } from "#/scripts/release-sources.ts";
 import { manifestAt, manifestPaths, rootManifest } from "#/scripts/repository.ts";
 import { type Listing, now, policy, registryDocument } from "#/tests/support/registry-fixtures.ts";
-import { expectScheduledJobToRun } from "#/tests/support/weekly-workflow.ts";
+import {
+  expectEveryJobToRunOnASchedule,
+  expectScheduledJobToRun,
+} from "#/tests/support/weekly-workflow.ts";
 
 const manifest = { packageManager: "pnpm@12.18.0", engines: { node: "^26.13.1" } };
 
@@ -505,7 +508,11 @@ test(`${heldBackFile} names only pins of this repository, and holds each back wi
   expect(holdsWithoutReason(heldBack)).toEqual([]);
 });
 
-test("the scheduled workflow runs the pin check, which retires exemptions, in a pins job with no if, no continue-on-error and a timeout", () => {
+test("every job of the weekly workflow runs each week: the schedule fires weekly, and no job sets if, needs or continue-on-error or lacks a timeout", () => {
+  expectEveryJobToRunOnASchedule();
+});
+
+test("the pins job has exactly one step that runs the pin check, which retires exemptions, with no if and no continue-on-error", () => {
   expectScheduledJobToRun("pins", "node scripts/check-newest-releases.ts");
 });
 

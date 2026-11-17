@@ -97,7 +97,7 @@ test(`no revisit in ${roadmapFile} is met by the registry fixture in ${fixtureFi
   expect(report.problems).toEqual([]);
 });
 
-test(`the scheduled workflow runs the revisit check in a ${revisitJob} job with no if, no continue-on-error and a timeout`, () => {
+test(`the ${revisitJob} job has exactly one step that runs the revisit check, with no if and no continue-on-error`, () => {
   expectScheduledJobToRun(revisitJob, revisitCheck);
 });
 
