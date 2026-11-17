@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  globSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
@@ -9,10 +17,16 @@ import {
   settingsFrom,
   workspaceFile,
 } from "#/scripts/pnpm-settings.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
+import { workflowFiles } from "#/tests/support/workspace.ts";
 
 const catalogOnly = ["catalog:", '  "@solidjs/web": 2.0.0-rc.21', "  solid-js: 2.0.0-rc.21", ""];
 const agePolicy = ["minimumReleaseAge: 99", "minimumReleaseAgeStrict: true", ""];
 const temporary: string[] = [];
+const namesAReleaseAgeSetting = /minimum[-_.]?release[-_.]?age/i;
+const hookFiles = globSync(".vite-hooks/*", { cwd: repositoryRoot }).filter((path) =>
+  statSync(join(repositoryRoot, path)).isFile(),
+);
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -41,6 +55,22 @@ function userConfigWith(lines: readonly string[]): string {
 test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true`, () => {
   expect(pnpmSettings().minimumReleaseAge).toBeGreaterThan(0);
   expect(pnpmSettings().minimumReleaseAgeStrict).toBe(true);
+});
+
+test(`no workflow and no hook sets a release-age setting on a command line or in a variable, so only ${workspaceFile} sets them`, () => {
+  const settingLines = [...workflowFiles, ...hookFiles].flatMap((file) =>
+    readFileSync(join(repositoryRoot, file), "utf8")
+      .split("\n")
+      .flatMap((line, index) =>
+        namesAReleaseAgeSetting.test(line)
+          ? [`${file}:${index + 1}: set the release age in ${workspaceFile} only: ${line.trim()}`]
+          : [],
+      ),
+  );
+
+  expect(workflowFiles.length).toBeGreaterThan(0);
+  expect(hookFiles).toContain(".vite-hooks/pre-commit");
+  expect(settingLines).toEqual([]);
 });
 
 test("the settings are the workspace file's own: the user's pnpm config and pnpm_config_* variables do not reach them", () => {

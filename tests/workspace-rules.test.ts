@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
+import { parseAllDocuments } from "yaml";
 import {
   commentsIn,
   descendants,
@@ -78,6 +79,7 @@ const sharedSettingsFile = "tsconfig.base.json";
 const optionsOfTheParseOnlyProject = ["allowJs", "noLib", "noResolve"];
 const optionsOfTheTypeCheckedProject = ["allowJs"];
 const pnpmSettingsReader = "scripts/pnpm-settings.ts";
+const lockfile = "pnpm-lock.yaml";
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
 
@@ -664,8 +666,13 @@ test("every peer range of a library package accepts the version the catalog pins
   expect(violations).toEqual([]);
 });
 
-test(`every minimumReleaseAgeExclude entry in ${workspaceFile} is a release the catalog pins exactly, or one that a release it pins lists at that exact version among its dependencies or optionalDependencies`, () => {
+test(`every minimumReleaseAgeExclude entry in ${workspaceFile} is a release that ${lockfile} locks, and that the catalog pins exactly or a release it pins lists at that exact version among its dependencies or optionalDependencies`, () => {
   const { catalog, minimumReleaseAgeExclude } = pnpmSettings();
+  const lockedReleases = parseAllDocuments(
+    readFileSync(join(repositoryRoot, lockfile), "utf8"),
+  ).flatMap((document) =>
+    Object.keys((document.toJS() as { packages?: Record<string, unknown> }).packages ?? {}),
+  );
   const exactPins = pinsOf(rootManifest(), catalog).flatMap((pin) =>
     pin.source === "registry" &&
     [pin.pinned, `npm:${pin.registryName}@${pin.pinned}`].includes(catalog[pin.name] ?? "")
@@ -682,17 +689,19 @@ test(`every minimumReleaseAgeExclude entry in ${workspaceFile} is a release the 
         .map(([name, version]) => `${name}@${version}`);
     });
   const violations = exclusionsIn(minimumReleaseAgeExclude).flatMap(({ name, version }) => {
-    if (version === undefined) {
-      return [
-        `${workspaceFile}: minimumReleaseAgeExclude names ${name} with no version; name the one release a person approved, as <name>@<exact version>.`,
-      ];
-    }
     const release = `${name}@${version}`;
-    return pinnedReleases.includes(release) || requiredReleases.includes(release)
-      ? []
-      : [
-          `${workspaceFile}: minimumReleaseAgeExclude names ${release}, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.`,
-        ];
+    return [
+      ...(lockedReleases.includes(release)
+        ? []
+        : [
+            `${workspaceFile}: minimumReleaseAgeExclude names ${release}, which ${lockfile} does not lock, so nothing installs it; remove the entry.`,
+          ]),
+      ...(pinnedReleases.includes(release) || requiredReleases.includes(release)
+        ? []
+        : [
+            `${workspaceFile}: minimumReleaseAgeExclude names ${release}, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.`,
+          ]),
+    ];
   });
 
   expect(violations).toEqual([]);

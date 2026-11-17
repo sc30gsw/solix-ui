@@ -12,6 +12,7 @@ import {
   type Pin,
   pinsOf,
   type RegistryDocument,
+  registryNamesToFetch,
   type ReleasePolicy,
 } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
@@ -164,17 +165,16 @@ test("a release younger than the minimum release age is not yet eligible, not be
   expect(statuses({ excluded: [{ name: "semver", version: "7.8.5" }] }).semver).toBe(
     "not yet eligible",
   );
-  expect(statuses({ excluded: [{ name: "semver" }] }).semver).toBe("behind");
 });
 
-test("an exemption in minimumReleaseAgeExclude fails the check by name once its release is old enough to install without it, and so does one whose release has no publish time", () => {
+test("an exemption in minimumReleaseAgeExclude fails the check by name once its release is old enough to install without it, and so does one whose release has no publish time or whose package has no registry document", () => {
   const exemptions = [
     { name: "semver", version: "7.8.7" },
     { name: "semver", version: "7.8.6" },
     { name: "a-platform-build", version: "2.0.0" },
     { name: "a-platform-build", version: "2.0.1" },
     { name: "semver", version: "7.9.0" },
-    { name: "semver" },
+    { name: "a-missing-package", version: "1.0.0" },
   ];
   const report = check({
     documents: {
@@ -192,6 +192,7 @@ test("an exemption in minimumReleaseAgeExclude fails the check by name once its 
       "semver@7.8.6: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
       "a-platform-build@2.0.0: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
       "semver@7.9.0: the registry gives no publish time for it, so nothing tells whether minimumReleaseAgeExclude still needs it.",
+      "a-missing-package@1.0.0: the registry answer holds no document for a-missing-package, so nothing tells whether minimumReleaseAgeExclude still needs it.",
     ],
   );
   expect(
@@ -199,18 +200,38 @@ test("an exemption in minimumReleaseAgeExclude fails the check by name once its 
   ).not.toContain("minimumReleaseAgeExclude");
 });
 
-test("releasePolicy reads each minimumReleaseAgeExclude entry as a package name or <name>@<exact version>, refuses any other, and accepts this repository's own", () => {
+test("the weekly check fetches the registry document of every registry pin and of every exempted package, each once", () => {
+  const exemptions = [
+    { name: "a-platform-build", version: "2.0.0" },
+    { name: "semver", version: "7.8.7" },
+  ];
+
+  expect(registryNamesToFetch(pins, { ...policy, excluded: exemptions })).toEqual([
+    "semver",
+    "playwright",
+    "solid-js",
+    "@solidjs/vite-plugin",
+    "@types/node",
+    "@voidzero-dev/vite-plus-core",
+    "pnpm",
+    "a-platform-build",
+  ]);
+});
+
+test("releasePolicy reads each minimumReleaseAgeExclude entry as <name>@<exact version>, refuses any other, a bare package name included, and accepts this repository's own", () => {
   const settings = { ...pnpmSettings(), minimumReleaseAge: 1440 };
   const withExclusions = (minimumReleaseAgeExclude: string[]) =>
     releasePolicy({ ...settings, minimumReleaseAgeExclude });
 
-  expect(withExclusions(["semver", "@types/node@26.6.7"]).excluded).toEqual([
-    { name: "semver" },
+  expect(withExclusions(["semver@7.8.7", "@types/node@26.6.7"]).excluded).toEqual([
+    { name: "semver", version: "7.8.7" },
     { name: "@types/node", version: "26.6.7" },
   ]);
-  expect(() => withExclusions(["semver", "semver@^7"])).toThrow(/"semver@\^7" is not a package/);
-  expect(() => withExclusions(["@types/*"])).toThrow(/is not a package name/);
-  expect(() => withExclusions(["semver@7.8.7 || 7.8.8"])).toThrow(/is not a package name/);
+  expect(() => withExclusions(["semver"])).toThrow(/"semver" is not <name>@<exact version>/);
+  expect(() => withExclusions(["semver@^7"])).toThrow(/"semver@\^7" is not <name>@<exact/);
+  expect(() => withExclusions(["@types/*"])).toThrow(/is not <name>@<exact version>/);
+  expect(() => withExclusions(["semver@7.8.7 || 7.8.8"])).toThrow(/is not <name>@<exact/);
+  expect(() => withExclusions(["semver@v7.8.7"])).toThrow(/is not <name>@<exact/);
   expect(() => releasePolicy({ ...settings, minimumReleaseAge: undefined })).toThrow(
     /set minimumReleaseAge/,
   );

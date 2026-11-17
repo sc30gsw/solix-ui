@@ -18,7 +18,7 @@ export type Pin = RegistryPin | { source: "node"; name: typeof nodePinName; pinn
 
 export type HeldBack = { name: string; reason: string; liftWhen: string };
 
-export type Exclusion = { name: string; version?: string };
+export type Exclusion = { name: string; version: string };
 
 export type ReleasePolicy = {
   minimumReleaseAgeMinutes: number;
@@ -182,23 +182,19 @@ export function pinsOf(
 
 export function exclusionsIn(entries: readonly string[]): Exclusion[] {
   return entries.map((entry) => {
-    const parts = packageAndVersion.exec(entry);
-    const name = parts ? parts[1] : entry;
-    const version = parts?.[2];
-    if (!packageName.test(name) || (version !== undefined && semver.valid(version) === null)) {
+    const [, name = "", version = ""] = packageAndVersion.exec(entry) ?? [];
+    if (!packageName.test(name) || semver.valid(version) !== version) {
       throw new Error(
-        `minimumReleaseAgeExclude: "${entry}" is not a package name or <name>@<exact version>, the only entries this check reads.`,
+        `minimumReleaseAgeExclude: "${entry}" is not <name>@<exact version>. An exemption names the one release it is for.`,
       );
     }
-    return version === undefined ? { name } : { name, version };
+    return { name, version };
   });
 }
 
 function isExcluded(registryName: string, version: string, policy: ReleasePolicy): boolean {
   return policy.excluded.some(
-    (exclusion) =>
-      exclusion.name === registryName &&
-      (exclusion.version === undefined || exclusion.version === version),
+    (exclusion) => exclusion.name === registryName && exclusion.version === version,
   );
 }
 
@@ -307,14 +303,28 @@ export function holdsWithoutReason(heldBack: readonly HeldBack[]): string[] {
     .map(({ name }) => `${name}: give the entry in ${heldBackFile} a reason and a liftWhen.`);
 }
 
+export function registryNamesToFetch(pins: readonly Pin[], policy: ReleasePolicy): string[] {
+  return [
+    ...new Set([
+      ...pins.flatMap((pin) => (pin.source === "registry" ? [pin.registryName] : [])),
+      ...policy.excluded.map(({ name }) => name),
+    ]),
+  ];
+}
+
 export function outgrownExclusions(
   documents: Record<string, RegistryDocument>,
   policy: ReleasePolicy,
   now: number,
 ): string[] {
   return policy.excluded.flatMap(({ name, version }) => {
-    if (version === undefined) return [];
-    const at = publishedAt(documents[name] ?? {}, version);
+    const document = documents[name];
+    if (document === undefined) {
+      return [
+        `${name}@${version}: the registry answer holds no document for ${name}, so nothing tells whether minimumReleaseAgeExclude still needs it.`,
+      ];
+    }
+    const at = publishedAt(document, version);
     if (at === undefined) {
       return [
         `${name}@${version}: the registry gives no publish time for it, so nothing tells whether minimumReleaseAgeExclude still needs it.`,
