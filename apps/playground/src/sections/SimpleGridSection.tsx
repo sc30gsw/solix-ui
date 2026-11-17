@@ -38,6 +38,20 @@ export function SimpleGridSection() {
           <Box bg="surface">Cell</Box>
         </SimpleGrid>
       </Box>
+      <Box mt="md" style={{ overflow: "hidden" }}>
+        <Box w={1024}>
+          <SimpleGrid type="container" cols={{ base: 1, md: 2 }}>
+            <Box bg="surface">Cell of a container past md</Box>
+            <Box bg="surface">Cell</Box>
+          </SimpleGrid>
+        </Box>
+        <Box w={960} mt="md">
+          <SimpleGrid type="container" cols={{ base: 1, md: 2 }}>
+            <Box bg="surface">Cell of a container short of md</Box>
+            <Box bg="surface">Cell</Box>
+          </SimpleGrid>
+        </Box>
+      </Box>
       <SimpleGrid minColWidth={160} mt="md">
         <Box bg="surface">Auto-filled cell</Box>
         <Box bg="surface">Cell</Box>

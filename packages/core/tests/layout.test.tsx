@@ -14,6 +14,7 @@ import type {
   StackProps,
 } from "../src/index";
 import type { createParts } from "../src/parts";
+import { breakpointWidths } from "../src/style-prop-table";
 import type { ContainerWidth } from "../src/style-props";
 import { isContainerWidth, library } from "./built-library";
 import { render } from "./fixtures";
@@ -407,10 +408,12 @@ test("SimpleGrid: with media queries, keys its columns and spacing by breakpoint
   });
 });
 
-test("SimpleGrid's type refuses a container width key with media queries and a breakpoint key with container queries, and Grid's refuses breakpoints that are not container widths", () => {
+test("SimpleGrid's type refuses a container width key with media queries and takes a breakpoint or a container width key with container queries, and Grid's refuses breakpoints that are not container widths", () => {
   expectTypeOf<{ type: "media"; cols: { "40em": number } }>().not.toExtend<SimpleGridProps>();
-  expectTypeOf<{ type: "container"; cols: { md: number } }>().not.toExtend<SimpleGridProps>();
+  expectTypeOf<{ type: "media"; cols: { md: number } }>().toExtend<SimpleGridProps>();
+  expectTypeOf<{ type: "container"; cols: { md: number } }>().toExtend<SimpleGridProps>();
   expectTypeOf<{ type: "container"; cols: { "40em": number } }>().toExtend<SimpleGridProps>();
+  expectTypeOf<{ type: "container" }>().toExtend<GridProps>();
   expectTypeOf<{
     type: "container";
     breakpoints: { xs: "1px"; sm: "2px"; md: "wide"; lg: "4px"; xl: "5px" };
@@ -442,6 +445,26 @@ test("SimpleGrid: with container queries, renders its root inside the container 
     "--sx-sg-spacing-x-c0-0": "var(--solix-spacing-xl)",
   });
   expect(widths).toEqual(["30em", "500px"]);
+});
+
+test("SimpleGrid: with container queries, takes a breakpoint key as the library's width for it, applied to its container's width", () => {
+  const rendered = simpleGridOf({
+    type: "container",
+    cols: { base: 1, md: 3, "40em": 2 },
+    spacing: "md",
+  });
+  const widths = [...rendered.rules.join("").matchAll(/\(min-width: ([^)]+)\)/g)].map(
+    ([, width]) => width,
+  );
+
+  expect(rendered.wrapped).toBe(true);
+  expect(rendered.style).toEqual({
+    "--sx-sg-cols": "1",
+    "--sx-sg-cols-c0-0": "2",
+    "--sx-sg-cols-c0-1": "3",
+    "--sx-sg-spacing-x": "var(--solix-spacing-md)",
+  });
+  expect(widths).toEqual(["40em", breakpointWidths.md]);
 });
 
 test("SimpleGrid: with minColWidth, fills the row with columns at least that wide and ignores cols, or fits them with autoFlow", () => {
@@ -684,19 +707,6 @@ const columnCases: [what: string, grid: GridProps, column: GridColProps, expecte
       },
     },
   ],
-  [
-    "in a grid with container queries and no breakpoints, keeps only its base values",
-    { type: "container" },
-    { span: { base: 12, md: 6 } },
-    {
-      classes: ["sx-col-flex-basis", "sx-col-flex-grow", "sx-col-max-width"],
-      style: {
-        "--sx-col-flex-basis": basisOf("1"),
-        "--sx-col-flex-grow": "0",
-        "--sx-col-max-width": basisOf("1"),
-      },
-    },
-  ],
 ];
 
 test.each(columnCases)("GridCol: %s", (_, grid, column, expected) => {
@@ -725,6 +735,16 @@ test("GridCol: in a grid with container queries and breakpoints, keys its values
   expect(rules).toContain(
     ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}",
   );
+  expect(html).toContain("solix-Grid-container");
+});
+
+test("GridCol: in a grid with container queries and no breakpoints, keys its values by the library's breakpoint widths, applied to the grid's width", () => {
+  const { html, classes } = columnIn({ type: "container" }, { span: { base: 12, md: 6 } });
+  const [rules = ""] = rulesOf(html);
+
+  expect(classes).toContain("sx-col-flex-basis-c0-2");
+  expect(rules).toContain(`@container (min-width: ${breakpointWidths.md}){`);
+  expect(rules).not.toContain("@media");
   expect(html).toContain("solix-Grid-container");
 });
 

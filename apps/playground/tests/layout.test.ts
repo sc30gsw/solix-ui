@@ -247,6 +247,14 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
       expect(await columnsOf(narrow), "a 320 pixel container is past 18em").toBe(2);
       expect(await columnsOf(wide), "a 560 pixel container is past 30em").toBe(4);
       expect(await columnsOf(nested), "a grid in one cell queries its own container").toBe(1);
+      expect(
+        await columnsOf(gridAround(page, "Cell of a container past md")),
+        `a 1024 pixel container is past the library's md, ${breakpointWidths.md}, whatever the viewport`,
+      ).toBe(2);
+      expect(
+        await columnsOf(gridAround(page, "Cell of a container short of md")),
+        `a 960 pixel container is short of the library's md, ${breakpointWidths.md}, whatever the viewport`,
+      ).toBe(1);
       expect(await computed(narrow, "row-gap"), "verticalSpacing follows spacing").toBe(
         expected("--solix-spacing-md"),
       );
@@ -324,6 +332,20 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
           await spanWidth(column("All of a narrow container"), 12, 12),
         ),
         "a 240 pixel container is short of md",
+      ).toBe(true);
+      expect(
+        near(
+          (await boxOf(column("Half of a container past md"))).width,
+          await spanWidth(column("Half of a container past md"), 6, 12),
+        ),
+        `without breakpoints, a 1024 pixel container is past the library's md, ${breakpointWidths.md}, whatever the viewport`,
+      ).toBe(true);
+      expect(
+        near(
+          (await boxOf(column("All of a container short of md"))).width,
+          await spanWidth(column("All of a container short of md"), 12, 12),
+        ),
+        `without breakpoints, a 960 pixel container is short of the library's md, ${breakpointWidths.md}, whatever the viewport`,
       ).toBe(true);
     },
   ],

@@ -2,9 +2,11 @@ import type { JSX } from "@solidjs/web";
 import {
   baseKey,
   type Breakpoint,
+  breakpointWidths,
   breakpoints,
   canonicalOf,
   containerVariableClass,
+  isBreakpoint,
   layerOrder,
   libraryCascadeLayer,
   type PropertyRow,
@@ -56,13 +58,14 @@ export type Spacing = ScaleValue<"spacing">;
 /** A container width that a value keyed for container queries applies from, such as `"40em"`. */
 export type ContainerWidth = `${number}${(typeof containerWidthUnits)[number]}`;
 
-/** A value for every width, or one for each container width it applies from. */
+/**
+ * A value for every width, or one for each width of its container it applies from: a container
+ * width, or a breakpoint, whose width the library's breakpoints give.
+ */
 export type ContainerProp<V> =
   | V
   | Absent
-  | ({ [Key in typeof baseKey | ContainerWidth]?: V | Absent } & {
-      [Key in Breakpoint]?: never;
-    });
+  | { [Key in typeof baseKey | Breakpoint | ContainerWidth]?: V | Absent };
 
 type Keyed<V> = V | Absent | Readonly<Record<string, V | Absent>>;
 
@@ -256,9 +259,12 @@ export function resolveVariables(
   return { classes, properties, used };
 }
 
-export function containerWidthsOf(value: Keyed<unknown>): ContainerWidth[] {
+export function containerKeysOf(value: Keyed<unknown>): [key: string, width: string][] {
   if (value === undefined || value === null || typeof value !== "object") return [];
-  return Object.keys(value).filter((key): key is ContainerWidth => isContainerWidth(key));
+  return Object.keys(value).flatMap((key): [string, string][] => {
+    if (isBreakpoint(key)) return [[key, breakpointWidths[key]]];
+    return isContainerWidth(key) ? [[key, key]] : [];
+  });
 }
 
 function widthOf(written: string): { amount: number; unit: string } | undefined {

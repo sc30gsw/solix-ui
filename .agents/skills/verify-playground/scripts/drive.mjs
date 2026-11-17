@@ -381,7 +381,8 @@ const journeys = {
     observe("the grid in a 320 pixel container has 2 columns, past 18em", await columnsOf(gridAround("Cell of the narrow container")), 2);
     observe("the grid in a 560 pixel container has 4 columns, past 30em", await columnsOf(gridAround("Cell of the wide container")), 4);
     observe("the grid in one cell of it queries its own container and has 1 column", await columnsOf(gridAround("Cell of the nested container")), 1);
-    observe("the auto-filled grid makes columns at least 160 pixels wide", (await widthOf(page.getByText("Auto-filled cell", { exact: true }))) >= 160, true);
+    observe("below md: the grid in a 1024 pixel container, past md, has the 2 columns of its md value", await columnsOf(gridAround("Cell of a container past md")), 2);
+    observe("the auto-filled grid makes columns at least 160 pixels wide",(await widthOf(page.getByText("Auto-filled cell", { exact: true }))) >= 160, true);
 
     await page.setViewportSize({ width: mdWidth, height: 720 });
     await section.scrollIntoViewIfNeeded();
@@ -389,6 +390,7 @@ const journeys = {
     observe("at md: the first grid has the 3 columns of its md value", await columnsOf(media), 3);
     observe("at md: the gap between its columns is lg", await style(media, "column-gap"), expected("--solix-spacing-lg"));
     observe("at md: the grids in containers keep their columns", `${await columnsOf(gridAround("Cell of the narrow container"))} ${await columnsOf(gridAround("Cell of the wide container"))}`, "2 4");
+    observe("at md: the grid in a 960 pixel container, short of md, has 1 column", await columnsOf(gridAround("Cell of a container short of md")), 1);
   },
   grid: async ({ page, observe, shot, expected }) => {
     const section = page.getByRole("region", { name: "Grid", exact: true });
@@ -420,6 +422,7 @@ const journeys = {
     observe("justify, align and overflow reach the grid", `${await style(column("Grows to half").locator("xpath=.."), "justify-content")} ${await style(column("Grows to half").locator("xpath=.."), "align-items")} ${await style(column("Grows to half").locator("xpath=../.."), "overflow")}`, "center flex-end hidden");
     observe("in a 480 pixel container, past 20em, a column spans 6 of 12", near((await boxOf(column("Half of a wide container"))).width, await spanWidth(column("Half of a wide container"), 6, 12)), true);
     observe("in a 240 pixel container, short of 20em, a column spans 12 of 12", near((await boxOf(column("All of a narrow container"))).width, await spanWidth(column("All of a narrow container"), 12, 12)), true);
+    observe("below md: without breakpoints, in a 1024 pixel container, past md, a column spans 6 of 12", near((await boxOf(column("Half of a container past md"))).width, await spanWidth(column("Half of a container past md"), 6, 12)), true);
 
     await page.setViewportSize({ width: mdWidth, height: 720 });
     await section.scrollIntoViewIfNeeded();
@@ -428,6 +431,7 @@ const journeys = {
     observe("at md: the gap is lg", await style(half.locator("xpath=.."), "column-gap"), expected("--solix-spacing-lg"));
     const [oneAtMd, twoAtMd] = await ordered();
     observe("at md: Ordered one comes before Ordered two, in one row", oneAtMd.top === twoAtMd.top && oneAtMd.left < twoAtMd.left, true);
+    observe("at md: without breakpoints, in a 960 pixel container, short of md, a column spans 12 of 12", near((await boxOf(column("All of a container short of md"))).width, await spanWidth(column("All of a container short of md"), 12, 12)), true);
   },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();

@@ -53,6 +53,20 @@ export function GridSection() {
           <Grid.Col span={{ base: 12, md: 6 }}>Cell</Grid.Col>
         </Grid>
       </Box>
+      <Box mt="md" style={{ overflow: "hidden" }}>
+        <Box w={1024}>
+          <Grid type="container">
+            <Grid.Col span={{ base: 12, md: 6 }}>Half of a container past md</Grid.Col>
+            <Grid.Col span={{ base: 12, md: 6 }}>Cell</Grid.Col>
+          </Grid>
+        </Box>
+        <Box w={960} mt="md">
+          <Grid type="container">
+            <Grid.Col span={{ base: 12, md: 6 }}>All of a container short of md</Grid.Col>
+            <Grid.Col span={{ base: 12, md: 6 }}>Cell</Grid.Col>
+          </Grid>
+        </Box>
+      </Box>
     </Box>
   );
 }

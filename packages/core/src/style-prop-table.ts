@@ -211,7 +211,7 @@ function isCanonical(name: StylePropName): name is CanonicalStylePropName {
   return !("aliasOf" in stylePropTable[name]);
 }
 
-function isBreakpoint(name: string): name is Breakpoint {
+export function isBreakpoint(name: string): name is Breakpoint {
   return Object.hasOwn(breakpointWidths, name);
 }
 
