@@ -152,8 +152,22 @@ const steps = [
   fc.stringMatching(/^[a-z]{0,6}$/).map((text) => new TypeAName(text)),
 ];
 
+const everyActionInEachRun: Step[][] = [
+  [new PressOpenModal(), new PressOutside()],
+  [new PressOpenModal(), new PressEscape()],
+  [
+    new PressOpenModal(),
+    new PressInside(),
+    new PressTab(false),
+    new PressTab(true),
+    new TypeAName("ab"),
+    new PressClose(),
+    new PressOpenModal(),
+  ],
+];
+
 inEveryEngine((browser) => {
-  test("for every generated sequence of user actions, the modal agrees with a model of open and closed", async () => {
+  test("for fixed sequences that take every action, and for every generated sequence of user actions, the modal agrees with a model of open and closed", async () => {
     const page = await browser().newPage();
 
     await fc.assert(
@@ -170,7 +184,10 @@ inEveryEngine((browser) => {
         await expectAgreement(model, real);
         await fc.asyncModelRun(() => ({ model, real }), sequence);
       }),
-      { numRuns: generatedRuns },
+      {
+        numRuns: everyActionInEachRun.length + generatedRuns,
+        examples: everyActionInEachRun.map((sequence): [Step[]] => [sequence]),
+      },
     );
 
     await page.close();
