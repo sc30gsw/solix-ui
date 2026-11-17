@@ -15,9 +15,11 @@ export function stylesAddedToThePage(page: Page): Promise<string[]> {
   );
 }
 
+export type PageStyleSource = "linked" | "library" | "added";
+
 export type PageStyleRule = {
-  addedAtRunTime: boolean;
-  addedByTheLibrary: boolean;
+  source: PageStyleSource;
+  layerOrder: boolean;
   layers: string[];
   important: string[];
   text: string;
@@ -26,17 +28,18 @@ export type PageStyleRule = {
 export function pageStyleRules(page: Page): Promise<PageStyleRule[]> {
   return page.evaluate((byTheLibrary) => {
     const found: PageStyleRule[] = [];
-    type Source = Pick<PageStyleRule, "addedAtRunTime" | "addedByTheLibrary">;
-    const walk = (rules: CSSRuleList, layers: string[], source: Source) => {
+    const walk = (rules: CSSRuleList, layers: string[], source: PageStyleSource) => {
       for (const rule of rules) {
         if (rule instanceof CSSLayerBlockRule) {
           walk(rule.cssRules, [...layers, rule.name], source);
           continue;
         }
         const style = rule instanceof CSSStyleRule ? rule.style : undefined;
+        const layerOrder = rule instanceof CSSLayerStatementRule;
         found.push({
-          ...source,
-          layers: rule instanceof CSSLayerStatementRule ? [...layers, ...rule.nameList] : layers,
+          source,
+          layerOrder,
+          layers: layerOrder ? [...layers, ...rule.nameList] : layers,
           important: style
             ? Array.from(style).filter((name) => style.getPropertyPriority(name) === "important")
             : [],
@@ -49,16 +52,17 @@ export function pageStyleRules(page: Page): Promise<PageStyleRule[]> {
     };
     for (const sheet of document.styleSheets) {
       const owner = sheet.ownerNode;
-      const addedByTheLibrary =
-        owner instanceof HTMLStyleElement && owner.hasAttribute(byTheLibrary);
-      walk(sheet.cssRules, [], {
-        addedAtRunTime: owner instanceof HTMLStyleElement && !addedByTheLibrary,
-        addedByTheLibrary,
-      });
+      walk(
+        sheet.cssRules,
+        [],
+        !(owner instanceof HTMLStyleElement)
+          ? "linked"
+          : owner.hasAttribute(byTheLibrary)
+            ? "library"
+            : "added",
+      );
     }
-    for (const sheet of document.adoptedStyleSheets) {
-      walk(sheet.cssRules, [], { addedAtRunTime: true, addedByTheLibrary: false });
-    }
+    for (const sheet of document.adoptedStyleSheets) walk(sheet.cssRules, [], "added");
     return found;
   }, runTimeStyleAttribute);
 }

@@ -1,7 +1,7 @@
 import { globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { descendants, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
+import { descendants, exportsOf, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
 import { repositoryRoot } from "./support/workspace";
 
 const skill = ".agents/skills/verify-playground";
@@ -15,7 +15,6 @@ const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
 const testConfig = "vite.config.ts";
 const setupsModules = "apps/playground/src/sections/*-setups.ts";
 const namesObject = /Names$/;
-const injectedByTheSolidPlugin = "$$";
 const letterOrDigit = /[\p{L}\p{N}]/u;
 const whitespace = /\s/;
 const derivingFunctions = ["panelOf", "valueOf"];
@@ -235,10 +234,12 @@ async function namesTheSetupsHold(): Promise<HeldName[]> {
   const modules = globSync(setupsModules, { cwd: repositoryRoot });
   const held = await Promise.all(
     modules.map(async (module) => {
+      const { functions, others } = exportsOf(parse(join(repositoryRoot, module)));
+      const declared = [...functions, ...others];
       const exported = Object.fromEntries(
         Object.entries(
           (await import(join(repositoryRoot, module))) as Record<string, unknown>,
-        ).filter(([name]) => !name.startsWith(injectedByTheSolidPlugin)),
+        ).filter(([name]) => declared.includes(name)),
       );
       const listNames = Object.values(exported).flatMap((value) =>
         typeof value === "string" ? [value] : [],

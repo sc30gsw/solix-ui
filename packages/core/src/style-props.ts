@@ -51,13 +51,18 @@ function responsiveEntries(value: StyleProp<string | number>): [ResponsiveKey, s
   });
 }
 
+export function tokenOf(scale: Scale, key: string): string | undefined {
+  const token = `--solix-${scale}-${key}`;
+  return Object.hasOwn(tokens, token) ? token : undefined;
+}
+
 function cssValue(row: PropertyRow, written: string | number): string | undefined {
   if (typeof written === "number") {
     return row.kind === "length" ? `${written / pixelsPerRem}rem` : String(written);
   }
   if (characterThatEndsADeclaration.test(written)) return undefined;
-  const token = `--solix-${row.scale}-${written}`;
-  return row.scale !== undefined && Object.hasOwn(tokens, token) ? `var(${token})` : written;
+  const token = row.scale === undefined ? undefined : tokenOf(row.scale, written);
+  return token === undefined ? written : `var(${token})`;
 }
 
 function presentEntries(style: JSX.CSSProperties): [string, string | number][] {

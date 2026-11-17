@@ -6,7 +6,6 @@ import {
   behaviourSdkHiddenRule,
   LIBRARY_CASCADE_LAYER,
 } from "../../../packages/core/build-pipeline.mjs";
-import { cascadeLayerOrder } from "../../../packages/core/src/cascade-layers";
 import { rootPart, stableClass, stylesheet } from "../../../packages/core/tests/built-library";
 import {
   computed,
@@ -91,29 +90,24 @@ inEveryEngine((browser) => {
       const added = await stylesAddedToThePage(page);
       await plain.close();
       const linkedLayerOrder = rules
-        .filter(
-          ({ addedAtRunTime, addedByTheLibrary, layers }) =>
-            !addedAtRunTime && !addedByTheLibrary && layers.length > 0,
-        )
+        .filter(({ source, layers }) => source === "linked" && layers.length > 0)
         .map(({ layers: [outermost] }) => outermost);
       const outsideTheSdkLayer = (rule: PageStyleRule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
 
       expect(
         rules
-          .filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule))
+          .filter((rule) => rule.source === "added" && outsideTheSdkLayer(rule))
           .map(({ text }) => text),
       ).toEqual([]);
       expect(
         rules
           .filter(
-            ({ addedByTheLibrary, layers, text }) =>
-              addedByTheLibrary &&
-              text !== cascadeLayerOrder &&
-              layers[0] !== LIBRARY_CASCADE_LAYER,
+            ({ source, layerOrder, layers }) =>
+              source === "library" && !layerOrder && layers[0] !== LIBRARY_CASCADE_LAYER,
           )
           .map(({ text }) => text),
       ).toEqual([]);
-      expect(rules.some(({ addedByTheLibrary }) => addedByTheLibrary)).toBe(true);
+      expect(rules.some(({ source }) => source === "library")).toBe(true);
       expect(
         rules
           .filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule))

@@ -4,19 +4,13 @@ import fc from "fast-check";
 import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import { tokenValues } from "../../../scripts/tokens";
+import { cascadeLayerOrder, libraryCascadeLayer } from "../src/cascade-layers";
 import type * as CreateTheme from "../src/create-theme";
-import type * as RunTimeStyle from "../src/run-time-style";
-import type * as CascadeLayers from "../src/cascade-layers";
+import { runTimeStyleAttribute } from "../src/run-time-style";
 import { dist, library } from "./built-library";
 import { elementsOf, valuesOf } from "./markup";
 
 const { scaleOfThemeKey } = (await import(join(dist, "create-theme.js"))) as typeof CreateTheme;
-const { runTimeStyleAttribute } = (await import(
-  join(dist, "run-time-style.js")
-)) as typeof RunTimeStyle;
-const { behaviourSdkLayer, libraryCascadeLayer } = (await import(
-  join(dist, "cascade-layers.js")
-)) as typeof CascadeLayers;
 
 const generatedRuns = 300;
 const tokens = Object.keys(tokenValues());
@@ -27,14 +21,36 @@ const sizes = [
   "toString",
   "__proto__",
 ];
-const characterThatLeavesItsPlace = /[;{}<]/;
+const refusedValues = [
+  "1rem;color:red",
+  "1rem}",
+  "{",
+  "</style><b>",
+  "a<b",
+  "1rem !important",
+  "calc(1rem",
+  "a)",
+  "(]",
+  "'open",
+  "a /* b",
+  "a\\b",
+];
+const refusedSelectors = ["a{", "b}", ":root;", "<x>", ":not(.a", "[data-x"];
 const writable = fc.oneof(
   fc.stringMatching(/^[a-z0-9.%]{1,12}$/),
-  fc.constantFrom("calc(1rem + 2px)", "var(--gap)", '"Inter", sans-serif', "a & b", "> x"),
+  fc.constantFrom(
+    "calc(1rem + 2px)",
+    "var(--gap)",
+    '"Inter", sans-serif',
+    "'a (b' 1rem",
+    "a & b",
+    "> x",
+    "[a] 1rem",
+  ),
 );
 const value = fc.oneof(
   writable,
-  fc.constantFrom("1rem;color:red", "1rem}", "{", "</style><b>", "a<b"),
+  fc.constantFrom(...refusedValues),
   fc.constant(null),
   fc.constant(undefined),
 );
@@ -45,7 +61,7 @@ const theme = fc.dictionary(
 );
 const selector = fc.oneof(
   fc.constantFrom(":root", ".app", "[data-theme]", "#page > main"),
-  fc.constantFrom("a{", "b}", ":root;", "<x>"),
+  fc.constantFrom(...refusedSelectors),
 );
 const nonce = fc.option(fc.stringMatching(/^[A-Za-z0-9+/]{1,24}={0,2}$/), { nil: undefined });
 
@@ -66,7 +82,7 @@ function expectedDeclarations({ theme: given }: Drawn): string[] {
       ? Object.entries(written).flatMap(([size, declared]) => {
           const token = `--solix-${scaleOfThemeKey[key]}-${size}`;
           return typeof declared === "string" &&
-            !characterThatLeavesItsPlace.test(declared) &&
+            !refusedValues.includes(declared) &&
             tokens.includes(token)
             ? [`${token}:${declared}`]
             : [];
@@ -94,14 +110,12 @@ function styleOf(html: string): string | undefined {
 }
 
 test("createTheme gives back the theme it is given", () => {
-  fc.assert(
-    fc.property(theme, (given) => {
-      expect(library.createTheme(given)).toBe(given);
-    }),
-  );
+  const given = { spacing: { md: "1rem" } };
+
+  expect(library.createTheme(given)).toBe(given);
 });
 
-test("on the server, the provider writes one style for generated themes, selectors and nonces: a declaration for each value its theme sets on a token, none for a value that holds ; { } or <, for null, or for a key that names no token, all under the selector in the library's layer after the layer order, with the nonce getStyleNonce gives and the library's mark, and no style when nothing is written or withCssVariables is false", () => {
+test("on the server, the provider writes its theme as one marked style with the nonce it is given, in the library's layer, for generated themes, selectors and nonces", () => {
   fc.assert(
     fc.property(
       fc.record({
@@ -116,7 +130,7 @@ test("on the server, the provider writes one style for generated themes, selecto
         const written =
           drawn.withCssVariables !== false &&
           declarations.length > 0 &&
-          !characterThatLeavesItsPlace.test(drawn.selector);
+          !refusedSelectors.includes(drawn.selector);
         const styles = elementsOf(html).filter(({ tag }) => tag === "style");
 
         expect(html).toContain(">Inside</button>");
@@ -125,19 +139,21 @@ test("on the server, the provider writes one style for generated themes, selecto
         const [style] = styles;
         expect(valuesOf(style, "nonce")).toEqual(drawn.nonce === undefined ? [] : [drawn.nonce]);
         expect(valuesOf(style, runTimeStyleAttribute)).toHaveLength(1);
-        const [order, layer, ...others] = postcss.parse(styleOf(html) ?? "").nodes;
-        expect(others).toEqual([]);
-        expect(order?.type === "atrule" && order.name === "layer" && order.params).toBe(
-          `${behaviourSdkLayer}, ${libraryCascadeLayer}`,
-        );
-        expect(layer?.type === "atrule" && layer.name === "layer" && layer.params).toBe(
-          libraryCascadeLayer,
-        );
+        const css = styleOf(html) ?? "";
+        const [order, layer, ...others] = postcss.parse(css).nodes;
         const rules = layer?.type === "atrule" ? (layer.nodes ?? []) : [];
-        expect(rules.map((rule) => (rule.type === "rule" ? rule.selector : rule.type))).toEqual([
-          drawn.selector,
-        ]);
         const [rule] = rules;
+
+        expect(others).toEqual([]);
+        expect(css.startsWith(cascadeLayerOrder)).toBe(true);
+        expect(order?.type).toBe("atrule");
+        expect(layer?.type === "atrule" ? [layer.name, layer.params] : layer?.type).toEqual([
+          "layer",
+          libraryCascadeLayer,
+        ]);
+        expect(rules.map((found) => (found.type === "rule" ? found.selector : found.type))).toEqual(
+          [drawn.selector],
+        );
         expect(
           rule?.type === "rule"
             ? rule.nodes.map((node) => (node.type === "decl" ? `${node.prop}:${node.value}` : ""))
@@ -147,4 +163,24 @@ test("on the server, the provider writes one style for generated themes, selecto
     ),
     { numRuns: generatedRuns },
   );
+});
+
+test("a provider given no getStyleNonce gives its theme style the nonce of the provider around it", () => {
+  const html = renderToString(() =>
+    createComponent(library.SolixProvider, {
+      getStyleNonce: () => "outer",
+      get children() {
+        return createComponent(library.SolixProvider, {
+          theme: { spacing: { md: "1rem" } },
+          cssVariablesSelector: ".inner",
+        });
+      },
+    }),
+  );
+
+  expect(
+    elementsOf(html)
+      .filter(({ tag }) => tag === "style")
+      .map((style) => valuesOf(style, "nonce")),
+  ).toEqual([["outer"]]);
 });

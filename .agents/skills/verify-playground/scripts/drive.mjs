@@ -395,7 +395,7 @@ const journeys = {
       const rules = await pageStyleRules(page);
       const outsideTheSdkLayer = (rule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
       const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibraryOrTheApp);
-      observe(`${when}: rules the SDK added outside its layer`, rules.filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
+      observe(`${when}: rules the SDK added outside its layer`, rules.filter((rule) => rule.source === "added" && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
       observe(`${when}: important declarations outside the SDK's layer`, rules.filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
       observe(`${when}: the SDK added the hidden rule the build reads from it`, (await stylesAddedToThePage(page)).includes(sdkHiddenRule), true);
       observe(`${when}: style attributes on the parts`, written.partStyles, ["", styleOfTheOneStyleProp, displayedByTheApp.style].sort().join(" | "));

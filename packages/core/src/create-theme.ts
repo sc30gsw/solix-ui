@@ -1,7 +1,6 @@
 import { cascadeLayerOrder, libraryCascadeLayer } from "./cascade-layers";
 import type { Scale } from "./style-prop-table";
-import { characterThatEndsADeclaration, type ScaleKey } from "./style-props";
-import { tokens } from "./tokens.stylex";
+import { characterThatEndsADeclaration, type ScaleKey, tokenOf } from "./style-props";
 
 export const scaleOfThemeKey = {
   spacing: "spacing",
@@ -16,10 +15,35 @@ export type SolixTheme = {
   [Key in ThemeKey]?: { [Size in ScaleKey<(typeof scaleOfThemeKey)[Key]>]?: string | null };
 };
 
-const characterThatEndsAStyleElement = /</;
+const characterThatLeavesItsPlace = /[<!\\]|\/\*/;
+
+const closerOf: Readonly<Record<string, string>> = { "(": ")", "[": "]" };
+
+const quotes = ['"', "'"];
+
+function isClosed(text: string): boolean {
+  const open: string[] = [];
+  let quote: string | undefined;
+  for (const character of text) {
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined;
+    } else if (quotes.includes(character)) {
+      quote = character;
+    } else if (Object.hasOwn(closerOf, character)) {
+      open.push(closerOf[character]);
+    } else if (Object.values(closerOf).includes(character) && open.pop() !== character) {
+      return false;
+    }
+  }
+  return quote === undefined && open.length === 0;
+}
 
 function isWritable(text: string): boolean {
-  return !characterThatEndsADeclaration.test(text) && !characterThatEndsAStyleElement.test(text);
+  return (
+    !characterThatEndsADeclaration.test(text) &&
+    !characterThatLeavesItsPlace.test(text) &&
+    isClosed(text)
+  );
 }
 
 function isThemeKey(key: string): key is ThemeKey {
@@ -30,8 +54,8 @@ function declarationsOf(theme: SolixTheme): string[] {
   return Object.entries(theme).flatMap(([key, sizes]) => {
     if (!isThemeKey(key) || typeof sizes !== "object" || sizes === null) return [];
     return Object.entries(sizes).flatMap(([size, value]) => {
-      const token = `--solix-${scaleOfThemeKey[key]}-${size}`;
-      return typeof value === "string" && isWritable(value) && Object.hasOwn(tokens, token)
+      const token = tokenOf(scaleOfThemeKey[key], size);
+      return token !== undefined && typeof value === "string" && isWritable(value)
         ? [`${token}:${value};`]
         : [];
     });

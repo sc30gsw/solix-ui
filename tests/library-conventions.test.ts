@@ -13,7 +13,9 @@ import {
   fileOf,
   findAncestor,
   firstLine,
+  isDomLibraryFile,
   memberDeclarations,
+  nameOf,
   openProgram,
   parse,
   parseAll,
@@ -674,30 +676,33 @@ const styleSheetClass = "CSSStyleSheet";
 const adoptedStyleSheets = "adoptedStyleSheets";
 const elementNameAt: Record<string, number> = { createElement: 0, createElementNS: 1 };
 
-function memberNamed(node: ts.Node): string | undefined {
-  if (ts.isPropertyAccessExpression(node)) return node.name.text;
-  if (ts.isElementAccessExpression(node)) {
-    return stringsIn(librarySources, node.argumentExpression)[0];
-  }
-  return undefined;
+function domMembersOf(node: ts.Node): string[] {
+  return memberDeclarations(librarySources, node).flatMap((declaration) =>
+    ts.isBindingElement(declaration)
+      ? domMembersOf(declaration)
+      : isDomLibraryFile(fileOf(declaration))
+        ? [nameOf(declaration)]
+        : [],
+  );
 }
 
 function writesAStyle(node: ts.Node): boolean {
   if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
     return node.tagName.getText() === styleElement;
   }
-  if (memberNamed(node) === adoptedStyleSheets) return true;
-  if (constructedClass(librarySources, node).some(({ name }) => name === styleSheetClass)) {
+  if (domMembersOf(node).includes(adoptedStyleSheets)) return true;
+  if (
+    constructedClass(librarySources, node).some(
+      ({ name, file }) => name === styleSheetClass && isDomLibraryFile(file),
+    )
+  ) {
     return true;
   }
   if (!ts.isCallExpression(node)) return false;
-  const callee = unwrapped(node.expression);
-  const position = elementNameAt[memberNamed(callee) ?? ""];
-  return (
-    position !== undefined &&
-    stringsIn(librarySources, node.arguments[position]).some(
+  return domMembersOf(unwrapped(node.expression)).some((member) =>
+    stringsIn(librarySources, node.arguments[elementNameAt[member] ?? -1]).some(
       (name) => name.toLowerCase() === styleElement,
-    )
+    ),
   );
 }
 
@@ -706,11 +711,11 @@ function styleWritesIn(file: string, source: ts.SourceFile): string[] {
     .filter(writesAStyle)
     .map(
       (node) =>
-        `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)} writes a style element or a style sheet. Render LibraryStyle from ${libraryStyleModule}, which gives it the nonce of SolixProvider and the library's mark.`,
+        `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)} writes a style element or a style sheet. Render LibraryStyle from ${libraryStyleModule}.`,
     );
 }
 
-test("no source of a library but library-style.tsx renders a <style>, creates a style element or constructs or adopts a style sheet, by any spelling of the element's name the type checker knows as a string", () => {
+test("no source of a library but library-style.tsx renders a <style>, creates a style element, or constructs or adopts a style sheet", () => {
   expect(
     librarySourceFiles
       .filter((file) => relativePath(file) !== libraryStyleModule)
@@ -719,6 +724,34 @@ test("no source of a library but library-style.tsx renders a <style>, creates a 
   expect(
     styleWritesIn(libraryStyleModule, typedSource(join(repositoryRoot, libraryStyleModule))),
   ).toHaveLength(1);
+});
+
+function callsCreateParts(node: ts.Node): boolean {
+  if (!ts.isCallExpression(node)) return false;
+  const called = calledDeclaration(librarySources, node);
+  return (
+    called !== undefined &&
+    relativePath(fileOf(called)) === partsHelperFile &&
+    ts.isFunctionDeclaration(called) &&
+    called.name?.text === partsHelper
+  );
+}
+
+test("only a Component.tsx calls createParts, so a module that renders a styled element is held to the component checks", () => {
+  const componentFiles = components.map(({ file }) => file);
+  const violations = librarySourceFiles
+    .filter((file) => !componentFiles.includes(file))
+    .flatMap((file) =>
+      descendants(typedSource(file))
+        .filter(callsCreateParts)
+        .map(
+          (call) =>
+            `${relativePath(file)}:${lineOf(call)}: ${firstLine(call)} styles an element outside a component. Move it into a Component.tsx of its own.`,
+        ),
+    );
+
+  expect(components.some(({ source }) => descendants(source).some(callsCreateParts))).toBe(true);
+  expect(violations).toEqual([]);
 });
 
 test("every other source file is the barrel, a StyleX definition, or a kebab-case module, with JSX or without", () => {
@@ -749,11 +782,7 @@ test("the barrel exports every component and its props type once, and by name wh
       (module) =>
         module !== undefined &&
         !names.includes(module) &&
-        !["ts", "tsx"].some(
-          (extension) =>
-            existsSync(join(source, `${module}.${extension}`)) &&
-            helperFile.test(`${module}.${extension}`),
-        ),
+        !["ts", "tsx"].some((extension) => existsSync(join(source, `${module}.${extension}`))),
     );
 
     expect(
