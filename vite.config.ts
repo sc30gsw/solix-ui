@@ -80,7 +80,7 @@ export default defineConfig({
             "apps/*/tests/**/*.test.{ts,tsx}",
           ],
           exclude: ["**/node_modules/**", browserTests, ...ruleFixtures],
-          globalSetup: ["tests/support/global-setup.ts"],
+          globalSetup: ["tests/support/git-free-environment.ts", "tests/support/global-setup.ts"],
         },
       },
       {

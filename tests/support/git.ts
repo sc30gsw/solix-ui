@@ -1,22 +1,20 @@
-import { type SpawnSyncReturns, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
-const gitVariable = /^GIT_/;
+const scratchSettings = [
+  "-c",
+  "user.name=Test",
+  "-c",
+  "user.email=test@example.com",
+  "-c",
+  "core.hooksPath=/dev/null",
+  "-c",
+  "commit.gpgsign=false",
+];
 
-export function withoutGitVariables(
-  environment: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv {
-  return Object.fromEntries(
-    Object.entries(environment).filter(([name]) => !gitVariable.test(name)),
-  );
-}
-
-export function git(
-  args: readonly string[],
-  options: { cwd: string; env?: NodeJS.ProcessEnv },
-): SpawnSyncReturns<string> {
-  return spawnSync("git", args, {
-    cwd: options.cwd,
-    env: withoutGitVariables(options.env),
-    encoding: "utf8",
-  });
+export function gitInScratchRepository(root: string, args: readonly string[]): string {
+  const result = spawnSync("git", [...scratchSettings, ...args], { cwd: root, encoding: "utf8" });
+  if (result.status !== 0) {
+    throw new Error(`git ${args.join(" ")} in ${root}: ${result.stderr || result.error}`);
+  }
+  return result.stdout;
 }

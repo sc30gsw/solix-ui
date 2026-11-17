@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
-import { git, withoutGitVariables } from "#/tests/support/git.ts";
+import { gitInScratchRepository } from "#/tests/support/git.ts";
 
 const script = join(repositoryRoot, "scripts/check-private-terms.mjs");
 const commitMessageHook = join(repositoryRoot, ".vite-hooks/commit-msg");
@@ -12,9 +12,7 @@ const madeUpTerm = "zorblax";
 const otherMadeUpTerm = "quindle widgets";
 const scissors = "# ------------------------ >8 ------------------------";
 function environment(terms: string | undefined): NodeJS.ProcessEnv {
-  const inherited = Object.entries(withoutGitVariables()).filter(
-    ([name]) => name !== "SOLIX_PRIVATE_TERMS",
-  );
+  const inherited = Object.entries(process.env).filter(([name]) => name !== "SOLIX_PRIVATE_TERMS");
   return {
     ...Object.fromEntries(inherited),
     ...(terms === undefined ? {} : { SOLIX_PRIVATE_TERMS: terms }),
@@ -37,22 +35,6 @@ function run(command: string, args: string[], terms: string | undefined, cwd = r
 
 function check(args: string[], terms: string | undefined, cwd = repositoryRoot) {
   return run("node", [script, ...args], terms, cwd);
-}
-
-function gitIn(repository: string, args: string[]): void {
-  const result = git(
-    [
-      "-c",
-      "user.name=Test",
-      "-c",
-      "user.email=test@example.com",
-      "-c",
-      "core.hooksPath=/dev/null",
-      ...args,
-    ],
-    { cwd: repository, env: environment(undefined) },
-  );
-  if (result.status !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
 }
 
 test("text names a term in any case, and the report gives each line but never the term", () => {
@@ -83,13 +65,13 @@ test("the commit-msg hook rejects a term anywhere above the scissors line, comme
 
 test("a repository scan reads what is staged, file names and commit messages, and masks the term", () => {
   const repository = temporaryDirectory();
-  gitIn(repository, ["init", "-q"]);
+  gitInScratchRepository(repository, ["init", "-q"]);
   writeFileSync(join(repository, "plain.txt"), "plain\n");
-  gitIn(repository, ["add", "."]);
-  gitIn(repository, ["commit", "-q", "-m", "start", "-m", "made like zorblax"]);
+  gitInScratchRepository(repository, ["add", "."]);
+  gitInScratchRepository(repository, ["commit", "-q", "-m", "start", "-m", "made like zorblax"]);
   writeFileSync(join(repository, "zorblax.md"), "plain\n");
   writeFileSync(join(repository, "notes.txt"), "plain\nmade like zorblax\n");
-  gitIn(repository, ["add", "."]);
+  gitInScratchRepository(repository, ["add", "."]);
   rmSync(join(repository, "notes.txt"));
 
   const result = check([], madeUpTerm, repository);
