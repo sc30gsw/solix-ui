@@ -21,6 +21,7 @@ import {
   changes,
   engineOrder,
   expectedAfter,
+  type Kind,
   kinds,
   type Slot,
   type Step,
@@ -365,69 +366,109 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   fc.record({ type: fc.constant("toggle"), at: fc.nat(), change: fc.constantFrom(...changes) }),
 ) as fc.Arbitrary<Step>;
 
+function described(node: Node | null): string {
+  if (node === null) return "nothing";
+  if (!(node instanceof Element)) return node.nodeName;
+  const label = node.getAttribute("aria-label") ?? node.textContent ?? "";
+  return `<${node.localName}${node.id === "" ? "" : `#${node.id}`}> "${label}"`;
+}
+
+function focusReport(): string {
+  const selection = document.getSelection();
+  return `focus stays in the trap: the active element is ${described(document.activeElement)}, the page ${document.hasFocus() ? "has" : "does not have"} focus, and the selection starts in ${described(selection?.anchorNode ?? null)} at ${selection?.anchorOffset ?? "no offset"}`;
+}
+
+async function followTheEngineOrder(
+  initial: readonly Kind[],
+  steps: readonly Step[],
+): Promise<void> {
+  document.body.replaceChildren();
+  html(`<button>Before</button>`);
+  const container = html(`<div id="trap" tabindex="-1" aria-label="Trap"></div>`);
+  const mirrorStart = html(`<button>Mirror start</button>`);
+  const mirror = html(`<div aria-label="Mirror"></div>`);
+  html(`<button>Mirror end</button>`);
+  const suspender = html(`<div></div>`);
+  html(`<button>After</button>`);
+  const slots: Slot[] = [];
+  const mirrored: Slot[] = [];
+  for (const [index, kind] of initial.entries()) {
+    apply({ type: "add", at: index, kind }, slots, container, `trap start ${index}`);
+    apply({ type: "add", at: index, kind }, mirrored, mirror, `mirror start ${index}`);
+  }
+  let order = await engineOrder(mirrorStart, mirrored);
+  mirrorStart.blur();
+  await trapped(container);
+  const [suspended, setSuspended] = createSignal(false);
+  mountOn(() => createFocusTrap(suspended), suspender);
+  try {
+    for (const [index, current] of steps.entries()) {
+      if (current.type !== "tab") {
+        const before = document.activeElement;
+        setSuspended(true);
+        flush();
+        apply(current, mirrored, mirror, `mirror step ${index}`);
+        order = await engineOrder(mirrorStart, mirrored);
+        if (before instanceof HTMLElement && before !== document.body) before.focus();
+        else (document.activeElement as HTMLElement | null)?.blur();
+        setSuspended(false);
+        flush();
+        apply(current, slots, container, `trap step ${index}`);
+        await settled();
+        continue;
+      }
+      const expected = expectedAfter(
+        document.activeElement,
+        current.backwards,
+        order,
+        slots,
+        container,
+      );
+      await tab(current.backwards);
+      expect(container.contains(document.activeElement), focusReport()).toBe(true);
+      if (expected !== undefined) {
+        expect(document.activeElement, "focus lands where the engine's order says").toBe(expected);
+      }
+    }
+  } finally {
+    unmount();
+  }
+}
+
 test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus never leaves the trap and lands where the engine's own Tab order says", async () => {
   await fc.assert(
     fc.asyncProperty(
       fc.array(fc.constantFrom(...kinds), { minLength: 0, maxLength: 4 }),
       fc.array(step, { minLength: 1, maxLength: 12 }),
-      async (initial, steps) => {
-        document.body.replaceChildren();
-        html(`<button>Before</button>`);
-        const container = html(`<div id="trap" tabindex="-1" aria-label="Trap"></div>`);
-        const mirrorStart = html(`<button>Mirror start</button>`);
-        const mirror = html(`<div aria-label="Mirror"></div>`);
-        html(`<button>Mirror end</button>`);
-        const suspender = html(`<div></div>`);
-        html(`<button>After</button>`);
-        const slots: Slot[] = [];
-        const mirrored: Slot[] = [];
-        for (const [index, kind] of initial.entries()) {
-          apply({ type: "add", at: index, kind }, slots, container, `trap start ${index}`);
-          apply({ type: "add", at: index, kind }, mirrored, mirror, `mirror start ${index}`);
-        }
-        let order = await engineOrder(mirrorStart, mirrored);
-        mirrorStart.blur();
-        await trapped(container);
-        const [suspended, setSuspended] = createSignal(false);
-        mountOn(() => createFocusTrap(suspended), suspender);
-        try {
-          for (const [index, current] of steps.entries()) {
-            if (current.type !== "tab") {
-              const before = document.activeElement;
-              setSuspended(true);
-              flush();
-              apply(current, mirrored, mirror, `mirror step ${index}`);
-              order = await engineOrder(mirrorStart, mirrored);
-              if (before instanceof HTMLElement && before !== document.body) before.focus();
-              else (document.activeElement as HTMLElement | null)?.blur();
-              setSuspended(false);
-              flush();
-              apply(current, slots, container, `trap step ${index}`);
-              await settled();
-              continue;
-            }
-            const expected = expectedAfter(
-              document.activeElement,
-              current.backwards,
-              order,
-              slots,
-              container,
-            );
-            await tab(current.backwards);
-            expect(container.contains(document.activeElement), "focus stays in the trap").toBe(
-              true,
-            );
-            if (expected !== undefined) {
-              expect(document.activeElement, "focus lands where the engine's order says").toBe(
-                expected,
-              );
-            }
-          }
-        } finally {
-          unmount();
-        }
-      },
+      followTheEngineOrder,
     ),
     { numRuns: 25 },
+  );
+});
+
+test("Shift+Tab from the container keeps focus in the trap after its focused textarea is disabled and hidden, its button removed, and the textarea shown again still disabled", async () => {
+  await followTheEngineOrder(
+    ["textarea", "button"],
+    [
+      { type: "toggle", at: 0, change: "disabled" },
+      { type: "toggle", at: 0, change: "hidden" },
+      { type: "remove", at: 123_208_341 },
+      { type: "tab", backwards: false },
+      { type: "toggle", at: 0, change: "hidden" },
+      { type: "tab", backwards: true },
+    ],
+  );
+});
+
+test("Shift+Tab from the container keeps focus in the trap after its button and its focused textarea are disabled and the textarea is removed", async () => {
+  await followTheEngineOrder(
+    ["textarea", "button"],
+    [
+      { type: "toggle", at: 14_481_141, change: "disabled" },
+      { type: "toggle", at: 0, change: "disabled" },
+      { type: "tab", backwards: false },
+      { type: "remove", at: 0 },
+      { type: "tab", backwards: true },
+    ],
   );
 });
