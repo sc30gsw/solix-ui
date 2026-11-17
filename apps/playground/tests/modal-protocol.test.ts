@@ -152,8 +152,10 @@ const steps = [
   fc.stringMatching(/^[a-z]{0,6}$/).map((text) => new TypeAName(text)),
 ];
 
+const lightDismissal = [new PressOpenModal(), new PressOutside()];
+
 inEveryEngine((browser) => {
-  test("for every generated sequence of user actions, the modal agrees with a model of open and closed", async () => {
+  test("for a press outside after opening, and every generated sequence of user actions, the modal agrees with a model of open and closed", async () => {
     const page = await browser().newPage();
 
     await fc.assert(
@@ -170,7 +172,7 @@ inEveryEngine((browser) => {
         await expectAgreement(model, real);
         await fc.asyncModelRun(() => ({ model, real }), sequence);
       }),
-      { numRuns: generatedRuns },
+      { numRuns: generatedRuns, examples: [[lightDismissal]] },
     );
 
     await page.close();

@@ -6,6 +6,7 @@ import type * as Library from "../src/index";
 import type * as Parts from "../src/parts";
 import type * as StableClass from "../src/stable-class";
 import { parse, staticPropertyName, ts } from "../../../scripts/syntax";
+import { contentOf } from "./markup";
 
 export type ConsumerProps = Record<string, unknown>;
 
@@ -40,13 +41,46 @@ export function builtSource(name: string): string {
 
 const builtByName: Record<string, unknown> = library;
 
-export function renderBuilt(name: string, props: ConsumerProps): string {
+function builtNamed(name: string): Component<ConsumerProps> {
   const built = builtByName[name];
   if (typeof built !== "function") {
     throw new Error(`packages/core/dist/index.js: export the component ${name}.`);
   }
-  const Built = built as Component<ConsumerProps>;
-  return renderToString(() => createComponent(Built, props));
+  return built as Component<ConsumerProps>;
+}
+
+export type Carried = { carrier: string; member: string };
+
+export const carriedComponents: Record<string, Carried> = Object.fromEntries(
+  builtComponents.flatMap((carrier) =>
+    Object.entries(builtNamed(carrier)).flatMap(([member, carried]) =>
+      builtComponents
+        .filter((name) => name !== carrier && builtByName[name] === carried)
+        .map((name): [string, Carried] => [name, { carrier, member }]),
+    ),
+  ),
+);
+
+export function renderBuilt(name: string, props: ConsumerProps): string {
+  return renderToString(() => createComponent(builtNamed(name), props));
+}
+
+export function renderBuiltWithin(
+  around: string,
+  aroundProps: ConsumerProps,
+  name: string,
+  props: ConsumerProps,
+): string {
+  return contentOf(
+    renderToString(() =>
+      createComponent(builtNamed(around), {
+        ...aroundProps,
+        get children() {
+          return createComponent(builtNamed(name), props);
+        },
+      }),
+    ),
+  );
 }
 
 function keyOf(property: ts.ObjectLiteralElementLike, where: string): string {

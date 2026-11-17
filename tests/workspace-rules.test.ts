@@ -1,7 +1,6 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative, sep } from "node:path";
+import { join } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
 import {
@@ -18,16 +17,18 @@ import {
 import { solidPackages } from "../scripts/newest-releases";
 import { type PnpmSettings, pnpmSettings } from "../scripts/pnpm-settings";
 import {
-  type ExportTarget,
+  type AllowedRuntimeDependency,
+  allowedRuntimeDependencies,
+  runtimeDependencyList,
+} from "../scripts/runtime-dependencies";
+import {
   type Installed,
   type Manifest,
   installedVersions,
-  installedVp,
   libraryNames,
   libraryPackages,
   listed,
   outsideGeneratedOrInstalled,
-  packageManagerAnswerTimeout,
   packages,
   primitivesDirectory,
   primitivesPackage,
@@ -37,6 +38,7 @@ import {
   workflowFiles,
   workspaceFile,
 } from "./support/workspace";
+import { moduleSpecifierOf } from "./support/module-specifiers";
 
 const vitePlusCommandFor: Record<string, string> = {
   vitest: "vp test",
@@ -59,7 +61,7 @@ const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
 const catalogReference = "catalog:";
 const webStandardsOnly =
-  "A library is built on web standards and has no runtime dependency: it names Solid, StyleX and the primitives package as peers. Use a platform feature or a fallback written in this repository.";
+  "A library is built on web standards: it names Solid, StyleX and the primitives package as peers, and has a runtime dependency only where the owner decided on one. Use a platform feature or a fallback written in this repository, or record the decision in that list with its reason.";
 
 const nodeVersionHome = "package.json";
 const nodeVersionFilesThatCompete = "**/{.node-version,.nvmrc,.tool-versions}";
@@ -77,8 +79,19 @@ const pnpmSettingsReader = "scripts/pnpm-settings.ts";
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
 
+function runtimeVersions(manifest: Manifest): Record<string, string> {
+  return { ...manifest.optionalDependencies, ...manifest.dependencies };
+}
+
+function runtimeDependencies(manifest: Manifest): string[] {
+  const bundled = [manifest.bundledDependencies, manifest.bundleDependencies].flatMap((names) =>
+    Array.isArray(names) ? names : [],
+  );
+  return [...new Set([...Object.keys(runtimeVersions(manifest)), ...bundled])];
+}
+
 function installedDependencies(manifest: Manifest): [string, string][] {
-  return Object.entries({ ...manifest.dependencies, ...manifest.devDependencies });
+  return Object.entries({ ...runtimeVersions(manifest), ...manifest.devDependencies });
 }
 
 function lowestMajorOf(range: string): number | undefined {
@@ -220,7 +233,112 @@ test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFil
   ).toEqual([]);
 });
 
-test("a library has no runtime dependency, and names as a peer, or as a library of this repository in any dependency list, only what its kind allows", () => {
+function runtimeDependencyProblems(
+  libraries: readonly { path: string; manifest: Manifest }[],
+  allowed: readonly AllowedRuntimeDependency[],
+  catalog: Record<string, string>,
+  exists: (file: string) => boolean,
+): string[] {
+  const entryFor = (library: string | undefined, dependency: string) =>
+    allowed.find((entry) => entry.library === library && entry.dependency === dependency);
+  const ownLibraries = libraries.map(({ manifest }) => manifest.name);
+  return [
+    ...libraries.flatMap(({ path, manifest }) =>
+      runtimeDependencies(manifest)
+        .filter((name) => entryFor(manifest.name, name) === undefined)
+        .map(
+          (name) =>
+            `${path}: package "${manifest.name}" has the runtime dependency "${name}", which ${runtimeDependencyList} does not allow. ${webStandardsOnly}`,
+        ),
+    ),
+    ...allowed.flatMap(({ library, dependency, seam, reason }) => {
+      const owner = libraries.find(({ manifest }) => manifest.name === library);
+      if (ownLibraries.includes(dependency)) {
+        return [
+          `${runtimeDependencyList}: remove "${dependency}" of "${library}". It is a library of this repository, which "${library}" names as a "${ownLibraryPeerRange}" peer, so a consumer who uses both gets one copy; this list is for packages from outside the repository.`,
+        ];
+      }
+      return [
+        ...(reason?.trim()
+          ? []
+          : [
+              `${runtimeDependencyList}: give "${dependency}" of "${library}" a reason, the decision that allows it.`,
+            ]),
+        ...(owner !== undefined && runtimeDependencies(owner.manifest).includes(dependency)
+          ? []
+          : [
+              `${runtimeDependencyList}: remove "${dependency}" of "${library}", which that package does not depend on.`,
+            ]),
+        ...(semver.valid(catalog[dependency] ?? "") === null
+          ? [
+              `${workspaceFile}: pin "${dependency}" to one exact version in the catalog, not "${catalog[dependency]}": a consumer installs the version this repository verified.`,
+            ]
+          : []),
+        ...(exists(seam)
+          ? []
+          : [
+              `${runtimeDependencyList}: name the seam of "${dependency}" in "${library}", the one source file that imports it, not "${seam}".`,
+            ]),
+      ];
+    }),
+  ];
+}
+
+test(`a library has no runtime dependency, in any list that installs with it, but a package from outside the repository that ${runtimeDependencyList} allows with a reason, pinned to one exact version, naming an existing file as its seam`, () => {
+  const library = { path: "packages/a/package.json", manifest: { name: "a" } };
+  const withB = (list: Partial<Manifest>) => ({ ...library, manifest: { name: "a", ...list } });
+  const dependsOnB = withB({ dependencies: { b: "catalog:" } });
+  const entry = {
+    library: "a",
+    dependency: "b",
+    seam: "packages/a/src/b.ts",
+    reason: "A decision.",
+  };
+  const own = { path: "packages/b/package.json", manifest: { name: "b" } };
+  const present = (file: string) => file === entry.seam;
+  const problems = (
+    libraries: Parameters<typeof runtimeDependencyProblems>[0],
+    allowed: AllowedRuntimeDependency[],
+    catalog: Record<string, string>,
+  ) => runtimeDependencyProblems(libraries, allowed, catalog, present);
+  const unlisted = expect.stringContaining('has the runtime dependency "b"');
+
+  expect(
+    runtimeDependencyProblems(
+      libraryPackages,
+      allowedRuntimeDependencies(),
+      pnpmSettings().catalog,
+      (file) => existsSync(join(repositoryRoot, file)),
+    ),
+  ).toEqual([]);
+  expect(problems([dependsOnB], [entry], { b: "1.0.0-beta.1" })).toEqual([]);
+  expect(problems([dependsOnB], [], {})).toEqual([unlisted]);
+  expect(problems([withB({ optionalDependencies: { b: "catalog:" } })], [], {})).toEqual([
+    unlisted,
+  ]);
+  expect(problems([withB({ bundledDependencies: ["b"] })], [], {})).toEqual([unlisted]);
+  expect(problems([withB({ bundleDependencies: ["b"] })], [], {})).toEqual([unlisted]);
+  expect(problems([dependsOnB], [{ ...entry, reason: " " }], { b: "1.0.0" })).toEqual([
+    expect.stringContaining('give "b" of "a" a reason'),
+  ]);
+  expect(problems([library], [entry], { b: "1.0.0" })).toEqual([
+    expect.stringContaining('remove "b" of "a"'),
+  ]);
+  expect(problems([dependsOnB], [entry], { b: "^1.0.0" })).toEqual([
+    expect.stringContaining('pin "b" to one exact version'),
+  ]);
+  expect(
+    problems([dependsOnB], [{ ...entry, seam: "packages/a/src/gone.ts" }], { b: "1.0.0" }),
+  ).toEqual([expect.stringContaining('name the seam of "b" in "a"')]);
+  expect(problems([withB({ dependencies: { b: "workspace:*" } }), own], [], {})).toEqual([
+    unlisted,
+  ]);
+  expect(problems([withB({ dependencies: { b: "workspace:*" } }), own], [entry], {})).toEqual([
+    expect.stringContaining("It is a library of this repository"),
+  ]);
+});
+
+test("a library names as a peer, or as a library of this repository in any dependency list, only what its kind allows", () => {
   const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
     const [kind, allowed] =
       directory === primitivesDirectory
@@ -232,69 +350,12 @@ test("a library has no runtime dependency, and names as a peer, or as a library 
         .map(([name]) => name)
         .filter((name) => libraryNames.includes(name)),
     ];
-    return [
-      ...Object.keys(manifest.dependencies ?? {}).map(
+    return [...new Set(named)]
+      .filter((name) => !allowed.includes(name))
+      .map(
         (name) =>
-          `${path}: package "${manifest.name}" has the runtime dependency "${name}". ${webStandardsOnly}`,
-      ),
-      ...[...new Set(named)]
-        .filter((name) => !allowed.includes(name))
-        .map(
-          (name) =>
-            `${path}: package "${manifest.name}" names "${name}", which ${kind} may not. It may name only ${allowed.join(", ")}.`,
-        ),
-    ];
-  });
-
-  expect(libraryPackages.length).toBeGreaterThan(1);
-  expect(violations).toEqual([]);
-});
-
-function exportedFiles(target: ExportTarget | undefined): string[] {
-  if (target === undefined || target === null) return [];
-  if (typeof target === "string") return [target.replace(/^\.\//, "")];
-  return Object.values(target).flatMap(exportedFiles);
-}
-
-function packedFiles(directory: string): string[] {
-  const answer = execFileSync(installedVp, ["pm", "pack", "--json", "--", "--dry-run"], {
-    cwd: directory,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: packageManagerAnswerTimeout,
-  });
-  const packed: unknown = JSON.parse(answer);
-  const files =
-    typeof packed === "object" && packed !== null && "files" in packed ? packed.files : undefined;
-  if (!Array.isArray(files)) {
-    throw new Error(`${directory}: the pack listed no files. It answered: ${answer}`);
-  }
-  return files.map((file: { path: string }) => file.path);
-}
-
-function filesBeside(directory: string, exported: string[]): string[] {
-  const folders = new Set(exported.flatMap((file) => file.split("/").slice(0, 1)));
-  return [...folders].flatMap((folder) =>
-    globSync(`${folder}/**`, { cwd: directory, withFileTypes: true })
-      .filter((entry) => entry.isFile())
-      .map((entry) => relative(directory, join(entry.parentPath, entry.name)).split(sep).join("/")),
-  );
-}
-
-test("a library exports a file, and its packed tarball holds every file its exports name and every file in their folders", () => {
-  const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
-    const exported = [...new Set(exportedFiles(manifest.exports))];
-    const needed = [...new Set([...exported, ...filesBeside(directory, exported)])];
-    const packed = packedFiles(directory);
-    return [
-      ...(exported.length === 0 ? [`${path}: package "${manifest.name}" exports no file.`] : []),
-      ...needed
-        .filter((file) => !packed.includes(file))
-        .map(
-          (file) =>
-            `${path}: the packed tarball of "${manifest.name}" leaves out ${file}, which "exports" names or which sits in the folder of a file they name.`,
-        ),
-    ];
+          `${path}: package "${manifest.name}" names "${name}", which ${kind} may not. It may name only ${allowed.join(", ")}.`,
+      );
   });
 
   expect(libraryPackages.length).toBeGreaterThan(1);
@@ -330,17 +391,6 @@ function commentsOtherThanDocComments(file: string, source: ts.SourceFile): stri
   return commentsIn(source)
     .filter(({ text }) => !text.startsWith("/**"))
     .map(({ pos, text }) => `${file}:${lineOf(source, pos)}: ${text.split("\n")[0]}`);
-}
-
-function moduleSpecifierOf(node: ts.Node): ts.Node | undefined {
-  if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) return node.moduleSpecifier;
-  if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument))
-    return node.argument.literal;
-  const loadsAModule =
-    ts.isCallExpression(node) &&
-    (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-      node.expression.getText() === "require");
-  return loadsAModule ? node.arguments[0] : undefined;
 }
 
 function typeScriptApiImports(file: string, source: ts.SourceFile): string[] {

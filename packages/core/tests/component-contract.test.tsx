@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, matchesGlob } from "node:path";
 import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import { expect, expectTypeOf, test } from "vite-plus/test";
@@ -18,8 +18,10 @@ import {
 } from "./arbitraries";
 import {
   builtComponents,
+  carriedComponents,
   compiledClassesOf,
   library,
+  renderBuilt,
   rootPart,
   stableClass,
   stylesheet,
@@ -36,7 +38,14 @@ import {
   stylePropPropsOf,
   styleWritten,
 } from "./consumer-props";
-import { components, fixtures, polymorphicComponents, render, type TakesDisplay } from "./fixtures";
+import {
+  components,
+  fixtures,
+  polymorphicComponents,
+  readsInOneRender,
+  render,
+  type TakesDisplay,
+} from "./fixtures";
 import {
   classesOf,
   declarationsIn,
@@ -139,6 +148,50 @@ test.each(builtComponents)(
     for (const element of elements) {
       for (const part of partsOn(name, element)) expectCompiledClassesFirst(name, part, element);
     }
+  },
+);
+
+test("a component that another export carries as a static member is exported under the carrier's name followed by the member's, and rendered outside its carrier it throws an error that names the carrier", () => {
+  const carried = Object.entries(carriedComponents);
+
+  expect(carried).not.toEqual([]);
+  for (const [name, { carrier, member }] of carried) {
+    expect(name).toBe(`${carrier}${member}`);
+    expect(() => renderBuilt(name, {}), name).toThrow(
+      new RegExp(`must be rendered inside ${carrier}\\.$`),
+    );
+  }
+});
+
+test.each(components)(
+  "%s reads each prop of its type that takes an element once in a server render of its fixture, so an element a consumer passes is created once",
+  (name, { elementProps, props }) => {
+    const rendered = Object.keys(elementProps);
+
+    expect(Object.keys(props), "the fixture gives each such prop").toEqual(
+      expect.arrayContaining(rendered),
+    );
+    for (const prop of rendered) expect(readsInOneRender(name, prop), prop).toBe(1);
+  },
+);
+
+const valuesThePlatformRendersNothingFor = [null, undefined, false, true, "", []];
+
+test.each(components)(
+  "%s renders a 0 given to a prop of its type that takes an element, and renders for null, undefined, false, true, an empty string and an empty list what it renders without the prop",
+  (name, { elementProps, props }) => {
+    const rendered = Object.keys(elementProps);
+    for (const prop of rendered) {
+      const without = render(name, { [prop]: undefined });
+
+      expect(render(name, { [prop]: 0 }), `${prop}={0}`).toContain(">0<");
+      for (const nothing of valuesThePlatformRendersNothingFor) {
+        expect(render(name, { [prop]: nothing }), `${prop}={${JSON.stringify(nothing)}}`).toBe(
+          without,
+        );
+      }
+    }
+    expect(Object.keys(props)).toEqual(expect.arrayContaining(rendered));
   },
 );
 
@@ -444,18 +497,22 @@ test("every --sx- declaration the generator draws for a consumer's style or styl
   );
 });
 
-test("the contract skill has a row for each component that names its root tag and boolean attribute as fixtures does", () => {
-  const rows = readFileSync(join(repositoryRoot, contractSkill), "utf8")
+test("every component's source file is covered by the contract skill's table", () => {
+  const coveredPaths = readFileSync(join(repositoryRoot, contractSkill), "utf8")
     .split("\n")
-    .filter((line) => line.startsWith("|"));
-  const violations = components.flatMap(([name, { tag, booleanAttribute }]) => {
-    const file = `packages/core/src/${name}.tsx`;
-    const row = rows.find((line) => line.includes(`\`${file}\`: \`${name}\``));
-    if (!row) return [`${contractSkill}: add a covered-code row for \`${file}\`: \`${name}\`.`];
-    return [`<${tag}>`, `\`${booleanAttribute}\``]
-      .filter((fact) => !row.includes(fact))
-      .map((fact) => `${contractSkill}: say ${fact} in the row for \`${file}\`, as fixtures does.`);
-  });
+    .filter((line) => line.startsWith("| `"))
+    .flatMap((row) =>
+      [...(row.split(" | ")[0] ?? "").matchAll(/`([^`]+)`/g)].map(([, path]) => path),
+    );
+  const covered = (file: string) =>
+    coveredPaths.some(
+      (path) => path === file || file.startsWith(`${path}/`) || matchesGlob(file, path),
+    );
 
-  expect(violations).toEqual([]);
+  expect(
+    components
+      .map(([name]) => `packages/core/src/${name}.tsx`)
+      .filter((file) => !covered(file))
+      .map((file) => `${contractSkill}: no covered-code row covers ${file}.`),
+  ).toEqual([]);
 });

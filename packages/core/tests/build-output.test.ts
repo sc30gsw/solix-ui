@@ -1,10 +1,15 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import {
+  BEHAVIOUR_SDK_LAYER,
+  behaviourSdkHiddenRule,
+  HIDDEN_LAYER,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
+  sdkHiddenRuleSource,
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
 import {
@@ -12,11 +17,19 @@ import {
   stylePropClassPrefix,
   stylePropNames,
 } from "../src/style-prop-table";
+import { stableClassPrefix } from "../src/stable-class";
 import { builtComponents, builtSource, dist, stylesheet as builtStylesheet } from "./built-library";
 import { parse, ts } from "../../../scripts/syntax";
-import { enclosingAtRules, inStylePropLayer, nestedLayerOrder } from "./cascade-layers";
+import {
+  enclosingAtRules,
+  inStylePropLayer,
+  layersAroundDeclaration,
+  nestedLayerOrder,
+} from "./cascade-layers";
 
 const stylesheet = builtStylesheet.trim();
+const realHiddenRule = behaviourSdkHiddenRule(join(import.meta.dirname, ".."));
+const libraryPartCondition = `:where([class^="${stableClassPrefix}"], [class*=" ${stableClassPrefix}"])`;
 const ownerBreakpoints: [name: string, width: string][] = [
   ["xs", "36em"],
   ["sm", "48em"],
@@ -134,16 +147,31 @@ function depthAfterEachCharacter(css: string): number[] {
   });
 }
 
-test("every rule sits inside the one library cascade layer", () => {
-  expect(stylesheet.startsWith(`@layer ${LIBRARY_CASCADE_LAYER} {`)).toBe(true);
+function sdkSelectors(): string[] {
+  const selectors: string[] = [];
+  postcss.parse(realHiddenRule).walkRules((rule) => {
+    selectors.push(rule.selector);
+  });
+  return selectors;
+}
 
-  const depths = depthAfterEachCharacter(stylesheet);
-  const firstBrace = stylesheet.indexOf("{");
+test("the stylesheet first orders the behaviour SDK's layer before the library's, then holds the rule the SDK writes at run time to keep a hidden part hidden, read from the SDK's package and narrowed to an element with a class that starts with the stable class prefix, and then every other rule inside the one library cascade layer", () => {
+  const [selector, ...others] = sdkSelectors();
+  const narrowed = realHiddenRule.replace(selector, `${selector}${libraryPartCondition}`);
+  const order = `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER};\n${narrowed}\n`;
+  const layer = stylesheet.slice(order.length);
+
+  expect(others).toEqual([]);
+  expect(stylesheet.startsWith(order)).toBe(true);
+  expect(layer.startsWith(`@layer ${LIBRARY_CASCADE_LAYER} {`)).toBe(true);
+
+  const depths = depthAfterEachCharacter(layer);
+  const firstBrace = layer.indexOf("{");
   const positionsBackAtTopLevel = depths
     .map((depth, position) => (position >= firstBrace && depth === 0 ? position : -1))
     .filter((position) => position !== -1);
 
-  expect(positionsBackAtTopLevel).toEqual([stylesheet.length - 1]);
+  expect(positionsBackAtTopLevel).toEqual([layer.length - 1]);
 });
 
 test("every class name carries the library's own prefix", () => {
@@ -156,13 +184,83 @@ test("every class name carries the library's own prefix", () => {
   expect(classNames.filter((name) => !name.startsWith(`.${LIBRARY_CLASS_PREFIX}`))).toEqual([]);
 });
 
-test("no declaration is marked important, so nothing in the layer can outrank a consumer", () => {
-  const important: string[] = [];
+test("every declaration marked important sits in the SDK's layer and none in the library's layer, so no rule in `solix` can outrank a consumer", () => {
+  const outsideTheSdkLayer: string[] = [];
   postcss.parse(stylesheet).walkDecls((declaration) => {
-    if (declaration.important) important.push(`${declaration.prop}: ${declaration.value}`);
+    const layers = layersAroundDeclaration(declaration);
+    if (declaration.important && layers.at(-1) !== BEHAVIOUR_SDK_LAYER) {
+      outsideTheSdkLayer.push(
+        `${layers.toReversed().join(" > ") || "no layer"}: ${declaration.toString()}`,
+      );
+    }
   });
 
-  expect(important).toEqual([]);
+  expect(outsideTheSdkLayer).toEqual([]);
+});
+
+function sdkWhoseHiddenWriterIs(body: string): string {
+  const packageRoot = mkdtempSync(join(tmpdir(), "sdk-hidden-rule-"));
+  const module = join(
+    packageRoot,
+    "node_modules",
+    sdkHiddenRuleSource.dependency,
+    sdkHiddenRuleSource.module,
+  );
+  mkdirSync(dirname(module), { recursive: true });
+  writeFileSync(module, `function ${sdkHiddenRuleSource.writer}(doc) {\n${body}\n}\n`);
+  return packageRoot;
+}
+
+test.each([
+  [
+    "a rule built by concatenation",
+    'const at = ":where([hidden])"; writeStyle(doc, "id", "@layer ui-sdk { " + at + " { display: none !important } }");',
+  ],
+  [
+    "a rule built from a template with a substitution",
+    'const at = ":where([hidden])"; writeStyle(doc, "id", `@layer ui-sdk { ${at} { display: none !important } }`);',
+  ],
+  [
+    "two writes",
+    'writeStyle(doc, "a", "@layer ui-sdk { a { display: none !important } }"); writeStyle(doc, "b", "@layer ui-sdk { b { display: none !important } }");',
+  ],
+  [
+    "two rules in one layer",
+    'writeStyle(doc, "id", "@layer ui-sdk { a { display: none !important } b { display: none !important } }");',
+  ],
+  [
+    "a second declaration",
+    'writeStyle(doc, "id", "@layer ui-sdk { :where([data-part][hidden]) { display: none !important; content-visibility: hidden !important } }");',
+  ],
+  [
+    "a declaration that is not important",
+    'writeStyle(doc, "id", "@layer ui-sdk { :where([hidden]) { display: none } }");',
+  ],
+  [
+    "another layer",
+    'writeStyle(doc, "id", "@layer other { :where([hidden]) { display: none !important } }");',
+  ],
+  ["no layer", 'writeStyle(doc, "id", ":where([hidden]) { display: none !important }");'],
+  [
+    "an unclosed layer",
+    'writeStyle(doc, "id", "@layer ui-sdk { :where([hidden]) { display: none !important }");',
+  ],
+  ["nothing", "return doc;"],
+])("the build refuses the SDK's hidden rule when its writer holds %s", (_, body) => {
+  expect(() => behaviourSdkHiddenRule(sdkWhoseHiddenWriterIs(body))).toThrow(
+    `${sdkHiddenRuleSource.writer} writes`,
+  );
+});
+
+test("the build takes the SDK's hidden rule when its writer holds one closed layer block of one rule that declares only display none important, whatever its selector", () => {
+  const rule = `@layer ${BEHAVIOUR_SDK_LAYER} { :where([data-part][hidden]) { display: none !important } }`;
+
+  expect(
+    behaviourSdkHiddenRule(
+      sdkWhoseHiddenWriterIs(`writeStyle(doc, "id", ${JSON.stringify(rule)});`),
+    ),
+  ).toBe(rule);
+  expect(realHiddenRule.startsWith(`@layer ${BEHAVIOUR_SDK_LAYER} {`)).toBe(true);
 });
 
 test("a token keeps its public custom property name", () => {
@@ -192,14 +290,31 @@ test("input validity and the modal backdrop compile to the platform's own select
   expect(stylesheet).toMatch(new RegExp(`\\.${LIBRARY_CLASS_PREFIX}\\w+::backdrop\\{`));
 });
 
-test("the style-prop layer sits inside the library layer, ordered after every layer StyleX emits", () => {
+test("the style-prop layer sits inside the library layer, ordered after every layer StyleX emits, and only the hidden layer comes after it", () => {
   const order = nestedLayerOrder(libraryLayer());
 
   expect(order.length, "StyleX emits layers of its own inside the library layer").toBeGreaterThan(
-    1,
+    2,
   );
   expect(order.filter((name) => name === STYLE_PROP_LAYER)).toEqual([STYLE_PROP_LAYER]);
-  expect(order.at(-1), `the nested layer order is ${order.join(", ")}`).toBe(STYLE_PROP_LAYER);
+  expect(order.slice(-2), `the nested layer order is ${order.join(", ")}`).toEqual([
+    STYLE_PROP_LAYER,
+    HIDDEN_LAYER,
+  ]);
+});
+
+test("the hidden layer holds one rule, display none on a hidden element with a class that starts with the stable class prefix, unless it is hidden until found", () => {
+  const rules: string[] = [];
+  libraryLayer().walkAtRules("layer", (layer) => {
+    if (layer.params !== HIDDEN_LAYER) return;
+    layer.walkRules((rule) => {
+      rules.push(`${rule.selector}{${rule.nodes.map((node) => node.toString()).join(";")}}`);
+    });
+  });
+
+  expect(rules).toEqual([
+    `[hidden]${libraryPartCondition}:not([hidden="until-found"]){display:none}`,
+  ]);
 });
 
 test("the style-prop table uses the build's class prefix", () => {

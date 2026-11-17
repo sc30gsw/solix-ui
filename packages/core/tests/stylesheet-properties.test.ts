@@ -4,16 +4,20 @@ import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import {
   compileLibrarySource,
+  BEHAVIOUR_SDK_LAYER,
+  behaviourSdkHiddenRule,
+  HIDDEN_LAYER,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
   libraryStylesheet,
   STYLE_PROP_LAYER,
 } from "../build-pipeline.mjs";
 import { stylePropRules } from "../src/style-prop-table";
-import { nestedLayerOrder } from "./cascade-layers";
+import { layersAroundDeclaration, nestedLayerOrder } from "./cascade-layers";
 
 const packageRoot = join(import.meta.dirname, "..");
 const generatedRuns = 300;
+const sdkRule = behaviourSdkHiddenRule(packageRoot);
 
 const valuesByProperty: Record<string, (string | number)[]> = {
   backgroundColor: ["red", "rgb(10, 20, 30)", "transparent"],
@@ -141,7 +145,7 @@ function sourceFor(definitions: Definition[]): string {
   return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "./disclosure-state.stylex";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
 }
 
-test("for every generated style definition, the stylesheet stays inside the library layer with prefixed classes and registered custom properties, the style-prop layer last, and nothing important", async () => {
+test("for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, the style-prop layer and then the hidden layer last, and nothing important in the library's layer", async () => {
   await fc.assert(
     fc.asyncProperty(styleDefinitions, async (definitions) => {
       const { rules } = await compileLibrarySource({
@@ -149,16 +153,21 @@ test("for every generated style definition, the stylesheet stays inside the libr
         source: sourceFor(definitions),
         packageRoot,
       });
-      const stylesheet = postcss.parse(libraryStylesheet(rules, stylePropRules()));
+      const stylesheet = postcss.parse(libraryStylesheet(rules, stylePropRules(), sdkRule));
 
       expect(rules.length).toBeGreaterThan(0);
       expect(
         stylesheet.nodes.map((node) =>
           node.type === "atrule" ? `@${node.name} ${node.params}` : node.type,
         ),
-      ).toEqual([`@layer ${LIBRARY_CASCADE_LAYER}`]);
+      ).toEqual([
+        `@layer ${BEHAVIOUR_SDK_LAYER}, ${LIBRARY_CASCADE_LAYER}`,
+        `@layer ${BEHAVIOUR_SDK_LAYER}`,
+        `@layer ${LIBRARY_CASCADE_LAYER}`,
+      ]);
       stylesheet.each((layer) => {
-        if (layer.type === "atrule") expect(nestedLayerOrder(layer).at(-1)).toBe(STYLE_PROP_LAYER);
+        if (layer.type !== "atrule" || layer.params !== LIBRARY_CASCADE_LAYER) return;
+        expect(nestedLayerOrder(layer).slice(-2)).toEqual([STYLE_PROP_LAYER, HIDDEN_LAYER]);
       });
 
       stylesheet.walkRules((rule) => {
@@ -176,7 +185,8 @@ test("for every generated style definition, the stylesheet stays inside the libr
         [],
       );
       stylesheet.walkDecls((declaration) => {
-        expect(declaration.important).toBeFalsy();
+        const inTheLibrary = layersAroundDeclaration(declaration).includes(LIBRARY_CASCADE_LAYER);
+        expect(Boolean(declaration.important) && inTheLibrary).toBe(false);
       });
     }),
     { numRuns: generatedRuns },

@@ -7,7 +7,7 @@ Solix UI is a component library for Solid 2.0, styled with StyleX. This page say
 The work comes in this order. Each step has a status: not started, in progress or merged. Only the status merged is checked against the build. A part that a component carries as a static member goes with that component.
 
 1. **Layout** (in progress): Box, Center, Container, Flex, Grid, Group, SimpleGrid, Space, Stack.
-2. **UI SDK seam** (in progress): Tabs.
+2. **UI SDK seam** (merged): Tabs.
 3. **`#/` subpath imports** (not started).
 4. **Storybook** (not started).
 5. **Buttons and basic display** (not started): Button, UnstyledButton, CloseButton, IconButton, CopyButton, FileButton, Toggle, Link, Text, Title, Highlight, List, Divider, Paper, VisuallyHidden, Loader, Badge, Avatar, Card, Image, BackgroundImage, Indicator, NumberFormatter, Code.
@@ -18,7 +18,7 @@ The work comes in this order. Each step has a status: not started, in progress o
 10. **Feedback and data** (not started): Alert, EmptyState, Progress, Skeleton, Table, ScrollArea, Scroller.
 11. **AppShell and Splitter** (not started): AppShell, Splitter.
 
-The UI SDK seam will be the behaviour layer every behaviour component builds on. Storybook will be the surface for visual checks and adds no component. Modal will move onto UI SDK's Dialog.
+The UI SDK seam is the behaviour layer: `Tabs` builds on it, and every new behaviour component will. Storybook will be the surface for visual checks and adds no component. Modal will move onto UI SDK's Dialog.
 
 ### Leaving
 
