@@ -14,10 +14,13 @@ import {
   type RegistryDocument,
   registryNamesToFetch,
   type ReleasePolicy,
+  solidBuildNames,
+  staleSolidExemptions,
 } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import { heldBackEntries, releasePolicy } from "#/scripts/release-sources.ts";
 import { rootManifest } from "#/scripts/repository.ts";
+import { expectScheduledJobToRun } from "#/tests/support/weekly-workflow.ts";
 
 const now = Date.parse("2026-11-14T12:00:00Z");
 const day = 24 * 60 * 60_000;
@@ -455,8 +458,95 @@ test("the Solid 2 canary refuses a peer range it cannot read instead of passing 
     '@solidjs/web@2.0.1: its peer range "workspace:^" for solid-js is not a semver range',
   );
   expect(() => newestSolidRelease({}, policy, now)).toThrow(
-    "No stable Solid 2 release is published for solid-js, @solidjs/web, @solidjs/compiler and @solidjs/signals alike, old enough to install and accepted by their peer ranges.",
+    "solid-js: the registry answer holds no document for it.",
   );
+  expect(() =>
+    newestSolidRelease(
+      solidLine(() => "*", []),
+      policy,
+      now,
+    ),
+  ).toThrow(
+    "No stable Solid 2 release is published for solid-js, @solidjs/web, @solidjs/compiler and @solidjs/signals alike, with every build they require at that version, old enough to install and accepted by their peer ranges.",
+  );
+});
+
+function withBuilds(releases: Release[], builds: Release[]) {
+  const line = solidLine(() => "*", releases);
+  const compiler = line["@solidjs/compiler"];
+  for (const [version] of releases) {
+    compiler.versions = {
+      ...compiler.versions,
+      [version]: {
+        optionalDependencies: { "a-compiler-build": version, "a-range": `^${version}` },
+      },
+    };
+  }
+  return { ...line, "a-compiler-build": registryDocument(builds) };
+}
+
+test("the Solid 2 canary waits until every build a Solid package requires at that exact version is old enough too, and fails by name when the registry answer holds no document for one", () => {
+  const releases: Release[] = [
+    ["2.0.0", 20],
+    ["2.0.1", 3],
+  ];
+  const buildTooYoung = withBuilds(releases, [
+    ["2.0.0", 20],
+    ["2.0.1", 0.5],
+  ]);
+  const { "a-compiler-build": _dropped, ...noBuildDocument } = buildTooYoung;
+
+  expect(solidBuildNames(buildTooYoung)).toEqual(["a-compiler-build"]);
+  expect(newestSolidRelease(buildTooYoung, policy, now)).toBe("2.0.0");
+  expect(
+    newestSolidRelease(
+      buildTooYoung,
+      { ...policy, excluded: [{ name: "a-compiler-build", version: "2.0.1" }] },
+      now,
+    ),
+  ).toBe("2.0.1");
+  expect(newestSolidRelease(withBuilds(releases, releases), policy, now)).toBe("2.0.1");
+  expect(newestSolidRelease(withBuilds(releases, [["2.0.0", 20]]), policy, now)).toBe("2.0.0");
+  expect(() => newestSolidRelease(noBuildDocument, policy, now)).toThrow(
+    "a-compiler-build: the registry answer holds no document for it.",
+  );
+});
+
+test("before it moves the Solid packages, the canary names each exemption the move would leave stale, and none when it stays on the pinned release", () => {
+  const documents = withBuilds(
+    [
+      ["2.0.0", 20],
+      ["2.0.1", 3],
+    ],
+    [
+      ["2.0.0", 20],
+      ["2.0.1", 3],
+    ],
+  );
+  const exemptions = {
+    ...policy,
+    excluded: [
+      { name: "solid-js", version: "2.0.0" },
+      { name: "a-compiler-build", version: "2.0.0" },
+      { name: "@solidjs/signals", version: "2.0.1" },
+      { name: "semver", version: "7.8.7" },
+    ],
+  };
+  const stale = (name: string) =>
+    `${name}@2.0.0: minimumReleaseAgeExclude exempts it, and the canary would move the Solid packages to 2.0.1, which does not install it. Remove the exemption first: the canary does not edit the list, so that the weekly run never blames Solid for a stale exemption.`;
+
+  expect(staleSolidExemptions(documents, exemptions, "2.0.0", "2.0.1")).toEqual([
+    stale("solid-js"),
+    stale("a-compiler-build"),
+  ]);
+  expect(
+    staleSolidExemptions(
+      documents,
+      { ...policy, excluded: exemptions.excluded.slice(0, 2) },
+      "2.0.0",
+      "2.0.0",
+    ),
+  ).toEqual([]);
 });
 
 test("the Solid 2 canary stays on Solid 2 when next moves to Solid 3, and takes 2.x stable once it is old enough to install", () => {
@@ -528,4 +618,8 @@ test(`${heldBackFile} names only pins of this repository, and holds each back wi
 
   expect(heldBack.filter(({ name }) => !names.includes(name))).toEqual([]);
   expect(holdsWithoutReason(heldBack)).toEqual([]);
+});
+
+test("the scheduled workflow runs the pin check, which retires exemptions, in a pins job with no if, no continue-on-error and a timeout", () => {
+  expectScheduledJobToRun("pins", "node scripts/check-newest-releases.ts");
 });

@@ -5,8 +5,14 @@ export const heldBackFile = "scripts/held-back-releases.json";
 export const packageManagerPinName = "packageManager";
 export const nodePinName = "engines.node";
 
+type VersionManifest = {
+  dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
+
 export type RegistryDocument = {
-  versions?: Record<string, { peerDependencies?: Record<string, string> }>;
+  versions?: Record<string, VersionManifest>;
   time?: Record<string, string>;
 };
 
@@ -401,20 +407,67 @@ export function reportTable(comparisons: readonly PinComparison[]): string {
   ].join("\n");
 }
 
+function exactlyRequiredBy(document: RegistryDocument | undefined, version: string): Exclusion[] {
+  const manifest = document?.versions?.[version];
+  return Object.entries({ ...manifest?.dependencies, ...manifest?.optionalDependencies })
+    .filter(([, specifier]) => semver.valid(specifier) === specifier)
+    .map(([name, required]) => ({ name, version: required }));
+}
+
+function exactlyRequiredBySolid(
+  documents: Record<string, RegistryDocument>,
+  version: string,
+): Exclusion[] {
+  return solidPackages.flatMap((name) => exactlyRequiredBy(documents[name], version));
+}
+
+export function solidBuildNames(documents: Record<string, RegistryDocument>): string[] {
+  return [
+    ...new Set(
+      solidPackages.flatMap((name) =>
+        Object.keys(documents[name]?.versions ?? {})
+          .filter((version) => semver.valid(version) !== null)
+          .filter((version) => stableOnMajor([{ version, eligibleAt: 0 }], solidMajor).length > 0)
+          .flatMap((version) =>
+            exactlyRequiredBy(documents[name], version).map(({ name: build }) => build),
+          ),
+      ),
+    ),
+  ];
+}
+
+function publishedOf(
+  name: string,
+  documents: Record<string, RegistryDocument>,
+  policy: ReleasePolicy,
+): Published[] {
+  const document = documents[name];
+  if (document === undefined) {
+    throw new Error(`${name}: the registry answer holds no document for it.`);
+  }
+  const published = publishedIn(name, document, policy);
+  if (!Array.isArray(published)) throw new Error(`${name}: ${published.why}`);
+  return published;
+}
+
 function publishedForEachSolidPackage(
   documents: Record<string, RegistryDocument>,
   policy: ReleasePolicy,
 ): Published[] {
-  const [first = [], ...others] = solidPackages.map((name) => {
-    const published = publishedIn(name, documents[name] ?? {}, policy);
-    if (!Array.isArray(published)) throw new Error(`${name}: ${published.why}`);
-    return published;
-  });
-  return first.flatMap(({ version, eligibleAt }) => {
-    const elsewhere = others.flatMap(
-      (published) => published.find((release) => release.version === version) ?? [],
-    );
-    return elsewhere.length === others.length
+  const [first = [], ...others] = solidPackages.map((name) => publishedOf(name, documents, policy));
+  return stableOnMajor(first, solidMajor).flatMap(({ version, eligibleAt }) => {
+    const elsewhere = [
+      ...others.flatMap(
+        (published) => published.find((release) => release.version === version) ?? [],
+      ),
+      ...exactlyRequiredBySolid(documents, version).flatMap(
+        (build) =>
+          publishedOf(build.name, documents, policy).find(
+            (release) => release.version === build.version,
+          ) ?? [],
+      ),
+    ];
+    return elsewhere.length === others.length + exactlyRequiredBySolid(documents, version).length
       ? [
           {
             version,
@@ -445,15 +498,40 @@ export function newestSolidRelease(
   policy: ReleasePolicy,
   now: number,
 ): string {
-  const release = newestFirst(
-    stableOnMajor(publishedForEachSolidPackage(documents, policy), solidMajor),
-  )
+  const release = newestFirst(publishedForEachSolidPackage(documents, policy))
     .filter(({ eligibleAt }) => eligibleAt <= now)
     .find(({ version }) => solidPeersAccept(documents, version));
   if (release === undefined) {
     throw new Error(
-      `No stable Solid ${solidMajor} release is published for ${listed(solidPackages)} alike, old enough to install and accepted by their peer ranges.`,
+      `No stable Solid ${solidMajor} release is published for ${listed(solidPackages)} alike, with every build they require at that version, old enough to install and accepted by their peer ranges.`,
     );
   }
   return release.version;
+}
+
+export function staleSolidExemptions(
+  documents: Record<string, RegistryDocument>,
+  policy: ReleasePolicy,
+  from: string,
+  to: string,
+): string[] {
+  const kept = [
+    ...solidPackages.map((name) => ({ name, version: to })),
+    ...exactlyRequiredBySolid(documents, to),
+  ];
+  const solidNames = new Set([
+    ...solidPackages,
+    ...exactlyRequiredBySolid(documents, from).map(({ name }) => name),
+    ...kept.map(({ name }) => name),
+  ]);
+  return policy.excluded
+    .filter(
+      ({ name, version }) =>
+        solidNames.has(name) &&
+        !kept.some((release) => release.name === name && release.version === version),
+    )
+    .map(
+      ({ name, version }) =>
+        `${name}@${version}: minimumReleaseAgeExclude exempts it, and the canary would move the Solid packages to ${to}, which does not install it. Remove the exemption first: the canary does not edit the list, so that the weekly run never blames Solid for a stale exemption.`,
+    );
 }

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { parse as parseYaml } from "yaml";
 import type { RegistryDocument, ReleasePolicy } from "#/scripts/newest-releases.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 import {
@@ -13,9 +12,9 @@ import {
   revisitsWithoutReasonOrCondition,
 } from "#/scripts/revisits.ts";
 import { roadmapFile } from "#/scripts/roadmap.ts";
+import { expectScheduledJobToRun } from "#/tests/support/weekly-workflow.ts";
 
 const fixtureFile = "tests/fixtures/registry/2026-11-16.json";
-const weeklyWorkflow = ".github/workflows/newest-releases.yml";
 const revisitJob = "revisits";
 const revisitCheck = "node scripts/check-revisits.ts";
 const now = Date.parse("2026-11-16T22:39:45Z");
@@ -98,21 +97,8 @@ test(`no revisit in ${roadmapFile} is met by the registry fixture in ${fixtureFi
   expect(report.problems).toEqual([]);
 });
 
-test(`the scheduled workflow runs the revisit check in a ${revisitJob} job with no if and a timeout`, () => {
-  const workflow = parseYaml(readFileSync(join(repositoryRoot, weeklyWorkflow), "utf8")) as {
-    on?: { schedule?: unknown[] };
-    jobs?: Record<string, Record<string, unknown> & { steps?: Record<string, unknown>[] }>;
-  };
-  const job = workflow.jobs?.[revisitJob];
-  const steps = (job?.steps ?? []).filter((step) => step.run === revisitCheck);
-
-  expect(workflow.on?.schedule?.length).toBeGreaterThan(0);
-  expect(job).toBeDefined();
-  expect(job).not.toHaveProperty("if");
-  expect(typeof job?.["timeout-minutes"]).toBe("number");
-  expect(steps.length).toBe(1);
-  expect(steps[0]).not.toHaveProperty("if");
-  expect(steps[0]).not.toHaveProperty("continue-on-error");
+test(`the scheduled workflow runs the revisit check in a ${revisitJob} job with no if, no continue-on-error and a timeout`, () => {
+  expectScheduledJobToRun(revisitJob, revisitCheck);
 });
 
 test("the revisits read the reason and the condition of each revisit", () => {
