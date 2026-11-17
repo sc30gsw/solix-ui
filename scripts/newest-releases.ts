@@ -14,6 +14,7 @@ type VersionManifest = {
 export type RegistryDocument = {
   versions?: Record<string, VersionManifest>;
   time?: Record<string, string>;
+  "dist-tags"?: Record<string, string>;
 };
 
 export type NodeRelease = { version: string; lts: string | false };
@@ -56,6 +57,7 @@ type ChannelContext = {
   pinned: string;
   nodeLtsMajor: number | undefined;
   now: number;
+  latest: string | undefined;
 };
 
 type Channel = {
@@ -135,6 +137,11 @@ const pinnedMajorUntilStableChannel: Channel = {
   versions: pinnedMajorUntilStable,
 };
 
+const latestTagChannel: Channel = {
+  describe: "the release its registry document's latest dist-tag names",
+  versions: (published, { latest }) => published.filter(({ version }) => version === latest),
+};
+
 export const channels: Record<string, Channel> = {
   "solid-js": solidChannel,
   "@solidjs/web": solidChannel,
@@ -144,6 +151,8 @@ export const channels: Record<string, Channel> = {
     describe: "its newest stable release on the major it pins",
     versions: (published, { pinned }) => stableOnMajor(published, semver.major(pinned)),
   },
+  "@ui-sdk/core": latestTagChannel,
+  "@ui-sdk/solid": latestTagChannel,
   "@types/node": {
     describe: "its newest stable release on the major of Node's newest LTS",
     versions: (published, { nodeLtsMajor }) =>
@@ -415,6 +424,7 @@ export function compareWithNewest(input: {
             pinned: pin.pinned,
             nodeLtsMajor,
             now: input.now,
+            latest: input.documents[pin.registryName]?.["dist-tags"]?.latest,
           });
     const described = channel === undefined ? nodeChannel : channel.describe;
     return "why" in releases

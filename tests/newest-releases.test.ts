@@ -728,3 +728,43 @@ test(`${heldBackFile} names only pins of this repository, and holds each back wi
 test("the scheduled workflow runs the pin check, which retires exemptions, in a pins job with no if, no continue-on-error and a timeout", () => {
   expectScheduledJobToRun("pins", "node scripts/check-newest-releases.ts");
 });
+
+test("a UI SDK pin follows the release the latest dist-tag names, once it is old enough to install: a release ahead of latest is not newer, and a document with no latest tag fails by name", () => {
+  const betas: Release[] = [
+    ["0.1.0-beta.5", 3],
+    ["0.1.0-beta.6", 2],
+    ["0.1.0-beta.7", 1.5],
+  ];
+  const tagged = (latest: string, releases: Release[] = betas): RegistryDocument => ({
+    ...registryDocument(releases),
+    "dist-tags": { latest, beta: "0.1.0-beta.7" },
+  });
+  const sdk = (pinned: string, document: RegistryDocument) =>
+    check({
+      pins: pinsOf(manifest, { "@ui-sdk/core": pinned }),
+      documents: { ...documents, "@ui-sdk/core": document },
+    });
+
+  expect(sdk("0.1.0-beta.5", tagged("0.1.0-beta.6")).comparisons[0]).toMatchObject({
+    status: "behind",
+    newest: "0.1.0-beta.6",
+    eligible: "0.1.0-beta.6",
+    channel: "the release its registry document's latest dist-tag names",
+  });
+  expect(sdk("0.1.0-beta.6", tagged("0.1.0-beta.6")).comparisons[0]).toMatchObject({
+    status: "current",
+    newest: "0.1.0-beta.6",
+  });
+  expect(
+    sdk(
+      "0.1.0-beta.5",
+      tagged("0.1.0-beta.6", [
+        ["0.1.0-beta.5", 3],
+        ["0.1.0-beta.6", 0.25],
+      ]),
+    ).comparisons[0],
+  ).toMatchObject({ status: "not yet eligible", eligibleAt: "2026-11-15T06:00:00.000Z" });
+  expect(sdk("0.1.0-beta.5", registryDocument(betas)).problems[0]).toBe(
+    "@ui-sdk/core: no published release is on its channel (the release its registry document's latest dist-tag names); check the name and the channel.",
+  );
+});
