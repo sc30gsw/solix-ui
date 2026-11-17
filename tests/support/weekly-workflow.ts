@@ -43,7 +43,7 @@ function outOfRange(
   });
 }
 
-function cronProblems(cron: string | undefined): string[] {
+export function cronProblems(cron: string | undefined): string[] {
   const fields = cron?.trim().split(/\s+/) ?? [];
   if (fields.length !== 5) return [`cron "${cron}": give it five fields.`];
   const [minute = "", hour = "", dayOfMonth = "", month = "", dayOfWeek = ""] = fields;

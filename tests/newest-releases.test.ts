@@ -29,6 +29,7 @@ import {
 import { manifestAt, manifestPaths, rootManifest } from "#/scripts/repository.ts";
 import { type Listing, now, policy, registryDocument } from "#/tests/support/registry-fixtures.ts";
 import {
+  cronProblems,
   expectEveryJobToRunWeeklyAndFailTheRun,
   expectJobToHaveOneStepRunning,
 } from "#/tests/support/weekly-workflow.ts";
@@ -742,4 +743,47 @@ test("a held-back entry says which way it holds: one written for a pin ahead fai
   expect(holdsWithoutReason([{ ...behindHold, holds: "sideways" }])).toEqual([
     `a-package: give the entry in ${heldBackFile} a reason, a liftWhen and, for a pin ahead of its channel, holds: "ahead".`,
   ]);
+});
+
+test("a second held-back entry for one pin fails by name, whichever way either holds and whichever comes first", () => {
+  const aheadHold = {
+    name: "a-package",
+    reason: "Tried ahead.",
+    liftWhen: "2.1.0 is out.",
+    holds: "ahead",
+  };
+  const behindHold = { name: "a-package", reason: "Waiting.", liftWhen: "it is fixed." };
+  const aboutThePackage = (pinned: string, heldBack: HeldBack[]) =>
+    check({
+      pins: pinsOf(manifest, { "a-package": pinned }),
+      documents: { ...documents, "a-package": registryDocument([["2.1.0", 10]]) },
+      heldBack,
+    }).problems.filter((problem) => problem.startsWith("a-package"));
+  const twice = "a-package: the held-back list names it more than once; keep one entry.";
+
+  expect(aboutThePackage("2.2.0", [aheadHold, behindHold])).toEqual([twice]);
+  expect(aboutThePackage("2.0.0", [behindHold, aheadHold])).toEqual([twice]);
+  expect(aboutThePackage("2.2.0", [aheadHold, aheadHold])).toEqual([twice]);
+  expect(aboutThePackage("2.2.0", [behindHold, aheadHold])).toEqual([
+    expect.stringMatching(/^a-package: 2\.2\.0 is ahead of 2\.1\.0/),
+    "a-package: the held-back list holds it behind its channel, but it is ahead; remove the entry, or rewrite it to hold the pin ahead with a reason and a liftWhen for that.",
+    twice,
+  ]);
+});
+
+test("a cron that GitHub cannot run, or that does not fire every week, fails naming the entry and each field at fault", () => {
+  expect(cronProblems("29 5 * * 1")).toEqual([]);
+  expect(cronProblems("*/15 0-6,12 * * mon-fri")).toEqual([]);
+  expect(cronProblems("29 24 * * 9")).toEqual([
+    'cron "29 24 * * 9": the hour field "24" is not within 0-23, with no range reversed.',
+    'cron "29 24 * * 9": the day of week field "9" is not within 0-6 or SUN-SAT, with no range reversed.',
+  ]);
+  expect(cronProblems("29 5 * * 5-1")).toEqual([
+    'cron "29 5 * * 5-1": the day of week field "5-1" is not within 0-6 or SUN-SAT, with no range reversed.',
+  ]);
+  expect(cronProblems("29 5 31 2 *")).toEqual([
+    'cron "29 5 31 2 *": the day of month field "31" is not *.',
+    'cron "29 5 31 2 *": the month field "2" is not *.',
+  ]);
+  expect(cronProblems("29 5 * *")).toEqual(['cron "29 5 * *": give it five fields.']);
 });

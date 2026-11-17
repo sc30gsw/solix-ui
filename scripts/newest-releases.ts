@@ -439,7 +439,10 @@ export function holdsOfNothing(
   heldBack: readonly HeldBack[],
   comparisons: readonly PinComparison[],
 ): string[] {
-  return heldBack.flatMap((held) => {
+  return heldBack.flatMap((held, index) => {
+    if (heldBack.findIndex(({ name }) => name === held.name) !== index) {
+      return [`${held.name}: the held-back list names it more than once; keep one entry.`];
+    }
     const status = comparisons.find(({ pin }) => pin.name === held.name)?.status;
     if (status === "held back" || status === "held ahead") return [];
     const now = status === "behind" || status === "ahead" ? status : undefined;
