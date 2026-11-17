@@ -56,7 +56,7 @@ export function distSpecifier(specifier: string, importer: string, layout: Sourc
       `${importer}: ${specifier} is relative. Name a file of this package with ${subpathPrefix} and its path from the package root, or run vp run migrate:subpath-imports.`,
     );
   }
-  if (namesAPackage(specifier)) return specifier;
+  if (namesAPackage(specifier) || URL.canParse(specifier)) return specifier;
   const target = subpathTarget(importer, specifier);
   if (target === undefined) {
     throw new Error(

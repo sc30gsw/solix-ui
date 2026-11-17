@@ -285,7 +285,10 @@ function bareImportsReachedFrom(entries: readonly string[]): string[] {
       if (isTypeOnlyImport(node.importClause)) continue;
       const target = fileNamedBy(file, specifier);
       if (namesAPackage(specifier)) bare.add(specifier);
-      else if (target && existsSync(target)) queue.push(target);
+      else {
+        const found = target && [target, `${target}.ts`, `${target}.tsx`].find(existsSync);
+        if (found) queue.push(found);
+      }
     }
   }
   return [...bare].sort();

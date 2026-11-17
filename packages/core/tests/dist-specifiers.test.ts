@@ -163,6 +163,7 @@ test(`the build refuses a relative specifier, and a ${subpathPrefix} specifier t
     expect(() => distSpecifier("../src/b.ts", importer, layout)).toThrow(/is relative/);
     expect(() => distSpecifier("#internal/b.ts", importer, layout)).toThrow(/neither a package/);
     expect(distSpecifier("solid-js", importer, layout)).toBe("solid-js");
+    expect(distSpecifier("node:fs", importer, layout)).toBe("node:fs");
     expect(() => distSpecifier(`${subpathPrefix}src/style.css`, importer, layout)).toThrow(
       /no output for a \.css file/,
     );
