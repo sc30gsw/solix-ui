@@ -266,7 +266,7 @@ const journeys = {
     await summary.click();
     await content.waitFor({ state: "visible" });
     await section.scrollIntoViewIfNeeded();
-    await shot("styled-parts-open", "Click the summary named Styled parts. It opens, and its background still comes from styles.", section);
+    await shot("open-parts", "Click the summary named Styled parts. It opens, and its background still comes from styles.", section);
     observe("open: content is visible", await content.isVisible(), true);
     observe("open: styles.summary still beats the library's open background", await style(summary, "background-color"), expected("partBackground"));
     observe("open: styles.summary still beats the library's open text colour", await style(summary, "color"), expected("partText"));
@@ -324,7 +324,7 @@ const journeys = {
     observe(`optional, after a second click on ${notes}: panels shown`, none.shown.join(), "");
 
     await tabNamed(page, controlled, locked).click();
-    await shot("locked", `Click ${locked} in the list named ${controlled}. The app's own handler refuses the press, so ${drafts} stays selected.`, region);
+    await shot(valueOf(locked), `Click ${locked} in the list named ${controlled}. The app's own handler refuses the press, so ${drafts} stays selected.`, region);
     observe(`controlled, after a click on ${locked}: selected tab`, (await stateOf(page, controlled)).selected, drafts);
     observe(`controlled, after a click on ${locked}: presses the app refused`, await page.getByRole("status", { name: "Refused presses" }).textContent(), "1");
   },

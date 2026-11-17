@@ -15,6 +15,9 @@ const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
 const testConfig = "vite.config.ts";
 const setupsModules = "apps/playground/src/sections/*-setups.ts";
 const namesObject = /Names$/;
+const letterOrDigit = /[\p{L}\p{N}]/u;
+const whitespace = /\s/;
+const derivingFunctions = ["panelOf", "valueOf"];
 const playgroundTestCode = "apps/playground/tests/**/*.{ts,tsx,mjs}";
 const featureSections = [
   "Sub-features",
@@ -238,27 +241,55 @@ async function namesTheSetupsHold(): Promise<HeldName[]> {
       const itemNames = Object.entries(exported).flatMap(([name, value]) =>
         namesObject.test(name) ? stringLeaves(value) : [],
       );
-      const { panelOf } = exported;
-      const panelTexts =
-        typeof panelOf === "function" ? itemNames.map((name) => String(panelOf(name))) : [];
-      return [...listNames, ...itemNames, ...panelTexts].map((name) => ({ name, module }));
+      const derived = Object.entries(exported).flatMap(([name, derive]) =>
+        derivingFunctions.includes(name) && typeof derive === "function"
+          ? itemNames.map((item) => String(derive(item)))
+          : [],
+      );
+      return [...listNames, ...itemNames, ...derived].map((name) => ({ name, module }));
     }),
   );
   return held.flat();
 }
 
-test("no playground test or drive script writes, as a string, a list's name, an item's name in an exported *Names object, or a panel's text that a setups module holds: each reads it from that module", async () => {
+function holdsAsAWord(text: string, name: string): boolean {
+  const at = text.indexOf(name);
+  if (at === -1) return false;
+  const before = text.slice(0, at).at(-1) ?? " ";
+  const after = text.at(at + name.length) ?? " ";
+  return (
+    (!letterOrDigit.test(before) && !letterOrDigit.test(after)) ||
+    holdsAsAWord(text.slice(at + 1), name)
+  );
+}
+
+function heldIn(node: ts.Node, held: HeldName[]): HeldName | undefined {
+  if (ts.isRegularExpressionLiteral(node)) {
+    return held.find(({ name }) => holdsAsAWord(node.text, name));
+  }
+  const text =
+    ts.isStringLiteralLikeNode(node) ||
+    ts.isTemplateHead(node) ||
+    ts.isTemplateMiddle(node) ||
+    ts.isTemplateTail(node)
+      ? node.text
+      : undefined;
+  if (text === undefined) return undefined;
+  return held.find(
+    ({ name }) => name === text || (!whitespace.test(text) && holdsAsAWord(text, name)),
+  );
+}
+
+test("no playground test or drive script writes a name that a setups module holds, a list's name, an item's name in an exported *Names object, or what its panelOf or valueOf gives for an item, as a string, as a word of a string with no whitespace, or as a word of a regular expression: each reads it from that module", async () => {
   const held = await namesTheSetupsHold();
   const files = [...globSync(playgroundTestCode, { cwd: repositoryRoot }), driveScript];
   const violations = files.flatMap((file) => {
     const source = parse(join(repositoryRoot, file));
     return descendants(source).flatMap((node) => {
-      const found = ts.isStringLiteralLikeNode(node)
-        ? held.find(({ name }) => name === node.text)
-        : undefined;
+      const found = heldIn(node, held);
       return found
         ? [
-            `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText()} is a name ${found.module} holds. Read it from that module.`,
+            `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText()} holds ${JSON.stringify(found.name)}, a name ${found.module} holds. Read it from that module.`,
           ]
         : [];
     });

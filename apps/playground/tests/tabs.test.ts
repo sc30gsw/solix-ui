@@ -285,13 +285,13 @@ inEveryEngine((browser) => {
 
       await tabNamed(page, controlled, inbox).click();
 
-      expect(await value.textContent()).toBe("inbox");
+      expect(await value.textContent()).toBe(valueOf(inbox));
       expect(await stateOf(page, controlled)).toMatchObject({ selected: inbox });
 
       await tabNamed(page, controlled, locked).click();
 
       expect(await refused.textContent()).toBe("1");
-      expect(await value.textContent()).toBe("inbox");
+      expect(await value.textContent()).toBe(valueOf(inbox));
       expect(await stateOf(page, controlled)).toMatchObject({ selected: inbox });
 
       await page.getByRole("button", { name: "Select none" }).click();
