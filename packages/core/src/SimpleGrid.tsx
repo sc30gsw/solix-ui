@@ -1,5 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { createUniqueId, Show } from "solid-js";
+import { LibraryStyle } from "#/src/library-style.tsx";
 import { createParts, type ElementProps } from "#/src/parts.ts";
 import {
   type ContainerVariableProp,
@@ -87,7 +88,9 @@ export function SimpleGrid(props: SimpleGridProps) {
   );
   return (
     <Show when={container.queries()} fallback={grid}>
-      <Show when={container.rules()}>{(rules) => <style data-solix-rules>{rules()}</style>}</Show>
+      <Show when={container.rules()}>
+        {(rules) => <LibraryStyle of="simple-grid" css={rules()} />}
+      </Show>
       <div {...part("container")}>{grid}</div>
     </Show>
   );

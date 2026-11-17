@@ -1,3 +1,4 @@
+import { createTheme, SolixProvider } from "@solix/core";
 import { BoxSection } from "#/src/sections/BoxSection.tsx";
 import { ButtonSection } from "#/src/sections/ButtonSection.tsx";
 import { CenterSection } from "#/src/sections/CenterSection.tsx";
@@ -15,30 +16,42 @@ import { StackSection } from "#/src/sections/StackSection.tsx";
 import { StylesApiSection } from "#/src/sections/StylesApiSection.tsx";
 import { TabsSection } from "#/src/sections/TabsSection.tsx";
 import { TextInputSection } from "#/src/sections/TextInputSection.tsx";
+import { themedByTheProvider, themedSpacing } from "#/src/sections/theme-setups.ts";
+import { ThemeSection } from "#/src/sections/ThemeSection.tsx";
+import { styleNonce } from "#/src/style-nonce.ts";
 import "#/src/app.css";
 import "@solix/core/styles.css";
 
+const playgroundTheme = createTheme({ spacing: themedSpacing });
+
 export default function App() {
   return (
-    <main>
-      <h1>Solix playground</h1>
-      <ButtonSection />
-      <ChangingPropsSection />
-      <DisclosureSection />
-      <TextInputSection />
-      <ModalSection />
-      <BoxSection />
-      <StylesApiSection />
-      <SpaceSection />
-      <CenterSection />
-      <StackSection />
-      <GroupSection />
-      <FlexSection />
-      <ContainerSection />
-      <SimpleGridSection />
-      <GridSection />
-      <TabsSection />
-      <PrimitivesSection />
-    </main>
+    <SolixProvider
+      theme={playgroundTheme}
+      cssVariablesSelector={`[${themedByTheProvider}]`}
+      getStyleNonce={styleNonce}
+    >
+      <main>
+        <h1>Solix playground</h1>
+        <ButtonSection />
+        <ChangingPropsSection />
+        <DisclosureSection />
+        <TextInputSection />
+        <ModalSection />
+        <BoxSection />
+        <StylesApiSection />
+        <SpaceSection />
+        <CenterSection />
+        <StackSection />
+        <GroupSection />
+        <FlexSection />
+        <ContainerSection />
+        <SimpleGridSection />
+        <GridSection />
+        <TabsSection />
+        <ThemeSection />
+        <PrimitivesSection />
+      </main>
+    </SolixProvider>
   );
 }

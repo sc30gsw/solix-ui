@@ -1,7 +1,14 @@
 import { globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { descendants, parse, parseAll, staticPropertyName, ts } from "#/scripts/syntax.ts";
+import {
+  descendants,
+  exportsOf,
+  parse,
+  parseAll,
+  staticPropertyName,
+  ts,
+} from "#/scripts/syntax.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const skill = ".agents/skills/verify-playground";
@@ -234,7 +241,13 @@ async function namesTheSetupsHold(): Promise<HeldName[]> {
   const modules = globSync(setupsModules, { cwd: repositoryRoot });
   const held = await Promise.all(
     modules.map(async (module) => {
-      const exported: Record<string, unknown> = await import(join(repositoryRoot, module));
+      const { functions, others } = exportsOf(parse(join(repositoryRoot, module)));
+      const declared = [...functions, ...others];
+      const exported = Object.fromEntries(
+        Object.entries(
+          (await import(join(repositoryRoot, module))) as Record<string, unknown>,
+        ).filter(([name]) => declared.includes(name)),
+      );
       const listNames = Object.values(exported).flatMap((value) =>
         typeof value === "string" ? [value] : [],
       );

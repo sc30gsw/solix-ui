@@ -16,3 +16,5 @@ export { TabsList, type TabsListProps } from "#/src/TabsList.tsx";
 export { TabsPanel, type TabsPanelProps } from "#/src/TabsPanel.tsx";
 export { TabsTab, type TabsTabProps } from "#/src/TabsTab.tsx";
 export { TextInput, type TextInputProps } from "#/src/TextInput.tsx";
+export { createTheme, type SolixTheme } from "#/src/create-theme.ts";
+export { SolixProvider, type SolixProviderProps } from "#/src/solix-provider.tsx";

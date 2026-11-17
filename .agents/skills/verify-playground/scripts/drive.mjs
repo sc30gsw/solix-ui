@@ -11,9 +11,10 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
-const { baseKey, breakpointWidths, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
+const { baseKey, breakpointWidths, libraryStyleMark, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
 const { BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { themedByTheProvider, themedSpacing, themeNames, themeSection } = await repositoryModule("apps/playground/src/sections/theme-setups.ts");
 const { pageStyleRules, stylesAddedToThePage } = await repositoryModule("apps/playground/tests/support/page-styles.ts");
 const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabNames, tabsRegion, valueOf } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
@@ -68,6 +69,22 @@ const journeys = {
     await shot("themed-button", "Look at the button named Themed, which sits in a subtree where the app overrides a token.", themed);
     observe("background follows the consumer's token value", await style(themed, "background-color"), expected("brandGreen"));
     observe("a button outside the themed subtree keeps the default", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected("--solix-color-primary"));
+  },
+  "provider-theme": async ({ page, observe, shot, expected }) => {
+    const themed = page.getByText(themeNames.themed, { exact: true });
+    const untouched = page.getByText(themeNames.untouched, { exact: true });
+    await shot("page", "Open the page.");
+    await shot("theme-section", `Look at the two boxes in the section named ${themeSection}.`, page.getByRole("region", { name: themeSection }));
+    observe("the box under the provider's selector reads the theme's spacing", (await style(themed, "--solix-spacing-md")).trim(), themedSpacing.md);
+    observe("the box outside it keeps the default padding", await style(untouched, "padding-top"), expected("--solix-spacing-md"));
+    observe("the theme changes the padding of the box under the selector", (await style(themed, "padding-top")) !== (await style(untouched, "padding-top")), true);
+    const styles = await page.evaluate(([mark, selected]) => {
+      const nonce = document.querySelector("script[nonce]")?.nonce;
+      const all = [...document.querySelectorAll("style")];
+      return { withoutTheNonce: all.filter((element) => element.nonce !== nonce).length, theme: all.filter((element) => element.hasAttribute(mark) && (element.textContent ?? "").includes(selected)).length };
+    }, [libraryStyleMark, themedByTheProvider]);
+    observe("style elements without the page's nonce", styles.withoutTheNonce, 0);
+    observe("library style elements that hold the provider's theme", styles.theme, 1);
   },
   "changing-props": async ({ page, observe, shot, expected }) => {
     const emphasise = page.getByRole("button", { name: "Emphasise" });
@@ -637,6 +654,7 @@ const observe = (what, actual, expected) => observations.push({ what, actual, ex
 const browser = await browserType(engine).launch();
 const browserVersion = browser.version();
 const recorded = await browser.newContext({
+  bypassCSP: true,
   viewport: { width: 640, height: 360 },
   recordVideo: { dir: directory, size: { width: 640, height: 360 } },
 });
