@@ -45,6 +45,7 @@ export type PinComparison =
   | (Compared & { status: "current" })
   | (Compared & { status: "behind"; eligible: string })
   | (Compared & { status: "held back"; eligible: string; held: HeldBack })
+  | (Compared & { status: "held ahead"; held: HeldBack })
   | (Compared & { status: "not yet eligible"; eligibleAt: string })
   | (Compared & { status: "ahead" })
   | { pin: Pin; channel: string; status: "unknown"; why: string };
@@ -71,6 +72,7 @@ type ChannelContext = {
 type Channel = {
   describe: string;
   versions: (published: readonly Published[], context: ChannelContext) => Published[];
+  unavailable?: (context: ChannelContext) => string | undefined;
 };
 
 const minute = 60_000;
@@ -153,6 +155,10 @@ const latestTagChannel: Channel = {
   describe: "the release its registry document's latest dist-tag names",
   versions: (published, { document }) =>
     published.filter(({ version }) => version === document?.["dist-tags"]?.latest),
+  unavailable: ({ document }) =>
+    document?.["dist-tags"]?.latest === undefined
+      ? "its registry document has no latest dist-tag."
+      : undefined,
 };
 
 export const channels: Record<string, Channel> = {
@@ -331,13 +337,17 @@ function publishedAt(document: RegistryDocument, version: string): number | unde
   return Number.isNaN(at) ? undefined : at;
 }
 
+function noDocumentFor(name: string): string {
+  return `the registry answer holds no document for ${name}.`;
+}
+
 export function publishedIn(
   registryName: string,
   document: RegistryDocument | undefined,
   policy: ReleasePolicy,
 ): Published[] | Unknown {
   if (document === undefined) {
-    return { why: `the registry answer holds no document for ${registryName}.` };
+    return { why: noDocumentFor(registryName) };
   }
   const published: Published[] = [];
   const versions = Object.keys(document.versions ?? {}).filter(
@@ -389,6 +399,8 @@ function registryReleases(
 ): Releases | Unknown {
   const published = publishedIn(pin.registryName, context.document, policy);
   if (!Array.isArray(published)) return published;
+  const unavailable = channel.unavailable?.(context);
+  if (unavailable !== undefined) return { why: unavailable };
   return (
     releasesAmong(channel.versions(published, context), context.now) ?? {
       why: `no published release is on its channel (${channel.describe}); check the name and the channel.`,
@@ -402,7 +414,11 @@ function compared(
   { newest, eligible, eligibleAt }: Releases,
   held: HeldBack | undefined,
 ): PinComparison {
-  if (semver.gt(pin.pinned, newest)) return { pin, channel, newest, status: "ahead" };
+  if (semver.gt(pin.pinned, newest)) {
+    return held
+      ? { pin, channel, newest, status: "held ahead", held }
+      : { pin, channel, newest, status: "ahead" };
+  }
   if (eligible !== undefined && semver.gt(eligible, pin.pinned)) {
     return held
       ? { pin, channel, newest, status: "held back", eligible, held }
@@ -420,10 +436,14 @@ export function holdsOfNothing(
   return heldBack
     .filter(
       ({ name }) =>
-        !comparisons.some(({ pin, status }) => pin.name === name && status === "held back"),
+        !comparisons.some(
+          ({ pin, status }) =>
+            pin.name === name && (status === "held back" || status === "held ahead"),
+        ),
     )
     .map(
-      ({ name }) => `${name}: the held-back list holds it, but it is not behind; remove the entry.`,
+      ({ name }) =>
+        `${name}: the held-back list holds it, but it is neither behind nor ahead of its channel; remove the entry.`,
     );
 }
 
@@ -445,19 +465,21 @@ export function outgrownExemptions(
   policy: ReleasePolicy,
   now: number,
 ): string[] {
-  const withoutExemptions = { ...policy, exempted: [] };
   return policy.exempted.flatMap(({ name, version }) => {
-    const published = publishedIn(name, documents[name], withoutExemptions);
-    const release = Array.isArray(published)
-      ? published.find((each) => each.version === version)
-      : undefined;
-    if (release === undefined) {
-      const why = Array.isArray(published) ? "the registry lists no such release." : published.why;
+    const document = documents[name];
+    const at = document === undefined ? undefined : publishedAt(document, version);
+    if (document === undefined || at === undefined) {
+      const why =
+        document === undefined
+          ? noDocumentFor(name)
+          : document.versions?.[version] === undefined
+            ? "the registry lists no such release."
+            : `the registry gives no publish time for ${name}@${version}, so its age cannot be told.`;
       return [
         `${name}@${version}: ${why} So nothing tells whether minimumReleaseAgeExclude still needs it.`,
       ];
     }
-    return release.eligibleAt <= now
+    return oldEnoughAt(at, policy.minimumReleaseAgeMinutes) <= now
       ? [
           `${name}@${version}: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.`,
         ]
@@ -524,8 +546,8 @@ export function reportTable(comparisons: readonly PinComparison[]): string {
     const status =
       comparison.status === "not yet eligible"
         ? `not yet eligible, until ${comparison.eligibleAt}`
-        : comparison.status === "held back"
-          ? `held back: ${comparison.held.reason} Lift when ${comparison.held.liftWhen}`
+        : comparison.status === "held back" || comparison.status === "held ahead"
+          ? `${comparison.status}: ${comparison.held.reason} Lift when ${comparison.held.liftWhen}`
           : comparison.status;
     return `| ${comparison.pin.name} | ${comparison.pin.pinned} | ${newest} | ${comparison.channel} | ${status} |`;
   });

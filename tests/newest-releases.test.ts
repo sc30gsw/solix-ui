@@ -157,7 +157,7 @@ test("a release younger than the minimum release age is not yet eligible, not be
   );
 });
 
-test("an exemption in minimumReleaseAgeExclude fails the check by name once its release is old enough to install without it, and so does one whose release has no publish time or whose package has no registry document", () => {
+test("an exemption in minimumReleaseAgeExclude fails the check by name once its release is old enough to install without it, and so does one whose release the registry does not list or whose package has no registry document", () => {
   const exemptions = [
     { name: "semver", version: "7.8.7" },
     { name: "semver", version: "7.8.6" },
@@ -476,7 +476,9 @@ test("a held-back entry that holds nothing back, or has no reason or no liftWhen
 
   expect(
     holdsOfNothing([idle, unexplained], check({ heldBack: [unexplained] }).comparisons),
-  ).toEqual(["vite: the held-back list holds it, but it is not behind; remove the entry."]);
+  ).toEqual([
+    "vite: the held-back list holds it, but it is neither behind nor ahead of its channel; remove the entry.",
+  ]);
   expect(holdsWithoutReason([idle, unexplained])).toEqual([
     `playwright: give the entry in ${heldBackFile} a reason and a liftWhen.`,
   ]);
@@ -557,7 +559,7 @@ test("a UI SDK pin follows the release the latest dist-tag names, once it is old
     ).comparisons[0],
   ).toMatchObject({ status: "not yet eligible", eligibleAt: "2026-11-15T06:00:00.000Z" });
   expect(sdk("0.1.0-beta.5", registryDocument(betas)).problems[0]).toBe(
-    "@ui-sdk/core: no published release is on its channel (the release its registry document's latest dist-tag names); check the name and the channel.",
+    "@ui-sdk/core: its registry document has no latest dist-tag.",
   );
 });
 
@@ -626,7 +628,7 @@ test("an exemption is unjustified unless the lockfile locks its release and the 
   ]);
 });
 
-test("once the catalog moves a Solid package to a newer release, an exemption still naming the older one is named by the weekly check in publish order and by the exemption rule in any order", () => {
+test("once the catalog moves a Solid package to a newer release, an exemption still naming the older one is named by the weekly check when the older release was published first, and by the exemption rule whatever the order", () => {
   const exemption = { name: "solid-js", version: "2.0.0" };
   const afterTheMove = {
     locked: ["solid-js@2.0.1"],
@@ -658,4 +660,47 @@ test("once the catalog moves a Solid package to a newer release, an exemption st
     "minimumReleaseAgeExclude names solid-js@2.0.0, which pnpm-lock.yaml does not lock, so nothing installs it; remove the entry.",
     "minimumReleaseAgeExclude names solid-js@2.0.0, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.",
   ]);
+});
+
+test("an exemption is judged by its own release's publish time: one with none is unknown by name, and another version with none does not make it unknown", () => {
+  const timeless = registryDocument([
+    ["7.8.5", 30],
+    ["7.8.6", 10],
+    ["7.8.7", 5],
+  ]);
+  const { "7.8.7": _withoutTime, ...otherTimes } = timeless.time ?? {};
+  const { "7.8.5": _alsoWithoutTime, ...laterTimes } = timeless.time ?? {};
+  const outgrown = (time: Record<string, string>, version: string) =>
+    outgrownExemptions(
+      { semver: { ...timeless, time } },
+      { ...policy, exempted: [{ name: "semver", version }] },
+      now,
+    );
+
+  expect(outgrown(otherTimes, "7.8.7")).toEqual([
+    "semver@7.8.7: the registry gives no publish time for semver@7.8.7, so its age cannot be told. So nothing tells whether minimumReleaseAgeExclude still needs it.",
+  ]);
+  expect(outgrown(laterTimes, "7.8.6")).toEqual([
+    "semver@7.8.6: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
+  ]);
+});
+
+test("a pin ahead of its channel passes while the held-back list holds it with a reason and a liftWhen, and fails by name without one", () => {
+  const hold = {
+    name: "a-package",
+    reason: "A release candidate tried ahead of the stable release.",
+    liftWhen: "the stable release is out.",
+  };
+  const ahead = () =>
+    check({
+      pins: pinsOf(manifest, { "a-package": "2.1.0-rc.1" }),
+      documents: { ...documents, "a-package": registryDocument([["2.0.1", 10]]) },
+      heldBack: [hold],
+    });
+
+  expect(ahead().comparisons[0]).toMatchObject({ status: "held ahead", held: hold });
+  expect(ahead().problems.filter((problem) => problem.startsWith("a-package"))).toEqual([]);
+  expect(checkOf("a-package", "2.1.0-rc.1", [["2.0.1", 10]]).problems[0]).toMatch(
+    /^a-package: 2\.1\.0-rc\.1 is ahead of 2\.0\.1, the newest release on its channel \(.+\)\. Pin 2\.0\.1\.$/,
+  );
 });
