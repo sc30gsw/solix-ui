@@ -791,44 +791,48 @@ test("a grid with container queries and no value keyed by a width renders its co
   expect(rulesOf(grid)).toEqual([]);
 });
 
-const writtenWidths = [
-  "30em",
-  "480px",
-  "2.5rem",
-  ".5em",
-  "1e2px",
-  "-5em",
-  "0x10px",
-  "px",
-  "em",
-  "5",
-  "5 em",
-  "fivepx",
-  "Infinitypx",
-  "5pt",
-] as const;
+const widthCases = [
+  ["30em", true],
+  ["480px", true],
+  ["2.5rem", true],
+  [".5em", true],
+  ["0em", true],
+  ["2.05rem", true],
+  ["0.001em", true],
+  ["10.50em", true],
+  ["-5em", false],
+  ["-0em", false],
+  ["+5em", false],
+  ["5 em", false],
+  [" 5em", false],
+  ["5em ", false],
+  ["0x10px", false],
+  ["0b1px", false],
+  ["1e2px", false],
+  ["007px", false],
+  ["5.em", false],
+  ["1_0px", false],
+  ["1.00001em", false],
+  ["px", false],
+  ["em", false],
+  ["5", false],
+  ["fivepx", false],
+  ["Infinitypx", false],
+  ["5pt", false],
+] as const satisfies readonly (readonly [written: string, accepted: boolean])[];
 
-type Written = (typeof writtenWidths)[number];
+type WidthCase = (typeof widthCases)[number];
+type Written = WidthCase[0];
 type AcceptedByTheType = {
   [Width in Written]: Width extends ContainerWidth ? Width : never;
 }[Written];
+type AcceptedByTheTable = Extract<WidthCase, readonly [string, true]>[0];
 
-test("a container width the type takes is one the run time takes, and the other way round", () => {
-  const acceptedAtRunTime = writtenWidths.filter((width) => isContainerWidth(width));
+test("a container width is a non-negative decimal length with a unit and no space, and the type and the run time take the same ones", () => {
+  const acceptedAtRunTime = widthCases.filter(([written]) => isContainerWidth(written));
 
-  expectTypeOf<AcceptedByTheType>().toEqualTypeOf<
-    "30em" | "480px" | "2.5rem" | ".5em" | "1e2px" | "-5em" | "0x10px" | "5 em"
-  >();
-  expect(acceptedAtRunTime).toEqual([
-    "30em",
-    "480px",
-    "2.5rem",
-    ".5em",
-    "1e2px",
-    "-5em",
-    "0x10px",
-    "5 em",
-  ]);
+  expectTypeOf<AcceptedByTheType>().toEqualTypeOf<AcceptedByTheTable>();
+  expect(acceptedAtRunTime).toEqual(widthCases.filter(([, accepted]) => accepted));
 });
 
 type NameTakenWithoutOptions<Name extends string> = Parameters<

@@ -56,8 +56,12 @@ export type SimpleGridProps = ElementProps<
 export function SimpleGrid(props: SimpleGridProps) {
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
-    const keyed = [props.cols, props.spacing, props.verticalSpacing].flatMap(containerKeysOf);
-    return [...new Map(keyed).entries()];
+    const keyed = new Map([
+      ...containerKeysOf(props.cols),
+      ...containerKeysOf(props.spacing),
+      ...containerKeysOf(props.verticalSpacing),
+    ]);
+    return [...keyed.entries()];
   });
   const autoColumns = () => props.minColWidth !== undefined;
   const { root, part } = createParts(

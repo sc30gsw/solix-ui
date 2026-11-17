@@ -37,6 +37,12 @@ import { tokens } from "./tokens.stylex";
 const pixelsPerRem = 16;
 const characterThatEndsADeclaration = /[;{}]/;
 const containerWidthUnits = ["rem", "px", "em"] as const;
+const fractionLeadingZeros = ["", "0", "00", "000"] as const;
+const unsignedInteger = "(?:0|[1-9]\\d*)";
+const fractionDigits = `0{0,${fractionLeadingZeros.length - 1}}${unsignedInteger}`;
+const containerWidthPattern = new RegExp(
+  `^(${unsignedInteger}(?:\\.${fractionDigits})?|\\.${fractionDigits})(${containerWidthUnits.join("|")})$`,
+);
 const characterOutsideAClassName = /[^\w-]/g;
 
 type Absent = null | undefined;
@@ -56,8 +62,19 @@ export type ScaleValue<Of extends Scale> = ScaleKey<Of> | number | (string & {})
 
 export type Spacing = ScaleValue<"spacing">;
 
-/** A container width that a value keyed for container queries applies from, such as `"40em"`. */
-export type ContainerWidth = `${number}${(typeof containerWidthUnits)[number]}`;
+type NonZeroDigit = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+type UnsignedInteger = `${bigint}` & (`${NonZeroDigit}${string}` | "0");
+type FractionDigits = `${(typeof fractionLeadingZeros)[number]}${UnsignedInteger}`;
+type ContainerWidthUnit = (typeof containerWidthUnits)[number];
+
+/**
+ * A container width that a value keyed for container queries applies from: a non-negative
+ * decimal length with a unit and no space, such as `"40em"` or `"2.5rem"`.
+ */
+export type ContainerWidth =
+  | `${UnsignedInteger}${ContainerWidthUnit}`
+  | `${UnsignedInteger}.${FractionDigits}${ContainerWidthUnit}`
+  | `.${FractionDigits}${ContainerWidthUnit}`;
 
 /**
  * A value for every width, or one for each width of its container it applies from: a container
@@ -274,12 +291,10 @@ export function containerWidthOf(breakpoint: Breakpoint): string {
   return parsed?.unit === "em" ? `${parsed.amount}rem` : written;
 }
 
-function widthOf(written: string): { amount: number; unit: string } | undefined {
-  const unit = containerWidthUnits.find((found) => written.endsWith(found));
-  const amount = unit === undefined ? "" : written.slice(0, -unit.length);
-  return unit !== undefined && amount !== "" && Number.isFinite(Number(amount))
-    ? { amount: Number(amount), unit }
-    : undefined;
+function widthOf(written: string): { amount: number; unit: ContainerWidthUnit } | undefined {
+  const [, amount, given] = containerWidthPattern.exec(written) ?? [];
+  const unit = containerWidthUnits.find((found) => found === given);
+  return amount === undefined || unit === undefined ? undefined : { amount: Number(amount), unit };
 }
 
 export function isContainerWidth(written: string): written is ContainerWidth {
