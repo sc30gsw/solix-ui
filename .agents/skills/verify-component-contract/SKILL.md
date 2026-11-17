@@ -81,6 +81,7 @@ No verifier runs on Solid components, so this is not a proof. The test uses fast
 - A class or attribute that changes after the first render. The check renders once on the server. `apps/playground/tests/consumer.test.ts` drives the `Emphasise` button and the `Follows` disclosure in a browser, including a class that `classes.summary` names on `Follows`. Only those two are driven, and no `styles` or `unstyled` value that changes is driven.
 - Event handlers and any attribute outside the four listed. `apps/playground/tests/consumer.test.ts` checks `ref` in a browser, for one instance of each component.
 - A part that a component renders only for props its fixture does not give.
+- A `classes` or `styles` key that names no part of the component itself, such as `Grid`'s `col`, which `Grid` hands to the root of each `Grid.Col`. `packages/core/tests/layout.test.tsx` checks that one, and its order against the column's own `classes.root` and `styles.root`.
 - Which CSS property a style prop sets, and how the browser ranks a style prop against a component default, a consumer class and a consumer `style`. `packages/core/tests/build-output.test.ts` checks the rules and their layer, and `apps/playground/tests/box.test.ts` checks the cascade in each installed engine.
 - The same class name switched on in one place and off in another.
 - A style-prop value that holds a comment opener `/*` or an unclosed quote. It is kept, and `packages/core/README.md` lists what it can do to the declarations after it.
