@@ -48,11 +48,15 @@ jobs:
           cache: true
       - run: node scripts/solid-2-canary.ts
       - run: vp install --no-frozen-lockfile
-      - run: vp exec playwright install --with-deps chromium firefox webkit
+      - id: browsers
+        background: true
+        run: vp exec playwright install --with-deps chromium firefox webkit
       - name: Approved package skills hold the reviewed files
         id: skills
         continue-on-error: true
         run: node scripts/check-package-skills.ts
+      - name: Wait for the browser engines
+        wait: browsers
       - run: vp run verify
         env:
           SOLIX_PRIVATE_TERMS: ${{ secrets.SOLIX_PRIVATE_TERMS }}

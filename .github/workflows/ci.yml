@@ -37,6 +37,9 @@ jobs:
       PULL_REQUEST: ${{ github.event.pull_request.number }}
       HEAD_COMMIT: ${{ github.event.pull_request.head.sha }}
     steps:
+      - id: ffmpeg
+        background: true
+        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -45,7 +48,8 @@ jobs:
         with:
           node-version-file: package.json
           cache: true
+      - name: Wait for ffmpeg, which holds the apt lock that the browser dependencies need
+        wait: ffmpeg
       - run: vp exec playwright install --with-deps chromium firefox webkit
-      - run: sudo apt-get update && sudo apt-get install --yes ffmpeg
       - run: vp run evidence
       - run: node scripts/publish-evidence.mjs
