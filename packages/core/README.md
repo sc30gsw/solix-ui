@@ -44,6 +44,8 @@ vp run -r build
 
 ## Not covered
 
+- The stylesheet imported into a layer of the consumer's own, as `@import url(...) layer(vendor)`, together with a component that queries its container. The component's `<style>` adds its rules to a top-level `solix` layer, which ranks below `vendor`, so a container query's value loses to the component's default: a column given 6 of 12 takes its whole row. `apps/playground/tests/layer-order.test.ts` pins this.
+
 - A consumer passing StyleX style objects, rather than the classes `stylex.attrs` compiles them to, to `class` or `classes`. `styles` takes inline declarations only.
 - A precompiled entry for tools that do not know the `solid` condition
 - Type declarations

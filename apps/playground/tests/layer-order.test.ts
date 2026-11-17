@@ -63,3 +63,11 @@ inEveryEngine((browser) => {
     });
   });
 });
+
+const importedIntoALayer = `<!doctype html><html><head></head><body><div style="width:${containerWidth}px">${markup}</div><style>@import url("${origin}/styles.css") layer(vendor);</style></body></html>`;
+
+inEveryEngine((browser) => {
+  test("with the library's stylesheet imported into a consumer's own layer after the markup, which the library does not cover, a column a container query gives 6 of 12 takes its whole row", async () => {
+    expect(await columnShare(browser(), importedIntoALayer)).toBeGreaterThan(0.95);
+  });
+});
