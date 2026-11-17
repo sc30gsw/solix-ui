@@ -1,6 +1,7 @@
 export * as ts from "./syntax/ast.ts";
 export {
   assertedType,
+  calledDeclaration,
   constructedClass,
   constructorClasses,
   contextualAliases,

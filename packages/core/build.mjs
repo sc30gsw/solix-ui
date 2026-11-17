@@ -1,7 +1,11 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { compileLibrarySource, libraryStylesheet } from "./build-pipeline.mjs";
+import {
+  behaviourSdkHiddenRule,
+  compileLibrarySource,
+  libraryStylesheet,
+} from "./build-pipeline.mjs";
 
 const packageRoot = dirname(fileURLToPath(import.meta.url));
 const sourceDirectory = join(packageRoot, "src");
@@ -28,5 +32,10 @@ for (const name of await readdir(sourceDirectory)) {
 const { stylePropRules } = await import(
   pathToFileURL(join(outputDirectory, "style-prop-table.js")).href
 );
-await writeFile(join(outputDirectory, "styles.css"), libraryStylesheet(rules, stylePropRules()));
-console.log(`dist/styles.css: ${rules.length} rules and the style-prop rules`);
+await writeFile(
+  join(outputDirectory, "styles.css"),
+  libraryStylesheet(rules, stylePropRules(), behaviourSdkHiddenRule(packageRoot)),
+);
+console.log(
+  `dist/styles.css: ${rules.length} rules, the style-prop rules and the SDK's hidden rule`,
+);

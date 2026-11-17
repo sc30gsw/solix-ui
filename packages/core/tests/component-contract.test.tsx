@@ -4,7 +4,11 @@ import type { JSX } from "@solidjs/web";
 import fc from "fast-check";
 import postcss from "postcss";
 import { expect, expectTypeOf, test } from "vite-plus/test";
-import { LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX } from "../build-pipeline.mjs";
+import {
+  LIBRARY_CASCADE_LAYER,
+  LIBRARY_CLASS_PREFIX,
+  LIBRARY_STYLE_MARK,
+} from "../build-pipeline.mjs";
 import type * as Library from "../src/index";
 import type { PolymorphicProps } from "../src/parts";
 import {
@@ -63,6 +67,7 @@ import {
   components,
   fixtures,
   polymorphicComponents,
+  readsInOneRender,
   render,
   renderTwiceOnOnePage,
   type TakesDisplay,
@@ -84,7 +89,6 @@ const generatedRuns = 300;
 const containerPart = "container";
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const contractSkill = ".agents/skills/verify-component-contract/SKILL.md";
-const fixturesFile = "packages/core/tests/fixtures.ts";
 const styleOverride = new RegExp(`^--${LIBRARY_CLASS_PREFIX}-`);
 const registeredCustomProperties = new Set(
   [...stylesheet.matchAll(/@property\s+(--[\w-]+)/g)].map(([, property]) => property),
@@ -194,6 +198,50 @@ test.each(builtComponents)(
     for (const element of elements) {
       for (const part of partsOn(name, element)) expectCompiledClassesFirst(name, part, element);
     }
+  },
+);
+
+test("a component that another export carries as a static member is exported under the carrier's name followed by the member's, and rendered outside its carrier it throws an error that names the carrier", () => {
+  const carried = Object.entries(carriedComponents);
+
+  expect(carried).not.toEqual([]);
+  for (const [name, { carrier, member }] of carried) {
+    expect(name).toBe(`${carrier}${member}`);
+    expect(() => renderBuilt(name, {}), name).toThrow(
+      new RegExp(`must be rendered inside ${carrier}\\.$`),
+    );
+  }
+});
+
+test.each(components)(
+  "%s reads each prop of its type that takes an element once in a server render of its fixture, so an element a consumer passes is created once",
+  (name, { elementProps, props }) => {
+    const rendered = Object.keys(elementProps);
+
+    expect(Object.keys(props), "the fixture gives each such prop").toEqual(
+      expect.arrayContaining(rendered),
+    );
+    for (const prop of rendered) expect(readsInOneRender(name, prop), prop).toBe(1);
+  },
+);
+
+const valuesThePlatformRendersNothingFor = [null, undefined, false, true, "", []];
+
+test.each(components)(
+  "%s renders a 0 given to a prop of its type that takes an element, and renders for null, undefined, false, true, an empty string and an empty list what it renders without the prop",
+  (name, { elementProps, props }) => {
+    const rendered = Object.keys(elementProps);
+    for (const prop of rendered) {
+      const without = render(name, { [prop]: undefined });
+
+      expect(render(name, { [prop]: 0 }), `${prop}={0}`).toContain(">0<");
+      for (const nothing of valuesThePlatformRendersNothingFor) {
+        expect(render(name, { [prop]: nothing }), `${prop}={${JSON.stringify(nothing)}}`).toBe(
+          without,
+        );
+      }
+    }
+    expect(Object.keys(props)).toEqual(expect.arrayContaining(rendered));
   },
 );
 
@@ -513,22 +561,24 @@ test("every --sx- declaration the generator draws for a consumer's style or styl
   );
 });
 
-test("the contract skill covers every component's source file with a glob row that points at fixtures.ts", () => {
-  const rows = readFileSync(join(repositoryRoot, contractSkill), "utf8")
+test("every component's source file is covered by the contract skill's table", () => {
+  const coveredPaths = readFileSync(join(repositoryRoot, contractSkill), "utf8")
     .split("\n")
-    .filter((line) => line.startsWith("|"));
-  const globRows = rows.flatMap((line) => {
-    const glob = /^\| `([^`]*\*[^`]*)`/.exec(line)?.[1];
-    return glob === undefined ? [] : [{ glob, line }];
-  });
-  const uncovered = components
-    .map(([name]) => `packages/core/src/${name}.tsx`)
-    .filter(
-      (file) =>
-        !globRows.some(({ glob, line }) => matchesGlob(file, glob) && line.includes(fixturesFile)),
+    .filter((line) => line.startsWith("| `"))
+    .flatMap((row) =>
+      [...(row.split(" | ")[0] ?? "").matchAll(/`([^`]+)`/g)].map(([, path]) => path),
+    );
+  const covered = (file: string) =>
+    coveredPaths.some(
+      (path) => path === file || file.startsWith(`${path}/`) || matchesGlob(file, path),
     );
 
-  expect(uncovered).toEqual([]);
+  expect(
+    components
+      .map(([name]) => `packages/core/src/${name}.tsx`)
+      .filter((file) => !covered(file))
+      .map((file) => `${contractSkill}: no covered-code row covers ${file}.`),
+  ).toEqual([]);
 });
 
 const containerQuery = /^\(min-width: (-?\d*\.?\d+(?:e[+-]?\d+)?)(px|em|rem)\)$/;
@@ -546,86 +596,97 @@ function scopesOf(classes: Iterable<string>): Set<string> {
 
 function containerRuleProblems(name: string, html: string): string[] {
   const rendered = new Set(elementsOf(html).flatMap(classesOf));
-  const order = `@layer ${LIBRARY_CASCADE_LAYER}{${layerOrder}}`;
-  return rulesOf(html).flatMap((rules) => {
-    if (!rules.startsWith(order)) return [`${name}: start its rules with ${order}.`];
-    const [layer, ...others] = postcss.parse(rules.slice(order.length)).nodes;
-    if (
-      others.length > 0 ||
-      layer?.type !== "atrule" ||
-      layer.name !== "layer" ||
-      layer.params !== `${LIBRARY_CASCADE_LAYER}.${containerQueryLayer}`
-    ) {
-      return [
-        `${name}: put its container rules in one @layer ${LIBRARY_CASCADE_LAYER}.${containerQueryLayer} after the order.`,
-      ];
-    }
-    const problems: string[] = [];
-    const registered = new Set<string>();
-    const read: string[] = [];
-    const widths: number[] = [];
-    layer.each((node) => {
-      if (node.type === "atrule" && node.name === "property") {
-        registered.add(node.params);
-        const declared = Object.fromEntries(
-          (node.nodes ?? []).flatMap((part) =>
-            part.type === "decl" ? [[part.prop, part.value]] : [],
-          ),
-        );
-        if (declared.syntax !== '"*"' || declared.inherits !== "false") {
-          problems.push(`${node.params}: register it with syntax "*" and inherits: false.`);
+  const order = layerOrder;
+  const unmarked = elementsOf(html).filter(
+    ({ tag, attributes }) =>
+      tag === "style" && !attributes.some(([attribute]) => attribute === LIBRARY_STYLE_MARK),
+  );
+  const markProblems = unmarked.map(
+    () => `${name}: mark each style element with ${LIBRARY_STYLE_MARK}.`,
+  );
+  return [
+    ...markProblems,
+    ...rulesOf(html).flatMap((rules) => {
+      if (!rules.startsWith(order)) return [`${name}: start its rules with ${order}.`];
+      const [layer, ...others] = postcss.parse(rules.slice(order.length)).nodes;
+      if (
+        others.length > 0 ||
+        layer?.type !== "atrule" ||
+        layer.name !== "layer" ||
+        layer.params !== `${LIBRARY_CASCADE_LAYER}.${containerQueryLayer}`
+      ) {
+        return [
+          `${name}: put its container rules in one @layer ${LIBRARY_CASCADE_LAYER}.${containerQueryLayer} after the order.`,
+        ];
+      }
+      const problems: string[] = [];
+      const registered = new Set<string>();
+      const read: string[] = [];
+      const widths: number[] = [];
+      layer.each((node) => {
+        if (node.type === "atrule" && node.name === "property") {
+          registered.add(node.params);
+          const declared = Object.fromEntries(
+            (node.nodes ?? []).flatMap((part) =>
+              part.type === "decl" ? [[part.prop, part.value]] : [],
+            ),
+          );
+          if (declared.syntax !== '"*"' || declared.inherits !== "false") {
+            problems.push(`${node.params}: register it with syntax "*" and inherits: false.`);
+          }
+          return;
         }
-        return;
-      }
-      const [, amount, unit] =
-        node.type === "atrule" ? (containerQuery.exec(node.params) ?? []) : [];
-      if (node.type !== "atrule" || node.name !== "container" || amount === undefined) {
-        problems.push(
-          `${node.toString()}: write only @property and @container (min-width: <length>).`,
-        );
-        return;
-      }
-      widths.push(Number(amount) * (unit === "px" ? 1 : pixelsPerEm));
-      node.each((rule) => {
-        const className =
-          rule.type === "rule" ? /^\.([\w-]+)$/.exec(rule.selector)?.[1] : undefined;
-        const placed = className === undefined ? undefined : containerClassParts(className);
-        if (rule.type !== "rule" || className === undefined || placed === undefined) {
+        const [, amount, unit] =
+          node.type === "atrule" ? (containerQuery.exec(node.params) ?? []) : [];
+        if (node.type !== "atrule" || node.name !== "container" || amount === undefined) {
           problems.push(
-            `${rule.toString()}: select one class a variable places for a container width.`,
+            `${node.toString()}: write only @property and @container (min-width: <length>).`,
           );
           return;
         }
-        read.push(className);
-        const declarations = rule.nodes.flatMap((part) =>
-          part.type === "decl" ? [`${part.prop}:${part.value}`] : [],
-        );
-        if (
-          JSON.stringify(declarations) !== JSON.stringify([`--${placed.name}:var(--${className})`])
-        ) {
-          problems.push(
-            `${className}: set --${placed.name} to var(--${className}) and nothing else.`,
+        widths.push(Number(amount) * (unit === "px" ? 1 : pixelsPerEm));
+        node.each((rule) => {
+          const className =
+            rule.type === "rule" ? /^\.([\w-]+)$/.exec(rule.selector)?.[1] : undefined;
+          const placed = className === undefined ? undefined : containerClassParts(className);
+          if (rule.type !== "rule" || className === undefined || placed === undefined) {
+            problems.push(
+              `${rule.toString()}: select one class a variable places for a container width.`,
+            );
+            return;
+          }
+          read.push(className);
+          const declarations = rule.nodes.flatMap((part) =>
+            part.type === "decl" ? [`${part.prop}:${part.value}`] : [],
           );
-        }
-        if (!registered.has(`--${className}`)) problems.push(`--${className}: register it.`);
+          if (
+            JSON.stringify(declarations) !==
+            JSON.stringify([`--${placed.name}:var(--${className})`])
+          ) {
+            problems.push(
+              `${className}: set --${placed.name} to var(--${className}) and nothing else.`,
+            );
+          }
+          if (!registered.has(`--${className}`)) problems.push(`--${className}: register it.`);
+        });
       });
-    });
-    const scopes = scopesOf(read);
-    return [
-      ...problems,
-      ...(widths.every((width, index) => index === 0 || width > widths[index - 1])
-        ? []
-        : [`${name}: write its container widths in ascending order, not ${widths.join(", ")}.`]),
-      ...(scopes.size === 1 ? [] : [`${name}: scope one style element's rules to one instance.`]),
-      ...(read.some((className) => rendered.has(className))
-        ? []
-        : [`${name}: put at least one class its container rules read on its own elements.`]),
-    ];
-  });
+      const scopes = scopesOf(read);
+      return [
+        ...problems,
+        ...(widths.every((width, index) => index === 0 || width > widths[index - 1])
+          ? []
+          : [`${name}: write its container widths in ascending order, not ${widths.join(", ")}.`]),
+        ...(scopes.size === 1 ? [] : [`${name}: scope one style element's rules to one instance.`]),
+        ...(read.some((className) => rendered.has(className))
+          ? []
+          : [`${name}: put at least one class its container rules read on its own elements.`]),
+      ];
+    }),
+  ];
 }
 
 test.each(builtComponents)(
-  "%s starts each style element it renders with the library's layer order, then writes, in the container-queries layer, registrations not inherited and, in ascending container widths, rules that each set a variable's custom property from its own class, for one instance's classes",
+  "%s marks each style element it renders as the library's, and starts it with the library's layer order, then writes, in the container-queries layer, registrations not inherited and, in ascending container widths, rules that each set a variable's custom property from its own class, for one instance's classes",
   (name) => {
     expect(containerRuleProblems(name, render(name))).toEqual([]);
   },
@@ -689,16 +750,4 @@ test("every variable drops null and a value that holds ;, { or }, and writes eac
     }),
     { numRuns: generatedRuns },
   );
-});
-
-test("a component that another export carries as a static member is exported under the carrier's name followed by the member's, and rendered outside its carrier it throws an error that names the carrier", () => {
-  const carried = Object.entries(carriedComponents);
-
-  expect(carried).not.toEqual([]);
-  for (const [name, { carrier, member }] of carried) {
-    expect(name).toBe(`${carrier}${member}`);
-    expect(() => renderBuilt(name, {}), name).toThrow(
-      new RegExp(`must be rendered inside ${carrier}\\.$`),
-    );
-  }
 });

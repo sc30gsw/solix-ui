@@ -11,8 +11,16 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
-const { breakpointWidths } = await repositoryModule("packages/core/src/style-prop-table.ts");
-const { stableClass } = await repositoryModule("packages/core/src/stable-class.ts");
+const { baseKey, breakpointWidths, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
+const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
+const { BEHAVIOUR_SDK_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { pageStyleRules, stylesAddedToThePage } = await repositoryModule("apps/playground/tests/support/page-styles.ts");
+const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabNames, tabsRegion, valueOf } =
+  await repositoryModule("apps/playground/tests/support/tabs.ts");
+const { overview, billing, members, security } = tabNames.account;
+const { two, three } = tabNames.manual;
+const { notes } = tabNames.optional;
+const { drafts, locked } = tabNames.controlled;
 const state = join(root, ".verify-playground");
 const pixelsPerMediaQueryEm = 16;
 const mdWidth = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
@@ -21,6 +29,21 @@ const style = (locator, property) =>
   locator.evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
 const widthOf = (locator) => locator.evaluate((node) => node.getBoundingClientRect().width);
 const elementAfter = (page, text) => page.getByText(text, { exact: true }).locator("xpath=following-sibling::*[1]");
+
+const writtenAtRunTime = (page, region, classOfTheLibrary) =>
+  page.evaluate(
+    ([selector, pattern]) => {
+      const parts = [...document.querySelectorAll(`${selector} [data-slot]`)];
+      const ours = new RegExp(pattern);
+      return {
+        partStyles: [...new Set(parts.map((part) => part.getAttribute("style") ?? ""))].sort().join(" | "),
+        htmlStyle: document.documentElement.getAttribute("style") ?? "",
+        inert: document.querySelectorAll("[inert]").length,
+        partsWithAForeignClass: parts.filter((part) => [...part.classList].some((name) => !ours.test(name))).length,
+      };
+    },
+    [region, classOfTheLibrary],
+  );
 
 const journeys = {
   "button-default": async ({ page, observe, shot, expected }) => {
@@ -245,7 +268,7 @@ const journeys = {
     await summary.click();
     await content.waitFor({ state: "visible" });
     await section.scrollIntoViewIfNeeded();
-    await shot("styled-parts-open", "Click the summary named Styled parts. It opens, and its background still comes from styles.", section);
+    await shot("open-parts", "Click the summary named Styled parts. It opens, and its background still comes from styles.", section);
     observe("open: content is visible", await content.isVisible(), true);
     observe("open: styles.summary still beats the library's open background", await style(summary, "background-color"), expected("partBackground"));
     observe("open: styles.summary still beats the library's open text colour", await style(summary, "color"), expected("partText"));
@@ -435,6 +458,130 @@ const journeys = {
     const [oneAtMd, twoAtMd] = await ordered();
     observe("at md: Ordered one comes before Ordered two, in one row", oneAtMd.top === twoAtMd.top && oneAtMd.left < twoAtMd.left, true);
     observe("at md: without breakpoints, in a 960 pixel container, short of md, a column spans 12 of 12", near((await boxOf(column("All of a container short of md"))).width, await spanWidth(column("All of a container short of md"), 12, 12)), true);
+  },
+  tabs: async ({ page, observe, shot, expected }) => {
+    const region = page.locator(tabsRegion);
+    const press = async (key, list, description, name) => {
+      await page.keyboard.press(key);
+      await shot(name, description, region);
+      return stateOf(page, list);
+    };
+    await region.scrollIntoViewIfNeeded();
+    await shot("tabs", "Open the page and scroll to the section named Tabs.", region);
+    const first = await stateOf(page, account);
+    observe("at first: selected tab", first.selected, overview);
+    observe("at first: panels shown", first.shown.join(), panelOf(overview));
+    observe("at first: selected tab text colour", await style(tabNamed(page, account, overview), "color"), expected("--solix-color-primary"));
+    observe("at first: another tab text colour", await style(tabNamed(page, account, members), "color"), expected("--solix-color-text"));
+    observe("at first: the disabled tab is disabled", await tabNamed(page, account, billing).isDisabled(), true);
+
+    await tabNamed(page, account, members).click();
+    await shot("click", `Click the tab named ${members}. Its panel replaces the ${panelOf(overview)}.`, region);
+    const clicked = await stateOf(page, account);
+    observe(`after a click on ${members}: selected tab`, clicked.selected, members);
+    observe(`after a click on ${members}: panels shown`, clicked.shown.join(), panelOf(members));
+    observe(`after a click on ${members}: the tab names its panel`, await tabNamed(page, account, members).getAttribute("aria-controls"), `account-panel-${valueOf(members)}`);
+
+    await startAt(page, account, overview);
+    const stepped = await press("ArrowRight", account, `Click ${overview} and press the right arrow. Focus and selection step over the disabled ${billing} tab to ${members}.`, "arrow-steps-over-disabled");
+    observe(`right arrow from ${overview}: focused tab`, stepped.focused, members);
+    observe(`right arrow from ${overview}: selected tab`, stepped.selected, members);
+    const atEnd = await press("End", account, `Press End. The last tab, ${security}, is focused and selected.`, "end");
+    observe("End: focused and selected tab", `${atEnd.focused} ${atEnd.selected}`, `${security} ${security}`);
+    const wrapped = await press("ArrowRight", account, `Press the right arrow on the last tab. It wraps to ${overview}.`, "arrow-wraps");
+    observe("right arrow from the last tab: focused and selected tab", `${wrapped.focused} ${wrapped.selected}`, `${overview} ${overview}`);
+
+    await startAt(page, manual, two);
+    const moved = await press("ArrowDown", manual, `In the vertical list, click ${two} and press the down arrow. Focus moves to ${three} and ${two} stays selected.`, "manual-arrow");
+    observe(`manual, down arrow from ${two}: focused tab`, moved.focused, three);
+    observe(`manual, down arrow from ${two}: selected tab`, moved.selected, two);
+    const activated = await press("Enter", manual, `Press Enter. ${three} is selected.`, "manual-enter");
+    observe(`manual, Enter on ${three}: selected tab`, activated.selected, three);
+    observe(`manual, Enter on ${three}: the selected tab's edge at its inline end, and under it`, `${await style(tabNamed(page, manual, three), "border-inline-end-style")} ${await style(tabNamed(page, manual, three), "border-bottom-style")}`, "solid none");
+    const stopped = await press("ArrowDown", manual, `Press the down arrow on the last tab. This list does not wrap, so focus stays on ${three}.`, "manual-no-wrap");
+    observe("manual, down arrow on the last tab: focused tab", stopped.focused, three);
+
+    observe("optional: nothing is selected at first", (await stateOf(page, optional)).selected, null);
+    await tabNamed(page, optional, notes).click();
+    await shot("optional-selected", `Click ${notes} in the list named ${optional}. Its panel shows.`, region);
+    observe(`optional, after a click on ${notes}: panels shown`, (await stateOf(page, optional)).shown.join(), panelOf(notes));
+    await tabNamed(page, optional, notes).click();
+    await shot("optional-deselected", `Click ${notes} again. No tab is selected and no panel shows.`, region);
+    const none = await stateOf(page, optional);
+    observe(`optional, after a second click on ${notes}: selected tab`, none.selected, null);
+    observe(`optional, after a second click on ${notes}: panels shown`, none.shown.join(), "");
+
+    await tabNamed(page, controlled, locked).click();
+    await shot(valueOf(locked), `Click ${locked} in the list named ${controlled}. The app's own handler refuses the press, so ${drafts} stays selected.`, region);
+    observe(`controlled, after a click on ${locked}: selected tab`, (await stateOf(page, controlled)).selected, drafts);
+    observe(`controlled, after a click on ${locked}: presses the app refused`, await page.getByRole("status", { name: "Refused presses" }).textContent(), "1");
+  },
+  "tabs-keyboard": async ({ page, observe, shot }) => {
+    await page.locator(tabsRegion).scrollIntoViewIfNeeded();
+    await shot("tabs", "Open the page and scroll to the section named Tabs.", page.locator(tabsRegion));
+    for (const [index, { list, start, keys, focused, selected }] of keyboardTable.entries()) {
+      const row = `${list}, from ${start}, ${keys.join(" then ")}`;
+      await startAt(page, list, start);
+      for (const key of keys) await page.keyboard.press(key);
+      await page.waitForFunction(
+        ([name, wanted]) =>
+          document.activeElement?.closest(`[role="tablist"][aria-label="${name}"]`) !== null &&
+          document.activeElement?.textContent?.includes(wanted),
+        [list, focused],
+      );
+      await shot(`keys-${index + 1}`, `In ${list}, start at ${start} and press ${keys.join(", then ")}.`, tabList(page, list).locator(".."));
+      const after = await stateOf(page, list);
+      observe(`${row}: focused tab`, after.focused, focused);
+      observe(`${row}: selected tab`, after.selected, selected);
+      observe(`${row}: panels shown`, after.shown.join(), panelOf(selected));
+      observe(`${row}: tab stops`, after.tabStops.join(), selected);
+    }
+  },
+  "tabs-focus": async ({ page, observe, shot, expected }) => {
+    const region = page.locator(tabsRegion);
+    await region.scrollIntoViewIfNeeded();
+    await startAt(page, manual, two);
+    await startAt(page, account, security);
+    const last = tabNamed(page, account, security);
+    await page.keyboard.press("Shift+Tab");
+    await page.keyboard.press("Tab");
+    await shot("focus-ring", `Click ${two} in ${manual} and ${security} in ${account}. Leave the ${account} list with Shift+Tab and come back with Tab. Focus returns to the selected tab, ${security}, which shows a focus ring.`, region);
+    observe("Tab into the list: focused tab", (await stateOf(page, account)).focused, security);
+    observe("focus ring: outline style", await style(last, "outline-style"), "solid");
+    observe("focus ring: outline colour", await style(last, "outline-color"), expected("--solix-color-primary"));
+    await page.keyboard.press("Tab");
+    await shot("focus-panel", "Press Tab. Focus leaves the list for the panel.", region);
+    observe("Tab out of the list: focused element", await page.evaluate(() => document.activeElement?.textContent), panelOf(security));
+    await page.keyboard.press("Tab");
+    await shot("focus-next-list", `Press Tab. Focus enters the next list at its selected tab, ${two}.`, region);
+    observe("Tab into the next list: focused tab", (await stateOf(page, manual)).focused, two);
+  },
+  "tabs-run-time-writes": async ({ page, observe, shot }) => {
+    const region = page.locator(tabsRegion);
+    const classOfTheLibraryOrTheApp = `^(?:${LIBRARY_CLASS_PREFIX}|${stableClassPrefix}|${displayedByTheApp.class}$)`;
+    const styleOfTheOneStyleProp = `--${stylePropClass("display", baseKey)}:flex`;
+    const sdkHiddenRule = behaviourSdkHiddenRule(join(root, "packages/core"));
+    const observeWrites = async (when) => {
+      const rules = await pageStyleRules(page);
+      const outsideTheSdkLayer = (rule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
+      const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibraryOrTheApp);
+      observe(`${when}: rules the SDK added outside its layer`, rules.filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
+      observe(`${when}: important declarations outside the SDK's layer`, rules.filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
+      observe(`${when}: the SDK added the hidden rule the build reads from it`, (await stylesAddedToThePage(page)).includes(sdkHiddenRule), true);
+      observe(`${when}: style attributes on the parts`, written.partStyles, ["", styleOfTheOneStyleProp, displayedByTheApp.style].sort().join(" | "));
+      observe(`${when}: style attribute on the html element`, written.htmlStyle, "");
+      observe(`${when}: inert elements`, written.inert, 0);
+      observe(`${when}: parts that carry a class neither the library nor the app gave`, written.partsWithAForeignClass, 0);
+    };
+    await region.scrollIntoViewIfNeeded();
+    await shot("tabs", "Open the page and scroll to the section named Tabs.", region);
+    await observeWrites("after hydration");
+    await startAt(page, account, overview);
+    for (const key of ["ArrowRight", "End", "Home"]) await page.keyboard.press(key);
+    await tabNamed(page, optional, notes).click();
+    await tabNamed(page, optional, notes).click();
+    await shot("after-keys", `Click ${overview} in ${account} and press the right arrow, End and Home. Click ${notes} in ${optional} twice.`, region);
+    await observeWrites("after clicks and keys");
   },
   "server-render": async ({ browser, url, observe, shot, directory, expected }) => {
     const html = await (await fetch(url)).text();

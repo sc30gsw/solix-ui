@@ -28,9 +28,9 @@ It does if it edits any of these:
 | `tests/support` | It runs `vp run -r build` in production mode before any test, which builds the library and the app, and then starts the built app once and gives the test its URL as `playgroundUrl`. |
 | `scripts/browser-engines.mjs` | It lists the engines the test runs on, and which of them are installed. |
 | `vite.config.ts` | It sets the test include globs and the global setup. |
-| `playwright`, `solid-js`, `@solidjs/web`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
+| `playwright`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `97abcf0`. Run `git diff 97abcf0 -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `2130845`. Run `git diff 2130845 -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 

@@ -19,6 +19,9 @@ export type Manifest = {
   devEngines?: Record<string, unknown>;
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  bundledDependencies?: string[] | boolean;
+  bundleDependencies?: string[] | boolean;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
 };
@@ -35,9 +38,12 @@ export function listed(names: readonly string[]): string {
   return names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 }
 
-export function installedVersions(names: readonly string[]): Installed[] {
+export function installedVersions(
+  names: readonly string[],
+  directory: string = repositoryRoot,
+): Installed[] {
   const answer = execFileSync(installedVp, ["why", ...names, "-r", "--json"], {
-    cwd: repositoryRoot,
+    cwd: directory,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: packageManagerAnswerTimeout,

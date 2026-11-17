@@ -30,6 +30,8 @@ export const componentLayer = "components";
 export const stylePropLayer = "style-props";
 export const containerQueryLayer = "container-queries";
 export const childRuleLayer = "child-rules";
+export const hiddenLayer = "hidden";
+export const behaviourSdkLayer = "ui-sdk";
 
 export const breakpointWidths = {
   xs: "36em",
@@ -356,7 +358,9 @@ function childRules(): string[] {
   );
 }
 
-export const layerOrder = `@layer ${componentLayer}, ${stylePropLayer}, ${containerQueryLayer};`;
+export const outerLayerOrder = `@layer ${behaviourSdkLayer}, ${libraryCascadeLayer};`;
+export const libraryLayerOrder = `@layer ${componentLayer}, ${stylePropLayer}, ${containerQueryLayer}, ${hiddenLayer};`;
+export const layerOrder = `${outerLayerOrder}@layer ${libraryCascadeLayer}{${libraryLayerOrder}}`;
 
 export function stylePropRules(): string {
   const depths = [...new Set(readers.map(({ depth }) => depth))].sort(

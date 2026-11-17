@@ -35,3 +35,4 @@ Preconditions:
 - If `Longhand padding` takes the `lg` top padding at md, a shorthand's rule was emitted after the longhand's at that breakpoint. If `Unset margin` takes the `xl` margin, its custom property was registered to inherit, or not registered.
 - The margin and padding are measured through `margin-top` and `padding-top`, not `height`. Chromium snaps a `height` to layout units and keeps a margin unsnapped, so the same length reads differently through the two properties.
 - `apps/playground/tests/box.test.ts` checks the same cascade one pixel below md and at md, with scripts on and off, in every installed engine.
+- The section holds two more lines, `Hidden with a display`, which never shows, and `Hidden until found with a display`, which keeps the `display` its style prop gives. No journey observes them. `apps/playground/tests/behaviour-seam.test.ts` reads the `display` each computes, with scripts on and off.

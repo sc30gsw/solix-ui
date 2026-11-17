@@ -91,7 +91,7 @@ export function GridCol(props: GridColProps) {
   );
   return (
     <>
-      <Show when={own.rules()}>{(rules) => <style>{rules()}</style>}</Show>
+      <Show when={own.rules()}>{(rules) => <style data-solix-rules>{rules()}</style>}</Show>
       <div {...root} />
     </>
   );

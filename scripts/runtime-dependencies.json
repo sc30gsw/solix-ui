@@ -1,0 +1,14 @@
+[
+  {
+    "library": "@solix/core",
+    "dependency": "@ui-sdk/core",
+    "seam": "packages/core/src/headless.ts",
+    "reason": "Keyboard, focus, selection and ARIA for composite widgets, in three engines, instead of writing them here."
+  },
+  {
+    "library": "@solix/core",
+    "dependency": "@ui-sdk/solid",
+    "seam": "packages/core/src/headless.ts",
+    "reason": "Binds that behaviour to Solid 2 and gives each part of a component its props."
+  }
+]

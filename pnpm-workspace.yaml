@@ -17,6 +17,8 @@ catalog:
   "@stylexjs/unplugin": 0.19.2
   "@types/node": ^26.6.6
   "@types/semver": 7.8.0
+  "@ui-sdk/core": 0.1.0-beta.5
+  "@ui-sdk/solid": 0.1.0-beta.5
   "@vitest/browser-playwright": 5.1.0
   axe-core: 4.14.0
   fast-check: 4.10.2
@@ -40,6 +42,8 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
 permissions:
+  "@ui-sdk/core":
+    skills: false
   "@solidjs/web":
     skills:
       - server-components

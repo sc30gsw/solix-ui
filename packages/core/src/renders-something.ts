@@ -1,3 +1,10 @@
-export function rendersSomething(child: unknown): boolean {
-  return child !== null && child !== undefined && typeof child !== "boolean" && child !== "";
+export function rendersSomething(resolved: unknown): boolean {
+  if (Array.isArray(resolved)) return resolved.some(rendersSomething);
+  return (
+    resolved !== undefined &&
+    resolved !== null &&
+    resolved !== false &&
+    resolved !== true &&
+    resolved !== ""
+  );
 }

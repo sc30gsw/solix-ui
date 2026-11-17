@@ -22,7 +22,7 @@ Preconditions:
 
 - **Look.** Run `.agents/skills/verify-playground/scripts/drive.mjs styles-api`. The journey scrolls to the section. The observations `classes.root: background comes from the consumer's class` (the `.danger` background in `apps/playground/src/app.css`), `classes.root: height still comes from the library` (the control-height token), `styles.summary: background comes from styles, not from the class classes.summary names or the library` (the `--playground-part-background` value in the same file), `styles.summary: text colour comes from styles, not from the library` (the `--playground-part-text` value), `classes.summary: the consumer's class still sets the outline` (`solid`), one `unstyled: <property> is the Plain button's` for each property `lookOf` in `scripts/expected-values.ts` reads (the `Plain button`'s value in the same page and engine) and `unstyled: the button keeps its stable class` (`true`) pass.
 - **Open.** The journey clicks `Styled parts`. `open: content is visible` (`true`), `open: styles.summary still beats the library's open background` (the `--playground-part-background` value) and `open: styles.summary still beats the library's open text colour` (the `--playground-part-text` value) pass.
-- **Proof.** The evidence directory holds `01-styles-api.png`, `02-styled-parts-open.png`, `recording.webm` and `observations.json`.
+- **Proof.** The evidence directory holds `01-styles-api.png`, `02-open-parts.png`, `recording.webm` and `observations.json`.
 
 ## Gotchas
 

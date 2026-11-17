@@ -1,4 +1,4 @@
-import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
@@ -13,8 +13,25 @@ import {
   carriedComponents,
   compiledClassesOf,
 } from "../packages/core/tests/built-library";
+import { allowedRuntimeDependencies, loads } from "../scripts/runtime-dependencies";
 import { tokenValues } from "../scripts/tokens";
-import { descendants, exportsOf, parse, parseAll, staticPropertyName, ts } from "../scripts/syntax";
+import {
+  calledDeclaration,
+  descendants,
+  exportsOf,
+  fileOf,
+  findAncestor,
+  firstLine,
+  memberDeclarations,
+  openProgram,
+  parse,
+  parseAll,
+  parseText,
+  staticPropertyName,
+  symbolOf,
+  ts,
+} from "../scripts/syntax";
+import { moduleSpecifierOf } from "./support/module-specifiers";
 import { componentLibraries, repositoryRoot, scriptFiles } from "./support/workspace";
 
 const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
@@ -46,9 +63,14 @@ const builtLibraryFile = "packages/core/tests/built-library.ts";
 const fixturesFile = "packages/core/tests/fixtures.ts";
 const testDirectory = "tests";
 const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
+const importedThroughASeam = allowedRuntimeDependencies();
+const seams = [...new Set(importedThroughASeam.map(({ seam }) => seam))];
+const behaviourType = "Behaviour";
+const behaviourBinder = "bind";
 
 const libraries = componentLibraries.map(({ directory, manifest }) => ({
   name: manifest.name ?? directory,
+  directory,
   source: join(directory, "src"),
 }));
 
@@ -60,6 +82,17 @@ function relativePath(file: string): string {
   return relative(repositoryRoot, file);
 }
 
+const librarySourceFiles = libraries.flatMap(({ source }) =>
+  globSync("**/*.{ts,tsx}", { cwd: source }).map((entry) => join(source, entry)),
+);
+const librarySources = openProgram(librarySourceFiles);
+
+function typedSource(file: string): ts.SourceFile {
+  const source = librarySources.sourceFile(file);
+  if (!source) throw new Error(`${relativePath(file)}: TypeScript could not read this file.`);
+  return source;
+}
+
 const components: Component[] = libraries.flatMap(({ source }) =>
   readdirSync(source)
     .filter((entry) => componentFile.test(entry))
@@ -67,9 +100,39 @@ const components: Component[] = libraries.flatMap(({ source }) =>
     .map((entry) => ({
       name: basename(entry, ".tsx"),
       file: join(source, entry),
-      source: parse(join(source, entry)),
+      source: typedSource(join(source, entry)),
     })),
 );
+
+function isTheBinder(member: ts.Node | undefined): boolean {
+  return (
+    member !== undefined &&
+    seams.includes(relativePath(fileOf(member))) &&
+    ts.isPropertySignatureDeclaration(member) &&
+    member.name.getText() === behaviourBinder &&
+    findAncestor(member, ts.isTypeAliasDeclaration)?.name.text === behaviourType
+  );
+}
+
+function bindsABehaviour(call: ts.CallExpression): boolean {
+  return isTheBinder(calledDeclaration(librarySources, call)?.parent);
+}
+
+function behaviourBindings(node: ts.Node): ts.CallExpression[] {
+  return descendants(node).filter(
+    (found): found is ts.CallExpression => ts.isCallExpression(found) && bindsABehaviour(found),
+  );
+}
+
+function referencesToTheBinder(node: ts.Node): ts.Node[] {
+  return descendants(node).filter((found) =>
+    memberDeclarations(librarySources, found).some(isTheBinder),
+  );
+}
+
+function lineOf(node: ts.Node): number {
+  return node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
+}
 
 function exportedNames(source: ts.SourceFile): string[] {
   const { functions, types, others } = exportsOf(source);
@@ -486,7 +549,15 @@ function problemsWith({ name, file, source }: Component): string[] {
 
   const calls = callsOf(fn, partsHelper);
   const [call] = calls;
-  const declaration = call?.parent;
+  const holder = call?.parent;
+  const binding =
+    holder !== undefined &&
+    ts.isCallExpression(holder) &&
+    holder.arguments[0] === call &&
+    bindsABehaviour(holder)
+      ? holder
+      : undefined;
+  const declaration = (binding ?? call)?.parent;
   const bound =
     declaration !== undefined &&
     ts.isVariableDeclaration(declaration) &&
@@ -495,8 +566,10 @@ function problemsWith({ name, file, source }: Component): string[] {
       ? declaration.name.elements.map((element) => element.getText())
       : [];
   const [componentName, compiled, consumer] = call?.arguments ?? [];
+  const statement = declaration?.parent.parent;
   if (
     calls.length !== 1 ||
+    statement?.parent !== fn.body ||
     !bound.includes(rootBinding) ||
     bound.some((binding) => binding !== rootBinding && binding !== partBinding) ||
     !componentName ||
@@ -506,9 +579,16 @@ function problemsWith({ name, file, source }: Component): string[] {
     consumer?.getText() !== "props"
   ) {
     report(
-      `call ${partsHelper} once, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}.`,
+      `call ${partsHelper} once, in a statement of the component's own body, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}, or as \`const { ${rootBinding}, ${partBinding} } = behaviour.${behaviourBinder}(${partsHelper}(...), { ... })\` with a behaviour from ${seams.join(" or ")}, so each bound part takes its slot there and none inline in JSX.`,
     );
     return problems;
+  }
+  for (const stray of referencesToTheBinder(source).filter(
+    (found) => found !== binding?.expression,
+  )) {
+    report(
+      `call ${behaviourBinder} only as the component's one binding, with its ${partsHelper} call as the first argument, written there, and bind every part in that one call: line ${lineOf(stray)} refers to ${behaviourBinder} in ${stray.parent.getText().split("\n")[0]}.`,
+    );
   }
 
   return [
@@ -541,8 +621,116 @@ test("the library has components to check", () => {
   expect(components.length).toBeGreaterThan(1);
 });
 
-test("every component is written the one way: one function, and its root and every other part from one createParts call", () => {
-  expect(components.flatMap(problemsWith)).toEqual([]);
+test("every component is written the one way: one function, and its root and every other part from one createParts call, which a behaviour binds only as the first argument of its bind, and every reference to that bind is the callee of a component's one binding", () => {
+  const componentFiles = components.map(({ file }) => file);
+  const boundElsewhere = librarySourceFiles
+    .filter((file) => !componentFiles.includes(file) && !seams.includes(relativePath(file)))
+    .flatMap((file) =>
+      referencesToTheBinder(typedSource(file)).map(
+        (reference) =>
+          `${relativePath(file)}:${lineOf(reference)}: ${reference.parent.getText().split("\n")[0]} refers to ${behaviourBinder} outside a component. Only a component binds a behaviour, to its own ${partsHelper} call.`,
+      ),
+    );
+
+  expect(components.filter(({ source }) => behaviourBindings(source).length > 0)).not.toEqual([]);
+  expect([...components.flatMap(problemsWith), ...boundElsewhere]).toEqual([]);
+});
+
+function loadsOutsideTheSeam(file: string, source: ts.SourceFile): string[] {
+  return descendants(source).flatMap((node) => {
+    const specifier = moduleSpecifierOf(node);
+    if (!specifier || !ts.isStringLiteralLikeNode(specifier)) return [];
+    return importedThroughASeam
+      .filter(({ dependency, seam }) => loads(dependency, specifier.text) && file !== seam)
+      .map(
+        ({ dependency, seam }) =>
+          `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText().split("\n")[0]} loads ${dependency}. Only ${seam} imports it; take what you need from that module.`,
+      );
+  });
+}
+
+function packageDirectoryOf(library: string, dependency: string): string {
+  const owner = libraries.find(({ name }) => name === library);
+  if (!owner) throw new Error(`${library}: no component library of this repository has this name.`);
+  return realpathSync(join(owner.directory, "node_modules", dependency));
+}
+
+const seamDependencies = importedThroughASeam.map((entry) => ({
+  ...entry,
+  directory: packageDirectoryOf(entry.library, entry.dependency),
+}));
+
+function resolvesOutsideTheSeam(file: string): string[] {
+  const source = typedSource(file);
+  const where = (node: ts.Node) => `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)}`;
+  return descendants(source).flatMap((node) => {
+    const specifier = moduleSpecifierOf(node);
+    if (specifier === undefined) return [];
+    if (!ts.isStringLiteralLikeNode(specifier)) {
+      return [`${where(node)} loads a module it names at run time. Name it with a string literal.`];
+    }
+    const resolved = symbolOf(librarySources, specifier)?.declarations?.[0]?.resolve();
+    if (resolved === undefined) {
+      return [
+        `${where(node)} names a module that resolves to no file, so nothing tells which package it loads. Import a module the library's program resolves, from a package its manifest names.`,
+      ];
+    }
+    const resolvedFile = realpathSync(fileOf(resolved));
+    return seamDependencies
+      .filter(
+        ({ directory, seam }) =>
+          resolvedFile.startsWith(`${directory}/`) && relativePath(file) !== seam,
+      )
+      .map(
+        ({ dependency, seam, directory }) =>
+          `${where(node)} resolves to ${relative(directory, resolvedFile)} of ${dependency}. Only ${seam} loads it; take what you need from that module.`,
+      );
+  });
+}
+
+test("every module a source of a library loads resolves to a file, no source but its seam loads one that resolves inside a runtime dependency the allow-list names with one, however the specifier is spelt, and no source of a library loads a module it names at run time", () => {
+  expect(librarySourceFiles.flatMap(resolvesOutsideTheSeam)).toEqual([]);
+});
+
+test("no file but its seam loads a runtime dependency the allow-list names with one, by an import, an export, a dynamic import, a require or an import type", () => {
+  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
+  const violations = scriptFiles.flatMap((file, index) =>
+    loadsOutsideTheSeam(file, sources[index]),
+  );
+  const [{ dependency }] = importedThroughASeam;
+  const flagged = loadsOutsideTheSeam(
+    "packages/core/src/Elsewhere.tsx",
+    parseText(
+      [
+        `import { tabs } from "${dependency}/tabs";`,
+        `import type { Primitive } from "${dependency}";`,
+        `export { usePrimitive } from "${dependency}/primitive";`,
+        `const later = await import("${dependency}");`,
+        `const required = require("${dependency}");`,
+        `type Handle = import("${dependency}/primitive").PrimitiveHandle<never>;`,
+        'import { createBehaviour } from "./headless";',
+        `const named = "${dependency}";`,
+        `import { other } from "${dependency}-and-more";`,
+      ].join("\n"),
+      ".tsx",
+    ),
+  ).map((violation) => /^[^:]+:(\d+):/.exec(violation)?.[1]);
+
+  for (const { dependency: imported, seam } of importedThroughASeam) {
+    expect(
+      descendants(parse(join(repositoryRoot, seam))).some((node) => {
+        const specifier = moduleSpecifierOf(node);
+        return (
+          specifier !== undefined &&
+          ts.isStringLiteralLikeNode(specifier) &&
+          loads(imported, specifier.text)
+        );
+      }),
+      `${seam} imports ${imported}`,
+    ).toBe(true);
+  }
+  expect(violations).toEqual([]);
+  expect(flagged).toEqual(["1", "2", "3", "4", "5", "6"]);
 });
 
 test("no source file of the library but parts.ts calls stylex.attrs or stylex.props", () => {

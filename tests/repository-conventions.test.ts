@@ -1,11 +1,25 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from "node:fs";
+import {
+  existsSync,
+  globSync,
+  lstatSync,
+  readdirSync,
+  readFileSync,
+  readlinkSync,
+  statSync,
+} from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "../scripts/browser-engines.mjs";
 import { approvedSkills, frontMatterOf } from "../scripts/package-skills";
 import { pnpmSettings } from "../scripts/pnpm-settings";
-import { repositoryRoot, rootManifest, workflowFiles, workspaceFile } from "./support/workspace";
+import {
+  outsideGeneratedOrInstalled,
+  repositoryRoot,
+  rootManifest,
+  workflowFiles,
+  workspaceFile,
+} from "./support/workspace";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -152,14 +166,67 @@ test("every verification skill says which commit it was last confirmed against",
   expect(violations).toEqual([]);
 });
 
+const coveredCodeHeader = "Covered code";
+
 function coveredPathsOf(text: string): string[] {
-  return text
-    .split("\n")
-    .filter((line) => line.startsWith("| ") && !line.startsWith("| ---"))
-    .slice(1)
-    .flatMap((row) => [...(row.split(" | ")[0] ?? "").matchAll(backticked)].map(([, path]) => path))
+  const rows = text.split("\n").map((line) => (line.startsWith("| ") ? line : undefined));
+  return rows
+    .flatMap((row, index) => {
+      if (row === undefined || row.startsWith("| ---")) return [];
+      const header = rows.slice(0, index + 1).findLastIndex((line) => line === undefined) + 1;
+      if (header === index) return [];
+      const cells = (rows[header] ?? "").replace(/^\| | \|$/g, "").split(" | ");
+      const column = Math.max(cells.indexOf(coveredCodeHeader), 0);
+      return [...(row.split(" | ")[column] ?? "").matchAll(backticked)].map(([, path]) => path);
+    })
     .filter((path) => existsSync(join(repositoryRoot, path)));
 }
+
+function coveredCellsOf(text: string): string[][] {
+  const rows = text.split("\n").map((line) => (line.startsWith("| ") ? line : undefined));
+  return rows.flatMap((row, index) => {
+    if (row === undefined || row.startsWith("| ---")) return [];
+    const header = rows.slice(0, index + 1).findLastIndex((line) => line === undefined) + 1;
+    if (header === index) return [];
+    const cells = (rows[header] ?? "").replace(/^\| | \|$/g, "").split(" | ");
+    const column = cells.indexOf(coveredCodeHeader);
+    if (column === -1) return [];
+    return [[...(row.split(" | ")[column] ?? "").matchAll(backticked)].map(([, path]) => path)];
+  });
+}
+
+function filesUnder(path: string): string[] {
+  const matched = globSync(path, { cwd: repositoryRoot, exclude: outsideGeneratedOrInstalled });
+  return matched.flatMap((found) =>
+    statSync(join(repositoryRoot, found)).isDirectory()
+      ? globSync(`${found}/**`, {
+          cwd: repositoryRoot,
+          exclude: outsideGeneratedOrInstalled,
+        }).filter((file) => statSync(join(repositoryRoot, file)).isFile())
+      : [found],
+  );
+}
+
+test("every file a verification skill covers sits in one covered-code cell of its tables, so a change to it is described in one place", () => {
+  const violations = skillNames
+    .filter((name) => name.startsWith("verify-"))
+    .flatMap((name) => {
+      const cells = coveredCellsOf(skillText(name)).map((paths) => [
+        ...new Set(paths.flatMap(filesUnder)),
+      ]);
+      const files = [...new Set(cells.flat())];
+      return files.flatMap((file) => {
+        const holding = cells.flatMap((cell, index) => (cell.includes(file) ? [index + 1] : []));
+        return holding.length > 1
+          ? [
+              `.agents/skills/${name}/SKILL.md: ${file} sits in covered-code cells ${holding.join(" and ")}, counted down the tables. Describe it in one of them.`,
+            ]
+          : [];
+      });
+    });
+
+  expect(violations).toEqual([]);
+});
 
 function covers(listed: string, path: string): boolean {
   return path === listed || path.startsWith(`${listed}/`);

@@ -13,6 +13,7 @@ import { SimpleGridSection } from "./sections/SimpleGridSection";
 import { SpaceSection } from "./sections/SpaceSection";
 import { StackSection } from "./sections/StackSection";
 import { StylesApiSection } from "./sections/StylesApiSection";
+import { TabsSection } from "./sections/TabsSection";
 import { TextInputSection } from "./sections/TextInputSection";
 import "./app.css";
 import "@solix/core/styles.css";
@@ -36,6 +37,7 @@ export default function App() {
       <ContainerSection />
       <SimpleGridSection />
       <GridSection />
+      <TabsSection />
       <PrimitivesSection />
     </main>
   );

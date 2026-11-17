@@ -101,7 +101,7 @@ export function Grid(props: GridProps) {
   );
   return (
     <Show when={container.queries()?.widths.length} fallback={grid}>
-      <Show when={container.rules()}>{(rules) => <style>{rules()}</style>}</Show>
+      <Show when={container.rules()}>{(rules) => <style data-solix-rules>{rules()}</style>}</Show>
       <div {...part("container")}>{grid}</div>
     </Show>
   );

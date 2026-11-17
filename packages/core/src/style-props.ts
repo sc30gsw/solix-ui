@@ -319,7 +319,7 @@ function rulesFor(queries: ContainerQueries, used: readonly Used[]): string | un
     );
     return [`@container (min-width: ${width}){${read.join("")}}`];
   });
-  return `@layer ${libraryCascadeLayer}{${layerOrder}}@layer ${libraryCascadeLayer}.${containerQueryLayer}{${[...registrations, ...readers].join("")}}`;
+  return `${layerOrder}@layer ${libraryCascadeLayer}.${containerQueryLayer}{${[...registrations, ...readers].join("")}}`;
 }
 
 function uniqueUsed(used: readonly Used[]): Used[] {

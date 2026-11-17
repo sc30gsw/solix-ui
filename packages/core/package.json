@@ -22,17 +22,24 @@
   "scripts": {
     "build": "node build.mjs"
   },
+  "dependencies": {
+    "@ui-sdk/core": "catalog:",
+    "@ui-sdk/solid": "catalog:"
+  },
   "devDependencies": {
     "@babel/core": "catalog:",
     "@babel/plugin-syntax-jsx": "catalog:",
     "@babel/preset-typescript": "catalog:",
     "@solidjs/web": "catalog:",
+    "@solix/primitives": "workspace:*",
     "@stylexjs/babel-plugin": "catalog:",
     "@stylexjs/stylex": "catalog:",
+    "postcss": "catalog:",
     "solid-js": "catalog:"
   },
   "peerDependencies": {
     "@solidjs/web": "^2.0.0-rc.22",
+    "@solix/primitives": "workspace:^",
     "@stylexjs/stylex": "^0.19.2",
     "solid-js": "^2.0.0-rc.22"
   }

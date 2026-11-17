@@ -11,4 +11,8 @@ export { Modal, type ModalProps } from "./Modal";
 export { SimpleGrid, type SimpleGridProps } from "./SimpleGrid";
 export { Space, type SpaceProps } from "./Space";
 export { Stack, type StackProps } from "./Stack";
+export { Tabs, type TabsProps } from "./Tabs";
+export { TabsList, type TabsListProps } from "./TabsList";
+export { TabsPanel, type TabsPanelProps } from "./TabsPanel";
+export { TabsTab, type TabsTabProps } from "./TabsTab";
 export { TextInput, type TextInputProps } from "./TextInput";
