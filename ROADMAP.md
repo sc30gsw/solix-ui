@@ -18,7 +18,7 @@ The work comes in this order. Each step has a status: not started, in progress o
 10. **Feedback and data** (not started): Alert, EmptyState, Progress, Skeleton, Table, ScrollArea, Scroller.
 11. **AppShell and Splitter** (not started): AppShell, Splitter.
 
-The UI SDK seam will be the behaviour layer every behaviour component builds on. Storybook will be the surface for visual checks and adds no component. Modal will move onto UI SDK's Dialog.
+The UI SDK seam is the behaviour layer: `Tabs` builds on it, and every new behaviour component will. Storybook will be the surface for visual checks and adds no component. Modal will move onto UI SDK's Dialog.
 
 ### Leaving
 

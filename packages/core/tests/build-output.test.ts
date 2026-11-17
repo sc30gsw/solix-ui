@@ -184,7 +184,7 @@ test("every class name carries the library's own prefix", () => {
   expect(classNames.filter((name) => !name.startsWith(`.${LIBRARY_CLASS_PREFIX}`))).toEqual([]);
 });
 
-test("every declaration marked important sits in the SDK's layer and none in the library's layer, so nothing of the library's can outrank a consumer", () => {
+test("every declaration marked important sits in the SDK's layer and none in the library's layer, so no rule in `solix` can outrank a consumer", () => {
   const outsideTheSdkLayer: string[] = [];
   postcss.parse(stylesheet).walkDecls((declaration) => {
     const layers = layersAroundDeclaration(declaration);
