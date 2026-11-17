@@ -209,6 +209,31 @@ inEveryEngine((browser) => {
         .toMatchObject({ selected: near, focused: near, shown: [panelOf(near)] });
     });
 
+    test("typing tab values moves neither the page nor the field, since the tabs it drives grow and shrink below it", async () => {
+      const { page } = opened;
+      const values = page.getByRole("textbox", { name: "Tab values" });
+      const many = Array.from({ length: 5 }, (_, index) => `a wide tab number ${index}`);
+      const where = () =>
+        values.evaluate((field) => ({
+          scrolled: window.scrollY,
+          fieldTop: field.getBoundingClientRect().top,
+        }));
+      const show = async (drawn: string[]) => {
+        await values.fill(JSON.stringify(drawn));
+        await expect
+          .poll(() => elementsNamedBy(page, generated).then((named) => named.length))
+          .toBe(drawn.length);
+      };
+      await show(many);
+      const before = await where();
+
+      for (const drawn of [["x"], many, ["y"], many]) {
+        await show(drawn);
+
+        expect(await where(), JSON.stringify(drawn)).toEqual(before);
+      }
+    });
+
     test("for generated tab values under a root id, every tab's aria-controls names exactly one element, its panel, and every panel's aria-labelledby names exactly one element, its tab", async () => {
       const { page } = opened;
       const values = page.getByRole("textbox", { name: "Tab values" });
