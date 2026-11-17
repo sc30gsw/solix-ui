@@ -132,6 +132,12 @@ inEveryEngine((browser) => {
       interfaceTimeout,
     );
 
+    test("the interface has requestIdleCallback, which Storybook's interface calls with no fallback and which the app's manager entry adds where the engine lacks it", async () => {
+      expect(await page.evaluate(() => typeof Reflect.get(window, "requestIdleCallback"))).toBe(
+        "function",
+      );
+    });
+
     test("the interface reports no console error", () => {
       expect(consoleErrors).toEqual([]);
     });

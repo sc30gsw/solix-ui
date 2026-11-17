@@ -58,6 +58,7 @@ export default defineConfig({
           "apps/storybook/**/vite.config.ts",
           "apps/storybook/**/.storybook/*.ts",
           "apps/storybook/**/*.stories.tsx",
+          "apps/storybook/tests/support/story-reporter.ts",
         ],
         rules: { "import/no-default-export": "off" },
       },

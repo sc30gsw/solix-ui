@@ -5,14 +5,13 @@ import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { installedVp } from "../../../../scripts/repository.ts";
 import { withoutTestRunnerVariables } from "../../../../tests/support/test-runner-environment.ts";
+import { type ReportedStory, storyReportVariable } from "#/tests/support/story-reporter.ts";
 
 type ChildRun = { exitCode: number | null; output: string };
 
-type TestResult = { title: string; status: string; failureMessages: string[] };
+type Report = { tests: ReportedStory[] } | { missing: string };
 
-type Report = { tests: TestResult[] } | { missing: string };
-
-type JsonReport = { testResults?: { assertionResults?: TestResult[] }[] };
+const storyReporter = join(import.meta.dirname, "story-reporter.ts");
 
 const telemetrySwitchOutsideTheConfig = "STORYBOOK_DISABLE_TELEMETRY";
 
@@ -72,14 +71,12 @@ function reportIn(file: string): Report {
     return { missing: `the run wrote no report: ${String(error)}` };
   }
   try {
-    const parsed = JSON.parse(text) as JsonReport;
+    const { stories } = JSON.parse(text) as { stories: ReportedStory[] };
     return {
-      tests: (parsed.testResults ?? [])
-        .flatMap(({ assertionResults = [] }) => assertionResults)
-        .map((test) => ({
-          ...test,
-          failureMessages: test.failureMessages.map(stripVTControlCharacters),
-        })),
+      tests: stories.map((story) => ({
+        ...story,
+        failureMessages: story.failureMessages.map(stripVTControlCharacters),
+      })),
     };
   } catch (error) {
     return { missing: `the run's report is not JSON: ${String(error)}` };
@@ -97,8 +94,8 @@ export async function runVitest(
   try {
     const finished = await runVp(
       directory,
-      ["test", "run", ...args, "--reporter=json", `--outputFile=${reportFile}`],
-      addedEnvironment,
+      ["test", "run", ...args, `--reporter=${storyReporter}`],
+      { ...addedEnvironment, [storyReportVariable]: reportFile },
       timeout,
     );
     return { ...finished, report: reportIn(reportFile) };
