@@ -253,16 +253,11 @@ describe("installed into a consumer outside the workspace", () => {
         include: ["src"],
       }),
     );
-    const pinnedWithTheRuntime = Object.fromEntries(
-      solidPackages.map((name) => [name, versionOf(name)]),
-    );
     writeFileSync(
       join(app, workspaceFile),
       [
         "overrides:",
-        ...Object.entries({ "vite@*": versionOf("vite"), ...pinnedWithTheRuntime }).map(
-          ([name, version]) => `  ${JSON.stringify(name)}: ${JSON.stringify(version)}`,
-        ),
+        `  "vite@*": ${JSON.stringify(versionOf("vite"))}`,
         "peerDependencyRules:",
         "  allowAny:",
         "    - vite",
