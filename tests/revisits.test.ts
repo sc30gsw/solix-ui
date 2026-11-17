@@ -12,7 +12,7 @@ import {
   revisitsWithoutReasonOrCondition,
 } from "#/scripts/revisits.ts";
 import { roadmapFile } from "#/scripts/roadmap.ts";
-import { expectScheduledJobToRun } from "#/tests/support/weekly-workflow.ts";
+import { expectJobToHaveOneStepRunning } from "#/tests/support/weekly-workflow.ts";
 
 const fixtureFile = "tests/fixtures/registry/2026-11-16.json";
 const revisitJob = "revisits";
@@ -98,7 +98,7 @@ test(`no revisit in ${roadmapFile} is met by the registry fixture in ${fixtureFi
 });
 
 test(`the ${revisitJob} job has exactly one step that runs the revisit check, with no if and no continue-on-error`, () => {
-  expectScheduledJobToRun(revisitJob, revisitCheck);
+  expectJobToHaveOneStepRunning(revisitJob, revisitCheck);
 });
 
 test("the revisits read the reason and the condition of each revisit", () => {

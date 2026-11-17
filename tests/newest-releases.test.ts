@@ -29,8 +29,8 @@ import {
 import { manifestAt, manifestPaths, rootManifest } from "#/scripts/repository.ts";
 import { type Listing, now, policy, registryDocument } from "#/tests/support/registry-fixtures.ts";
 import {
-  expectEveryJobToRunOnASchedule,
-  expectScheduledJobToRun,
+  expectEveryJobToRunWeeklyAndFailTheRun,
+  expectJobToHaveOneStepRunning,
 } from "#/tests/support/weekly-workflow.ts";
 
 const manifest = { packageManager: "pnpm@12.18.0", engines: { node: "^26.13.1" } };
@@ -510,12 +510,12 @@ test(`${heldBackFile} names only pins of this repository, and holds each back wi
   expect(holdsWithoutReason(heldBack)).toEqual([]);
 });
 
-test("every job of the weekly workflow runs each week: the schedule fires weekly, and no job sets if, needs or continue-on-error or lacks a timeout", () => {
-  expectEveryJobToRunOnASchedule();
+test("every job of the weekly workflow runs each week and fails the run when it fails: a schedule GitHub can run has * for day-of-month and month, and no job sets if, needs or continue-on-error or lacks a timeout", () => {
+  expectEveryJobToRunWeeklyAndFailTheRun();
 });
 
-test("the pins job has exactly one step that runs the pin check, which retires exemptions, with no if and no continue-on-error", () => {
-  expectScheduledJobToRun("pins", "node scripts/check-newest-releases.ts");
+test("the pins job has exactly one step that runs the pin check, which also names exemptions pnpm no longer needs, with no if and no continue-on-error", () => {
+  expectJobToHaveOneStepRunning("pins", "node scripts/check-newest-releases.ts");
 });
 
 test("a UI SDK pin follows the release the latest dist-tag names, once it is old enough to install: a release ahead of latest is not newer, a pin ahead of latest fails by name, and a document with no latest tag fails by name", () => {

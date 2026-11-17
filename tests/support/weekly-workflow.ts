@@ -17,19 +17,49 @@ function workflow(): Workflow {
   return parseYaml(readFileSync(join(repositoryRoot, weeklyWorkflow), "utf8")) as Workflow;
 }
 
-function firesWeekly(cron: string | undefined): boolean {
-  const [, , dayOfMonth, month, dayOfWeek] = cron?.trim().split(/\s+/) ?? [];
-  return dayOfMonth === "*" && month === "*" && dayOfWeek !== undefined;
+const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+function valueOf(value: string, names: readonly string[]): number {
+  const named = names.indexOf(value.toUpperCase());
+  if (named >= 0) return named;
+  return /^\d+$/.test(value) ? Number(value) : Number.NaN;
 }
 
-export function expectEveryJobToRunOnASchedule(): void {
+function inRange(field: string, low: number, high: number, names: readonly string[] = []): boolean {
+  return field.split(",").every((part) => {
+    const [span = "", step, ...rest] = part.split("/");
+    if (rest.length > 0 || (step !== undefined && !/^[1-9]\d*$/.test(step))) return false;
+    if (span === "*") return true;
+    const bounds = span.split("-").map((value) => valueOf(value, names));
+    return bounds.length <= 2 && bounds.every((value) => value >= low && value <= high);
+  });
+}
+
+function firesWeekly(cron: string | undefined): boolean {
+  const fields = cron?.trim().split(/\s+/) ?? [];
+  const [minute = "", hour = "", dayOfMonth, month, dayOfWeek = ""] = fields;
+  return (
+    fields.length === 5 &&
+    dayOfMonth === "*" &&
+    month === "*" &&
+    inRange(minute, 0, 59) &&
+    inRange(hour, 0, 23) &&
+    inRange(dayOfWeek, 0, 6, dayNames)
+  );
+}
+
+const refusedBecause: Record<string, string> = {
+  if: "so it can be skipped.",
+  needs: "so it is skipped when the job it needs fails.",
+  "continue-on-error": "so its failure does not fail the run.",
+};
+
+export function expectEveryJobToRunWeeklyAndFailTheRun(): void {
   const { on, jobs = {} } = workflow();
   const held = Object.entries(jobs).flatMap(([name, job]) => [
-    ...["if", "needs", "continue-on-error"]
-      .filter((key) => key in job)
-      .map(
-        (key) => `${weeklyWorkflow}: the ${name} job sets ${key}, so it does not run every week.`,
-      ),
+    ...Object.entries(refusedBecause)
+      .filter(([key]) => key in job)
+      .map(([key, reason]) => `${weeklyWorkflow}: the ${name} job sets ${key}, ${reason}`),
     ...(typeof job["timeout-minutes"] === "number"
       ? []
       : [`${weeklyWorkflow}: give the ${name} job timeout-minutes, so a hung step ends.`]),
@@ -40,7 +70,7 @@ export function expectEveryJobToRunOnASchedule(): void {
   expect(held).toEqual([]);
 }
 
-export function expectScheduledJobToRun(jobName: string, command: string): void {
+export function expectJobToHaveOneStepRunning(jobName: string, command: string): void {
   const steps = (workflow().jobs?.[jobName]?.steps ?? []).filter((step) => step.run === command);
 
   expect(steps.length).toBe(1);
