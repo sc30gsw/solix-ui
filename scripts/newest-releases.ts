@@ -107,6 +107,19 @@ const solidChannel: Channel = {
   versions: (published, { now }) => solidLine(published, now),
 };
 
+function nextLine(published: readonly Published[], { pinned, now }: ChannelContext): Published[] {
+  const line = published.filter(({ version }) => semver.major(version) === semver.major(pinned));
+  return line.some((release) => isStable(release) && release.eligibleAt <= now)
+    ? published.filter(isStable)
+    : line;
+}
+
+const nextChannel: Channel = {
+  describe:
+    "the next line: its newest release on the major it pins, nightly, beta, release candidate or stable, until a stable release of that major is old enough to install; then its newest stable release",
+  versions: nextLine,
+};
+
 export const channels: Record<string, Channel> = {
   "solid-js": solidChannel,
   "@solidjs/web": solidChannel,
@@ -117,6 +130,10 @@ export const channels: Record<string, Channel> = {
     versions: (published, { pinned }) =>
       published.filter(({ version }) => semver.major(version) === semver.major(pinned)),
   },
+  storybook: nextChannel,
+  "@storybook/addon-a11y": nextChannel,
+  "@storybook/addon-vitest": nextChannel,
+  "storybook-solidjs-vite": nextChannel,
   "@types/node": {
     describe: "its newest stable release on the major of Node's newest LTS",
     versions: (published, { nodeLtsMajor }) =>

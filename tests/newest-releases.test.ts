@@ -319,6 +319,47 @@ test("a prerelease pin of a package with no stable release yet is behind its new
   ).toMatchObject({ status: "behind", eligible: "3.0.0", newest: "3.0.0" });
 });
 
+test("a pin on the next line is behind the newest release of the major it pins, nightly, beta or release candidate, and follows stable releases once that major has one old enough to install", () => {
+  const nightlies: Release[] = [
+    ["10.7.4", 30],
+    ["11.0.0-next-20261020160717", 28],
+    ["11.0.0-next-20261105190313", 12],
+    ["11.0.0-next-20261116090000", 0.5],
+    ["12.0.0-next-20261101000000", 10],
+  ];
+  const betas: Release[] = [
+    ["10.6.7", 7],
+    ["11.0.0-beta.3", 4],
+    ["11.0.0-rc.0", 2],
+    ["11.0.0-rc.1", 0.5],
+  ];
+  const stable: Release[] = [...betas, ["11.0.0", 2], ["11.0.1", 0.5], ["11.1.0-beta.0", 1.5]];
+
+  expect(
+    checkOf("storybook-solidjs-vite", "11.0.0-next-20261020160717", nightlies).comparison,
+  ).toMatchObject({
+    status: "behind",
+    eligible: "11.0.0-next-20261105190313",
+    newest: "11.0.0-next-20261116090000",
+  });
+  expect(
+    checkOf("storybook-solidjs-vite", "11.0.0-next-20261105190313", nightlies).comparison,
+  ).toMatchObject({ status: "not yet eligible" });
+  expect(checkOf("storybook", "11.0.0-beta.3", betas).comparison).toMatchObject({
+    status: "behind",
+    eligible: "11.0.0-rc.0",
+  });
+  expect(checkOf("@storybook/addon-vitest", "11.0.0-rc.0", stable).comparison).toMatchObject({
+    status: "behind",
+    eligible: "11.0.0",
+    newest: "11.0.1",
+  });
+  expect(checkOf("@storybook/addon-a11y", "11.0.0", stable).comparison).toMatchObject({
+    status: "not yet eligible",
+    newest: "11.0.1",
+  });
+});
+
 test("a published version with no publish time, or one that is not a date, is a problem that names the package and the version", () => {
   const noTime = registryDocument([["7.8.6", 10]]);
   noTime.versions = { ...noTime.versions, "7.8.7": {} };
