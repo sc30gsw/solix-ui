@@ -16,7 +16,7 @@ import {
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
-import { solidPackages } from "#/scripts/newest-releases.ts";
+import { exclusionsIn, pinsOf, solidPackages } from "#/scripts/newest-releases.ts";
 import { type PnpmSettings, pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   type AllowedRuntimeDependency,
@@ -660,6 +660,40 @@ test("every peer range of a library package accepts the version the catalog pins
         : [];
     }),
   );
+
+  expect(violations).toEqual([]);
+});
+
+test(`every minimumReleaseAgeExclude entry in ${workspaceFile} is a release the catalog pins exactly, or one that a release it pins lists at that exact version among its dependencies or optionalDependencies`, () => {
+  const { catalog, minimumReleaseAgeExclude } = pnpmSettings();
+  const exactPins = pinsOf(rootManifest(), catalog).flatMap((pin) =>
+    pin.source === "registry" &&
+    [pin.pinned, `npm:${pin.registryName}@${pin.pinned}`].includes(catalog[pin.name] ?? "")
+      ? [pin]
+      : [],
+  );
+  const pinnedReleases = exactPins.map(({ registryName, pinned }) => `${registryName}@${pinned}`);
+  const requiredReleases = installedVersions(exactPins.map(({ registryName }) => registryName))
+    .filter(({ name, version }) => pinnedReleases.includes(`${name}@${version}`))
+    .flatMap(({ path }) => {
+      const manifest = JSON.parse(readFileSync(join(path, "package.json"), "utf8")) as Manifest;
+      return Object.entries({ ...manifest.dependencies, ...manifest.optionalDependencies })
+        .filter(([, specifier]) => semver.valid(specifier) === specifier)
+        .map(([name, version]) => `${name}@${version}`);
+    });
+  const violations = exclusionsIn(minimumReleaseAgeExclude).flatMap(({ name, version }) => {
+    if (version === undefined) {
+      return [
+        `${workspaceFile}: minimumReleaseAgeExclude names ${name} with no version; name the one release a person approved, as <name>@<exact version>.`,
+      ];
+    }
+    const release = `${name}@${version}`;
+    return pinnedReleases.includes(release) || requiredReleases.includes(release)
+      ? []
+      : [
+          `${workspaceFile}: minimumReleaseAgeExclude names ${release}, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.`,
+        ];
+  });
 
   expect(violations).toEqual([]);
 });

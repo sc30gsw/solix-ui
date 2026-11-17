@@ -167,6 +167,38 @@ test("a release younger than the minimum release age is not yet eligible, not be
   expect(statuses({ excluded: [{ name: "semver" }] }).semver).toBe("behind");
 });
 
+test("an exemption in minimumReleaseAgeExclude fails the check by name once its release is old enough to install without it, and so does one whose release has no publish time", () => {
+  const exemptions = [
+    { name: "semver", version: "7.8.7" },
+    { name: "semver", version: "7.8.6" },
+    { name: "a-platform-build", version: "2.0.0" },
+    { name: "a-platform-build", version: "2.0.1" },
+    { name: "semver", version: "7.9.0" },
+    { name: "semver" },
+  ];
+  const report = check({
+    documents: {
+      ...documents,
+      "a-platform-build": registryDocument([
+        ["2.0.0", 1],
+        ["2.0.1", 0.5],
+      ]),
+    },
+    excluded: exemptions,
+  });
+
+  expect(report.problems.filter((problem) => problem.includes("minimumReleaseAgeExclude"))).toEqual(
+    [
+      "semver@7.8.6: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
+      "a-platform-build@2.0.0: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
+      "semver@7.9.0: the registry gives no publish time for it, so nothing tells whether minimumReleaseAgeExclude still needs it.",
+    ],
+  );
+  expect(
+    check({ excluded: [{ name: "semver", version: "7.8.7" }] }).problems.join("\n"),
+  ).not.toContain("minimumReleaseAgeExclude");
+});
+
 test("releasePolicy reads each minimumReleaseAgeExclude entry as a package name or <name>@<exact version>, refuses any other, and accepts this repository's own", () => {
   const settings = { ...pnpmSettings(), minimumReleaseAge: 1440 };
   const withExclusions = (minimumReleaseAgeExclude: string[]) =>

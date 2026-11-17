@@ -307,6 +307,27 @@ export function holdsWithoutReason(heldBack: readonly HeldBack[]): string[] {
     .map(({ name }) => `${name}: give the entry in ${heldBackFile} a reason and a liftWhen.`);
 }
 
+export function outgrownExclusions(
+  documents: Record<string, RegistryDocument>,
+  policy: ReleasePolicy,
+  now: number,
+): string[] {
+  return policy.excluded.flatMap(({ name, version }) => {
+    if (version === undefined) return [];
+    const at = publishedAt(documents[name] ?? {}, version);
+    if (at === undefined) {
+      return [
+        `${name}@${version}: the registry gives no publish time for it, so nothing tells whether minimumReleaseAgeExclude still needs it.`,
+      ];
+    }
+    return at + policy.minimumReleaseAgeMinutes * minute <= now
+      ? [
+          `${name}@${version}: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.`,
+        ]
+      : [];
+  });
+}
+
 export function compareWithNewest(input: {
   pins: readonly Pin[];
   documents: Record<string, RegistryDocument>;
@@ -347,6 +368,7 @@ export function compareWithNewest(input: {
     }),
     ...holdsOfNothing(input.heldBack, comparisons),
     ...holdsWithoutReason(input.heldBack),
+    ...outgrownExclusions(input.documents, input.policy, input.now),
   ];
   return { comparisons, problems };
 }

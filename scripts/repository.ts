@@ -25,7 +25,7 @@ export function scriptFilesIn(root: string = repositoryRoot): string[] {
   });
 }
 
-export type Installed = { name: string; version: string };
+export type Installed = { name: string; version: string; path: string };
 
 export type ExportTarget = string | null | ExportTarget[] | { [condition: string]: ExportTarget };
 
@@ -70,5 +70,5 @@ export function installedVersions(
   });
   const installed: unknown = JSON.parse(answer);
   if (!Array.isArray(installed)) throw new Error(`The package manager answered: ${answer}`);
-  return installed.map(({ name, version }: Installed) => ({ name, version }));
+  return installed.map(({ name, version, path }: Installed) => ({ name, version, path }));
 }

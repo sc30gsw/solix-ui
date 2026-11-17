@@ -10,13 +10,15 @@ import { rootManifest } from "#/scripts/repository.ts";
 
 const settings = pnpmSettings();
 const pins = pinsOf(rootManifest(), settings.catalog);
+const policy = releasePolicy(settings);
 const { comparisons, problems } = compareWithNewest({
   pins,
-  documents: await registryDocuments(
-    pins.flatMap((pin) => (pin.source === "registry" ? [pin.registryName] : [])),
-  ),
+  documents: await registryDocuments([
+    ...pins.flatMap((pin) => (pin.source === "registry" ? [pin.registryName] : [])),
+    ...policy.excluded.map(({ name }) => name),
+  ]),
   nodeReleases: await nodeReleases(),
-  policy: releasePolicy(settings),
+  policy,
   now: Date.now(),
   heldBack: heldBackEntries(),
 });
