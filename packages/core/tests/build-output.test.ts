@@ -41,6 +41,7 @@ import {
   stylesheet as builtStylesheet,
 } from "#/tests/built-library.ts";
 import { parse, ts } from "../../../scripts/syntax";
+import { tokenKind, tokenValues } from "../../../scripts/tokens";
 import {
   enclosingAtRules,
   inChildRuleLayer,
@@ -589,6 +590,61 @@ test("hiddenFrom and visibleFrom hide the element from, or below, each breakpoin
   });
 
   expect(violations).toEqual([]);
+});
+
+test("no light-dark() reaches the stylesheet: each colour token's default is its light value, and an element whose data-color-scheme is light or dark, or auto under each prefers-color-scheme, sets every colour token to that scheme's value, in the style-prop layer", () => {
+  const tokens = tokenValues();
+  const colours = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
+  const valuesOf = (scheme: "light" | "dark") =>
+    colours.map((name) => {
+      const [, light, dark] = /^light-dark\((.+), (oklch\(.+\))\)$/.exec(tokens[name]) ?? [];
+      return `${name}:${scheme === "light" ? light : dark}`;
+    });
+  const placed = placedRules();
+  const tokenDeclarations = (rule: PlacedRule) =>
+    rule.declarations.filter((declaration) => declaration.startsWith("--solix-color-"));
+  const rootDefaults = placed.filter((rule) => rule.selector.split(/,\s*/).includes(":root"));
+  const perScheme = placed
+    .filter(
+      (rule) =>
+        rule.selector.startsWith("[data-color-scheme") && tokenDeclarations(rule).length > 0,
+    )
+    .map((rule) => ({
+      selector: rule.selector,
+      media: rule.media,
+      inStylePropLayer: rule.inStylePropLayer,
+      declarations: tokenDeclarations(rule),
+    }));
+
+  expect(colours.length).toBeGreaterThan(0);
+  expect(stylesheet).not.toContain("light-dark(");
+  expect(rootDefaults.flatMap(tokenDeclarations)).toEqual(valuesOf("light"));
+  expect(perScheme).toEqual([
+    {
+      selector: '[data-color-scheme="light"]',
+      media: undefined,
+      inStylePropLayer: true,
+      declarations: valuesOf("light"),
+    },
+    {
+      selector: '[data-color-scheme="dark"]',
+      media: undefined,
+      inStylePropLayer: true,
+      declarations: valuesOf("dark"),
+    },
+    {
+      selector: '[data-color-scheme="auto"]',
+      media: "(prefers-color-scheme: light)",
+      inStylePropLayer: true,
+      declarations: valuesOf("light"),
+    },
+    {
+      selector: '[data-color-scheme="auto"]',
+      media: "(prefers-color-scheme: dark)",
+      inStylePropLayer: true,
+      declarations: valuesOf("dark"),
+    },
+  ]);
 });
 
 test("lightHidden and darkHidden hide the element inside an element whose data-color-scheme names that scheme, and inside auto while the operating system prefers it, after every style-prop rule", () => {

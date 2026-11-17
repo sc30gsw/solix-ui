@@ -54,6 +54,7 @@ export default defineConfig({
           "vite.config.ts",
           "apps/*/vite.config.ts",
           "apps/*/src/App.tsx",
+          "apps/playground/src/Document.tsx",
           "apps/playground/src/middleware.ts",
           "apps/storybook/**/vite.config.ts",
           "apps/storybook/**/.storybook/*.ts",
