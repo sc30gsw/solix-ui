@@ -80,10 +80,10 @@ function isOnTheVersionOf(pinned: string, { version }: Published): boolean {
   );
 }
 
-function solidLine(published: readonly Published[], now: number): Published[] {
-  const line = published.filter(({ version }) => semver.major(version) === solidMajor);
-  const stable = line.filter(isStable);
-  return stable.some(({ eligibleAt }) => eligibleAt <= now) ? stable : line;
+function stableOnMajor(published: readonly Published[], major: number): Published[] {
+  return published.filter(
+    (release) => isStable(release) && semver.major(release.version) === major,
+  );
 }
 
 const stableChannel: Channel = {
@@ -103,8 +103,8 @@ const prereleasePinChannel: Channel = {
       : published.filter((release) => carriesTheIdentifierOf(pinned, release)),
 };
 const solidChannel: Channel = {
-  describe: `the newest Solid ${solidMajor} release, stable once a stable ${solidMajor}.x is old enough to install`,
-  versions: (published, { now }) => solidLine(published, now),
+  describe: `the newest stable Solid ${solidMajor} release`,
+  versions: (published) => stableOnMajor(published, solidMajor),
 };
 
 export const channels: Record<string, Channel> = {
@@ -113,9 +113,8 @@ export const channels: Record<string, Channel> = {
   "@solidjs/compiler": solidChannel,
   "@solidjs/signals": solidChannel,
   "@solidjs/vite-plugin": {
-    describe: "its newest release on the major it pins, tagged or not",
-    versions: (published, { pinned }) =>
-      published.filter(({ version }) => semver.major(version) === semver.major(pinned)),
+    describe: "its newest stable release on the major it pins",
+    versions: (published, { pinned }) => stableOnMajor(published, semver.major(pinned)),
   },
   "@types/node": {
     describe: "its newest stable release on the major of Node's newest LTS",
@@ -404,7 +403,7 @@ function solidPeersAccept(documents: Record<string, RegistryDocument>, version: 
             `${name}@${version}: its peer range "${range}" for ${peer} is not a semver range, so nothing tells whether it accepts ${version}.`,
           );
         }
-        return semver.satisfies(version, range, { includePrerelease: true });
+        return semver.satisfies(version, range);
       }),
   );
 }
@@ -414,12 +413,14 @@ export function newestSolidRelease(
   policy: ReleasePolicy,
   now: number,
 ): string {
-  const release = newestFirst(solidLine(publishedForEachSolidPackage(documents, policy), now))
+  const release = newestFirst(
+    stableOnMajor(publishedForEachSolidPackage(documents, policy), solidMajor),
+  )
     .filter(({ eligibleAt }) => eligibleAt <= now)
     .find(({ version }) => solidPeersAccept(documents, version));
   if (release === undefined) {
     throw new Error(
-      `No Solid ${solidMajor} release is published for ${listed(solidPackages)} alike, old enough to install and accepted by their peer ranges.`,
+      `No stable Solid ${solidMajor} release is published for ${listed(solidPackages)} alike, old enough to install and accepted by their peer ranges.`,
     );
   }
   return release.version;

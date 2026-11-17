@@ -54,14 +54,17 @@ const documents = {
   ]),
   "solid-js": registryDocument([
     ["1.9.19", 90],
-    ["2.0.0-rc.21", 20],
-    ["2.0.0-rc.22", 3],
+    ["2.0.0-rc.23", 30],
+    ["2.0.0", 20],
+    ["2.0.1", 3],
+    ["2.1.0-rc.1", 2],
   ]),
   "@solidjs/vite-plugin": registryDocument([
-    ["3.0.0-next.35", 200],
-    ["3.0.0-next.57", 20],
-    ["3.0.0-next.58", 4],
-    ["4.0.0-next.0", 4],
+    ["3.0.0-next.57", 30],
+    ["3.0.0", 20],
+    ["3.0.1", 4],
+    ["3.1.0-next.0", 3],
+    ["4.0.0", 4],
   ]),
   "@types/node": registryDocument([
     ["26.6.6", 20],
@@ -79,8 +82,8 @@ const nodeReleases: NodeRelease[] = [
 const pins = pinsOf(manifest, {
   semver: "7.8.6",
   playwright: "^1.63.0",
-  "solid-js": "2.0.0-rc.21",
-  "@solidjs/vite-plugin": "3.0.0-next.57",
+  "solid-js": "2.0.0",
+  "@solidjs/vite-plugin": "3.0.0",
   "@types/node": "^26.6.6",
   vite: "npm:@voidzero-dev/vite-plus-core@1.6.0",
 });
@@ -140,8 +143,8 @@ test("each pin is compared with the newest published release on its own channel,
   expect(newest).toEqual({
     semver: "7.8.7",
     playwright: "1.65.1",
-    "solid-js": "2.0.0-rc.22",
-    "@solidjs/vite-plugin": "3.0.0-next.58",
+    "solid-js": "2.0.1",
+    "@solidjs/vite-plugin": "3.0.1",
     "@types/node": "26.6.7",
     vite: "1.6.0",
     [packageManagerPinName]: "12.18.0",
@@ -182,7 +185,7 @@ test("releasePolicy reads each minimumReleaseAgeExclude entry as a package name 
   expect(() => releasePolicy(pnpmSettings())).not.toThrow();
 });
 
-test("each channel finds what is behind: stable, the Solid 2 line, the plugin's pinned major, the Node LTS major and Node's newest LTS", () => {
+test("each channel finds what is behind: stable, the stable Solid 2 line, the plugin's stable releases on its pinned major, the Node LTS major and Node's newest LTS", () => {
   expect(statuses()).toEqual({
     semver: "not yet eligible",
     playwright: "behind",
@@ -195,73 +198,55 @@ test("each channel finds what is behind: stable, the Solid 2 line, the plugin's 
   });
 });
 
-test("the Solid 2 line takes a stable 2.x once one is old enough to install, and never a Solid 3 release", () => {
-  const afterStable: Release[] = [
-    ["2.0.0-rc.22", 30],
-    ["2.0.0", 20],
+test("the Solid 2 line takes only stable 2.x releases: never a prerelease, and never a Solid 3 release", () => {
+  const releases: Release[] = [
+    ["2.0.0", 30],
     ["2.0.1", 10],
-    ["3.0.0-alpha.1", 5],
+    ["2.1.0-rc.1", 5],
+    ["3.0.0", 5],
   ];
-  const beforeStable: Release[] = [
-    ["2.0.0-rc.21", 20],
-    ["2.0.0-rc.22", 10],
+  const noNewerStable: Release[] = [
+    ["2.0.0", 30],
+    ["2.1.0-rc.1", 5],
     ["3.0.0-alpha.1", 5],
   ];
 
-  expect(checkOf("solid-js", "2.0.0-rc.22", afterStable).comparison).toMatchObject({
+  expect(checkOf("solid-js", "2.0.0", releases).comparison).toMatchObject({
     status: "behind",
     newest: "2.0.1",
     eligible: "2.0.1",
   });
-  expect(checkOf("solid-js", "2.0.0-rc.22", beforeStable).comparison).toMatchObject({
+  expect(checkOf("solid-js", "2.0.0", noNewerStable).comparison).toMatchObject({
     status: "current",
-    newest: "2.0.0-rc.22",
-  });
-});
-
-test("on the first day of a stable Solid 2, a newer release candidate that is old enough is still what a pin is behind", () => {
-  const firstDay: Release[] = [
-    ["2.0.0-rc.22", 60],
-    ["2.0.0-rc.23", 5],
-    ["2.0.0", 0.25],
-  ];
-
-  expect(checkOf("solid-js", "2.0.0-rc.22", firstDay).comparison).toMatchObject({
-    status: "behind",
-    eligible: "2.0.0-rc.23",
     newest: "2.0.0",
-  });
-  expect(checkOf("solid-js", "2.0.0-rc.23", firstDay).comparison).toMatchObject({
-    status: "not yet eligible",
-    eligibleAt: "2026-11-15T06:00:00.000Z",
   });
   expect(
     newestSolidRelease(
-      solidLine(() => "*", firstDay),
+      solidLine(() => "*", noNewerStable),
       policy,
       now,
     ),
-  ).toBe("2.0.0-rc.23");
+  ).toBe("2.0.0");
 });
 
-test("while @solidjs/web has no stable Solid 2 yet, the canary takes the newest release every Solid package has", () => {
+test("while @solidjs/web lacks the newest stable Solid 2 release, the canary takes the newest release every Solid package has", () => {
   const lagging = {
     "solid-js": registryDocument([
-      ["2.0.0-rc.23", 9],
-      ["2.0.0", 5],
+      ["2.0.0", 9],
+      ["2.0.1", 5],
     ]),
-    "@solidjs/web": registryDocument([["2.0.0-rc.23", 9]]),
+    "@solidjs/web": registryDocument([["2.0.0", 9]]),
     "@solidjs/compiler": registryDocument([
-      ["2.0.0-rc.23", 9],
-      ["2.0.0", 5],
+      ["2.0.0", 9],
+      ["2.0.1", 5],
     ]),
     "@solidjs/signals": registryDocument([
-      ["2.0.0-rc.23", 9],
-      ["2.0.0", 5],
+      ["2.0.0", 9],
+      ["2.0.1", 5],
     ]),
   };
 
-  expect(newestSolidRelease(lagging, policy, now)).toBe("2.0.0-rc.23");
+  expect(newestSolidRelease(lagging, policy, now)).toBe("2.0.0");
 });
 
 test("a prerelease pin with no channel of its own is behind a newer prerelease of the version it pins that carries the pin's own identifier, and behind that version once it is stable", () => {
@@ -369,19 +354,19 @@ test("the Solid 2 canary takes one release for every Solid package, old enough f
   const lockstep = solidLine(
     (version) => `^${version}`,
     [
-      ["2.0.0-rc.21", 20],
-      ["2.0.0-rc.22", 2],
+      ["2.0.0", 20],
+      ["2.0.1", 2],
     ],
   );
   lockstep["solid-js"] = registryDocument([
-    ["2.0.0-rc.21", 20],
-    ["2.0.0-rc.22", 0.25],
+    ["2.0.0", 20],
+    ["2.0.1", 0.25],
   ]);
   const peerTooNew = solidLine(
-    (version) => (version === "2.0.0-rc.22" ? "^2.0.0-rc.23" : "*"),
+    (version) => (version === "2.0.1" ? "^2.0.2" : "*"),
     [
-      ["2.0.0-rc.21", 20],
-      ["2.0.0-rc.22", 2],
+      ["2.0.0", 20],
+      ["2.0.1", 2],
     ],
   );
 
@@ -392,32 +377,32 @@ test("the Solid 2 canary takes one release for every Solid package, old enough f
     "@solidjs/signals": lockstep["@solidjs/signals"],
   };
 
-  expect(newestSolidRelease(lockstep, policy, now)).toBe("2.0.0-rc.21");
-  expect(newestSolidRelease(webTooYoung, policy, now)).toBe("2.0.0-rc.21");
-  expect(newestSolidRelease(peerTooNew, policy, now)).toBe("2.0.0-rc.21");
+  expect(newestSolidRelease(lockstep, policy, now)).toBe("2.0.0");
+  expect(newestSolidRelease(webTooYoung, policy, now)).toBe("2.0.0");
+  expect(newestSolidRelease(peerTooNew, policy, now)).toBe("2.0.0");
   expect(
     newestSolidRelease(
       lockstep,
-      { ...policy, excluded: [{ name: "solid-js", version: "2.0.0-rc.22" }] },
+      { ...policy, excluded: [{ name: "solid-js", version: "2.0.1" }] },
       now,
     ),
-  ).toBe("2.0.0-rc.22");
+  ).toBe("2.0.1");
 });
 
 test("the Solid 2 canary refuses a peer range it cannot read instead of passing over that release, and says when no release will do", () => {
   const unreadable = solidLine(
-    (version) => (version === "2.0.0-rc.22" ? "workspace:^" : "*"),
+    (version) => (version === "2.0.1" ? "workspace:^" : "*"),
     [
-      ["2.0.0-rc.21", 20],
-      ["2.0.0-rc.22", 2],
+      ["2.0.0", 20],
+      ["2.0.1", 2],
     ],
   );
 
   expect(() => newestSolidRelease(unreadable, policy, now)).toThrow(
-    '@solidjs/web@2.0.0-rc.22: its peer range "workspace:^" for solid-js is not a semver range',
+    '@solidjs/web@2.0.1: its peer range "workspace:^" for solid-js is not a semver range',
   );
   expect(() => newestSolidRelease({}, policy, now)).toThrow(
-    "No Solid 2 release is published for solid-js, @solidjs/web, @solidjs/compiler and @solidjs/signals alike, old enough to install and accepted by their peer ranges.",
+    "No stable Solid 2 release is published for solid-js, @solidjs/web, @solidjs/compiler and @solidjs/signals alike, old enough to install and accepted by their peer ranges.",
   );
 });
 
