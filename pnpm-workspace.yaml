@@ -4,14 +4,15 @@ packages:
 catalogMode: strict
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
+ignorePnpmfile: true
 catalog:
   "@babel/core": ^8.1.2
   "@babel/plugin-syntax-jsx": ^8.0.1
   "@babel/preset-typescript": ^8.0.7
-  "@solidjs/compiler": 2.0.0-rc.22
-  "@solidjs/signals": 2.0.0-rc.22
-  "@solidjs/vite-plugin": 3.0.0-next.57
-  "@solidjs/web": 2.0.0-rc.22
+  "@solidjs/compiler": 2.0.0
+  "@solidjs/signals": 2.0.0
+  "@solidjs/vite-plugin": 3.0.0
+  "@solidjs/web": 2.0.0
   "@storybook/addon-a11y": 11.0.0-beta.3
   "@storybook/addon-vitest": 11.0.0-beta.3
   "@stylexjs/babel-plugin": 0.19.2
@@ -19,8 +20,8 @@ catalog:
   "@stylexjs/unplugin": 0.19.2
   "@types/node": ^26.6.6
   "@types/semver": 7.8.0
-  "@ui-sdk/core": 0.1.0-beta.5
-  "@ui-sdk/solid": 0.1.0-beta.5
+  "@ui-sdk/core": 0.1.0-beta.6
+  "@ui-sdk/solid": 0.1.0-beta.6
   "@vitest/browser-playwright": 5.1.0
   axe-core: 4.14.0
   fast-check: 4.10.2
@@ -30,7 +31,7 @@ catalog:
   postcss-selector-parser: 7.2.1
   postcss-value-parser: 4.2.0
   semver: 7.8.6
-  solid-js: 2.0.0-rc.22
+  solid-js: 2.0.0
   solid2-agent-kit: 0.26.1
   storybook: 11.0.0-beta.3
   storybook-solidjs-vite: 11.0.0-next-20261105190313

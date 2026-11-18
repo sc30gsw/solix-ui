@@ -9,6 +9,7 @@ import { layerOrder, libraryCascadeLayer, libraryStyleMark } from "#/src/style-p
 import { dist, library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
 import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const { scaleOfThemeKey } = (await import(join(dist, "create-theme.js"))) as typeof CreateTheme;
 
@@ -115,8 +116,9 @@ test("createTheme gives back the theme it is given", () => {
   expect(library.createTheme(given)).toBe(given);
 });
 
-test("on the server, the provider writes its theme as one marked style with the nonce it is given, in the library's layer, for generated themes, selectors and nonces", () => {
-  fc.assert(
+test("on the server, the provider writes its theme as one marked style with the nonce it is given, in the library's layer, for generated themes, selectors and nonces", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.record({
         theme,
@@ -164,8 +166,9 @@ test("on the server, the provider writes its theme as one marked style with the 
   );
 });
 
-test("given no cssVariablesSelector, the provider writes its theme under a selector whose subject names no element type, so it styles no <html> or <body> by name, for generated themes", () => {
-  fc.assert(
+test("given no cssVariablesSelector, the provider writes its theme under a selector whose subject names no element type, so it styles no <html> or <body> by name, for generated themes", async (context) => {
+  await assertProperty(
+    context,
     fc.property(theme, (given) => {
       const css = styleOf(
         renderToString(() => createComponent(library.SolixProvider, { theme: given })),

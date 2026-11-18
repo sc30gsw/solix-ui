@@ -4,6 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { createSetState, type SetStatePatch } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 type Filters = { query: string; page: number; tags?: string[] };
 
@@ -114,8 +115,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of patches, updaters and flushes, it agrees with a model of the object and shows an object only when a key changes", () => {
-  fc.assert(
+test("for every generated sequence of patches, updaters and flushes, it agrees with a model of the object and shows an object only when a key changes", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc
         .array(fc.tuple(key, value), { maxLength: 3 })

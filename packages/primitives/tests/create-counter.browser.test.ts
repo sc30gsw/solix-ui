@@ -4,6 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { type CounterHandlers, createCounter } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 test("by default it starts at 0 and moves by 1 with no bounds", () => {
   const [count, { increment, decrement }] = mount(() => createCounter());
@@ -174,8 +175,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of moves, bound changes and flushes, it agrees with a model of the count", () => {
-  fc.assert(
+test("for every generated sequence of moves, bound changes and flushes, it agrees with a model of the count", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       small,
       bounds,

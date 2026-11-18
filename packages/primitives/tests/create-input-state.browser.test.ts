@@ -6,6 +6,7 @@ import { createInputState, type InputChange } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { attached } from "#/tests/support/dom.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 function listened<E extends HTMLElement>(
   element: E,
@@ -144,8 +145,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of values, updaters, input events and flushes, it agrees with a model of the value", () => {
-  fc.assert(
+test("for every generated sequence of values, updaters, input events and flushes, it agrees with a model of the value", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       stored,
       fc.commands(commands, { maxCommands: 30, size: "medium" }),

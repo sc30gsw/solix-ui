@@ -79,7 +79,7 @@ No model checker runs on a Solid component or on the SDK, so this is not a proof
 - **A single step fails.** Its name is the list, the state, the key and what the model expects, such as `in Vertical, with Gamma selected and focus on Gamma, after ArrowDown Alpha is selected and focus is on Alpha`. Replay it by hand in the playground. If the page is right and the model wrong, fix the model and say what was wrong. If the page is wrong, it is a bug in the component or a change in the SDK; report it in those words and do not loosen the model.
 - **The generated check fails after `Counterexample`.** It prints the list and the shortest sequence, such as `click the enabled tab at position 1, counted round the list, press ArrowLeft`, and the first observation that disagreed. Treat it as a single step that the single steps missed, and say which state they do not reach.
 - **A timeout in `page.goto` or a click.** The server did not start, or the section no longer renders what `tabsSetups` describes.
-- To replay one generated failure, add the printed `seed` and `path` to the options object passed to `fc.assert`, run again, and remove them afterwards.
+- To replay one generated failure, add the printed `seed` and `path` to the parameters passed to `assertProperty`, run again, and remove them afterwards.
 
 ## When the change is intended
 

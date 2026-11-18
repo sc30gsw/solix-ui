@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import type { Browser, Page } from "playwright";
+import semver from "semver";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { solidPackages } from "#/scripts/newest-releases.ts";
@@ -253,16 +254,11 @@ describe("installed into a consumer outside the workspace", () => {
         include: ["src"],
       }),
     );
-    const pinnedWithTheRuntime = Object.fromEntries(
-      solidPackages.map((name) => [name, versionOf(name)]),
-    );
     writeFileSync(
       join(app, workspaceFile),
       [
         "overrides:",
-        ...Object.entries({ "vite@*": versionOf("vite"), ...pinnedWithTheRuntime }).map(
-          ([name, version]) => `  ${JSON.stringify(name)}: ${JSON.stringify(version)}`,
-        ),
+        `  "vite@*": ${JSON.stringify(versionOf("vite"))}`,
         "peerDependencyRules:",
         "  allowAny:",
         "    - vite",
@@ -308,20 +304,44 @@ describe("installed into a consumer outside the workspace", () => {
     }
   });
 
-  test("the consumer installs every package on the Solid 2 channel, and each only at the release the catalog pins, wherever it is in the install", () => {
+  test("the consumer installs one copy of every package on the Solid 2 channel: each it names at the release the catalog pins, and each other one inside the range the installed packages it names give for it", () => {
     const { catalog } = pnpmSettings();
+    const manifestIn = (path: string) =>
+      JSON.parse(readFileSync(join(path, "package.json"), "utf8")) as Manifest;
+    const own = manifestIn(app);
+    const named = Object.keys({ ...own.dependencies, ...own.devDependencies });
+    const requirers = installedVersions(named, app).map(({ name, version, path }) => {
+      if (path === undefined)
+        throw new Error(`${name}@${version}: the package manager gives no path for it.`);
+      return manifestIn(path);
+    });
     const installed = installedVersions(solidPackages, app);
-
-    expect(solidPackages.filter((name) => !installed.some((each) => each.name === name))).toEqual(
-      [],
-    );
-    expect(
-      installed
-        .filter(({ name, version }) => version !== catalog[name])
+    const problems = solidPackages.flatMap((name) => {
+      const copies = installed.filter((each) => each.name === name).map(({ version }) => version);
+      const [version] = copies;
+      if (version === undefined || copies.length > 1) {
+        return [`${name}: ${copies.length} copies (${copies.join(", ")}), not one`];
+      }
+      if (named.includes(name)) {
+        return version === catalog[name]
+          ? []
+          : [
+              `${name} ${version}, not ${catalog[name] ?? "a pinned release"}, which the catalog pins`,
+            ];
+      }
+      const ranges = requirers.flatMap(
+        (manifest) => manifest.dependencies?.[name] ?? manifest.optionalDependencies?.[name] ?? [],
+      );
+      if (ranges.length === 0) return [`${name}: no package the consumer names requires it`];
+      return ranges
+        .filter((range) => !semver.satisfies(version, range))
         .map(
-          ({ name, version }) => `${name} ${version}, not ${catalog[name] ?? "a pinned release"}`,
-        ),
-    ).toEqual([]);
+          (range) =>
+            `${name} ${version}, outside ${range}, which a package the consumer names gives`,
+        );
+    });
+
+    expect(problems).toEqual([]);
   });
 
   test("the consumer's Vite configuration sets nothing but the Solid plugin: no dependency optimisation, no StyleX plugin, no alias", () => {

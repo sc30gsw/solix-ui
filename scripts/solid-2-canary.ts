@@ -1,12 +1,10 @@
-import { newestSolidRelease, solidPackages } from "#/scripts/newest-releases.ts";
+import { solidPackages } from "#/scripts/newest-releases.ts";
 import { pnpmSettings, rewriteCatalog } from "#/scripts/pnpm-settings.ts";
 import { registryDocuments, releasePolicy } from "#/scripts/release-sources.ts";
-import { listed } from "#/scripts/repository.ts";
+import { exactlyRequiredNames, solidCatalogMove } from "#/scripts/solid-2-release.ts";
 
-const version = newestSolidRelease(
-  await registryDocuments(solidPackages),
-  releasePolicy(pnpmSettings()),
-  Date.now(),
-);
-rewriteCatalog(Object.fromEntries(solidPackages.map((name) => [name, version])));
-console.log(`${listed(solidPackages)} -> ${version}`);
+const solid = await registryDocuments(solidPackages);
+const documents = { ...solid, ...(await registryDocuments(exactlyRequiredNames(solid))) };
+const move = solidCatalogMove(documents, releasePolicy(pnpmSettings()), Date.now());
+rewriteCatalog(move.versions);
+console.log(move.summary);

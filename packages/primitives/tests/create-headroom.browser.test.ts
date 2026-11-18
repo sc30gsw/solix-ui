@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 import { createHeadroom, type HeadroomOptions, type HeadroomReturn } from "#/src/index.ts";
 import { flush, mount, unmount } from "#/tests/support/browser-harness.ts";
 import { applied, onScrollGrid, type ScrollStub, stubbedScroll } from "#/tests/support/scroll.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -234,8 +235,9 @@ const setups = fc.record({
   start: onScrollGrid(16),
 });
 
-test("for every generated sequence of scroll positions, its progress, pinned state and callbacks agree with a model of the header", async () => {
-  await fc.assert(
+test("for every generated sequence of scroll positions, its progress, pinned state and callbacks agree with a model of the header", async (context) => {
+  await assertProperty(
+    context,
     fc.asyncProperty(
       setups,
       fc.commands([onScrollGrid(16).map(scrollTo)], { maxCommands: 25, size: "medium" }),
@@ -265,8 +267,9 @@ test("for every generated sequence of scroll positions, its progress, pinned sta
   );
 });
 
-test("for every generated sequence of scroll positions, the documented rules hold: progress stays between 0 and 1, it is 1 in the fixed zone, a scroll down never raises it and a scroll up never lowers it, and a scroll with no vertical move changes nothing and calls nothing", async () => {
-  await fc.assert(
+test("for every generated sequence of scroll positions, the documented rules hold: progress stays between 0 and 1, it is 1 in the fixed zone, a scroll down never raises it and a scroll up never lowers it, and a scroll with no vertical move changes nothing and calls nothing", async (context) => {
+  await assertProperty(
+    context,
     fc.asyncProperty(
       setups,
       fc.array(onScrollGrid(16), { maxLength: 25 }),

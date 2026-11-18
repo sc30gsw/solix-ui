@@ -81,6 +81,7 @@ import {
   withoutLeadingRules,
 } from "#/tests/markup.ts";
 import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const generatedRuns = 300;
 const containerPart = "container";
@@ -133,11 +134,12 @@ test("every component the library exports is held to the root contract", () => {
   expect(builtComponents).toEqual(Object.keys(fixtures).sort());
 });
 
-test.each(components)(
+test.for(components)(
   "%s starts its root with exactly the classes of its compiled root styles and then its own stable root class, its only one, and puts every class and attribute a consumer passes on it",
-  (name, component) => {
+  async ([name, component], context) => {
     const rootClasses = builtComponents.map((other) => stableClass(other, rootPart));
-    fc.assert(
+    await assertProperty(
+      context,
       fc.property(classTokens, stringAttributes, fc.boolean(), (tokens, attributes, flag) => {
         const root = rootOf(
           name,
@@ -273,11 +275,12 @@ function expectClassesOnTheirParts(name: string, html: string, tokens: PartClass
   }
 }
 
-test.each(builtComponents)(
+test.for(builtComponents)(
   "%s puts a class that classes names for a part on exactly that part's element, after the library's classes and the stable class, and the class prop after classes.root",
-  (name) => {
+  async (name, context) => {
     const parts = partsOf(name);
-    fc.assert(
+    await assertProperty(
+      context,
       fc.property(partClassTokens(parts), (tokens) => {
         expectClassesOnTheirParts(name, render(name, classesPropsFrom(parts, tokens)), tokens);
       }),
@@ -286,10 +289,11 @@ test.each(builtComponents)(
   },
 );
 
-test.each(builtComponents)(
+test.for(builtComponents)(
   "%s puts the declarations styles names for a part in exactly that part's style, beside the custom property of each of its own variables, leaves out an undefined or null one, and puts the consumer's style after styles.root, where an undefined or null one replaces nothing",
-  (name) => {
-    fc.assert(
+  async (name, context) => {
+    await assertProperty(
+      context,
       fc.property(
         declarationsByPart(partsOf(name)),
         consumerStyles,
@@ -335,13 +339,14 @@ test.each(builtComponents)(
   },
 );
 
-test.each(builtComponents)(
+test.for(builtComponents)(
   "%s with unstyled drops every class of its compiled styles from every part, and keeps every stable part class and every consumer class",
-  (name) => {
+  async (name, context) => {
     const parts = partsOf(name);
     const everyCompiledClass = Object.values(compiled[name]).flat();
     const marked = elementsOf(render(name)).flatMap((element) => partsOn(name, element));
-    fc.assert(
+    await assertProperty(
+      context,
       fc.property(partClassTokens(parts), (tokens) => {
         const html = render(name, { ...classesPropsFrom(parts, tokens), unstyled: true });
         const elements = elementsOf(html);
@@ -437,10 +442,11 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
   ).toEqual([]);
 }
 
-test.each(components)(
+test.for(components)(
   "%s gives every kept style-prop value it takes one class and the one custom property that class reads, drops null and every value that holds ;, { or }, keeps the consumer's class and style on top, renders the element component names, and renders the same markup twice",
-  (name, { tag, takesDisplay, polymorphic }) => {
-    fc.assert(
+  async ([name, { tag, takesDisplay, polymorphic }], context) => {
+    await assertProperty(
+      context,
       fc.property(
         stylePropCases,
         polymorphic ? elementsToRender : fc.constant(undefined),
@@ -543,8 +549,9 @@ test("Box passes unstyled to the Button its component prop names, so the Button 
   ).toEqual([]);
 });
 
-test("every --sx- declaration the generator draws for a consumer's style or styles.root is a custom property that a style-prop class reads, aliases included", () => {
-  fc.assert(
+test("every --sx- declaration the generator draws for a consumer's style or styles.root is a custom property that a style-prop class reads, aliases included", async (context) => {
+  await assertProperty(
+    context,
     fc.property(stylePropCases, (generated) => {
       const drawn = [...(generated.consumerStyle?.declarations ?? []), ...generated.stylesRoot]
         .map(([property]) => property)
@@ -731,8 +738,9 @@ test.each(builtComponents)(
   },
 );
 
-test("every variable drops null and a value that holds ;, { or }, and writes each value it keeps as one class and the custom property that class reads", () => {
-  fc.assert(
+test("every variable drops null and a value that holds ;, { or }, and writes each value it keeps as one class and the custom property that class reads", async (context) => {
+  await assertProperty(
+    context,
     fc.property(fc.constantFrom(...variableNames), declaredStyleProp, (name, declared) => {
       const group = variableGroups.find((found) => variablesOf(found).some((own) => own === name));
       if (group === undefined) throw new Error(`${name}: put it in a group.`);

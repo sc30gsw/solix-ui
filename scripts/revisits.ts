@@ -95,13 +95,6 @@ function stateOf(
   policy: ReleasePolicy,
   now: number,
 ): RequirementState {
-  if (document === undefined) {
-    return {
-      requirement,
-      status: "unknown",
-      why: `the registry answer holds no document for ${requirement.name}, so nothing tells whether it is published.`,
-    };
-  }
   const published = publishedIn(requirement.name, document, policy);
   if (!Array.isArray(published)) return { requirement, status: "unknown", why: published.why };
   const inRange = newestFirst(

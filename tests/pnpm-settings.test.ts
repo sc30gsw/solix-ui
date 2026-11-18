@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  globSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
@@ -9,10 +17,17 @@ import {
   settingsFrom,
   workspaceFile,
 } from "#/scripts/pnpm-settings.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
+import { packages } from "#/tests/support/workspace.ts";
 
 const catalogOnly = ["catalog:", '  "@solidjs/web": 2.0.0-rc.21', "  solid-js: 2.0.0-rc.21", ""];
 const agePolicy = ["minimumReleaseAge: 99", "minimumReleaseAgeStrict: true", ""];
 const temporary: string[] = [];
+const namesAReleaseAgeSetting = /minimum[-_.]?release[-_.]?age|trust[-_.]?lockfile|pnpmfile/i;
+const githubFiles = globSync(".github/**/*.{yml,yaml}", { cwd: repositoryRoot });
+const hookFiles = globSync(".vite-hooks/*", { cwd: repositoryRoot }).filter((path) =>
+  statSync(join(repositoryRoot, path)).isFile(),
+);
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -38,15 +53,61 @@ function userConfigWith(lines: readonly string[]): string {
   return configHome;
 }
 
-test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true`, () => {
+test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true, exempts no release from them, ignores every pnpmfile, loads no config dependency, and does not trust the lockfile past the release-age check`, () => {
   expect(pnpmSettings().minimumReleaseAge).toBeGreaterThan(0);
   expect(pnpmSettings().minimumReleaseAgeStrict).toBe(true);
+  expect(
+    pnpmSettings().minimumReleaseAgeExclude,
+    `${workspaceFile}: remove every minimumReleaseAgeExclude entry; a release younger than minimumReleaseAge is not installed.`,
+  ).toEqual([]);
+  expect(pnpmSettings().trustLockfile).toBe(false);
+  expect(pnpmSettings().ignorePnpmfile).toBe(true);
+  expect(pnpmSettings().configDependencies).toEqual({});
+});
+
+function logicalLines(text: string): { number: number; line: string }[] {
+  const lines = text.split("\n");
+  return lines.flatMap((line, index) => {
+    if (index > 0 && lines[index - 1]?.endsWith("\\")) return [];
+    let joined = line;
+    for (let next = index; joined.endsWith("\\") && next + 1 < lines.length; next += 1) {
+      joined = joined.slice(0, -1) + (lines[next + 1] ?? "").trimStart();
+    }
+    return [{ number: index + 1, line: joined }];
+  });
+}
+
+test(`no YAML file under .github, no file in .vite-hooks and no script of a workspace manifest names a release-age setting, trustLockfile or a pnpmfile, with lines a backslash continues joined first, so only ${workspaceFile} sets the release age, nothing trusts the lockfile and no pnpmfile runs`, () => {
+  const fileLines = [...githubFiles, ...hookFiles].flatMap((file) =>
+    logicalLines(readFileSync(join(repositoryRoot, file), "utf8")).map(({ number, line }) => ({
+      where: `${file}:${number}`,
+      line,
+    })),
+  );
+  const scripts = packages.flatMap(({ path, manifest }) =>
+    Object.entries(manifest.scripts ?? {}).map(([name, line]) => ({
+      where: `${path} scripts.${name}`,
+      line,
+    })),
+  );
+  const settingLines = [...fileLines, ...scripts]
+    .filter(({ line }) => namesAReleaseAgeSetting.test(line))
+    .map(
+      ({ where, line }) =>
+        `${where}: names a release-age setting, trustLockfile or a pnpmfile; set the release age only in ${workspaceFile}, do not trust the lockfile, and run no pnpmfile: ${line.trim()}`,
+    );
+
+  expect(githubFiles).toContain(".github/workflows/ci.yml");
+  expect(hookFiles).toContain(".vite-hooks/pre-commit");
+  expect(scripts.length).toBeGreaterThan(1);
+  expect(settingLines).toEqual([]);
 });
 
 test("the settings are the workspace file's own: the user's pnpm config and pnpm_config_* variables do not reach them", () => {
   const checkout = checkoutWith(catalogOnly);
   vi.stubEnv("XDG_CONFIG_HOME", userConfigWith(agePolicy));
   vi.stubEnv("pnpm_config_minimum_release_age_exclude", "solid-js");
+  vi.stubEnv("pnpm_config_trust_lockfile", "true");
 
   expect(readPnpmSettings(checkout)).toEqual({
     catalog: { "@solidjs/web": "2.0.0-rc.21", "solid-js": "2.0.0-rc.21" },
@@ -54,6 +115,9 @@ test("the settings are the workspace file's own: the user's pnpm config and pnpm
     minimumReleaseAge: undefined,
     minimumReleaseAgeStrict: false,
     minimumReleaseAgeExclude: [],
+    trustLockfile: false,
+    ignorePnpmfile: false,
+    configDependencies: {},
     approvedSkills: {},
   });
   vi.stubEnv("XDG_CONFIG_HOME", userConfigWith([]));

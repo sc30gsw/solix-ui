@@ -6,6 +6,7 @@ import { expect, test } from "vite-plus/test";
 import type * as ColorSchemeScript from "#/src/color-scheme-script.tsx";
 import { builtNamed, dist, library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const { colorSchemeScriptText } = (await import(
   join(dist, "color-scheme-script.jsx")
@@ -93,8 +94,9 @@ function runScript(drawn: Page, before = ""): Run {
   };
 }
 
-test("the pre-paint script sets data-color-scheme on <html> to the forced scheme, else to the stored scheme, else, and when the storage throws, to the default, with auto resolved by prefers-color-scheme, and reads the storage key it is given, for generated pages", () => {
-  fc.assert(
+test("the pre-paint script sets data-color-scheme on <html> to the forced scheme, else to the stored scheme, else, and when the storage throws, to the default, with auto resolved by prefers-color-scheme, and reads the storage key it is given, for generated pages", async (context) => {
+  await assertProperty(
+    context,
     fc.property(page, (drawn) => {
       const { attributes, keysRead } = runScript(drawn);
 
@@ -107,10 +109,11 @@ test("the pre-paint script sets data-color-scheme on <html> to the forced scheme
   );
 });
 
-test("the pre-paint script leaves no global behind, and runs on a page whose own script declared every one-letter name before it", () => {
+test("the pre-paint script leaves no global behind, and runs on a page whose own script declared every one-letter name before it", async (context) => {
   const declared = `let ${"abcdefghijklmnopqrstuvwxyz".split("").join(",")};`;
 
-  fc.assert(
+  await assertProperty(
+    context,
     fc.property(page, (drawn) => {
       const alone = runScript(drawn);
       const beside = runScript(drawn, declared);
@@ -122,8 +125,9 @@ test("the pre-paint script leaves no global behind, and runs on a page whose own
   );
 });
 
-test("the pre-paint script never holds the text that would end its <script> element", () => {
-  fc.assert(
+test("the pre-paint script never holds the text that would end its <script> element", async (context) => {
+  await assertProperty(
+    context,
     fc.property(page, (drawn) => {
       const text = colorSchemeScriptText(drawn);
 
@@ -224,9 +228,10 @@ test("the library exports the name of the attribute that carries the scheme", ()
   expect(library.colorSchemeAttribute).toBe(ownerAttribute);
 });
 
-test("isColorScheme is true for light, dark and auto, and false for any other value", () => {
+test("isColorScheme is true for light, dark and auto, and false for any other value", async (context) => {
   for (const scheme of ownerSchemes) expect(library.isColorScheme(scheme)).toBe(true);
-  fc.assert(
+  await assertProperty(
+    context,
     fc.property(
       fc.anything().filter((value) => !anOwnerScheme.includes(value)),
       (value) => {

@@ -7,6 +7,7 @@ import type * as Headless from "#/src/headless.ts";
 import type * as Parts from "#/src/parts.ts";
 import { dist } from "#/tests/built-library.ts";
 import { classesOf, declarationsIn, elementsOf, valuesOf } from "#/tests/markup.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const { bindSlot, createBehaviour, tabs } = (await import(
   join(dist, "headless.js")
@@ -90,8 +91,9 @@ function declared(style: unknown): Record<string, string> {
     : { ...(style as Record<string, string> | undefined) };
 }
 
-test("bindSlot gives the behaviour only attributes, the consumer's over the component's, and merges what it returns in one order: each event reaches the consumer's handler, then the component's, then the behaviour's, until one prevents its default; refs run in that order; the id is the first of them given; the class is ours alone; a declaration of the behaviour's style gives way to ours", () => {
-  fc.assert(
+test("bindSlot gives the behaviour only attributes, the consumer's over the component's, and merges what it returns in one order: each event reaches the consumer's handler, then the component's, then the behaviour's, until one prevents its default; refs run in that order; the id is the first of them given; the class is ours alone; a declaration of the behaviour's style gives way to ours", async (context) => {
+  await assertProperty(
+    context,
     fc.property(drawn, drawn, drawn, (consumer, component, behaviour) => {
       const calls: string[] = [];
       const given = { consumer, component, behaviour };
@@ -219,8 +221,9 @@ function Probe(props: ProbeProps) {
   );
 }
 
-test("bound to the SDK's tabs slots, each part keeps exactly our classes and our style, takes the SDK's role, takes our id where we give one and the SDK's where we do not, with the panel labelled by whichever the tab has, and a click reaches the component's handler and then selects through the SDK unless the component prevented its default or the tab is disabled", () => {
-  fc.assert(
+test("bound to the SDK's tabs slots, each part keeps exactly our classes and our style, takes the SDK's role, takes our id where we give one and the SDK's where we do not, with the panel labelled by whichever the tab has, and a click reaches the component's handler and then selects through the SDK unless the component prevented its default or the tab is disabled", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.record({
         class: fc.option(word, { nil: undefined }),

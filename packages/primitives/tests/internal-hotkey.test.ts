@@ -10,6 +10,7 @@ import {
   runHotkeys,
 } from "#/src/internal-hotkey.ts";
 import type { HotkeyItem } from "#/src/types.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 type Modifiers = { alt: boolean; ctrl: boolean; meta: boolean; shift: boolean };
 type Key = { names: readonly string[]; key: string; code: string };
@@ -77,8 +78,9 @@ function hotkeyOf(pressed: Modifiers, name: string, shuffle: number): string {
   return rotated.join("+");
 }
 
-test("a hotkey written with any casing, alias or order of its parts matches exactly the key it names with exactly its modifiers", () => {
-  fc.assert(
+test("a hotkey written with any casing, alias or order of its parts matches exactly the key it names with exactly its modifiers", async (context) => {
+  await assertProperty(
+    context,
     fc.property(modifiers, writtenKey, casing, fc.nat(), (pressed, [key, name], cased, shuffle) => {
       const hotkey = parseHotkey(cased(hotkeyOf(pressed, name, shuffle)));
 
@@ -93,8 +95,9 @@ test("a hotkey written with any casing, alias or order of its parts matches exac
   );
 });
 
-test("a hotkey matches no other key", () => {
-  fc.assert(
+test("a hotkey matches no other key", async (context) => {
+  await assertProperty(
+    context,
     fc.property(modifiers, writtenKey, fc.constantFrom(...keys), (pressed, [key, name], other) => {
       fc.pre(other !== key);
       const hotkey = parseHotkey(hotkeyOf(pressed, name, 0));
@@ -105,8 +108,9 @@ test("a hotkey matches no other key", () => {
   );
 });
 
-test("mod matches Ctrl, Meta or both, and nothing without either", () => {
-  fc.assert(
+test("mod matches Ctrl, Meta or both, and nothing without either", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.record({ alt: fc.boolean(), shift: fc.boolean() }),
       fc.boolean(),
@@ -124,8 +128,9 @@ test("mod matches Ctrl, Meta or both, and nothing without either", () => {
   );
 });
 
-test("with physical keys, a letter or digit matches its code whatever character the layout gives, and a digit does not match the numpad", () => {
-  fc.assert(
+test("with physical keys, a letter or digit matches its code whatever character the layout gives, and a digit does not match the numpad", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       modifiers,
       fc.constantFrom("a", "q", "z", "0", "7"),
@@ -145,8 +150,9 @@ test("with physical keys, a letter or digit matches its code whatever character 
   );
 });
 
-test("parsing reads the hotkey case-insensitively, and a hotkey with no key or two keys never matches", () => {
-  fc.assert(
+test("parsing reads the hotkey case-insensitively, and a hotkey with no key or two keys never matches", async (context) => {
+  await assertProperty(
+    context,
     fc.property(fc.string(), modifiers, writtenKey, (text, pressed, [key]) => {
       expect(parseHotkey(text.toUpperCase())).toEqual(parseHotkey(text.toLowerCase()));
       expect(matchesHotkey(parseHotkey(hotkeyOf(pressed, "", 0)), chord(key, pressed), false)).toBe(
@@ -180,8 +186,9 @@ test("names and codes reduce to one spelling: a space, the plus sign and the arr
   ]);
 });
 
-test("a key pressed while an input method composes text is composing, by the standard flag or the legacy key code 229", () => {
-  fc.assert(
+test("a key pressed while an input method composes text is composing, by the standard flag or the legacy key code 229", async (context) => {
+  await assertProperty(
+    context,
     fc.property(fc.boolean(), fc.integer({ min: 0, max: 300 }), (composing, keyCode) => {
       expect(isComposing({ isComposing: composing, keyCode })).toBe(composing || keyCode === 229);
     }),

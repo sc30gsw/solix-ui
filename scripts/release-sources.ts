@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  exclusionsIn,
   prereleasePinsOnlyNamedBy,
   type HeldBack,
   heldBackFile,
@@ -10,7 +9,7 @@ import {
   type ReleasePolicy,
 } from "#/scripts/newest-releases.ts";
 import { type PnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
-import { manifestAt, manifestPaths, repositoryRoot } from "#/scripts/repository.ts";
+import { manifestAt, manifestPaths, repositoryRoot, unique } from "#/scripts/repository.ts";
 
 const registry = "https://registry.npmjs.org";
 const nodeIndex = "https://nodejs.org/dist/index.json";
@@ -19,10 +18,7 @@ export function releasePolicy(settings: PnpmSettings): ReleasePolicy {
   if (settings.minimumReleaseAge === undefined) {
     throw new Error(`${workspaceFile}: set minimumReleaseAge.`);
   }
-  return {
-    minimumReleaseAgeMinutes: settings.minimumReleaseAge,
-    excluded: exclusionsIn(settings.minimumReleaseAgeExclude),
-  };
+  return { minimumReleaseAgeMinutes: settings.minimumReleaseAge };
 }
 
 export const storybookAppManifest = "apps/storybook/package.json";
@@ -52,7 +48,7 @@ export async function registryDocuments(
 ): Promise<Record<string, RegistryDocument>> {
   return Object.fromEntries(
     await Promise.all(
-      [...new Set(names)].map(async (name) => [
+      unique(names).map(async (name) => [
         name,
         (await fetched(`${registry}/${name.replace("/", "%2f")}`)) as RegistryDocument,
       ]),

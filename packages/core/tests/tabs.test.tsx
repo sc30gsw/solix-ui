@@ -3,12 +3,14 @@ import fc from "fast-check";
 import { expect, test } from "vite-plus/test";
 import { library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const generatedRuns = 200;
 const value = fc.stringMatching(/^[a-z]{1,6}$/);
 
-test("on the server, a tab carries data-active exactly when its aria-selected is true, for generated tabs and a generated value, controlled or not", () => {
-  fc.assert(
+test("on the server, a tab carries data-active exactly when its aria-selected is true, for generated tabs and a generated value, controlled or not", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.uniqueArray(fc.record({ value, disabled: fc.boolean() }), {
         minLength: 1,

@@ -4,6 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { createSet } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 function setOf(values?: string[]) {
   return mount(() => {
@@ -160,8 +161,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of mutations on any instance it showed, and flushes, it agrees with a model of the members and shows a new set once per tick that changed it", () => {
-  fc.assert(
+test("for every generated sequence of mutations on any instance it showed, and flushes, it agrees with a model of the members and shows a new set once per tick that changed it", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.uniqueArray(member, { maxLength: 3 }),
       fc.commands(commands, { maxCommands: 30, size: "medium" }),

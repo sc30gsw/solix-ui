@@ -13,6 +13,16 @@ const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
 const storybookConfigDirectory = join(import.meta.dirname, "apps/storybook/.storybook");
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
+const propertyRunner = "tests/support/properties.ts";
+const fastCheckRunners = [
+  "assert",
+  "check",
+  "configureGlobal",
+  "installGlobalPlugin",
+  "sample",
+  "statistics",
+];
+const runPropertiesThroughTheWrapper = `Run a property with assertProperty from ${propertyRunner}, which gives it the time limit of the test that runs it and makes a failure report its seed, path and counterexample.`;
 
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
@@ -46,8 +56,32 @@ export default defineConfig({
       "import/no-default-export": "error",
       "import/no-duplicates": "error",
       "unicorn/no-array-for-each": "error",
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "fast-check",
+              importNames: fastCheckRunners,
+              message: runPropertiesThroughTheWrapper,
+            },
+          ],
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        ...fastCheckRunners.map((property) => ({
+          object: "fc",
+          property,
+          message: runPropertiesThroughTheWrapper,
+        })),
+      ],
     },
     overrides: [
+      {
+        files: [propertyRunner],
+        rules: { "no-restricted-imports": "off", "no-restricted-properties": "off" },
+      },
       {
         files: ["scripts/**", "packages/*/build.mjs"],
         rules: { "no-console": "off" },
@@ -84,7 +118,7 @@ export default defineConfig({
             "apps/*/tests/**/*.test.{ts,tsx}",
           ],
           exclude: ["**/node_modules/**", browserTests, ...ruleFixtures],
-          globalSetup: ["tests/support/global-setup.ts"],
+          globalSetup: ["tests/support/git-free-environment.ts", "tests/support/global-setup.ts"],
         },
       },
       {

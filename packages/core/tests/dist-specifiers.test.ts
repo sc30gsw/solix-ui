@@ -15,6 +15,7 @@ import {
 import { subpathPattern, subpathPatternTarget, subpathPrefix } from "../../../scripts/subpath.ts";
 import { descendants, moduleSpecifierOf, parseText, ts } from "../../../scripts/syntax.ts";
 import { inTemporaryTree } from "../../../tests/support/temporary-tree.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const generatedLayouts = 50;
 const manifest = JSON.stringify({
@@ -84,8 +85,9 @@ const generatedPackage = outputExtensions.chain((extensions) =>
   }),
 );
 
-test(`for generated layouts, the build rewrites every ${subpathPrefix} specifier in dist to a relative one that reaches the output of the file the original reached`, async () => {
-  await fc.assert(
+test(`for generated layouts, the build rewrites every ${subpathPrefix} specifier in dist to a relative one that reaches the output of the file the original reached`, async (context) => {
+  await assertProperty(
+    context,
     fc.asyncProperty(generatedPackage, async (generated) => {
       const { extensions, sourceDirectory, outputDirectory, files, loads } = generated;
       const sources = files.map((file, index): [string, string] => {

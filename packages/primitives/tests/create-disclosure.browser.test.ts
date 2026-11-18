@@ -4,6 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { createDisclosure, type DisclosureHandlers } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 function recording() {
   const calls: string[] = [];
@@ -181,8 +182,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of commands and flushes, it agrees with a model of open and closed and its callbacks", () => {
-  fc.assert(
+test("for every generated sequence of commands and flushes, it agrees with a model of open and closed and its callbacks", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.boolean(),
       fc.commands(commands, { maxCommands: 30, size: "medium" }),

@@ -11,6 +11,7 @@ import {
   stubbedScroll,
   tallPage,
 } from "#/tests/support/scroll.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -57,8 +58,9 @@ function scrollTo(y: number): fc.AsyncCommand<Model, Real> {
   };
 }
 
-test("for every generated sequence of scroll positions, it agrees with a model of the last move", async () => {
-  await fc.assert(
+test("for every generated sequence of scroll positions, it agrees with a model of the last move", async (context) => {
+  await assertProperty(
+    context,
     fc.asyncProperty(
       onScrollGrid(12),
       fc.commands([onScrollGrid(12).map(scrollTo)], { maxCommands: 25, size: "medium" }),

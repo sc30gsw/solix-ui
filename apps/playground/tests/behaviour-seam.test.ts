@@ -30,6 +30,7 @@ import {
   tabNamed,
   tabNames,
 } from "#/tests/support/tabs.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const url = inject("playgroundUrl");
 const { inbox, drafts, locked } = tabNames.controlled;
@@ -238,11 +239,12 @@ inEveryEngine((browser) => {
       }
     });
 
-    test("for generated tab values under a root id, every tab's aria-controls names exactly one element, its panel, and every panel's aria-labelledby names exactly one element, its tab", async () => {
+    test("for generated tab values under a root id, every tab's aria-controls names exactly one element, its panel, and every panel's aria-labelledby names exactly one element, its tab", async (context) => {
       const { page } = opened;
       const values = page.getByRole("textbox", { name: "Tab values" });
 
-      await fc.assert(
+      await assertProperty(
+        context,
         fc.asyncProperty(tabValues, async (drawn) => {
           await values.fill(JSON.stringify(drawn));
 
