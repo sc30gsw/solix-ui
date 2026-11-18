@@ -1,7 +1,12 @@
 import fc from "fast-check";
 import type { Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
-import { inEveryEngine } from "#/tests/support/playground.ts";
+import {
+  hydrated,
+  inEveryEngine,
+  openedAndHydrated,
+  pageDidNotBecomeReady,
+} from "#/tests/support/playground.ts";
 import {
   activeAndSelected,
   clickMissedItsTab,
@@ -119,6 +124,40 @@ const steps = [
   fc.constantFrom(...keys).map((key) => new PressKey(key)),
 ];
 
+function everySequenceAgreesOn(page: Page) {
+  return fc.asyncProperty(
+    fc.constantFrom(...tabLists),
+    fc.commands(steps, { maxCommands: longestSequence }),
+    async (list, sequence) => {
+      await openedAndHydrated(page, url);
+      const model = atTheStartOf(list);
+
+      await expectAgreement(model, { page });
+      await fc.asyncModelRun(() => ({ model, real: { page } }), sequence);
+    },
+  );
+}
+
+const lateBy = 2_000;
+const lateClientScripts: Record<string, string> = {
+  "waits before it hydrates the page": `await new Promise((resolve) => setTimeout(resolve, ${lateBy}));`,
+  "keeps the page busy before it hydrates it": `for (const end = Date.now() + ${lateBy}; Date.now() < end; );`,
+};
+const neverHydrates = "await new Promise(() => {});";
+const waitForAPageThatNeverHydrates = 1_000;
+
+async function withItsClientScriptAfter(page: Page, delay: string): Promise<void> {
+  await page.route("**/*.js", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: `${delay}\n${await response.text()}` });
+  });
+}
+
+const firstRunsThatFailedInCi = [
+  { seed: -19_020_418, path: "0" },
+  { seed: -2_077_914_389, path: "0" },
+];
+
 inEveryEngine((browser) => {
   test(
     "for every generated sequence of clicks and keys on a list of tabs, the selected tab, the focused tab, the panel shown and the one tab stop agree with a model of that list, and the selected tab alone carries data-active",
@@ -126,29 +165,40 @@ inEveryEngine((browser) => {
     async (context) => {
       const page = await browser().newPage();
 
-      await assertProperty(
-        context,
-        fc.asyncProperty(
-          fc.constantFrom(...tabLists),
-          fc.commands(steps, { maxCommands: longestSequence }),
-          async (list, sequence) => {
-            await page.goto(url, { waitUntil: "networkidle" });
-            const model = atTheStartOf(list);
-
-            await expectAgreement(model, { page });
-            await fc.asyncModelRun(() => ({ model, real: { page } }), sequence);
-          },
-        ),
-        { numRuns: generatedRuns },
-      );
+      await assertProperty(context, everySequenceAgreesOn(page), { numRuns: generatedRuns });
 
       await page.close();
     },
   );
 
+  for (const [how, delay] of Object.entries(lateClientScripts)) {
+    test(`on a page whose client script ${how}, the sequences that failed in CI as the first run in a cold engine agree with the model`, async (context) => {
+      const page = await browser().newPage();
+      await withItsClientScriptAfter(page, delay);
+
+      for (const { seed, path } of firstRunsThatFailedInCi) {
+        await assertProperty(context, everySequenceAgreesOn(page), { seed, path, numRuns: 1 });
+      }
+
+      await page.close();
+    });
+  }
+
+  test("on a page whose client script never hydrates it, the drive fails by saying that the page did not become ready", async () => {
+    const page = await browser().newPage();
+    await withItsClientScriptAfter(page, neverHydrates);
+    await page.goto(url, { waitUntil: "networkidle" });
+
+    await expect(hydrated(page, { timeout: waitForAPageThatNeverHydrates })).rejects.toThrow(
+      pageDidNotBecomeReady,
+    );
+
+    await page.close();
+  });
+
   test("a click on a tab begins only once the page has stopped scrolling, also when the scrolling pauses for fewer frames than the drive waits", async () => {
     const page = await browser().newPage();
-    await page.goto(url, { waitUntil: "networkidle" });
+    await openedAndHydrated(page, url);
     const list = theOptionalList();
     const model = atTheStartOf(list);
     await clickOn(list, files).run(model, { page });
@@ -192,7 +242,7 @@ inEveryEngine((browser) => {
 
   test("a click that does not reach its tab, because the page moves under the pointer, fails by saying so and not as a disagreement with the model", async () => {
     const page = await browser().newPage();
-    await page.goto(url, { waitUntil: "networkidle" });
+    await openedAndHydrated(page, url);
     const list = theOptionalList();
     const model = atTheStartOf(list);
     await clickOn(list, files).run(model, { page });

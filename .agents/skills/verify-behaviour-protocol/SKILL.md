@@ -48,7 +48,7 @@ Last confirmed against commit `d67b2cc`. Run `git diff d67b2cc -- packages/core/
 vp test apps/playground/tests/roving-list-model.test.ts apps/playground/tests/tabs-protocol.test.ts apps/playground/tests/tabs.test.ts
 ```
 
-It takes about thirty seconds with one engine installed. With `CI` set, all three engines must be installed.
+It takes about thirty-five seconds with one engine installed. With `CI` set, all three engines must be installed.
 
 ## The tool and why
 
@@ -56,7 +56,7 @@ No model checker runs on a Solid component or on the SDK, so this is not a proof
 
 - `roving-list-model.test.ts` runs in Node. It checks every row of the hand-written keyboard table against the model, so the model and the pattern as a person wrote it down agree before a browser opens.
 - The single steps in `tabs.test.ts` take every state the model can reach in each list and every key, bring the page to that state by the shortest way the model knows, press the key, and compare the page with the model. This covers every key from every state, once.
-- `tabs-protocol.test.ts` uses fast-check's model-based commands. It generates sequences of clicks and keys, runs each against the built app from a fresh page load, and compares the page with the model after every action. A failing sequence is shrunk to the shortest that still fails. An arrow key the list leaves to the page scrolls the page, so `clickTab` in `apps/playground/tests/support/tabs.ts` begins a click only once the page has not scrolled for `stillFrames` animation frames, and fails with `the click did not reach the tab` when no click event lands on the tab.
+- `tabs-protocol.test.ts` uses fast-check's model-based commands. It generates sequences of clicks and keys, runs each against the built app from a fresh page load, and compares the page with the model after every action. A failing sequence is shrunk to the shortest that still fails. Each run opens the page through `openedAndHydrated` in `apps/playground/tests/support/playground.ts`, which waits until the client script has claimed every hydration probe of the server's markup, so no step acts on the server's markup before its handlers exist and no read waits behind the script; a page that does not get there fails with `the page did not become ready`. Two pages whose client script hydrates late, one that waits and one that keeps the page busy, run the two sequences that failed in CI as the first run in a cold engine, and a page that never hydrates must fail so. An arrow key the list leaves to the page scrolls the page, so `clickTab` in `apps/playground/tests/support/tabs.ts` begins a click only once the page has not scrolled for `stillFrames` animation frames, and fails with `the click did not reach the tab` when no click event lands on the tab.
 
 ## What a pass covers
 
@@ -81,6 +81,7 @@ No model checker runs on a Solid component or on the SDK, so this is not a proof
 - **A single step fails.** Its name is the list, the state, the key and what the model expects, such as `in Vertical, with Gamma selected and focus on Gamma, after ArrowDown Alpha is selected and focus is on Alpha`. Replay it by hand in the playground. If the page is right and the model wrong, fix the model and say what was wrong. If the page is wrong, it is a bug in the component or a change in the SDK; report it in those words and do not loosen the model.
 - **The generated check fails after `Counterexample`.** It prints the list and the shortest sequence, such as `click the enabled tab at position 1, counted round the list, press ArrowLeft`, and the first observation that disagreed. Treat it as a single step that the single steps missed, and say which state they do not reach.
 - **`the click did not reach the tab`.** The press went somewhere else, and the message lists the events the page saw with how far it was scrolled at each. The component was not asked to select anything, so this is a fault of the drive, not of `Tabs`: look for what moved the page after `clickTab` found it still.
+- **`the page did not become ready`.** The client script did not claim every hydration probe within Playwright's own wait, so the drive never acted. Look for a script that failed to load or threw while it hydrated; the console of the page says which.
 - **A timeout in `page.goto` or a click.** The server did not start, or the section no longer renders what `tabsSetups` describes.
 - To replay one generated failure, add the printed `seed` and `path` to the parameters passed to `assertProperty`, run again, and remove them afterwards.
 
