@@ -1,6 +1,12 @@
 import { globSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { manifestAt, manifestPaths, repositoryRoot, scriptFilesIn } from "#/scripts/repository.ts";
+import {
+  manifestAt,
+  manifestPaths,
+  repositoryRoot,
+  scriptFilesIn,
+  scriptFilesInDotDirectoriesIn,
+} from "#/scripts/repository.ts";
 
 export { workspaceFile } from "#/scripts/pnpm-settings.ts";
 export {
@@ -23,6 +29,8 @@ export const primitivesDirectory = join(repositoryRoot, "packages/primitives");
 const peerDependencyThatMarksALibrary = "solid-js";
 
 export const scriptFiles = scriptFilesIn();
+
+export const scriptFilesInDotDirectories = scriptFilesInDotDirectoriesIn();
 
 export const packages = manifestPaths().map((path) => ({
   path,

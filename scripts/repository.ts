@@ -18,11 +18,14 @@ export function manifestPaths(root: string = repositoryRoot): string[] {
   return globSync("**/package.json", { cwd: root, exclude: outsideGeneratedOrInstalled });
 }
 
+const scriptFile = "*.{ts,tsx,mjs,cjs,js}";
+
 export function scriptFilesIn(root: string = repositoryRoot): string[] {
-  return globSync("**/*.{ts,tsx,mjs,cjs,js}", {
-    cwd: root,
-    exclude: outsideGeneratedOrInstalled,
-  });
+  return globSync(`**/${scriptFile}`, { cwd: root, exclude: outsideGeneratedOrInstalled });
+}
+
+export function scriptFilesInDotDirectoriesIn(root: string = repositoryRoot): string[] {
+  return globSync(`**/.*/**/${scriptFile}`, { cwd: root, exclude: outsideGeneratedOrInstalled });
 }
 
 export type Installed = { name: string; version: string; path?: string };

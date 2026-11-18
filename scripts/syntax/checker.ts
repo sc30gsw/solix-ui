@@ -94,7 +94,11 @@ export function declarationsOf(program: Program, node: ts.Node): ts.Node[] {
   ];
 }
 
-function propertyDeclarations(program: Program, owner: ts.Node, names: string[]): ts.Node[] {
+export function propertyDeclarations(
+  program: Program,
+  owner: ts.Node,
+  names: readonly string[],
+): ts.Node[] {
   const { checker } = program;
   const type = checker.getTypeAtLocation(owner);
   const present = type && checker.getNonNullableType(type);
