@@ -19,6 +19,8 @@ export const schemeTexts = {
   shownInDark: "Shown in the dark scheme",
   shownInLight: "Shown in the light scheme",
   forcedChosen: "Chosen in the forced section",
+  forcedShownInDark: "Inside the forced section, shown in dark",
+  forcedShownInLight: "Inside the forced section, shown in light",
   pageInput: "Input in the page's scheme",
   forcedInput: "Input in the forced dark scheme",
 } as const;

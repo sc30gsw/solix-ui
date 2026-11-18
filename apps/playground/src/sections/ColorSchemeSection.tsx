@@ -34,6 +34,12 @@ function ForcedScheme() {
       <SolixProvider forceColorScheme="dark" getRootElement={() => section}>
         <ChosenScheme label={schemeTexts.forcedChosen} />
         <ForcedControls />
+        <Box lightHidden display="flex">
+          {schemeTexts.forcedShownInDark}
+        </Box>
+        <Box darkHidden display="flex">
+          {schemeTexts.forcedShownInLight}
+        </Box>
         <TextInput aria-label={schemeTexts.forcedInput} />
       </SolixProvider>
     </section>

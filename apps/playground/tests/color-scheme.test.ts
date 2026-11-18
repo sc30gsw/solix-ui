@@ -1,6 +1,8 @@
+import { join } from "node:path";
 import type { Browser, BrowserContextOptions, Page } from "playwright";
 import { describe, expect, inject, test } from "vite-plus/test";
 import { schemeValues, tokenValues } from "../../../scripts/tokens";
+import { stylePropClass, visibilityClass } from "../../../packages/core/src/style-prop-table";
 import { elementsOf, valuesOf } from "../../../packages/core/tests/markup";
 import { policyHeader } from "#/src/middleware.ts";
 import { pageColorScheme } from "#/src/page-color-scheme.ts";
@@ -20,6 +22,30 @@ const schemes = ["light", "dark"] as const;
 type Scheme = (typeof schemes)[number];
 const tokens = tokenValues();
 const clientScript = "**/assets/**/*.js";
+const builtStylesheet = join(import.meta.dirname, "../../../packages/core/dist/styles.css");
+const attributeValues = [undefined, "light", "dark", "auto"] as const;
+type AttributeValue = (typeof attributeValues)[number];
+const displayClass = stylePropClass("display", "base");
+const shownAs = "flex";
+
+function schemeUnder(outer: AttributeValue, inner: AttributeValue, system: Scheme): Scheme {
+  const nearest = inner ?? outer ?? "light";
+  return nearest === "auto" ? system : nearest;
+}
+
+function withScheme(value: AttributeValue): string {
+  return value === undefined ? "" : ` ${ownerAttribute}="${value}"`;
+}
+
+function nestedSchemes(outer: AttributeValue): string {
+  const box = (hides: Scheme, inner: AttributeValue) =>
+    `<div data-hides="${hides}" data-inner="${inner}" class="${displayClass} ${visibilityClass(`${hides}Hidden`, true)}" style="--${displayClass}:${shownAs}">box</div>`;
+  const sections = attributeValues.map(
+    (inner) =>
+      `<section${withScheme(inner)}>${schemes.map((hides) => box(hides, inner)).join("")}</section>`,
+  );
+  return `<!doctype html><html${withScheme(outer)}><head></head><body>${sections.join("")}</body></html>`;
+}
 
 function written(token: string, scheme: Scheme): string {
   const values = schemeValues(tokens[token] ?? "");
@@ -238,6 +264,67 @@ inEveryEngine((browser) => {
       await context.close();
     });
 
+    test("with the built stylesheet alone, lightHidden and darkHidden follow the nearest data-color-scheme, the light scheme where no ancestor has one, and an element that is shown keeps the display a style prop gives it", async () => {
+      const context = await browser().newContext({ colorScheme: system });
+      const page = await context.newPage();
+      const wrong: string[] = [];
+      for (const outer of attributeValues) {
+        await page.setContent(nestedSchemes(outer));
+        await page.addStyleTag({ path: builtStylesheet });
+        const found = await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>("[data-hides]")].map((box) => ({
+            hides: box.dataset.hides,
+            inner: box.dataset.inner,
+            display: getComputedStyle(box).display,
+          })),
+        );
+        for (const inner of attributeValues) {
+          for (const hides of schemes) {
+            const display = found.find(
+              (box) => box.hides === hides && box.inner === String(inner),
+            )?.display;
+            const expected = schemeUnder(outer, inner, system) === hides ? "none" : shownAs;
+            if (display !== expected) {
+              wrong.push(
+                `${hides}Hidden inside ${inner} inside ${outer}: display is ${display}, not ${expected}`,
+              );
+            }
+          }
+        }
+      }
+
+      expect(wrong).toEqual([]);
+      await context.close();
+    });
+
+    test("with the built stylesheet alone, a consumer's override of a colour token on :root is reset inside a nested scheme, and reaches it once the consumer sets it on [data-color-scheme] too", async () => {
+      const context = await browser().newContext({ colorScheme: system });
+      const page = await context.newPage();
+      const token = "--solix-color-primary";
+      const overridden = "rgb(0, 128, 0)";
+      const text = (id: string) => `<p id="${id}" style="color:var(${token})">text</p>`;
+      const pageWith = (selector: string) =>
+        `<!doctype html><html${withScheme(system)}><head><style>${selector}{${token}:${overridden}}</style></head><body>${text("outer")}<section${withScheme(other)}>${text("inner")}</section></body></html>`;
+      const colours = async (selector: string) => {
+        await page.setContent(pageWith(selector));
+        await page.addStyleTag({ path: builtStylesheet });
+        return {
+          outer: await computed(page.locator("#outer"), "color"),
+          inner: await computed(page.locator("#inner"), "color"),
+        };
+      };
+
+      expect(await colours(":root")).toEqual({
+        outer: overridden,
+        inner: await colourOf(page, written(token, other)),
+      });
+      expect(await colours(`:root, [${ownerAttribute}]`)).toEqual({
+        outer: overridden,
+        inner: overridden,
+      });
+      await context.close();
+    });
+
     test("a provider given forceColorScheme and getRootElement writes the forced scheme on its own element, which its controls neither change nor store, and leaves <html> to the page's provider", async () => {
       const { page, close } = await open(browser(), system);
       await settledOn(page, system);
@@ -248,6 +335,11 @@ inEveryEngine((browser) => {
         .poll(() => forced.evaluate((node, name) => node.getAttribute(name), ownerAttribute))
         .toBe("dark");
       expect(await chosen(page, schemeTexts.forcedChosen)).toBe("dark");
+      expect(
+        await computed(forced.getByText(schemeTexts.forcedShownInDark), "display"),
+        "lightHidden follows the section's dark scheme, not the page's, and keeps its display",
+      ).toBe("flex");
+      expect(await forced.getByText(schemeTexts.forcedShownInLight).isVisible()).toBe(false);
       expect(await computed(input, "background-color")).toBe(
         await colourOf(page, written("--solix-color-body", "dark")),
       );

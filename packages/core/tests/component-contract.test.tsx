@@ -9,7 +9,6 @@ import type * as Library from "#/src/index.ts";
 import type { PolymorphicProps } from "#/src/parts.ts";
 import {
   baseKey,
-  breakpoints,
   canonicalOf,
   layerOrder,
   libraryStyleMark,
@@ -24,10 +23,7 @@ import {
   variableNames,
   variableRow,
   variablesOf,
-  colorSchemeVisibilityClass,
-  colorSchemeVisibilityPropNames,
-  visibilityClass,
-  visibilityPropNames,
+  visibilityClasses,
 } from "#/src/style-prop-table.ts";
 import {
   classTokens,
@@ -104,10 +100,7 @@ const stylePropClasses = new Set([
   ...canonicalStylePropNames.flatMap((name) =>
     responsiveKeys.map((key) => stylePropClass(name, key)),
   ),
-  ...visibilityPropNames.flatMap((name) =>
-    breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
-  ),
-  ...colorSchemeVisibilityPropNames.map(colorSchemeVisibilityClass),
+  ...visibilityClasses,
 ]);
 
 function rootOf(name: string, html: string): Element {

@@ -29,10 +29,7 @@ import {
   variableNames,
   variableRow,
   variablesOf,
-  colorSchemeVisibilityClass,
-  colorSchemeVisibilityPropNames,
-  visibilityClass,
-  visibilityPropNames,
+  visibilityClasses,
 } from "#/src/style-prop-table.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 import {
@@ -71,10 +68,12 @@ const ownerColorSchemes: [scheme: string, colorScheme: string][] = [
 const ownerAttribute = "data-color-scheme";
 const whereSchemeIs = (scheme: string) => `[${ownerAttribute}="${scheme}"]`;
 const stylePropClass = `.${LIBRARY_CLASS_PREFIX}-`;
-const ownerSchemeHiding: [className: string, scheme: string][] = [
-  [`${LIBRARY_CLASS_PREFIX}-light-hidden`, "light"],
-  [`${LIBRARY_CLASS_PREFIX}-dark-hidden`, "dark"],
+const ownerSchemeHiding: [className: string, scheme: string, property: string][] = [
+  [`${LIBRARY_CLASS_PREFIX}-light-hidden`, "light", "--light-hidden"],
+  [`${LIBRARY_CLASS_PREFIX}-dark-hidden`, "dark", "--dark-hidden"],
 ];
+const ownerDefaultScheme = "light";
+const pageRoot = ":root";
 const stylePropCustomProperty = `--${LIBRARY_CLASS_PREFIX}-`;
 const builtStylePropTable = "style-prop-table.js";
 const boxSides = ["top", "right", "bottom", "left"];
@@ -604,11 +603,16 @@ test("each value of data-color-scheme sets color-scheme on its element, both sch
   expect(outside.filter((rule) => colorSchemeOf(rule).length > 0)).toEqual([]);
 });
 
-test("the colour-scheme layer holds every rule that names data-color-scheme, and no other layer holds one", () => {
+test("the colour-scheme layer holds every rule that names data-color-scheme, beside the defaults on :root and the classes of lightHidden and darkHidden, and no other layer holds one", () => {
   const { inside, outside } = colorSchemeLayerRules();
+  const others = [pageRoot, ...ownerSchemeHiding.map(([className]) => `.${className}`)];
 
   expect(inside.length).toBeGreaterThan(0);
-  expect(inside.filter(({ selector }) => !selector.includes(ownerAttribute))).toEqual([]);
+  expect(
+    inside.filter(
+      ({ selector }) => !selector.includes(ownerAttribute) && !others.includes(selector),
+    ),
+  ).toEqual([]);
   expect(outside.filter(({ selector }) => selector.includes(ownerAttribute))).toEqual([]);
 });
 
@@ -691,24 +695,40 @@ test("no light-dark() reaches the stylesheet: each colour token's default is its
   );
 });
 
-test("lightHidden and darkHidden hide the element inside an element whose data-color-scheme names that scheme, and inside auto while the operating system prefers it, in the colour-scheme layer, which ranks after every style prop", () => {
-  const written = colorSchemeLayerRules().inside.filter(({ selector }) => / \./.test(selector));
+test("lightHidden and darkHidden each read one inherited custom property in the colour-scheme layer, which ranks after every style prop: none where the scheme hides the element, set by :root for the light scheme, by data-color-scheme for its own, and by auto under each prefers-color-scheme, and elsewhere a value that leaves the display to the layers before", () => {
+  const { inside } = colorSchemeLayerRules();
+  const hidingIn = (scheme: string) =>
+    ownerSchemeHiding.map(
+      ([, hiddenIn, property]) => `${property}:${hiddenIn === scheme ? "none" : "initial"}`,
+    );
+  const hidingOf = ({ declarations }: PlacedRule) =>
+    declarations.filter((declaration) =>
+      ownerSchemeHiding.some(([, , property]) => declaration.startsWith(`${property}:`)),
+    );
+  const set = inside
+    .filter((rule) => hidingOf(rule).length > 0)
+    .map((rule) => ({ selector: rule.selector, media: rule.media, hiding: hidingOf(rule) }));
+  const read = inside
+    .filter(({ selector }) => selector.startsWith(stylePropClass))
+    .map(({ selector, media, declarations }) => ({ selector, media, declarations }));
 
-  expect(
-    written.map(({ selector, media, declarations }) => ({ selector, media, declarations })),
-  ).toEqual(
-    ownerSchemeHiding.flatMap(([className, scheme]) => [
+  expect(set).toEqual([
+    { selector: pageRoot, media: undefined, hiding: hidingIn(ownerDefaultScheme) },
+    ...(["light", "dark"] as const).flatMap((scheme) => [
+      { selector: whereSchemeIs(scheme), media: undefined, hiding: hidingIn(scheme) },
       {
-        selector: `${whereSchemeIs(scheme)} .${className}`,
-        media: undefined,
-        declarations: ["display:none"],
-      },
-      {
-        selector: `${whereSchemeIs("auto")} .${className}`,
+        selector: whereSchemeIs("auto"),
         media: `(prefers-color-scheme: ${scheme})`,
-        declarations: ["display:none"],
+        hiding: hidingIn(scheme),
       },
     ]),
+  ]);
+  expect(read).toEqual(
+    ownerSchemeHiding.map(([className, , property]) => ({
+      selector: `.${className}`,
+      media: undefined,
+      declarations: [`display:var(${property},revert-layer)`],
+    })),
   );
   expect(libraryLayers.indexOf(colorSchemeLayer)).toBeGreaterThan(
     libraryLayers.indexOf(STYLE_PROP_LAYER),
@@ -721,10 +741,7 @@ test("every variable is named apart from every other variable and every style-pr
       `${LIBRARY_CLASS_PREFIX}-${name}`,
       ...breakpoints.map((breakpoint) => `${LIBRARY_CLASS_PREFIX}-${name}-${breakpoint}`),
     ]),
-    ...visibilityPropNames.flatMap((name) =>
-      breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
-    ),
-    ...colorSchemeVisibilityPropNames.map(colorSchemeVisibilityClass),
+    ...visibilityClasses,
   ];
   const variableClasses = variableNames.flatMap((name) =>
     responsiveKeys.map((key) => variableClass(name, key)),

@@ -1,8 +1,4 @@
-import {
-  colorSchemeVisibilityClass,
-  colorSchemeVisibilityPropNames,
-  colorSchemeVisibilityTable,
-} from "#/src/style-prop-table.ts";
+import { hiddenInAScheme } from "#/src/style-prop-table.ts";
 
 export const colorSchemeAttribute = "data-color-scheme";
 
@@ -55,31 +51,30 @@ function declared(declarations: Declarations): string {
   return declarations.map(([property, value]) => `${property}:${value}`).join(";");
 }
 
-export function inScheme(
-  scheme: SolixComputedColorScheme,
-  rule: (selector: string) => string,
-): string[] {
+function hiding(scheme: SolixComputedColorScheme): Declarations {
+  return hiddenInAScheme.map(({ scheme: hiddenIn, property }) => [
+    property,
+    hiddenIn === scheme ? "none" : "initial",
+  ]);
+}
+
+export function inScheme(scheme: SolixComputedColorScheme, declarations: Declarations): string[] {
+  const body = `{${declared(declarations)}}`;
   return [
-    rule(where(scheme)),
-    `@media ${prefersColorScheme(scheme)}{${rule(where(systemColorScheme))}}`,
+    `${where(scheme)}${body}`,
+    `@media ${prefersColorScheme(scheme)}{${where(systemColorScheme)}${body}}`,
   ];
 }
 
 export function colorSchemeRules(tokens: TokensPerScheme): string {
   return [
+    `:root{${declared(hiding(defaultColorScheme))}}`,
     ...colorSchemes.map((scheme) => `${where(scheme)}{color-scheme:${cssColorSchemeOf[scheme]}}`),
-    ...computedColorSchemes.flatMap((scheme) => [
-      ...(tokens[scheme].length === 0
-        ? []
-        : inScheme(scheme, (selector) => `${selector}{${declared(tokens[scheme])}}`)),
-      ...colorSchemeVisibilityPropNames
-        .filter((name) => colorSchemeVisibilityTable[name].scheme === scheme)
-        .flatMap((name) =>
-          inScheme(
-            scheme,
-            (selector) => `${selector} .${colorSchemeVisibilityClass(name)}{display:none}`,
-          ),
-        ),
-    ]),
+    ...computedColorSchemes.flatMap((scheme) =>
+      inScheme(scheme, [...tokens[scheme], ...hiding(scheme)]),
+    ),
+    ...hiddenInAScheme.map(
+      ({ className, property }) => `.${className}{display:var(${property},revert-layer)}`,
+    ),
   ].join("\n");
 }
