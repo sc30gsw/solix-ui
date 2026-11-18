@@ -16,6 +16,7 @@ export {
   isElementAccessExpression,
   isExportAssignment,
   isExportDeclaration,
+  isExportSpecifier,
   isExpression,
   isFunctionDeclaration,
   isFunctionExpression,

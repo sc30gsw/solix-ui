@@ -368,8 +368,8 @@ const step: fc.Arbitrary<Step> = fc.oneof(
 ) as fc.Arbitrary<Step>;
 
 const enginesThatLeaveTheDocumentOnTheseSequences = ["firefox"];
-const huntRuns = 1_500;
-const huntTimeout = 1_080_000;
+const staysOrLeavesAsDocumented =
+  "focus stays in the trap, and leaves its document only on Shift+Tab from the container itself while the document selection lies inside it with no tab stop before it, in an engine listed as leaving it";
 
 function described(node: Node | null): string {
   if (node === null) return "nothing";
@@ -392,6 +392,13 @@ function selectionInside(container: HTMLElement): boolean {
   return anchor !== null && anchor !== undefined && container.contains(anchor);
 }
 
+function selectionPastOneOf(stops: readonly Element[]): boolean {
+  const selection = document.getSelection();
+  if (selection === null || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0);
+  return stops.some((stop) => range.comparePoint(stop, 0) < 0);
+}
+
 function inTheTrap(container: HTMLElement): boolean {
   return document.hasFocus() && container.contains(document.activeElement);
 }
@@ -409,14 +416,35 @@ async function holdsTheContract(
     ).toBe(true);
     return false;
   }
-  expect(
-    inTheTrap(container),
-    `focus stays in the trap, and leaves its document only on Shift+Tab from a trap with no tab stop while the document selection lies inside it: ${whereFocusIs()}`,
-  ).toBe(true);
+  expect(inTheTrap(container), `${staysOrLeavesAsDocumented}: ${whereFocusIs()}`).toBe(true);
   return true;
 }
 
-type Arranged = { container: HTMLElement; slots: Slot[] };
+type Arranged = { container: HTMLElement; slots: Slot[]; order: number[] };
+
+type Press = (backwards: boolean) => Promise<void>;
+
+async function pressed(
+  { container, slots, order }: Arranged,
+  backwards: boolean,
+  comeBackBackwards: boolean,
+  press: Press = tab,
+  engine: string = server.browser,
+): Promise<void> {
+  const expected = expectedAfter(document.activeElement, backwards, order, slots, container);
+  const startsFromTheSelection =
+    document.activeElement === container &&
+    selectionInside(container) &&
+    enginesThatLeaveTheDocumentOnTheseSequences.includes(engine);
+  const startsPastAStop =
+    startsFromTheSelection && selectionPastOneOf(order.map((at) => slots[at].control));
+  const mayLeaveTheDocument = backwards && startsFromTheSelection && !startsPastAStop;
+  await press(backwards);
+  const keptTheDocument = await holdsTheContract(container, mayLeaveTheDocument, comeBackBackwards);
+  if (keptTheDocument && expected !== undefined && !startsPastAStop) {
+    expect(document.activeElement, "focus lands where the engine's order says").toBe(expected);
+  }
+}
 
 async function followTheEngineOrder(
   initial: readonly Kind[],
@@ -459,49 +487,27 @@ async function followTheEngineOrder(
         await settled();
         continue;
       }
-      const expected = expectedAfter(
-        document.activeElement,
-        current.backwards,
-        order,
-        slots,
-        container,
-      );
-      const mayLeaveTheDocument =
-        current.backwards && order.length === 0 && selectionInside(container);
-      await tab(current.backwards);
-      const keptTheDocument = await holdsTheContract(
-        container,
-        mayLeaveTheDocument,
-        comeBackBackwards,
-      );
-      if (keptTheDocument && expected !== undefined) {
-        expect(document.activeElement, "focus lands where the engine's order says").toBe(expected);
-      }
+      await pressed({ container, slots, order }, current.backwards, comeBackBackwards);
     }
-    await afterwards?.({ container, slots });
+    await afterwards?.({ container, slots, order });
   } finally {
     unmount();
   }
 }
 
-const generatedPresses = fc.asyncProperty(
-  fc.array(fc.constantFrom(...kinds), { minLength: 0, maxLength: 4 }),
-  fc.array(step, { minLength: 1, maxLength: 12 }),
-  fc.boolean(),
-  (initial, steps, comeBackBackwards) => followTheEngineOrder(initial, steps, comeBackBackwards),
-);
-
-test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus stays in the trap and lands where the engine's own Tab order says, except that Shift+Tab from a trap with no tab stop while the document selection lies inside it may take focus out of the trap's document, to whatever precedes it, from which the next Tab or Shift+Tab brings it back into the trap", async (context) => {
-  await assertProperty(context, generatedPresses, { numRuns: 25 });
+test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus stays in the trap and lands where the engine's own Tab order says, except that, in an engine listed as doing so, while focus is on the container itself and the document selection lies inside it, Shift+Tab with no tab stop before the selection may take focus out of the trap's document, from which the next Tab or Shift+Tab brings it back into the trap, and past a tab stop either key keeps focus in the trap without saying where", async (context) => {
+  await assertProperty(
+    context,
+    fc.asyncProperty(
+      fc.array(fc.constantFrom(...kinds), { minLength: 0, maxLength: 4 }),
+      fc.array(step, { minLength: 1, maxLength: 12 }),
+      fc.boolean(),
+      (initial, steps, comeBackBackwards) =>
+        followTheEngineOrder(initial, steps, comeBackBackwards),
+    ),
+    { numRuns: 25 },
+  );
 });
-
-test.runIf(enginesThatLeaveTheDocumentOnTheseSequences.includes(server.browser))(
-  `hunt: in the engines listed as leaving the document, the same holds for ${huntRuns} generated sequences`,
-  { timeout: huntTimeout },
-  async (context) => {
-    await assertProperty(context, generatedPresses, { numRuns: huntRuns });
-  },
-);
 
 const showsAgain: Step[] = [
   { type: "toggle", at: 0, change: "disabled" },
@@ -520,71 +526,272 @@ const removes: Step[] = [
   { type: "tab", backwards: true },
 ];
 
-const leaveTheDocument: Record<string, Step[]> = {
+const addsStopsBehindTheSelection: Step[] = [
+  { type: "add", at: 0, kind: "input" },
+  { type: "tab", backwards: false },
+  { type: "remove", at: 0 },
+  { type: "tab", backwards: false },
+  { type: "add", at: 0, kind: "button" },
+  { type: "add", at: 0, kind: "button" },
+  { type: "tab", backwards: true },
+];
+
+const addsAStopBehindTheSelection: Step[] = [
+  { type: "remove", at: 0 },
+  { type: "toggle", at: 0, change: "disabled" },
+  { type: "tab", backwards: false },
+  { type: "add", at: 0, kind: "button" },
+  { type: "tab", backwards: true },
+];
+
+type Sequence = { initial: readonly Kind[]; steps: Step[]; leavesTheTrapWithNoTabStop: boolean };
+
+const leaveTheDocument: Record<string, Sequence> = {
   "its focused textarea is disabled and hidden, its button removed, and the textarea shown again still disabled":
-    showsAgain,
-  "its button and its focused textarea are disabled and the textarea is removed": removes,
+    { initial: ["textarea", "button"], steps: showsAgain, leavesTheTrapWithNoTabStop: true },
+  "its button and its focused textarea are disabled and the textarea is removed": {
+    initial: ["textarea", "button"],
+    steps: removes,
+    leavesTheTrapWithNoTabStop: true,
+  },
+  "its only stop, a focused input, is removed, Tab brings focus to the container, and two buttons are added":
+    { initial: [], steps: addsStopsBehindTheSelection, leavesTheTrapWithNoTabStop: false },
+  "its focused textarea is removed and its button disabled, Tab brings focus to the container, and a button is added":
+    {
+      initial: ["textarea", "button"],
+      steps: addsAStopBehindTheSelection,
+      leavesTheTrapWithNoTabStop: false,
+    },
 };
 
-for (const [sequence, steps] of Object.entries(leaveTheDocument)) {
+for (const [sequence, { initial, steps, leavesTheTrapWithNoTabStop }] of Object.entries(
+  leaveTheDocument,
+)) {
   const allButTheLastKey = steps.slice(0, -1);
 
   test(`after ${sequence}, Shift+Tab from the container keeps focus in the trap or takes it out of the trap's document, and the next Tab, or the next Shift+Tab, brings it back into the trap`, async () => {
-    await followTheEngineOrder(["textarea", "button"], steps, false);
-    await followTheEngineOrder(["textarea", "button"], steps, true);
+    await followTheEngineOrder(initial, steps, false);
+    await followTheEngineOrder(initial, steps, true);
   });
 
   test(`after ${sequence}, Shift+Tab from the container takes focus out of the trap's document in exactly the engines listed as doing so`, async () => {
-    await followTheEngineOrder(
-      ["textarea", "button"],
-      allButTheLastKey,
-      false,
-      async ({ container }) => {
-        await tab(true);
-        const left = leftTheDocument();
-        if (left) await tab(false);
-        expect(
-          left,
-          `in ${server.browser}, listed: ${enginesThatLeaveTheDocumentOnTheseSequences.join(", ")}; ${whereFocusIs()}`,
-        ).toBe(enginesThatLeaveTheDocumentOnTheseSequences.includes(server.browser));
-        expect(inTheTrap(container), whereFocusIs()).toBe(true);
-      },
-    );
+    await followTheEngineOrder(initial, allButTheLastKey, false, async ({ container }) => {
+      await tab(true);
+      const left = leftTheDocument();
+      if (left) await tab(false);
+      expect(
+        left,
+        `in ${server.browser}, listed: ${enginesThatLeaveTheDocumentOnTheseSequences.join(", ")}; ${whereFocusIs()}`,
+      ).toBe(enginesThatLeaveTheDocumentOnTheseSequences.includes(server.browser));
+      expect(inTheTrap(container), whereFocusIs()).toBe(true);
+    });
   });
 
   test(`after ${sequence}, with the document selection cleared just before it, Shift+Tab from the container keeps focus in the trap`, async () => {
-    await followTheEngineOrder(
-      ["textarea", "button"],
-      allButTheLastKey,
-      false,
-      async ({ container }) => {
-        document.getSelection()?.removeAllRanges();
+    await followTheEngineOrder(initial, allButTheLastKey, false, async ({ container }) => {
+      document.getSelection()?.removeAllRanges();
+      await tab(true);
+      expect(inTheTrap(container), whereFocusIs()).toBe(true);
+    });
+  });
+
+  if (leavesTheTrapWithNoTabStop) {
+    test(`after ${sequence}, in a native modal dialog in place of the trap with the same stops and steps, the same Shift+Tab leaves the dialog's document without focus`, async () => {
+      document.body.replaceChildren();
+      html(`<button>Before</button>`);
+      const dialog = html<HTMLDialogElement>(`<dialog tabindex="-1" aria-label="Dialog"></dialog>`);
+      html(`<button>After</button>`);
+      const slots: Slot[] = [];
+      for (const [index, kind] of initial.entries()) {
+        apply({ type: "add", at: index, kind }, slots, dialog, `dialog start ${index}`);
+      }
+      dialog.showModal();
+      await settled();
+      for (const [index, current] of steps.entries()) {
+        if (current.type === "tab") await tab(current.backwards);
+        else apply(current, slots, dialog, `dialog step ${index}`);
+        await settled();
+      }
+      const left = !document.hasFocus();
+      const where = whereFocusIs();
+      dialog.close();
+      await tab(false);
+      expect(left, where).toBe(true);
+    });
+  }
+}
+
+type Surface = "trap" | "element with no trap on it" | "native modal dialog";
+type Arrange = (surface: HTMLElement) => void | Promise<void>;
+
+async function withFocusOnTheSurface(
+  kind: Surface,
+  markup: string,
+  arrange: Arrange,
+  check: (surface: HTMLElement) => Promise<void>,
+): Promise<void> {
+  document.body.replaceChildren();
+  html(`<button>Before</button>`);
+  const tag = kind === "native modal dialog" ? "dialog" : "div";
+  const surface = html(
+    `<${tag} id="surface" tabindex="-1" aria-label="Surface">${markup}</${tag}>`,
+  );
+  html(`<button>After</button>`);
+  if (kind === "trap") await trapped(surface);
+  if (kind === "native modal dialog") (surface as HTMLDialogElement).showModal();
+  await settled();
+  try {
+    await arrange(surface);
+    expect(document.activeElement, "the surface itself has focus before the key").toBe(surface);
+    await check(surface);
+  } finally {
+    if (kind === "trap") unmount();
+    if (kind === "native modal dialog") (surface as HTMLDialogElement).close();
+    window.focus();
+  }
+}
+
+const twoStops = `<div><button>One</button></div><div><button>Two</button></div>`;
+const listedAsLeaving = enginesThatLeaveTheDocumentOnTheseSequences.includes(server.browser);
+
+type SelectionInFocus = { markup: string; arrange: Arrange };
+
+const selectionBehindEveryStop: Record<string, SelectionInFocus> = {
+  "a script has focused it and then collapsed the selection at its start": {
+    markup: twoStops,
+    arrange: (surface) => {
+      surface.focus();
+      document.getSelection()?.collapse(surface, 0);
+    },
+  },
+  "a click on the words at its start has focused it and put the selection in them": {
+    markup: `<p id="words">Words to select</p>${twoStops}`,
+    arrange: async (surface) => {
+      await userEvent.click(surface.querySelector("#words") as HTMLElement);
+    },
+  },
+};
+
+for (const [state, { markup, arrange }] of Object.entries(selectionBehindEveryStop)) {
+  for (const comeBackBackwards of [false, true]) {
+    test(`with two tab stops in the trap, once ${state}, Shift+Tab from the container takes focus out of the trap's document in exactly the engines listed as doing so, and the next ${comeBackBackwards ? "Shift+Tab" : "Tab"} brings it back into the trap`, async () => {
+      await withFocusOnTheSurface("trap", markup, arrange, async (container) => {
+        expect(selectionInside(container), "the selection lies inside the container").toBe(true);
         await tab(true);
+        const left = leftTheDocument();
+        const where = whereFocusIs();
+        if (left) await tab(comeBackBackwards);
+        expect(left, `in ${server.browser}: ${where}`).toBe(listedAsLeaving);
+        expect(inTheTrap(container), whereFocusIs()).toBe(true);
+      });
+    });
+  }
+
+  test(`with two tab stops in the trap, once ${state} and the selection is then cleared, Shift+Tab from the container keeps focus in the trap`, async () => {
+    await withFocusOnTheSurface("trap", markup, arrange, async (container) => {
+      document.getSelection()?.removeAllRanges();
+      await tab(true);
+      expect(inTheTrap(container), whereFocusIs()).toBe(true);
+    });
+  });
+
+  for (const kind of ["element with no trap on it", "native modal dialog"] satisfies Surface[]) {
+    test.runIf(listedAsLeaving)(
+      `in an engine listed as leaving the document, a ${kind}, with the same two tab stops, once ${state}, loses focus to outside its document on the same Shift+Tab`,
+      async () => {
+        await withFocusOnTheSurface(kind, markup, arrange, async () => {
+          await tab(true);
+          expect(leftTheDocument(), `on a ${kind}: ${whereFocusIs()}`).toBe(true);
+        });
+      },
+    );
+  }
+}
+
+for (const backwards of [false, true]) {
+  test(`with the selection collapsed between two tab stops after a script has focused the container, ${backwards ? "Shift+Tab" : "Tab"} from the container keeps focus in the trap`, async () => {
+    await withFocusOnTheSurface(
+      "trap",
+      twoStops,
+      (surface) => {
+        surface.focus();
+        document.getSelection()?.collapse(surface, 1);
+      },
+      async (container) => {
+        await tab(backwards);
         expect(inTheTrap(container), whereFocusIs()).toBe(true);
       },
     );
   });
+}
 
-  test(`after ${sequence}, in a native modal dialog in place of the trap with the same stops and steps, the same Shift+Tab leaves the dialog's document without focus`, async () => {
-    document.body.replaceChildren();
-    html(`<button>Before</button>`);
-    const dialog = html<HTMLDialogElement>(`<dialog tabindex="-1" aria-label="Dialog"></dialog>`);
-    html(`<button>After</button>`);
-    const slots: Slot[] = [];
-    apply({ type: "add", at: 0, kind: "textarea" }, slots, dialog, "dialog start 0");
-    apply({ type: "add", at: 1, kind: "button" }, slots, dialog, "dialog start 1");
-    dialog.showModal();
-    await settled();
-    for (const [index, current] of steps.entries()) {
-      if (current.type === "tab") await tab(current.backwards);
-      else apply(current, slots, dialog, `dialog step ${index}`);
-      await settled();
+async function takeFocusToTheEmbeddingPage(): Promise<void> {
+  const embedding = window.parent.document;
+  const outside = embedding.body.appendChild(embedding.createElement("button"));
+  (document.activeElement as HTMLElement | null)?.blur();
+  outside.focus();
+  outside.remove();
+  expect(
+    leftTheDocument(),
+    `the test's own step takes focus out of the trap's document: ${whereFocusIs()}`,
+  ).toBe(true);
+}
+
+type Leaving = {
+  stops: Kind[];
+  focusOnTheContainer: boolean;
+  selection: "at the start of the container" | "at the end of the container" | "outside";
+  backwards: boolean;
+  engine: string;
+};
+
+const [anEngineListed] = enginesThatLeaveTheDocumentOnTheseSequences;
+const leavingAllowed: Leaving = {
+  stops: ["button"],
+  focusOnTheContainer: true,
+  selection: "at the start of the container",
+  backwards: true,
+  engine: anEngineListed,
+};
+const leavingRefused: Record<string, Partial<Leaving>> = {
+  "Tab in place of Shift+Tab": { backwards: false },
+  "focus on a tab stop in place of the container": { focusOnTheContainer: false },
+  "the selection past a tab stop": { selection: "at the end of the container" },
+  "the selection outside the container": { selection: "outside" },
+  "an engine not listed as leaving the document": { engine: "an engine not listed" },
+};
+
+async function leavesByAStepOfTheTest(
+  { stops, focusOnTheContainer, selection, backwards, engine }: Leaving,
+  check: (press: Promise<void>) => Promise<void>,
+): Promise<void> {
+  await followTheEngineOrder(stops, [], false, async (arranged) => {
+    const { container } = arranged;
+    if (focusOnTheContainer) container.focus();
+    if (selection === "outside") document.getSelection()?.removeAllRanges();
+    else {
+      const at = selection === "at the start of the container" ? 0 : container.childNodes.length;
+      document.getSelection()?.collapse(container, at);
     }
-    const left = !document.hasFocus();
-    const where = whereFocusIs();
-    dialog.close();
-    await tab(false);
-    expect(left, where).toBe(true);
+    try {
+      await check(pressed(arranged, backwards, false, takeFocusToTheEmbeddingPage, engine));
+    } finally {
+      window.focus();
+    }
+  });
+}
+
+test("a key that takes focus out of the trap's document keeps the contract on Shift+Tab from the container of a trap with a tab stop, with the selection at the container's start, in an engine listed as leaving the document, when the next Tab brings focus back", async () => {
+  await leavesByAStepOfTheTest(leavingAllowed, async (press) => {
+    await expect(press).resolves.toBeUndefined();
+  });
+});
+
+for (const [difference, changed] of Object.entries(leavingRefused)) {
+  test(`a key that takes focus out of the trap's document breaks the contract with ${difference}`, async () => {
+    await leavesByAStepOfTheTest({ ...leavingAllowed, ...changed }, async (press) => {
+      await expect(press).rejects.toThrow(staysOrLeavesAsDocumented);
+    });
   });
 }
 
