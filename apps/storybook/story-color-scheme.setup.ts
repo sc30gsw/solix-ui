@@ -1,9 +1,8 @@
-import { colorSchemeAttribute } from "@solix/core";
+import { colorSchemeAttribute, type SolixComputedColorScheme } from "@solix/core";
 import { afterEach, beforeEach, inject } from "vite-plus/test";
-import type { StoryColorScheme } from "#/story-color-scheme.ts";
 
-function schemeOfTheProject(): StoryColorScheme {
-  const scheme: StoryColorScheme | undefined = inject("storyColorScheme");
+function schemeOfTheProject(): SolixComputedColorScheme {
+  const scheme: SolixComputedColorScheme | undefined = inject("storyColorScheme");
   if (scheme === undefined) {
     throw new Error(
       "The stories project provides no storyColorScheme, so nothing tells which colour scheme its stories run in. Provide it in the project, as apps/storybook/stories-project.ts does.",

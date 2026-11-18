@@ -1,5 +1,5 @@
 import type { JSX } from "@solidjs/web";
-import type { SolixComputedColorScheme } from "#/src/color-schemes.ts";
+import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 
 export type Scale = "spacing" | "font-size" | "line-height" | "radius" | "color" | "container-size";
 

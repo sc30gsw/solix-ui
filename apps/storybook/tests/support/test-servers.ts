@@ -1,6 +1,10 @@
-import type { StoryColorScheme } from "#/story-color-scheme.ts";
+import type { SolixComputedColorScheme } from "@solix/core";
 
-export type StoriesServer = { project: string; port: number; colorScheme: StoryColorScheme };
+export type StoriesServer = {
+  project: string;
+  port: number;
+  colorScheme: SolixComputedColorScheme;
+};
 
 export const storiesServer = {
   project: "stories",

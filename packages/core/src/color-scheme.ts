@@ -13,8 +13,8 @@ import {
   prefersColorScheme,
   resolvedColorScheme,
   type SolixColorScheme,
-  type SolixComputedColorScheme,
 } from "#/src/color-schemes.ts";
+import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 
 export type ColorSchemeOptions = {
   manager: () => SolixColorSchemeManager;

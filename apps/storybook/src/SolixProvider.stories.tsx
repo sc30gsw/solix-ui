@@ -6,6 +6,7 @@ import {
   createTheme,
   localStorageColorSchemeManager,
   type SolixColorScheme,
+  type SolixComputedColorScheme,
   SolixProvider,
   type SolixProviderProps,
 } from "@solix/core";
@@ -269,7 +270,7 @@ function SeenSchemes() {
 }
 
 function ForcedThenFree() {
-  const [forced, setForced] = createSignal<SolixProviderProps["forceColorScheme"]>("light");
+  const [forced, setForced] = createSignal<SolixComputedColorScheme | undefined>("light");
   return (
     <OnItsOwnElement
       colorSchemeManager={managerOfTheForced}

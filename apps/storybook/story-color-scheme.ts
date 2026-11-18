@@ -1,10 +1,8 @@
-import type { SolixProviderProps } from "@solix/core";
-
-export type StoryColorScheme = NonNullable<SolixProviderProps["forceColorScheme"]>;
+import type { SolixComputedColorScheme } from "@solix/core";
 
 declare module "vite-plus/test" {
   interface ProvidedContext {
-    storyColorScheme: StoryColorScheme;
+    storyColorScheme: SolixComputedColorScheme;
   }
   interface TaskMeta {
     colorSchemeAtTheEnd?: string;

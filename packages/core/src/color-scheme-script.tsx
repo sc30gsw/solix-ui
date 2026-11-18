@@ -8,9 +8,9 @@ import {
   prefersColorScheme,
   resolvedColorScheme,
   type SolixColorScheme,
-  type SolixComputedColorScheme,
   systemColorScheme,
 } from "#/src/color-schemes.ts";
+import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
 import { PageNonceContext } from "#/src/run-time-style.ts";
 

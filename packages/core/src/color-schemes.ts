@@ -1,3 +1,4 @@
+import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 import { hiddenInAScheme } from "#/src/style-prop-table.ts";
 
 export const colorSchemeAttribute = "data-color-scheme";
@@ -11,8 +12,6 @@ export const cssColorSchemeOf = {
 export type SolixColorScheme = keyof typeof cssColorSchemeOf;
 
 export const systemColorScheme = "auto" satisfies SolixColorScheme;
-
-export type SolixComputedColorScheme = Exclude<SolixColorScheme, typeof systemColorScheme>;
 
 export const defaultColorScheme = "light" satisfies SolixComputedColorScheme;
 

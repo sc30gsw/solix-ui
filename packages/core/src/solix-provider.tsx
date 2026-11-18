@@ -6,11 +6,8 @@ import {
   type ProvidedColorScheme,
 } from "#/src/color-scheme.ts";
 import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
-import {
-  defaultColorScheme,
-  type SolixColorScheme,
-  type SolixComputedColorScheme,
-} from "#/src/color-schemes.ts";
+import { defaultColorScheme, type SolixColorScheme } from "#/src/color-schemes.ts";
+import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 import { type SolixTheme, themeStyleSheet } from "#/src/create-theme.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { localStorageColorSchemeManager } from "#/src/local-storage-manager.ts";
