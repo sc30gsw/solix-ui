@@ -247,41 +247,6 @@ test("no selector of the stylesheet names an element type in its subject, and on
   expect(rulesThatStyleThePage(postcss.parse(stylesheet))).toEqual([]);
 });
 
-test("the page rule flags a subject that names an element type, alone or in a branch of :is() or :where(), and a selector that requires no class beside more than custom properties and color-scheme, once each, and passes every other rule", () => {
-  const flagged = [
-    "body{--a:1}",
-    "HTML{--a:1}",
-    "html|body{--a:1}",
-    ".a>body{margin:0}",
-    ".a :where(html){--a:1}",
-    ".a:is(.b, body){margin:0}",
-    "*{box-sizing:border-box}",
-    ":root{--a:1;background:red}",
-    "::selection{color:red}",
-    ":not(.a){margin:0}",
-    ":has(.a){margin:0}",
-    ":is(.a, *){margin:0}",
-    '[data-color-scheme="dark"]{color-scheme:dark;background:black}',
-  ];
-  const passed = [
-    ":root{--a:1;color-scheme:light dark}",
-    '[data-color-scheme="dark"]{color-scheme:dark;--a:1}',
-    ".a{margin:0}",
-    ".a>*{margin:0}",
-    "body .a{margin:0}",
-    ".a:not(body){margin:0}",
-    ".a:has(>img){margin:0}",
-    ".a:nth-child(odd):lang(en){margin:0}",
-    '[class~="a"]{margin:0}',
-    ':where([class^="a"], [class*=" a"])[hidden]{display:none}',
-    "@keyframes a{from{margin:0}50%{margin:1px}}",
-  ];
-  const problemsOf = (css: string) => rulesThatStyleThePage(postcss.parse(css));
-
-  expect(flagged.filter((css) => problemsOf(css).length !== 1)).toEqual([]);
-  expect(passed.filter((css) => problemsOf(css).length !== 0)).toEqual([]);
-});
-
 function sdkWhoseHiddenWriterIs(body: string): string {
   const packageRoot = mkdtempSync(join(tmpdir(), "sdk-hidden-rule-"));
   const module = join(

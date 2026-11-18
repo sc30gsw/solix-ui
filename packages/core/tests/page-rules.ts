@@ -1,6 +1,5 @@
 import type postcss from "postcss";
 import selectorParser from "postcss-selector-parser";
-import { enclosingAtRules } from "#/tests/cascade-layers.ts";
 
 type Described = { text: string; namesAnElementType: boolean; requiresAClass: boolean };
 
@@ -8,7 +7,6 @@ const branchingPseudoClasses = [":is", ":where"];
 const classAttribute = "class";
 const colorSchemeProperty = "color-scheme";
 const customPropertyPrefix = "--";
-const described = new Map<string, Described[]>();
 
 function branchesOf(node: selectorParser.Node): selectorParser.Selector[] {
   return selectorParser.isPseudoClass(node) &&
@@ -36,17 +34,13 @@ function requiresAClass(node: selectorParser.Node): boolean {
 }
 
 function selectorsOf(rule: postcss.Rule): Described[] {
-  const known = described.get(rule.selector);
-  if (known) return known;
-  const found = selectorParser()
+  return selectorParser()
     .astSync(rule.selector)
     .map((selector) => ({
       text: selector.toString().trim(),
       namesAnElementType: subjectOf(selector).some(namesAnElementType),
       requiresAClass: selector.nodes.some(requiresAClass),
     }));
-  described.set(rule.selector, found);
-  return found;
 }
 
 function declaresMoreThanAnUnclassedElementMayTake(node: postcss.ChildNode): boolean {
@@ -57,12 +51,36 @@ function declaresMoreThanAnUnclassedElementMayTake(node: postcss.ChildNode): boo
   );
 }
 
+function containersAround(node: postcss.Node): postcss.Node[] {
+  const parent = node.parent;
+  return parent === undefined ? [] : [parent, ...containersAround(parent)];
+}
+
+function isStyleRule(node: postcss.Node | undefined): node is postcss.Rule {
+  return node?.type === "rule";
+}
+
+function isKeyframes(node: postcss.Node): boolean {
+  return node.type === "atrule" && "name" in node && String(node.name).endsWith("keyframes");
+}
+
+function written(node: postcss.Rule | postcss.AtRule): string {
+  return node.type === "rule" ? node.selector : `@${node.name} ${node.params}`;
+}
+
 export function rulesThatStyleThePage(stylesheet: postcss.Root): string[] {
   const problems: string[] = [];
-  stylesheet.walkRules((rule) => {
-    if (enclosingAtRules(rule).some(({ name }) => name.endsWith("keyframes"))) return;
-    const more = rule.nodes.filter(declaresMoreThanAnUnclassedElementMayTake);
-    for (const selector of selectorsOf(rule)) {
+  stylesheet.walk((node) => {
+    if (node.type !== "rule" && node.type !== "atrule") return;
+    const around = containersAround(node);
+    if (isStyleRule(node.parent)) {
+      problems.push(
+        `${written(node)}: it is nested in the rule ${node.parent.selector}. Write every rule and at-rule of the library outside any style rule, so each declaration is read against the selector of the rule that holds it.`,
+      );
+    }
+    if (node.type !== "rule" || around.some(isStyleRule) || around.some(isKeyframes)) return;
+    const more = node.nodes.filter(declaresMoreThanAnUnclassedElementMayTake);
+    for (const selector of selectorsOf(node)) {
       if (selector.namesAnElementType) {
         problems.push(
           `${selector.text}: its subject names an element type. Select a class the library puts on its own element, and leave <body>, <html> and every other element of the page to the app.`,
