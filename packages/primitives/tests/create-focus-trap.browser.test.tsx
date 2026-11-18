@@ -368,6 +368,8 @@ const step: fc.Arbitrary<Step> = fc.oneof(
 ) as fc.Arbitrary<Step>;
 
 const enginesThatLeaveTheDocumentOnTheseSequences = ["firefox"];
+const staysOrLeavesAsDocumented =
+  "focus stays in the trap, and leaves its document only on Shift+Tab from a trap with no tab stop while the document selection lies inside it, in an engine listed as leaving it";
 const huntRuns = 1_500;
 const huntTimeout = 1_080_000;
 
@@ -409,14 +411,33 @@ async function holdsTheContract(
     ).toBe(true);
     return false;
   }
-  expect(
-    inTheTrap(container),
-    `focus stays in the trap, and leaves its document only on Shift+Tab from a trap with no tab stop while the document selection lies inside it: ${whereFocusIs()}`,
-  ).toBe(true);
+  expect(inTheTrap(container), `${staysOrLeavesAsDocumented}: ${whereFocusIs()}`).toBe(true);
   return true;
 }
 
-type Arranged = { container: HTMLElement; slots: Slot[] };
+type Arranged = { container: HTMLElement; slots: Slot[]; order: number[] };
+
+type Press = (backwards: boolean) => Promise<void>;
+
+async function pressed(
+  { container, slots, order }: Arranged,
+  backwards: boolean,
+  comeBackBackwards: boolean,
+  press: Press = tab,
+  engine: string = server.browser,
+): Promise<void> {
+  const expected = expectedAfter(document.activeElement, backwards, order, slots, container);
+  const mayLeaveTheDocument =
+    backwards &&
+    order.length === 0 &&
+    selectionInside(container) &&
+    enginesThatLeaveTheDocumentOnTheseSequences.includes(engine);
+  await press(backwards);
+  const keptTheDocument = await holdsTheContract(container, mayLeaveTheDocument, comeBackBackwards);
+  if (keptTheDocument && expected !== undefined) {
+    expect(document.activeElement, "focus lands where the engine's order says").toBe(expected);
+  }
+}
 
 async function followTheEngineOrder(
   initial: readonly Kind[],
@@ -459,26 +480,9 @@ async function followTheEngineOrder(
         await settled();
         continue;
       }
-      const expected = expectedAfter(
-        document.activeElement,
-        current.backwards,
-        order,
-        slots,
-        container,
-      );
-      const mayLeaveTheDocument =
-        current.backwards && order.length === 0 && selectionInside(container);
-      await tab(current.backwards);
-      const keptTheDocument = await holdsTheContract(
-        container,
-        mayLeaveTheDocument,
-        comeBackBackwards,
-      );
-      if (keptTheDocument && expected !== undefined) {
-        expect(document.activeElement, "focus lands where the engine's order says").toBe(expected);
-      }
+      await pressed({ container, slots, order }, current.backwards, comeBackBackwards);
     }
-    await afterwards?.({ container, slots });
+    await afterwards?.({ container, slots, order });
   } finally {
     unmount();
   }
@@ -491,7 +495,7 @@ const generatedPresses = fc.asyncProperty(
   (initial, steps, comeBackBackwards) => followTheEngineOrder(initial, steps, comeBackBackwards),
 );
 
-test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus stays in the trap and lands where the engine's own Tab order says, except that Shift+Tab from a trap with no tab stop while the document selection lies inside it may take focus out of the trap's document, to whatever precedes it, from which the next Tab or Shift+Tab brings it back into the trap", async (context) => {
+test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus stays in the trap and lands where the engine's own Tab order says, except that, in an engine listed as doing so, Shift+Tab from a trap with no tab stop while the document selection lies inside it may take focus out of the trap's document, to whatever precedes it, from which the next Tab or Shift+Tab brings it back into the trap", async (context) => {
   await assertProperty(context, generatedPresses, { numRuns: 25 });
 });
 
@@ -585,6 +589,50 @@ for (const [sequence, steps] of Object.entries(leaveTheDocument)) {
     dialog.close();
     await tab(false);
     expect(left, where).toBe(true);
+  });
+}
+
+async function takeFocusToTheEmbeddingPage(): Promise<void> {
+  const embedding = window.parent.document;
+  const outside = embedding.body.appendChild(embedding.createElement("button"));
+  (document.activeElement as HTMLElement | null)?.blur();
+  outside.focus();
+  outside.remove();
+  expect(
+    leftTheDocument(),
+    `the test's own step takes focus out of the trap's document: ${whereFocusIs()}`,
+  ).toBe(true);
+}
+
+type Leaving = { stops: Kind[]; backwards: boolean; selectionInside: boolean; engine: string };
+
+const [anEngineListed] = enginesThatLeaveTheDocumentOnTheseSequences;
+const leavingRefused: Record<string, Leaving> = {
+  "Tab from a trap with no tab stop while the document selection lies inside it, in an engine listed as leaving the document":
+    { stops: [], backwards: false, selectionInside: true, engine: anEngineListed },
+  "Shift+Tab from a trap with a tab stop while the document selection lies inside it, in an engine listed as leaving the document":
+    { stops: ["button"], backwards: true, selectionInside: true, engine: anEngineListed },
+  "Shift+Tab from a trap with no tab stop while the document selection lies outside it, in an engine listed as leaving the document":
+    { stops: [], backwards: true, selectionInside: false, engine: anEngineListed },
+  "Shift+Tab from a trap with no tab stop while the document selection lies inside it, in an engine not listed as leaving the document":
+    { stops: [], backwards: true, selectionInside: true, engine: "an engine not listed" },
+};
+
+for (const [state, { stops, backwards, selectionInside, engine }] of Object.entries(
+  leavingRefused,
+)) {
+  test(`a key that takes focus out of the trap's document breaks the contract on ${state}`, async () => {
+    await followTheEngineOrder(stops, [], false, async (arranged) => {
+      if (selectionInside) document.getSelection()?.collapse(arranged.container);
+      else document.getSelection()?.removeAllRanges();
+      try {
+        await expect(
+          pressed(arranged, backwards, false, takeFocusToTheEmbeddingPage, engine),
+        ).rejects.toThrow(staysOrLeavesAsDocumented);
+      } finally {
+        window.focus();
+      }
+    });
   });
 }
 

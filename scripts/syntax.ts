@@ -15,6 +15,7 @@ export {
   isPackageFile,
   memberDeclarations,
   parameterAliases,
+  propertyDeclarations,
   reachedFrom,
   returnsAlias,
   stringsIn,

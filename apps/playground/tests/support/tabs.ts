@@ -31,6 +31,10 @@ export {
 } from "#/src/sections/tabs-setups.ts";
 
 export const tabsRegion = 'section[aria-label="Tabs"]';
+export const stillFrames = 10;
+export const clickMissedItsTab = "the click did not reach the tab";
+
+const pressEvents = ["mousedown", "mouseup", "click"];
 
 export function rovingListOf(setup: TabsSetup): RovingList {
   return {
@@ -190,6 +194,57 @@ export function activeAndSelected(
       selected: indexesWhere((tab) => tab.getAttribute("aria-selected") === "true"),
     };
   });
+}
+
+export function scrollingStopped(page: Page): Promise<void> {
+  return page.evaluate(
+    (frames) =>
+      new Promise<void>((resolve) => {
+        let seen = [window.scrollX, window.scrollY];
+        let still = 0;
+        const look = () => {
+          const now = [window.scrollX, window.scrollY];
+          still = now.join() === seen.join() ? still + 1 : 0;
+          seen = now;
+          if (still >= frames) resolve();
+          else requestAnimationFrame(look);
+        };
+        requestAnimationFrame(look);
+      }),
+    stillFrames,
+  );
+}
+
+export async function clickTab(page: Page, list: string, name: string): Promise<void> {
+  const tab = tabNamed(page, list, name);
+  await scrollingStopped(page);
+  const watch = await tab.evaluateHandle((node, types) => {
+    const seen: string[] = [];
+    let reached = false;
+    const note = ({ type, target }: Event) => {
+      const onTheTab = target instanceof Node && node.contains(target);
+      const where = target instanceof Element ? `<${target.localName}>` : "no element";
+      seen.push(
+        `${type} on ${onTheTab ? "the tab" : where} with the page scrolled to ${window.scrollY}`,
+      );
+      reached ||= type === "click" && onTheTab;
+    };
+    for (const type of types) window.addEventListener(type, note, true);
+    return {
+      end: () => {
+        for (const type of types) window.removeEventListener(type, note, true);
+        return { reached, seen };
+      },
+    };
+  }, pressEvents);
+  await tab.click();
+  const { reached, seen } = await watch.evaluate(({ end }) => end());
+  await watch.dispose();
+  if (!reached) {
+    throw new Error(
+      `${list}: ${clickMissedItsTab} ${name}. The page saw ${seen.join(", ") || "no event of the press"}.`,
+    );
+  }
 }
 
 export async function startAt(page: Page, list: string, name: string): Promise<void> {

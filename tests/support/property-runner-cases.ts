@@ -8,6 +8,8 @@ const runTime = 100;
 const slowRuns = 100;
 const quickRuns = 10;
 const runsPastTheShortLimit = 50;
+const runsForHalfTheShortTimeout = 20;
+const waitBeforeTheRetry = 3_000;
 const failure =
   /^Property failed after 1 tests\n\{ seed: -?\d+, path: "0(?::\d+)*", endOnFailure: true \}\nCounterexample: \[\d+\]\nShrunk \d+ time\(s\)/;
 const interruption = /^Property interrupted after \d+ tests\n\{ seed: -?\d+ \}/;
@@ -53,6 +55,23 @@ export function definePropertyRunnerTests(): void {
     { timeout: shortTimeout },
     async (context) => {
       await assertProperty(context, slow, { numRuns: quickRuns });
+      await expect(assertProperty(context, slow, { numRuns: slowRuns })).rejects.toThrow(
+        interruption,
+      );
+    },
+  );
+
+  test(
+    "a retry gets the whole time limit again, counted from the end of the wait before it, and so does a repetition, which waits for nothing",
+    { timeout: shortTimeout, retry: { count: 1, delay: waitBeforeTheRetry }, repeats: 1 },
+    async (context) => {
+      const attemptsBefore = context.task.result?.attempts?.length;
+      if (attemptsBefore === 0) throw new Error("The first attempt fails, so the test is retried.");
+      if (attemptsBefore !== 1 && attemptsBefore !== 2) {
+        throw new Error("The repetition failed, so it was retried too.");
+      }
+      await assertProperty(context, slow, { numRuns: runsForHalfTheShortTimeout });
+      if (attemptsBefore === 1) return;
       await expect(assertProperty(context, slow, { numRuns: slowRuns })).rejects.toThrow(
         interruption,
       );

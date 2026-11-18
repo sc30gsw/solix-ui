@@ -8,10 +8,22 @@ export type PropertyParameters<Ts> = Pick<
   "numRuns" | "examples" | "seed" | "path" | "endOnFailure" | "verbose"
 >;
 
+function waitBeforeARetry({ retry }: TestContext["task"]): number {
+  return typeof retry === "object" ? (retry.delay ?? 0) : 0;
+}
+
+function attemptStartedAt(task: TestContext["task"]): number {
+  const previous = task.result?.attempts?.at(-1);
+  if (!previous) return task.result?.startTime ?? Date.now();
+  const previousEndedAt = previous.startTime + previous.duration;
+  return previous.repeatIndex === task.result?.repeatCount
+    ? previousEndedAt + waitBeforeARetry(task)
+    : previousEndedAt;
+}
+
 function timeLimit({ task }: TestContext): fc.Plugin<unknown>[] {
   if (!Number.isFinite(task.timeout) || task.timeout <= 0) return [];
-  const startedAt = task.result?.startTime ?? Date.now();
-  const runsOutAt = startedAt + task.timeout * shareOfTheTestTimeout;
+  const runsOutAt = attemptStartedAt(task) + task.timeout * shareOfTheTestTimeout;
   return [fc.interruptAfterTimeLimit(runsOutAt - Date.now(), { failOnInterrupt: true })];
 }
 

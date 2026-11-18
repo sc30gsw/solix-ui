@@ -4,11 +4,13 @@ import { expect, inject, test } from "vite-plus/test";
 import { inEveryEngine } from "#/tests/support/playground.ts";
 import {
   activeAndSelected,
+  clickMissedItsTab,
+  clickTab,
   optional,
   panelOf,
   stateOf,
+  stillFrames,
   tabLists,
-  tabNamed,
   tabNames,
 } from "#/tests/support/tabs.ts";
 import {
@@ -24,7 +26,9 @@ import { assertProperty } from "../../../tests/support/properties.ts";
 const url = inject("playgroundUrl");
 const generatedRuns = 15;
 const longestSequence = 12;
-const generatedSequencesTimeout = 55_000;
+const generatedSequencesTimeout = 90_000;
+const scrollMovesObserved = 4;
+const scrollAwayFromThePointer = 200;
 const observedRepetitions = 50;
 const observationTimeout = 180_000;
 const observedEvents = ["pointerdown", "mousedown", "mouseup", "click", "keydown", "scroll"];
@@ -78,7 +82,7 @@ class ClickTab extends Step {
   check = (model: Model) => !this.tab(model).disabled;
   async act(model: Model, { page }: Real) {
     const { name } = this.tab(model);
-    await tabNamed(page, model.list.name, name).click();
+    await clickTab(page, model.list.name, name);
     become(model, afterPressOn(model.list, model, name));
   }
   toString = () => `click the enabled tab at position ${this.position}, counted round the list`;
@@ -167,6 +171,22 @@ function written({ type, at, scrollY, tab }: Seen): string {
   return `${type} on ${tab ?? "no tab"} at ${at} ms with the page scrolled to ${scrollY}`;
 }
 
+const { notes, files } = tabNames.optional;
+
+function theOptionalList(): RovingList {
+  const list = tabLists.find(({ name }) => name === optional);
+  if (!list) throw new Error(`${optional}: the playground describes no list of tabs so.`);
+  return list;
+}
+
+function atTheStartOf(list: RovingList): Model {
+  return { list, selected: list.initial, focused: null };
+}
+
+function clickOn(list: RovingList, tab: string): ClickTab {
+  return new ClickTab(list.items.findIndex(({ name }) => name === tab));
+}
+
 const steps = [
   fc.nat({ max: 11 }).map((position) => new ClickTab(position)),
   fc.constantFrom(...keys).map((key) => new PressKey(key)),
@@ -186,7 +206,7 @@ inEveryEngine((browser) => {
           fc.commands(steps, { maxCommands: longestSequence }),
           async (list, sequence) => {
             await page.goto(url, { waitUntil: "networkidle" });
-            const model: Model = { list, selected: list.initial, focused: null };
+            const model = atTheStartOf(list);
 
             await expectAgreement(model, { page });
             await fc.asyncModelRun(() => ({ model, real: { page } }), sequence);
@@ -199,26 +219,81 @@ inEveryEngine((browser) => {
     },
   );
 
+  test("a click on a tab begins only once the page has stopped scrolling, also when the scrolling pauses for fewer frames than the drive waits", async () => {
+    const page = await browser().newPage();
+    await page.goto(url, { waitUntil: "networkidle" });
+    const list = theOptionalList();
+    const model = atTheStartOf(list);
+    await clickOn(list, files).run(model, { page });
+    const scrolling = await page.evaluateHandle(
+      ({ moves, pause }) => {
+        const state: { left: number; leftWhenPressed: number | undefined } = {
+          left: moves,
+          leftWhenPressed: undefined,
+        };
+        const first = window.scrollY > 0 ? -1 : 1;
+        let frames = 0;
+        const frame = () => {
+          frames += 1;
+          if (frames % pause === 0) {
+            window.scrollBy(0, state.left % 2 === 0 ? first : -first);
+            state.left -= 1;
+          }
+          if (state.left > 0) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+        window.addEventListener(
+          "pointerdown",
+          () => {
+            state.leftWhenPressed = state.left;
+          },
+          { capture: true, once: true },
+        );
+        return state;
+      },
+      { moves: scrollMovesObserved, pause: stillFrames - 1 },
+    );
+
+    await clickOn(list, notes).run(model, { page });
+
+    expect(
+      await scrolling.evaluate(({ leftWhenPressed }) => leftWhenPressed),
+      "the scroll movements still to come when the press began",
+    ).toBe(0);
+    await page.close();
+  });
+
+  test("a click that does not reach its tab, because the page moves under the pointer, fails by saying so and not as a disagreement with the model", async () => {
+    const page = await browser().newPage();
+    await page.goto(url, { waitUntil: "networkidle" });
+    const list = theOptionalList();
+    const model = atTheStartOf(list);
+    await clickOn(list, files).run(model, { page });
+    await page.evaluate((distance) => {
+      window.addEventListener(
+        "mousedown",
+        () => window.scrollBy(0, window.scrollY > 0 ? -distance : distance),
+        { capture: true, once: true },
+      );
+    }, scrollAwayFromThePointer);
+
+    await expect(clickOn(list, notes).run(model, { page })).rejects.toThrow(clickMissedItsTab);
+    await page.close();
+  });
+
   test(
     `observation: repeated ${observedRepetitions} times from a fresh page load, a click on a tab, a key the list leaves to the page and a click on another tab keep the page in agreement with the model, and each click reaches its tab`,
     { timeout: observationTimeout },
     async (context) => {
-      const { notes, files } = tabNames.optional;
-      const list = tabLists.find(({ name }) => name === optional);
-      if (!list) throw new Error(`${optional}: the playground describes no list of tabs so.`);
-      const positionOf = (tab: string) => list.items.findIndex(({ name }) => name === tab);
-      const sequence = [
-        new ClickTab(positionOf(files)),
-        new PressKey("ArrowUp"),
-        new ClickTab(positionOf(notes)),
-      ];
+      const list = theOptionalList();
+      const sequence = [clickOn(list, files), new PressKey("ArrowUp"), clickOn(list, notes)];
       const page = await browser().newPage();
       await recordEvents(page);
       const repetitions: Observed[] = [];
 
       for (let repetition = 0; repetition < observedRepetitions; repetition += 1) {
         await page.goto(url, { waitUntil: "networkidle" });
-        const model: Model = { list, selected: list.initial, focused: null };
+        const model = atTheStartOf(list);
         let disagreement: string | undefined;
         for (const step of sequence) {
           try {
