@@ -230,7 +230,7 @@ inEveryEngine((browser) => {
       await close();
     });
 
-    test("a scheme set on another page of the same origin reaches this one through the storage event", async () => {
+    test("a scheme set, cleared, or cleared with the whole storage on another page of the same origin reaches this one through the storage event, and a change of another key does not", async () => {
       const first = await open(browser(), system);
       const second = await first.page.context().newPage();
       await second.goto(url, { waitUntil: "networkidle" });
@@ -239,30 +239,78 @@ inEveryEngine((browser) => {
       await press(first.page, schemeButtons[other]);
       await settledOn(second, other);
       expect(await chosen(second)).toBe(other);
+
+      const shown = await second
+        .getByRole("status", { name: schemeTexts.chosen })
+        .evaluateHandle((output) => {
+          const texts: (string | null)[] = [];
+          new MutationObserver(() => texts.push(output.textContent)).observe(output, {
+            characterData: true,
+            childList: true,
+            subtree: true,
+          });
+          return texts;
+        });
+      await first.page.evaluate(
+        ([key, value]) => localStorage.setItem(key, value),
+        [`${playgroundColorSchemeKey}-of-another-app`, system],
+      );
+      await press(first.page, schemeButtons.clear);
+      await settledOn(second, system);
+      expect(await chosen(second)).toBe(pageColorScheme);
+      expect(await shown.jsonValue(), "another key's change shows nothing").toEqual([
+        pageColorScheme,
+      ]);
+
+      await press(first.page, schemeButtons[other]);
+      await settledOn(second, other);
+      await first.page.evaluate(() => localStorage.clear());
+      await settledOn(second, system);
+      expect(await chosen(second)).toBe(pageColorScheme);
       await first.close();
     });
 
-    test("with a storage that throws, the page still renders the default and each button still switches it", async () => {
-      const context = await browser().newContext({ colorScheme: system });
-      await context.addInitScript(() => {
-        Object.defineProperty(window, "localStorage", {
-          get: () => {
-            throw new DOMException("The storage is blocked.", "SecurityError");
-          },
-        });
-      });
-      const page = await context.newPage();
-      const problems: string[] = [];
-      page.on("pageerror", (error) => problems.push(String(error)));
-      await page.goto(url, { waitUntil: "networkidle" });
-      await settledOn(page, system);
+    test.each([
+      [
+        "that throws when it is read",
+        () => {
+          Object.defineProperty(window, "localStorage", {
+            get: () => {
+              throw new DOMException("The storage is blocked.", "SecurityError");
+            },
+          });
+        },
+      ],
+      [
+        "whose every method throws",
+        () => {
+          for (const method of ["getItem", "setItem", "removeItem"] as const) {
+            Storage.prototype[method] = () => {
+              throw new DOMException("The storage is full.", "QuotaExceededError");
+            };
+          }
+        },
+      ],
+    ])(
+      "with a storage %s, the page still renders the default and each button still switches and clears it",
+      async (_, breakTheStorage) => {
+        const context = await browser().newContext({ colorScheme: system });
+        await context.addInitScript(breakTheStorage);
+        const page = await context.newPage();
+        const problems: string[] = [];
+        page.on("pageerror", (error) => problems.push(String(error)));
+        await page.goto(url, { waitUntil: "networkidle" });
+        await settledOn(page, system);
 
-      await press(page, schemeButtons[other]);
-      await settledOn(page, other);
-      await expectTheScheme(page, other);
-      expect(problems).toEqual([]);
-      await context.close();
-    });
+        await press(page, schemeButtons[other]);
+        await settledOn(page, other);
+        await expectTheScheme(page, other);
+        await press(page, schemeButtons.clear);
+        await settledOn(page, system);
+        expect(problems).toEqual([]);
+        await context.close();
+      },
+    );
 
     test("with the built stylesheet alone, lightHidden and darkHidden follow the nearest data-color-scheme, the light scheme where no ancestor has one, and an element that is shown keeps the display a style prop gives it", async () => {
       const context = await browser().newContext({ colorScheme: system });

@@ -61,10 +61,9 @@ export function createProvidedColorScheme(options: ColorSchemeOptions): Provided
 
   onSettled(() => {
     const manager = options.manager();
-    setChosen(manager.get(options.defaultColorScheme()));
+    setChosen(manager.get() ?? options.defaultColorScheme());
     setSettled(true);
-    manager.subscribe(setChosen);
-    return () => manager.unsubscribe();
+    return manager.subscribe((stored) => setChosen(stored ?? options.defaultColorScheme()));
   });
 
   createEffect(
@@ -82,13 +81,9 @@ export function createProvidedColorScheme(options: ColorSchemeOptions): Provided
     setColorScheme: (value) => {
       const forced = options.forceColorScheme();
       if (forced !== undefined) return;
-      setChosen(value);
       options.manager().set(value);
     },
-    clearColorScheme: () => {
-      setChosen(options.defaultColorScheme());
-      options.manager().clear();
-    },
+    clearColorScheme: () => options.manager().clear(),
   };
 }
 

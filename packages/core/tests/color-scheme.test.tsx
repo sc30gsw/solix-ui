@@ -187,16 +187,21 @@ test("isColorScheme is true for light, dark and auto, and false for any other va
   );
 });
 
-test("on the server, the local-storage manager gives back the default and its other calls do nothing", () => {
+test("on the server, the local-storage manager has nothing stored, tells its subscribers of a set and a clear until they leave, and touches no storage", () => {
   const manager = library.localStorageColorSchemeManager({ key: "theme" });
+  const told: unknown[] = [];
+  const others: unknown[] = [];
+  const leave = manager.subscribe((scheme) => told.push(scheme));
+  manager.subscribe((scheme) => others.push(scheme));
 
-  for (const scheme of ["light", "dark", "auto"] as const) expect(manager.get(scheme)).toBe(scheme);
-  expect(() => {
-    manager.set("dark");
-    manager.subscribe(() => {});
-    manager.unsubscribe();
-    manager.clear();
-  }).not.toThrow();
+  expect(manager.get()).toBeUndefined();
+  manager.set("dark");
+  manager.clear();
+  leave();
+  manager.set("light");
+  expect(told).toEqual(["dark", undefined]);
+  expect(others).toEqual(["dark", undefined, "light"]);
+  expect(Object.keys(manager).sort()).toEqual(["clear", "get", "set", "subscribe"]);
 });
 
 test("createColorScheme and createComputedColorScheme outside a SolixProvider throw, naming themselves", () => {

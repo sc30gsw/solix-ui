@@ -24,13 +24,14 @@ export type SolixProviderProps = {
   children?: JSX.Element;
 };
 
+const storedInLocalStorage = localStorageColorSchemeManager();
+
 function documentElement(): HTMLElement {
   return document.documentElement;
 }
 
 export function SolixProvider(props: SolixProviderProps) {
   const outerNonce = useContext(StyleNonceContext);
-  const storedInLocalStorage = localStorageColorSchemeManager();
   const colorScheme = createProvidedColorScheme({
     manager: () => props.colorSchemeManager ?? storedInLocalStorage,
     defaultColorScheme: () => props.defaultColorScheme ?? defaultColorScheme,

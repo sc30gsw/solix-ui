@@ -1,9 +1,8 @@
 import type { SolixColorScheme } from "#/src/color-schemes.ts";
 
 export type SolixColorSchemeManager = {
-  get: (defaultValue: SolixColorScheme) => SolixColorScheme;
+  get: () => SolixColorScheme | undefined;
   set: (value: SolixColorScheme) => void;
-  subscribe: (onUpdate: (colorScheme: SolixColorScheme) => void) => void;
-  unsubscribe: () => void;
   clear: () => void;
+  subscribe: (onUpdate: (colorScheme: SolixColorScheme | undefined) => void) => () => void;
 };
