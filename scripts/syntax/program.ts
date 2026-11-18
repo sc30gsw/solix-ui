@@ -17,6 +17,10 @@ export const parseWithoutLibrariesOrImports: CompilerOptions = {
 export const typeCheckedWithScripts: CompilerOptions = {
   allowJs: true,
 };
+export const typeCheckedWithNodeTypes: CompilerOptions = {
+  allowJs: true,
+  types: ["node"],
+};
 const virtualFiles = new Map<string, string>();
 const parsed = new Map<string, SourceFile>();
 let compiler: API | undefined;
@@ -102,6 +106,10 @@ export function rereadFiles(files: readonly string[]): void {
 
 export function openProgram(rootFiles: readonly string[]): Program {
   return openProject(rootFiles.map(normalised), typeCheckedWithScripts);
+}
+
+export function openProgramWithNodeTypes(rootFiles: readonly string[]): Program {
+  return openProject(rootFiles.map(normalised), typeCheckedWithNodeTypes);
 }
 
 export function stringLiteralTypesOf(checker: Checker, node: Node): string[] {

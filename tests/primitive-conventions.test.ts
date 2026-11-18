@@ -23,7 +23,7 @@ const checked = libraryPackages
   .map(({ directory, kind }) => ({
     name: relative(repositoryRoot, directory),
     kind,
-    library: loadLibrary(directory),
+    library: loadLibrary(directory, kind),
   }));
 afterAll(() => {
   for (const { library } of checked) library.dispose();

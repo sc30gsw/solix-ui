@@ -27,6 +27,7 @@ export {
 } from "#/scripts/syntax/checker.ts";
 export {
   openProgram,
+  openProgramWithNodeTypes,
   parse,
   parseAll,
   parseText,
@@ -34,6 +35,7 @@ export {
   rereadFiles,
   sharedSettings,
   typeCheckedWithScripts,
+  typeCheckedWithNodeTypes,
   stringLiteralTypesOf,
   virtualFile,
   type Program,

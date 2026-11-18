@@ -14,11 +14,12 @@ import {
   memberDeclarations,
   nameOf,
   openProgram,
+  openProgramWithNodeTypes,
   type Program,
   reachedFrom,
   ts,
 } from "#/scripts/syntax.ts";
-import { repositoryRoot } from "#/tests/support/workspace.ts";
+import { type LibraryKind, repositoryRoot } from "#/tests/support/workspace.ts";
 
 export const kebabCaseModule = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts$/;
 export const typesModule = "types.ts";
@@ -69,14 +70,14 @@ function entriesOf(directory: string): string[] {
   return existsSync(directory) ? readdirSync(directory).sort() : [];
 }
 
-export function loadLibrary(directory: string): Library {
+export function loadLibrary(directory: string, kind: LibraryKind = "primitives"): Library {
   const source = join(directory, "src");
   const testDirectory = join(directory, "tests");
   const entries = entriesOf(source);
   const paths = entries
     .filter((entry) => entry.endsWith(".ts"))
     .map((entry) => join(source, entry));
-  const compiled = openProgram(paths);
+  const compiled = kind === "logic" ? openProgramWithNodeTypes(paths) : openProgram(paths);
   const testFiles = entriesOf(testDirectory).filter((entry) => /\.tsx?$/.test(entry));
   const compiledTests = openProgram(testFiles.map((entry) => join(testDirectory, entry)));
   const tests = new Map(
@@ -178,13 +179,17 @@ export function importsFrom(module: Module, specifier: string): boolean {
   return importsOf(module.source).some((found) => found.specifier === specifier);
 }
 
-export function exportedFunction(module: Module): ts.FunctionDeclaration | undefined {
-  return module.source.statements.find(
+export function exportedFunctions(module: Module): ts.FunctionDeclaration[] {
+  return module.source.statements.filter(
     (statement): statement is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(statement) &&
       statement.name !== undefined &&
       isNamedFor(module.file, statement.name.text),
   );
+}
+
+export function exportedFunction(module: Module): ts.FunctionDeclaration | undefined {
+  return exportedFunctions(module)[0];
 }
 
 export function isDeclared(declaration: ts.Node, declared: Declared): boolean {

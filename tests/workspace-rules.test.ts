@@ -14,6 +14,7 @@ import {
   parseWithoutLibrariesOrImports,
   sharedSettings,
   typeCheckedWithScripts,
+  typeCheckedWithNodeTypes,
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
@@ -88,6 +89,7 @@ const typeScriptProjectOpener = "scripts/syntax/program.ts";
 const sharedSettingsFile = "tsconfig.base.json";
 const optionsOfTheParseOnlyProject = ["allowJs", "noLib", "noResolve"];
 const optionsOfTheTypeCheckedProject = ["allowJs"];
+const optionsOfTheProjectWithNodeTypes = ["allowJs", "types"];
 const pnpmSettingsReader = "scripts/pnpm-settings.ts";
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
@@ -226,7 +228,7 @@ function hasProperty(name: string): (property: ts.ObjectLiteralElementLike) => b
   return (property) => staticPropertyName(property) === name;
 }
 
-test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFile} and sets no option it sets, the type-checked project adds ${optionsOfTheTypeCheckedProject.join(", ")}, and the parse-only project adds ${optionsOfTheParseOnlyProject.join(", ")}`, () => {
+test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFile} and sets no option it sets, the type-checked project adds ${optionsOfTheTypeCheckedProject.join(", ")}, the one with Node's types adds ${optionsOfTheProjectWithNodeTypes.join(" and ")} naming node, and the parse-only project adds ${optionsOfTheParseOnlyProject.join(", ")}`, () => {
   const source = parse(join(repositoryRoot, typeScriptProjectOpener));
   const nodes = descendants(source);
   const settingsWritten = nodes
@@ -252,12 +254,16 @@ test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFil
   expect(optionsOfEachProject).toEqual([
     "parseWithoutLibrariesOrImports",
     "typeCheckedWithScripts",
+    "typeCheckedWithNodeTypes",
   ]);
   expect(Object.keys(parseWithoutLibrariesOrImports)).toEqual(optionsOfTheParseOnlyProject);
   expect(Object.keys(typeCheckedWithScripts)).toEqual(optionsOfTheTypeCheckedProject);
+  expect(Object.keys(typeCheckedWithNodeTypes)).toEqual(optionsOfTheProjectWithNodeTypes);
+  expect(typeCheckedWithNodeTypes.types).toEqual(["node"]);
   expect([
     ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, parseWithoutLibrariesOrImports),
     ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, typeCheckedWithScripts),
+    ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, typeCheckedWithNodeTypes),
   ]).toEqual([]);
 });
 

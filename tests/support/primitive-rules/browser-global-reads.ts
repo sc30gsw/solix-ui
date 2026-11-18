@@ -1,7 +1,7 @@
 import { isBrowserOnlyGlobal, reachedFrom, type ts } from "#/scripts/syntax.ts";
 import {
   browserOnlyRoles,
-  exportedFunction,
+  exportedFunctions,
   hasRole,
   type Library,
   located,
@@ -24,10 +24,7 @@ export function browserGlobalsReached(
 }
 
 const browserGlobalReads: Rule = (library) => {
-  const roots = publicModules(library).flatMap((module) => {
-    const fn = exportedFunction(module);
-    return fn ? [fn] : [];
-  });
+  const roots = publicModules(library).flatMap(exportedFunctions);
   const reads = browserGlobalsReached(
     library,
     roots,
@@ -42,6 +39,6 @@ const browserGlobalReads: Rule = (library) => {
 
 export const browserGlobalReadsRule: PrimitiveRule = {
   description:
-    "what a public primitive runs on the server, through every function it reaches, reads no global declared only in lib.dom",
+    "what a public function runs on the server, through every function its implementation reaches, reads no global declared only in lib.dom",
   rule: browserGlobalReads,
 };
