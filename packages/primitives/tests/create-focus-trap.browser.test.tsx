@@ -585,6 +585,247 @@ for (const [sequence, steps] of Object.entries(leaveTheDocument)) {
   });
 }
 
+const addsStopsBehindTheSelection: Step[] = [
+  { type: "add", at: 0, kind: "input" },
+  { type: "tab", backwards: false },
+  { type: "remove", at: 0 },
+  { type: "tab", backwards: false },
+  { type: "add", at: 0, kind: "button" },
+  { type: "add", at: 0, kind: "button" },
+  { type: "tab", backwards: true },
+];
+
+test("after its focused input is removed, Tab brings focus to the container, and two buttons are added, Shift+Tab from the container keeps focus in the trap", async () => {
+  await followTheEngineOrder([], addsStopsBehindTheSelection, false);
+  await followTheEngineOrder([], addsStopsBehindTheSelection, true);
+});
+
+function named(target: EventTarget | null): string {
+  if (target === null) return "nothing";
+  if (target === window) return "window";
+  if (target === document) return "document";
+  const node = target as Partial<Element>;
+  if (typeof node.nodeName !== "string") return "another target";
+  if (node.nodeType !== Node.ELEMENT_NODE) {
+    return `${node.nodeName} in ${named(node.parentNode ?? null)}`;
+  }
+  const label =
+    node.getAttribute?.("aria-label") ?? (node.childElementCount === 0 ? node.textContent : null);
+  const id = node.id === "" ? "" : `#${node.id}`;
+  return `<${node.localName}${id}>${label === null || label === undefined ? "" : ` "${label}"`}`;
+}
+
+function selectionPlace(): string {
+  const selection = document.getSelection();
+  if (selection === null || selection.rangeCount === 0) return "no range";
+  const anchor = `${named(selection.anchorNode)} at ${selection.anchorOffset}`;
+  return selection.isCollapsed
+    ? anchor
+    : `${anchor} to ${named(selection.focusNode)} at ${selection.focusOffset}`;
+}
+
+function focusPlace(surface: HTMLElement): string {
+  const top = (window.top ?? window).document;
+  const held = document.hasFocus() && surface.contains(document.activeElement);
+  return `${held ? "inside" : leftTheDocument() ? "left the document" : "outside"}: active ${named(document.activeElement)}, document ${document.hasFocus() ? "focused" : "not focused"}, top ${top.hasFocus() ? "focused" : "not focused"} with ${named(top.activeElement)}`;
+}
+
+type Observation = { before: string; events: string[]; after: string; afterTheNextKey?: string };
+
+const observedEvents = ["keydown", "blur", "focusout", "focus", "focusin"];
+
+async function observedPress(
+  surface: HTMLElement,
+  backwards: boolean,
+  comeBackBackwards?: boolean,
+): Promise<Observation> {
+  const events: string[] = [];
+  const note = (event: Event) => {
+    const detail =
+      "relatedTarget" in event
+        ? `, related ${named(event.relatedTarget as EventTarget | null)}`
+        : "key" in event
+          ? ` of ${String(event.key)}${event.defaultPrevented ? ", prevented" : ""}`
+          : "";
+    events.push(`${event.type} on ${named(event.target)}${detail}`);
+  };
+  for (const type of observedEvents) window.addEventListener(type, note, true);
+  const before = `${focusPlace(surface)}; selection ${selectionPlace()}`;
+  try {
+    await tab(backwards);
+  } finally {
+    for (const type of observedEvents) window.removeEventListener(type, note, true);
+  }
+  const after = `${focusPlace(surface)}; selection ${selectionPlace()}`;
+  if (comeBackBackwards === undefined) return { before, events, after };
+  await tab(comeBackBackwards);
+  return { before, events, after, afterTheNextKey: focusPlace(surface) };
+}
+
+type Prepared = (surface: HTMLElement) => void | Promise<void>;
+
+async function inTheReplayedState(
+  prepare: Prepared,
+  backwards: boolean,
+  comeBackBackwards?: boolean,
+): Promise<Observation> {
+  const seen: Observation[] = [];
+  try {
+    await followTheEngineOrder(
+      [],
+      addsStopsBehindTheSelection.slice(0, -1),
+      false,
+      async ({ container }) => {
+        await prepare(container);
+        seen.push(await observedPress(container, backwards, comeBackBackwards));
+      },
+    );
+  } finally {
+    window.focus();
+  }
+  return seen[0];
+}
+
+function added(surface: HTMLElement, name: string, first = false): void {
+  const slots: Slot[] = [];
+  apply({ type: "add", at: 0, kind: "button" }, slots, surface, name);
+  if (first) surface.prepend(slots[0].wrapper);
+}
+
+type Surface = "trap" | "plain" | "dialog";
+
+async function onASurface(
+  kind: Surface,
+  markup: string,
+  prepare: Prepared,
+  backwards: boolean,
+  comeBackBackwards?: boolean,
+): Promise<Observation> {
+  document.body.replaceChildren();
+  html(`<button>Before</button>`);
+  const tag = kind === "dialog" ? "dialog" : "div";
+  const surface = html(
+    `<${tag} id="surface" tabindex="-1" aria-label="Surface">${markup}</${tag}>`,
+  );
+  html(`<button>After</button>`);
+  if (kind === "trap") await trapped(surface);
+  else if (kind === "dialog") (surface as HTMLDialogElement).showModal();
+  else surface.focus();
+  await settled();
+  try {
+    await prepare(surface);
+    return await observedPress(surface, backwards, comeBackBackwards);
+  } finally {
+    if (kind === "trap") unmount();
+    if (kind === "dialog") (surface as HTMLDialogElement).close();
+    window.focus();
+  }
+}
+
+const twoStops = `<div><button>One</button></div><div><button>Two</button></div>`;
+const wordsAndTwoStops = `<p id="words">Words to select</p>${twoStops}`;
+
+function selectionBehindAnAddedStop(surface: HTMLElement): void {
+  added(surface, "First added");
+  document.getSelection()?.collapse(surface, 0);
+  added(surface, "Second added", true);
+}
+
+async function clickedOnItsWords(surface: HTMLElement): Promise<void> {
+  await userEvent.click(surface.querySelector("#words") as HTMLElement);
+}
+
+function reported(seen: Record<string, Observation>): void {
+  if (server.browser !== "chromium") expect.fail(JSON.stringify(seen, null, 1));
+}
+
+test("observation: in the replayed state, what each key does", async () => {
+  const nothing = () => {};
+  reported({
+    "Shift+Tab, then Tab": await inTheReplayedState(nothing, true, false),
+    "Shift+Tab, then Shift+Tab": await inTheReplayedState(nothing, true, true),
+    Tab: await inTheReplayedState(nothing, false),
+    "selection cleared, Shift+Tab": await inTheReplayedState(
+      () => document.getSelection()?.removeAllRanges(),
+      true,
+    ),
+    "selection collapsed at the start of the body, Shift+Tab": await inTheReplayedState(
+      () => document.getSelection()?.collapse(document.body, 0),
+      true,
+    ),
+    "selection collapsed at the end of the container, Shift+Tab": await inTheReplayedState(
+      (container) => document.getSelection()?.collapse(container, container.childNodes.length),
+      true,
+    ),
+    "selection collapsed in the last button, Shift+Tab": await inTheReplayedState(
+      (container) =>
+        document.getSelection()?.collapse(container.querySelector("div:last-child button"), 0),
+      true,
+    ),
+    "container blurred and focused again, Shift+Tab": await inTheReplayedState((container) => {
+      container.blur();
+      container.focus();
+    }, true),
+  });
+});
+
+for (const kind of ["trap", "plain", "dialog"] satisfies Surface[]) {
+  test(`observation: on a ${kind}, what Shift+Tab from the focused surface does`, async () => {
+    reported({
+      "a stop added before a selection collapsed at the start, Shift+Tab, then Tab":
+        await onASurface(kind, "", selectionBehindAnAddedStop, true, false),
+      "a stop added before a selection collapsed at the start, Shift+Tab, then Shift+Tab":
+        await onASurface(kind, "", selectionBehindAnAddedStop, true, true),
+      "a stop added before a selection collapsed at the start, Tab": await onASurface(
+        kind,
+        "",
+        selectionBehindAnAddedStop,
+        false,
+      ),
+      "two stops, surface focused by a script, Shift+Tab": await onASurface(
+        kind,
+        twoStops,
+        (surface) => surface.focus(),
+        true,
+      ),
+      "two stops, surface focused by a script, selection collapsed at its start, Shift+Tab":
+        await onASurface(
+          kind,
+          twoStops,
+          (surface) => {
+            surface.focus();
+            document.getSelection()?.collapse(surface, 0);
+          },
+          true,
+        ),
+      "two stops, surface focused by a script, selection cleared, Shift+Tab": await onASurface(
+        kind,
+        twoStops,
+        (surface) => {
+          surface.focus();
+          document.getSelection()?.removeAllRanges();
+        },
+        true,
+      ),
+      "words clicked, Shift+Tab, then Tab": await onASurface(
+        kind,
+        wordsAndTwoStops,
+        clickedOnItsWords,
+        true,
+        false,
+      ),
+      "words clicked, Tab": await onASurface(kind, wordsAndTwoStops, clickedOnItsWords, false),
+      "no stop, words clicked, Shift+Tab, then Tab": await onASurface(
+        kind,
+        `<p id="words">Words to select</p>`,
+        clickedOnItsWords,
+        true,
+        false,
+      ),
+    });
+  });
+}
+
 async function takeFocusToTheEmbeddingPage(): Promise<void> {
   const embedding = window.parent.document;
   const outside = embedding.body.appendChild(embedding.createElement("button"));
