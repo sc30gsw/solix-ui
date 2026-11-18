@@ -1,6 +1,6 @@
 import type { Browser, BrowserContextOptions, Page } from "playwright";
 import { describe, expect, inject, test } from "vite-plus/test";
-import { tokenValues } from "../../../scripts/tokens";
+import { schemeValues, tokenValues } from "../../../scripts/tokens";
 import { elementsOf, valuesOf } from "../../../packages/core/tests/markup";
 import { policyHeader } from "#/src/middleware.ts";
 import { pageColorScheme } from "#/src/page-color-scheme.ts";
@@ -18,14 +18,13 @@ const ownerAttribute = "data-color-scheme";
 const ownerDefault = pageColorScheme;
 const schemes = ["light", "dark"] as const;
 type Scheme = (typeof schemes)[number];
-const perScheme = /^light-dark\((oklch\([^)]*\)), (oklch\([^)]*\))\)$/;
 const tokens = tokenValues();
 const clientScript = "**/assets/**/*.js";
 
 function written(token: string, scheme: Scheme): string {
-  const match = perScheme.exec(tokens[token] ?? "");
-  if (!match) throw new Error(`${token} is not written as light-dark(<light>, <dark>).`);
-  return scheme === "light" ? match[1] : match[2];
+  const values = schemeValues(tokens[token] ?? "");
+  if (!values) throw new Error(`${token} is not written as light-dark(<light>, <dark>).`);
+  return values[scheme];
 }
 
 async function colourOf(page: Page, value: string): Promise<string> {

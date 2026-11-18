@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import valueParser from "postcss-value-parser";
 import { repositoryRoot } from "#/scripts/repository.ts";
 import { parse, ts } from "#/scripts/syntax.ts";
 
@@ -52,6 +53,34 @@ export function tokenValues(file: string = tokensFile): Record<string, string> {
     throw new Error(`${file}: no tokens were found in a stylex.defineVars({ ... }) call.`);
   }
   return values;
+}
+
+const perSchemeFunction = "light-dark";
+
+export type SchemeValues = { light: string; dark: string };
+
+function isPerSchemeFunction(node: valueParser.Node): node is valueParser.FunctionNode {
+  return node.type === "function" && node.value.toLowerCase() === perSchemeFunction;
+}
+
+export function holdsSchemeValues(value: string): boolean {
+  let found = false;
+  valueParser(value).walk((node) => {
+    found ||= isPerSchemeFunction(node);
+  });
+  return found;
+}
+
+export function schemeValues(value: string): SchemeValues | undefined {
+  const [whole, ...others] = valueParser(value.trim()).nodes;
+  if (whole === undefined || others.length > 0 || !isPerSchemeFunction(whole)) return undefined;
+  const written: valueParser.Node[][] = [[]];
+  for (const node of whole.nodes) {
+    if (node.type === "div" && node.value === ",") written.push([]);
+    else written.at(-1)?.push(node);
+  }
+  const [light, dark, ...more] = written.map((nodes) => valueParser.stringify(nodes).trim());
+  return light && dark && more.length === 0 ? { light, dark } : undefined;
 }
 
 export function tokenKind(name: string): TokenKind {

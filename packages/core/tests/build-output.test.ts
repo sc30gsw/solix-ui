@@ -42,7 +42,7 @@ import {
   stylesheet as builtStylesheet,
 } from "#/tests/built-library.ts";
 import { parse, ts } from "../../../scripts/syntax";
-import { tokenKind, tokenValues } from "../../../scripts/tokens";
+import { schemeValues, tokenKind, tokenValues } from "../../../scripts/tokens";
 import {
   enclosingAtRules,
   inChildRuleLayer,
@@ -653,10 +653,7 @@ test("no light-dark() reaches the stylesheet: each colour token's default is its
   const tokens = tokenValues();
   const colours = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
   const valuesOf = (scheme: "light" | "dark") =>
-    colours.map((name) => {
-      const [, light, dark] = /^light-dark\((.+), (oklch\(.+\))\)$/.exec(tokens[name]) ?? [];
-      return `${name}:${scheme === "light" ? light : dark}`;
-    });
+    colours.map((name) => `${name}:${schemeValues(tokens[name])?.[scheme]}`);
   const placed = placedRules();
   const tokenDeclarations = (rule: PlacedRule) =>
     rule.declarations.filter((declaration) => declaration.startsWith("--solix-color-"));
@@ -674,7 +671,7 @@ test("no light-dark() reaches the stylesheet: each colour token's default is its
     }));
 
   expect(colours.length).toBeGreaterThan(0);
-  expect(stylesheet).not.toContain("light-dark(");
+  expect(stylesheet.toLowerCase()).not.toContain("light-dark(");
   expect(rootDefaults.flatMap(tokenDeclarations)).toEqual(valuesOf("light"));
   expect(perScheme).toEqual(
     (["light", "dark"] as const).flatMap((scheme) => [

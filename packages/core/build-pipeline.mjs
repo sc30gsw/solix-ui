@@ -6,6 +6,7 @@ import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
 import postcss from "postcss";
 import { distSpecifiers, libraryLayout } from "../../scripts/dist-specifiers.ts";
+import { tokensPerScheme } from "../../scripts/tokens-per-scheme.ts";
 import { colorSchemeRules, defaultColorScheme } from "#/src/color-schemes.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 
@@ -151,41 +152,10 @@ function scopedToLibraryParts(css) {
   return parsed.toString();
 }
 
-const perSchemeValue = /^light-dark\((.+)\)$/;
-
-function topLevelArguments(text) {
-  const found = [""];
-  let depth = 0;
-  for (const character of text) {
-    if (character === "(") depth += 1;
-    if (character === ")") depth -= 1;
-    if (character === "," && depth === 0) found.push("");
-    else found[found.length - 1] += character;
-  }
-  return found.map((argument) => argument.trim());
-}
-
-export function tokensPerScheme(css) {
-  const parsed = postcss.parse(css);
-  const light = [];
-  const dark = [];
-  parsed.walkRules((rule) => {
-    if (!rule.selectors.includes(":root")) return;
-    rule.walkDecls((declaration) => {
-      const inner = perSchemeValue.exec(declaration.value)?.[1];
-      const values = inner === undefined ? [] : topLevelArguments(inner);
-      if (!declaration.prop.startsWith("--") || values.length !== 2) return;
-      light.push([declaration.prop, values[0]]);
-      dark.push([declaration.prop, values[1]]);
-      declaration.value = { light: values[0], dark: values[1] }[defaultColorScheme];
-    });
-  });
-  return { css: parsed.toString(), tokens: { light, dark } };
-}
-
 export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
   const { css, tokens } = tokensPerScheme(
     stylexPlugin.processStylexRules(rules, { useLayers: true }),
+    defaultColorScheme,
   );
   return [
     outerLayerOrder,

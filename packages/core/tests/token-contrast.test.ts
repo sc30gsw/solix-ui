@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
+import { schemeValues, tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
 import { parse, ts } from "../../../scripts/syntax";
 
 type Minimum = { ratio: number; criterion: string };
@@ -22,7 +22,6 @@ const remLength = /^\d+(?:\.\d+)?rem$/;
 const number = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
 const oklchText = String.raw`oklch\(${number} ${number} ${number}(?: / ${number})?\)`;
 const oklchNotation = new RegExp(`^${oklchText}$`);
-const perScheme = new RegExp(`^light-dark\\((${oklchText}), (${oklchText})\\)$`);
 const schemes = ["light", "dark"] as const;
 type Scheme = (typeof schemes)[number];
 const gamutTolerance = 1e-4;
@@ -41,8 +40,7 @@ function oklch(value: string): Oklch | undefined {
 }
 
 function valueIn(name: string, scheme: Scheme): string | undefined {
-  const match = perScheme.exec(tokens[name]);
-  return match?.[scheme === "light" ? 1 : 6];
+  return schemeValues(tokens[name])?.[scheme];
 }
 
 function colourIn(name: string, scheme: Scheme): Oklch | undefined {
