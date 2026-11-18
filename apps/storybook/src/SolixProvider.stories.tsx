@@ -9,7 +9,7 @@ import {
   SolixProvider,
   type SolixProviderProps,
 } from "@solix/core";
-import { createSignal, Show } from "solid-js";
+import { createEffect, createSignal, Show } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect, spyOn, userEvent, waitFor } from "storybook/test";
 
@@ -22,6 +22,7 @@ const storageKeys = {
   outer: "story-outer-color-scheme",
   mounted: "story-mounted-color-scheme",
   inline: "story-inline-color-scheme",
+  forced: "story-forced-color-scheme",
 };
 const storeOfThePage = localStorageColorSchemeManager();
 
@@ -255,6 +256,51 @@ export const WritesOnARootThatMountsLater: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Show the root" }));
     await waitFor(() => expect(schemeOn(canvas.getByRole("region"))).toBe("dark"));
+  },
+};
+
+const managerOfTheForced = localStorageColorSchemeManager({ key: storageKeys.forced });
+
+function SeenSchemes() {
+  const { colorScheme } = createColorScheme();
+  let seen: HTMLOutputElement | undefined;
+  createEffect(colorScheme, (scheme) => seen?.append(`${scheme} `));
+  return <output aria-label="Seen by an effect" ref={(node) => (seen = node)} />;
+}
+
+function ForcedThenFree() {
+  const [forced, setForced] = createSignal<SolixProviderProps["forceColorScheme"]>("light");
+  return (
+    <OnItsOwnElement
+      colorSchemeManager={managerOfTheForced}
+      defaultColorScheme="auto"
+      forceColorScheme={forced()}
+    >
+      <Button onClick={() => setForced((now) => (now === undefined ? "light" : undefined))}>
+        Force or free
+      </Button>
+      <SeenSchemes />
+    </OnItsOwnElement>
+  );
+}
+
+export const GivesTheStoredSchemeWhenTheForceIsLifted: Story = {
+  beforeEach: () => {
+    localStorage.setItem(storageKeys.forced, "dark");
+  },
+  render: () => <ForcedThenFree />,
+  play: async ({ canvas }) => {
+    const scheme = () => schemeOn(canvas.getByRole("region"));
+    const forceOrFree = canvas.getByRole("button", { name: "Force or free" });
+
+    await waitFor(() => expect(scheme()).toBe("light"));
+    await userEvent.click(forceOrFree);
+    await waitFor(() => expect(scheme()).toBe("dark"));
+    await userEvent.click(forceOrFree);
+    await waitFor(() => expect(scheme()).toBe("light"));
+    await userEvent.click(forceOrFree);
+    await waitFor(() => expect(scheme()).toBe("dark"));
+    await expect(canvas.getByRole("status")).toHaveTextContent(/^light dark light dark$/);
   },
 };
 

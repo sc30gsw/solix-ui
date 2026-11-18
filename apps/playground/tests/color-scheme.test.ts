@@ -413,7 +413,7 @@ inEveryEngine((browser) => {
       }
     });
 
-    test("a provider given forceColorScheme and getRootElement writes the forced scheme on its own element, takes no manager, so its controls neither change, store nor clear a scheme, and leaves <html> to the page's provider", async () => {
+    test("a provider given forceColorScheme and getRootElement writes the forced scheme on its own element, its controls neither change, store nor clear a scheme, and it leaves <html> to the page's provider", async () => {
       const { page, close } = await open(browser(), system, { stored: other });
       await settledOn(page, other);
       const forced = page.getByRole("region", { name: forcedSection });

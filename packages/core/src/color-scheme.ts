@@ -51,9 +51,9 @@ export function createProvidedColorScheme(options: ColorSchemeOptions): Provided
   const computedColorScheme = () => resolvedColorScheme(colorScheme(), prefersDark());
   const setColorScheme = (value: SolixColorScheme) => followed()?.set(value);
 
-  createEffect(followed, (store) => {
-    setRead({ stored: store?.get() });
-    return store?.subscribe((stored) => setRead({ stored }));
+  createEffect(manager, (store) => {
+    setRead({ stored: store.get() });
+    return store.subscribe((stored) => setRead({ stored }));
   });
 
   createEffect(
