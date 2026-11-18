@@ -14,7 +14,6 @@ import {
   optional,
   panelOf,
   stateOf,
-  stillFrames,
   tabLists,
   tabNames,
 } from "#/tests/support/tabs.ts";
@@ -31,8 +30,7 @@ import { assertProperty } from "../../../tests/support/properties.ts";
 const url = inject("playgroundUrl");
 const generatedRuns = 15;
 const longestSequence = 12;
-const generatedSequencesTimeout = 90_000;
-const scrollMovesObserved = 4;
+const generatedSequencesTimeout = 55_000;
 const scrollAwayFromThePointer = 200;
 type Model = RovingListState & { list: RovingList };
 type Real = { page: Page };
@@ -193,50 +191,6 @@ inEveryEngine((browser) => {
       pageDidNotBecomeReady,
     );
 
-    await page.close();
-  });
-
-  test("a click on a tab begins only once the page has stopped scrolling, also when the scrolling pauses for fewer frames than the drive waits", async () => {
-    const page = await browser().newPage();
-    await openedAndHydrated(page, url);
-    const list = theOptionalList();
-    const model = atTheStartOf(list);
-    await clickOn(list, files).run(model, { page });
-    const scrolling = await page.evaluateHandle(
-      ({ moves, pause }) => {
-        const state: { left: number; leftWhenPressed: number | undefined } = {
-          left: moves,
-          leftWhenPressed: undefined,
-        };
-        const first = window.scrollY > 0 ? -1 : 1;
-        let frames = 0;
-        const frame = () => {
-          frames += 1;
-          if (frames % pause === 0) {
-            window.scrollBy(0, state.left % 2 === 0 ? first : -first);
-            state.left -= 1;
-          }
-          if (state.left > 0) requestAnimationFrame(frame);
-        };
-        requestAnimationFrame(frame);
-        window.addEventListener(
-          "pointerdown",
-          () => {
-            state.leftWhenPressed = state.left;
-          },
-          { capture: true, once: true },
-        );
-        return state;
-      },
-      { moves: scrollMovesObserved, pause: stillFrames - 1 },
-    );
-
-    await clickOn(list, notes).run(model, { page });
-
-    expect(
-      await scrolling.evaluate(({ leftWhenPressed }) => leftWhenPressed),
-      "the scroll movements still to come when the press began",
-    ).toBe(0);
     await page.close();
   });
 

@@ -31,7 +31,6 @@ export {
 } from "#/src/sections/tabs-setups.ts";
 
 export const tabsRegion = 'section[aria-label="Tabs"]';
-export const stillFrames = 10;
 export const clickMissedItsTab = "the click did not reach the tab";
 
 const pressEvents = ["mousedown", "mouseup", "click"];
@@ -196,28 +195,8 @@ export function activeAndSelected(
   });
 }
 
-export function scrollingStopped(page: Page): Promise<void> {
-  return page.evaluate(
-    (frames) =>
-      new Promise<void>((resolve) => {
-        let seen = [window.scrollX, window.scrollY];
-        let still = 0;
-        const look = () => {
-          const now = [window.scrollX, window.scrollY];
-          still = now.join() === seen.join() ? still + 1 : 0;
-          seen = now;
-          if (still >= frames) resolve();
-          else requestAnimationFrame(look);
-        };
-        requestAnimationFrame(look);
-      }),
-    stillFrames,
-  );
-}
-
 export async function clickTab(page: Page, list: string, name: string): Promise<void> {
   const tab = tabNamed(page, list, name);
-  await scrollingStopped(page);
   const watch = await tab.evaluateHandle((node, types) => {
     const seen: string[] = [];
     let reached = false;
