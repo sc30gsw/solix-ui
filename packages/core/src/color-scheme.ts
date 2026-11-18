@@ -8,13 +8,19 @@ import {
   onSettled,
   useContext,
 } from "solid-js";
-import { isColorScheme, type SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
+import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
+import {
+  colorSchemeAttribute,
+  colorSchemes,
+  defaultColorScheme,
+  isColorScheme,
+  prefersColorScheme,
+  resolvedColorScheme,
+  type SolixColorScheme,
+  type SolixComputedColorScheme,
+  systemColorScheme,
+} from "#/src/color-schemes.ts";
 import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
-import { colorSchemeAttribute } from "#/src/style-prop-table.ts";
-
-export type SolixColorScheme = "light" | "dark" | "auto";
-
-export type SolixComputedColorScheme = Exclude<SolixColorScheme, "auto">;
 
 export type ColorSchemeOptions = {
   manager: () => SolixColorSchemeManager;
@@ -35,8 +41,7 @@ type ProvidedColorScheme = Omit<SolixColorSchemeControls, "toggleColorScheme"> &
   currentColorScheme: () => SolixComputedColorScheme;
 };
 
-export const defaultColorScheme = "light" satisfies SolixColorScheme;
-export const darkSchemeQuery = "(prefers-color-scheme: dark)";
+const darkSchemeQuery = prefersColorScheme("dark");
 
 export const ColorSchemeContext = createContext<ProvidedColorScheme | null>(null);
 
@@ -50,10 +55,8 @@ export function createProvidedColorScheme(options: ColorSchemeOptions): Provided
   const darkPreferred = createMediaQuery(darkSchemeQuery);
   const colorScheme = () => options.forceColorScheme() ?? chosen() ?? options.defaultColorScheme();
   const currentColorScheme = (): SolixComputedColorScheme => {
-    const scheme = colorScheme();
-    if (scheme !== "auto") return scheme;
     darkPreferred();
-    return prefersDark() ? "dark" : "light";
+    return resolvedColorScheme(colorScheme(), prefersDark());
   };
 
   onSettled(() => {
@@ -74,11 +77,7 @@ export function createProvidedColorScheme(options: ColorSchemeOptions): Provided
 
   return {
     colorScheme,
-    computedColorScheme: () => {
-      const scheme = colorScheme();
-      if (scheme !== "auto") return scheme;
-      return darkPreferred() ? "dark" : "light";
-    },
+    computedColorScheme: () => resolvedColorScheme(colorScheme(), darkPreferred()),
     currentColorScheme,
     setColorScheme: (value) => {
       const forced = options.forceColorScheme();
@@ -134,8 +133,8 @@ export function colorSchemeScriptText(options: ColorSchemeScriptOptions): string
   return [
     "try{",
     `var s=localStorage.getItem(${scriptString(options.localStorageKey ?? colorSchemeStorageKey)});`,
-    `var c=s==="light"||s==="dark"||s==="auto"?s:${scriptString(fallback)};`,
-    `if(c==="auto")c=matchMedia(${scriptString(darkSchemeQuery)}).matches?"dark":"light";`,
+    `var c=${JSON.stringify(colorSchemes)}.indexOf(s)===-1?${scriptString(fallback)}:s;`,
+    `if(c===${scriptString(systemColorScheme)})c=matchMedia(${scriptString(darkSchemeQuery)}).matches?${scriptString(resolvedColorScheme(systemColorScheme, true))}:${scriptString(resolvedColorScheme(systemColorScheme, false))};`,
     `${setAttribute("c")}`,
     "}catch(e){}",
   ].join("");

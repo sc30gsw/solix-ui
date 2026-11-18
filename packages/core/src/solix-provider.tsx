@@ -1,13 +1,12 @@
 import type { JSX } from "@solidjs/web";
 import { Show, useContext } from "solid-js";
+import { ColorSchemeContext, createProvidedColorScheme } from "#/src/color-scheme.ts";
+import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
 import {
-  ColorSchemeContext,
-  createProvidedColorScheme,
   defaultColorScheme,
   type SolixColorScheme,
   type SolixComputedColorScheme,
-} from "#/src/color-scheme.ts";
-import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
+} from "#/src/color-schemes.ts";
 import { type SolixTheme, themeStyleSheet } from "#/src/create-theme.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { localStorageColorSchemeManager } from "#/src/local-storage-manager.ts";

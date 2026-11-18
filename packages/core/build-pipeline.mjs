@@ -6,11 +6,12 @@ import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
 import postcss from "postcss";
 import { distSpecifiers, libraryLayout } from "../../scripts/dist-specifiers.ts";
+import { colorSchemeRules, defaultColorScheme } from "#/src/color-schemes.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 
 import {
   behaviourSdkLayer,
-  colorSchemeAttribute,
+  colorSchemeLayer,
   componentLayer,
   hiddenLayer,
   libraryCascadeLayer,
@@ -164,10 +165,6 @@ function topLevelArguments(text) {
   return found.map((argument) => argument.trim());
 }
 
-function declarationsIn(values) {
-  return values.map(([property, value]) => `${property}:${value}`).join(";");
-}
-
 export function tokensPerScheme(css) {
   const parsed = postcss.parse(css);
   const light = [];
@@ -180,25 +177,16 @@ export function tokensPerScheme(css) {
       if (!declaration.prop.startsWith("--") || values.length !== 2) return;
       light.push([declaration.prop, values[0]]);
       dark.push([declaration.prop, values[1]]);
-      declaration.value = values[0];
+      declaration.value = { light: values[0], dark: values[1] }[defaultColorScheme];
     });
   });
-  const scheme = (value) => `[${colorSchemeAttribute}="${value}"]`;
-  const rules =
-    light.length === 0
-      ? ""
-      : [
-          `${scheme("light")}{${declarationsIn(light)}}`,
-          `${scheme("dark")}{${declarationsIn(dark)}}`,
-          `@media (prefers-color-scheme: light){${scheme("auto")}{${declarationsIn(light)}}}`,
-          `@media (prefers-color-scheme: dark){${scheme("auto")}{${declarationsIn(dark)}}}`,
-        ].join("\n");
-  return { css: parsed.toString(), rules };
+  return { css: parsed.toString(), tokens: { light, dark } };
 }
 
 export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
-  const schemes = tokensPerScheme(stylexPlugin.processStylexRules(rules, { useLayers: true }));
-  const { css } = schemes;
+  const { css, tokens } = tokensPerScheme(
+    stylexPlugin.processStylexRules(rules, { useLayers: true }),
+  );
   return [
     outerLayerOrder,
     scopedToLibraryParts(behaviourSdkRules),
@@ -209,7 +197,9 @@ export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
     "}",
     `@layer ${STYLE_PROP_LAYER} {`,
     stylePropRules,
-    schemes.rules,
+    "}",
+    `@layer ${colorSchemeLayer} {`,
+    colorSchemeRules(tokens),
     "}",
     `@layer ${HIDDEN_LAYER} {`,
     `${HIDDEN_PART_SELECTOR}{display:none}`,

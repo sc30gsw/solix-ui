@@ -1,5 +1,6 @@
 import { isServer } from "@solidjs/web";
-import { isColorScheme, type SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
+import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
+import { isColorScheme } from "#/src/color-schemes.ts";
 
 export type LocalStorageColorSchemeManagerOptions = { key?: string };
 

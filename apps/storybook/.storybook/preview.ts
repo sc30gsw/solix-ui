@@ -10,10 +10,10 @@ import {
   globalSwitchesThatSkipTheAccessibilityScan,
   selectorsTheAccessibilityAddonLeavesUnscanned,
 } from "#/accessibility-scan.ts";
+import { colorSchemeAttribute } from "@solix/core";
 import "@solix/core/styles.css";
 import "#/.storybook/preview.css";
 
-const colorSchemeAttribute = "data-color-scheme";
 const storyColorScheme: string = import.meta.env.STORY_COLOR_SCHEME ?? "light";
 
 function schemeProblems(): string[] {

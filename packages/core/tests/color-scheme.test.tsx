@@ -4,6 +4,7 @@ import { createComponent, renderToString } from "@solidjs/web";
 import fc from "fast-check";
 import { expect, test } from "vite-plus/test";
 import type * as ColorScheme from "#/src/color-scheme.ts";
+import type { SolixColorScheme } from "#/src/color-schemes.ts";
 import { dist, library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
 
@@ -75,7 +76,7 @@ function runScript(drawn: Page): { attributes: Map<string, string>; keysRead: st
   };
   runInNewContext(
     colorSchemeScriptText({
-      defaultColorScheme: drawn.defaultColorScheme as ColorScheme.SolixColorScheme | undefined,
+      defaultColorScheme: drawn.defaultColorScheme as SolixColorScheme | undefined,
       forceColorScheme: drawn.forceColorScheme,
       localStorageKey: drawn.localStorageKey,
     }),
@@ -113,7 +114,7 @@ test("the pre-paint script never holds the text that would end its <script> elem
   fc.assert(
     fc.property(page, (drawn) => {
       const text = colorSchemeScriptText({
-        defaultColorScheme: drawn.defaultColorScheme as ColorScheme.SolixColorScheme | undefined,
+        defaultColorScheme: drawn.defaultColorScheme as SolixColorScheme | undefined,
         forceColorScheme: drawn.forceColorScheme,
         localStorageKey: drawn.localStorageKey,
       });
@@ -167,6 +168,10 @@ test("the provider writes nothing of the colour scheme on the server: its markup
   ]) {
     expect(rendered(props)).toBe(rendered({}));
   }
+});
+
+test("the library exports the name of the attribute that carries the scheme", () => {
+  expect(library.colorSchemeAttribute).toBe(ownerAttribute);
 });
 
 test("isColorScheme is true for light, dark and auto, and false for any other value", () => {

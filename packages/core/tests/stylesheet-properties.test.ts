@@ -144,7 +144,7 @@ function sourceFor(definitions: Definition[]): string {
   return `import * as stylex from "@stylexjs/stylex";\nimport { disclosureState } from "#/src/disclosure-state.stylex.ts";\nexport const styles = stylex.create({ ${namespaces.join(", ")} });\n`;
 }
 
-test("for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its container queries and then the hidden layer last, nothing important in the library's layer, and no rule that styles a page's own <html> or <body>", async () => {
+test("for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its colour-scheme rules, its container queries and then the hidden layer last, nothing important in the library's layer, and no rule that styles a page's own <html> or <body>", async () => {
   await fc.assert(
     fc.asyncProperty(styleDefinitions, async (definitions) => {
       const { rules } = await compileLibrarySource({

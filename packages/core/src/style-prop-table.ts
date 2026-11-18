@@ -28,19 +28,12 @@ export const stylePropClassPrefix = "sx";
 export const libraryCascadeLayer = "solix";
 export const componentLayer = "components";
 export const stylePropLayer = "style-props";
+export const colorSchemeLayer = "color-scheme";
 export const containerQueryLayer = "container-queries";
 export const childRuleLayer = "child-rules";
 export const hiddenLayer = "hidden";
 export const behaviourSdkLayer = "ui-sdk";
 export const libraryStyleMark = "data-solix-rules";
-
-export const colorSchemeAttribute = "data-color-scheme";
-
-export const colorSchemeOf = {
-  light: "light",
-  dark: "dark",
-  auto: "light dark",
-} as const;
 
 export const breakpointWidths = {
   xs: "36em",
@@ -188,7 +181,7 @@ const visibilityTable = {
   visibleFrom: { className: "visible-from", query: (width: string) => `(width < ${width})` },
 } satisfies Record<string, { className: string; query: (width: string) => string }>;
 
-const colorSchemeVisibilityTable = {
+export const colorSchemeVisibilityTable = {
   lightHidden: { className: "light-hidden", scheme: "light" },
   darkHidden: { className: "dark-hidden", scheme: "dark" },
 } as const satisfies Record<string, { className: string; scheme: "light" | "dark" }>;
@@ -396,6 +389,7 @@ const outerLayers = [behaviourSdkLayer, libraryCascadeLayer] as const;
 export const libraryLayers = [
   componentLayer,
   stylePropLayer,
+  colorSchemeLayer,
   containerQueryLayer,
   hiddenLayer,
 ] as const;
@@ -420,23 +414,10 @@ export function stylePropRules(): string {
       ]),
     ),
   );
-  const schemes = Object.entries(colorSchemeOf).map(
-    ([scheme, colorScheme]) => `[${colorSchemeAttribute}="${scheme}"]{color-scheme:${colorScheme}}`,
-  );
-  const hiddenInScheme = colorSchemeVisibilityPropNames.flatMap((name) => {
-    const hidden = `.${colorSchemeVisibilityClass(name)}{display:none}`;
-    const { scheme } = colorSchemeVisibilityTable[name];
-    return [
-      `[${colorSchemeAttribute}="${scheme}"] ${hidden}`,
-      media(`(prefers-color-scheme: ${scheme})`, [`[${colorSchemeAttribute}="auto"] ${hidden}`]),
-    ];
-  });
   return [
     `@layer ${childRuleLayer}{\n${childRules().join("\n")}\n}`,
-    ...schemes,
     ...registrations,
     ...ordered,
     ...visibility,
-    ...hiddenInScheme,
   ].join("\n");
 }

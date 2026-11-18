@@ -1,4 +1,4 @@
-import type { SolixColorScheme } from "#/src/color-scheme.ts";
+import type { SolixColorScheme } from "#/src/color-schemes.ts";
 
 export type SolixColorSchemeManager = {
   get: (defaultValue: SolixColorScheme) => SolixColorScheme;
@@ -7,9 +7,3 @@ export type SolixColorSchemeManager = {
   unsubscribe: () => void;
   clear: () => void;
 };
-
-const colorSchemes: readonly unknown[] = ["light", "dark", "auto"] satisfies SolixColorScheme[];
-
-export function isColorScheme(value: unknown): value is SolixColorScheme {
-  return colorSchemes.includes(value);
-}
