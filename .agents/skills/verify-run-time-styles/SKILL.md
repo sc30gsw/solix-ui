@@ -70,7 +70,7 @@ No verifier runs on a Solid component or on a browser's policy, so this is not a
 - **`refused` is not empty.** The engine dropped a style; the message names the directive and the sample.
 - **The theme value differs.** The theme's style was dropped, or its selector or layer changed.
 - **The generated test fails.** fast-check prints the theme, selector and nonce under `Counterexample`. Say which rule broke in the terms above.
-- To replay one failure, add the printed `seed` and `path` to the options object passed to `fc.assert`, run again, and remove them afterwards.
+- To replay one failure, add the printed `seed` and `path` to the parameters passed to `assertProperty`, run again, and remove them afterwards.
 
 ## When the change is intended
 

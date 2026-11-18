@@ -71,7 +71,7 @@ No verifier runs on a JavaScript build script, so this is not a proof. `styleshe
 
 - **An `expect` fails.** This is a real break. fast-check prints the smallest definition that triggers it under `Counterexample`, with a `seed` and `path`. Report it in these terms: which definition, and which rule left the layer or lost the prefix. Do not loosen the assertion.
 - **`BABEL_TRANSFORM_ERROR` from StyleX.** The generator wrote source that StyleX rejects, so the check never ran for that input. Fix the generator in `stylesheet-properties.test.ts`, as `withoutRepeatedConditions` does for a condition nested inside itself.
-- To replay one failure, add the printed `seed` and `path` to the options object passed to `fc.assert`, run again, and remove them afterwards.
+- To replay one failure, add the printed `seed` and `path` to the parameters passed to `assertProperty`, run again, and remove them afterwards.
 
 ## When the change is intended
 

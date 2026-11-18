@@ -65,7 +65,7 @@ No model checker runs on a Solid component, so this is not a proof. The test use
 - **An `expect` fails after `Counterexample`.** This is a real break unless it is listed below. fast-check prints a generated sequence shrunk to the shortest that still fails, such as `[press the Open modal button,press outside the dialog /*replayPath="BF:C"*/]`, and a fixed sequence whole and in double brackets, such as `[[press the Open modal button,press outside the dialog]]`. The message names the observation, such as `the dialog's open property: expected true to be false`. Report it in those terms. Do not loosen the assertion.
 - **`focus is on the page behind the open dialog`.** Tab and Shift+Tab may leave the dialog for the browser's own controls, so `document.body` is allowed. An element of the page behind is not.
 - **A timeout in `page.goto` or a click.** The server did not start or the page is not the one in the table. Run `vp run -r build`, then the test.
-- To replay one failure, add the printed `seed` and `path` to the options object passed to `fc.assert`, run again, and remove them afterwards.
+- To replay one failure, add the printed `seed` and `path` to the parameters passed to `assertProperty`, run again, and remove them afterwards.
 
 ## When the change is intended
 

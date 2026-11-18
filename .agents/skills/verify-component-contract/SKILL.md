@@ -104,7 +104,7 @@ No verifier runs on Solid components, so this is not a proof. The test uses fast
 - **`starts with exactly the classes of its compiled styles, then its stable class` fails.** A part carries the classes of another part's styles, or of none, or a class before them. Give each part `stylex.attrs` of its own `styles` entry, in `createParts`.
 - **An `expect` inside the property fails.** This is a real break. fast-check prints the smallest input under `Counterexample`: the class names with how each was written, the attributes, and the boolean flag. Report it in those terms, for example "a class written as an object key and switched off still appears on the Button". Do not loosen the assertion.
 - **`The rendered markup holds 0 elements with solix-<Component>-root`.** The component no longer renders its root, or renders it twice. A wrapper is only allowed as the `container` part.
-- To replay one failure, add the printed `seed` and `path` to the options object passed to `fc.assert`, run again, and remove them afterwards.
+- To replay one failure, add the printed `seed` and `path` to the parameters passed to `assertProperty`, run again, and remove them afterwards.
 
 ## When the change is intended
 

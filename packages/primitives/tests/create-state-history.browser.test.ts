@@ -4,6 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { createStateHistory, type StateHistory, type StateHistoryHandlers } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 function shown<T>(value: () => T, history: StateHistory<T>): [T, T[], number] {
   return [value(), history.history(), history.current()];
@@ -133,8 +134,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of sets, moves, resets and flushes, it agrees with a model of the history", () => {
-  fc.assert(
+test("for every generated sequence of sets, moves, resets and flushes, it agrees with a model of the history", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.integer({ min: 0, max: 9 }),
       fc.commands(commands, { maxCommands: 30, size: "medium" }),

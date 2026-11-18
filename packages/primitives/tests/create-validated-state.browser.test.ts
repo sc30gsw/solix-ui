@@ -4,6 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { createValidatedState, type ValidatedState } from "#/src/index.ts";
 import { flush, mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { command, flushCommand, type Tick } from "#/tests/support/model.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const longerThanTwo = (text: string) => text.length > 2;
 
@@ -108,8 +109,9 @@ const commands = [
   ),
 ];
 
-test("for every generated sequence of values and flushes, it agrees with a model of the value, the last valid value and the verdict", () => {
-  fc.assert(
+test("for every generated sequence of values and flushes, it agrees with a model of the value, the last valid value and the verdict", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       text,
       fc.option(fc.boolean(), { nil: undefined }),

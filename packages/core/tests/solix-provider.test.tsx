@@ -8,6 +8,7 @@ import type * as CreateTheme from "#/src/create-theme.ts";
 import { layerOrder, libraryCascadeLayer, libraryStyleMark } from "#/src/style-prop-table.ts";
 import { dist, library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const { scaleOfThemeKey } = (await import(join(dist, "create-theme.js"))) as typeof CreateTheme;
 
@@ -114,8 +115,9 @@ test("createTheme gives back the theme it is given", () => {
   expect(library.createTheme(given)).toBe(given);
 });
 
-test("on the server, the provider writes its theme as one marked style with the nonce it is given, in the library's layer, for generated themes, selectors and nonces", () => {
-  fc.assert(
+test("on the server, the provider writes its theme as one marked style with the nonce it is given, in the library's layer, for generated themes, selectors and nonces", async (context) => {
+  await assertProperty(
+    context,
     fc.property(
       fc.record({
         theme,
