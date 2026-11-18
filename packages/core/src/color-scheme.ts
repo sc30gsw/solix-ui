@@ -8,7 +8,7 @@ import {
   onSettled,
   useContext,
 } from "solid-js";
-import { isSolixColorScheme, type SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
+import { isColorScheme, type SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
 import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
 import { colorSchemeAttribute } from "#/src/style-prop-table.ts";
 
@@ -101,9 +101,9 @@ export function provided(caller: string): ProvidedColorScheme {
   return scheme;
 }
 
-export function createSolixColorScheme(): SolixColorSchemeControls {
+export function createColorScheme(): SolixColorSchemeControls {
   const { colorScheme, setColorScheme, clearColorScheme, currentColorScheme } =
-    provided("createSolixColorScheme");
+    provided("createColorScheme");
   return {
     colorScheme,
     setColorScheme,
@@ -125,10 +125,10 @@ export type ColorSchemeScriptOptions = {
 export function colorSchemeScriptText(options: ColorSchemeScriptOptions): string {
   const setAttribute = (scheme: string) =>
     `document.documentElement.setAttribute(${scriptString(colorSchemeAttribute)},${scheme})`;
-  if (options.forceColorScheme !== undefined && isSolixColorScheme(options.forceColorScheme)) {
+  if (options.forceColorScheme !== undefined && isColorScheme(options.forceColorScheme)) {
     return `${setAttribute(scriptString(options.forceColorScheme))};`;
   }
-  const fallback = isSolixColorScheme(options.defaultColorScheme)
+  const fallback = isColorScheme(options.defaultColorScheme)
     ? options.defaultColorScheme
     : defaultColorScheme;
   return [

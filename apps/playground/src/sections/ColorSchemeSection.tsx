@@ -2,7 +2,7 @@ import {
   Box,
   Button,
   createComputedColorScheme,
-  createSolixColorScheme,
+  createColorScheme,
   SolixProvider,
   TextInput,
 } from "@solix/core";
@@ -14,7 +14,7 @@ import {
 } from "#/src/sections/color-scheme-setups.ts";
 
 function ChosenScheme(props: { label: string }) {
-  const { colorScheme } = createSolixColorScheme();
+  const { colorScheme } = createColorScheme();
   return (
     <p>
       {props.label}: <output aria-label={props.label}>{colorScheme()}</output>
@@ -23,7 +23,7 @@ function ChosenScheme(props: { label: string }) {
 }
 
 function ForcedControls() {
-  const { setColorScheme } = createSolixColorScheme();
+  const { setColorScheme } = createColorScheme();
   return <Button onClick={() => setColorScheme("light")}>{schemeButtons.forcedLight}</Button>;
 }
 
@@ -41,7 +41,7 @@ function ForcedScheme() {
 }
 
 export function ColorSchemeSection() {
-  const { setColorScheme, toggleColorScheme, clearColorScheme } = createSolixColorScheme();
+  const { setColorScheme, toggleColorScheme, clearColorScheme } = createColorScheme();
   const computedScheme = createComputedColorScheme();
   return (
     <section aria-label={colorSchemeSection}>

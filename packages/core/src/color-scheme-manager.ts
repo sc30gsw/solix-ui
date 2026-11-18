@@ -10,6 +10,6 @@ export type SolixColorSchemeManager = {
 
 const colorSchemes: readonly unknown[] = ["light", "dark", "auto"] satisfies SolixColorScheme[];
 
-export function isSolixColorScheme(value: unknown): value is SolixColorScheme {
+export function isColorScheme(value: unknown): value is SolixColorScheme {
   return colorSchemes.includes(value);
 }

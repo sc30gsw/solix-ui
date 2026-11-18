@@ -169,13 +169,13 @@ test("the provider writes nothing of the colour scheme on the server: its markup
   }
 });
 
-test("isSolixColorScheme is true for light, dark and auto, and false for any other value", () => {
-  for (const scheme of ownerSchemes) expect(library.isSolixColorScheme(scheme)).toBe(true);
+test("isColorScheme is true for light, dark and auto, and false for any other value", () => {
+  for (const scheme of ownerSchemes) expect(library.isColorScheme(scheme)).toBe(true);
   fc.assert(
     fc.property(
       fc.anything().filter((value) => !ownerSchemes.includes(value as string)),
       (value) => {
-        expect(library.isSolixColorScheme(value)).toBe(false);
+        expect(library.isColorScheme(value)).toBe(false);
       },
     ),
     { numRuns: generatedRuns },
@@ -194,9 +194,9 @@ test("on the server, the local-storage manager gives back the default and its ot
   }).not.toThrow();
 });
 
-test("createSolixColorScheme and createComputedColorScheme outside a SolixProvider throw, naming themselves", () => {
+test("createColorScheme and createComputedColorScheme outside a SolixProvider throw, naming themselves", () => {
   for (const [name, create] of [
-    ["createSolixColorScheme", library.createSolixColorScheme],
+    ["createColorScheme", library.createColorScheme],
     ["createComputedColorScheme", library.createComputedColorScheme],
   ] as const) {
     expect(() =>

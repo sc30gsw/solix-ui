@@ -1,10 +1,4 @@
-import {
-  Box,
-  createTheme,
-  isSolixColorScheme,
-  type SolixColorScheme,
-  SolixProvider,
-} from "@solix/core";
+import { Box, createTheme, isColorScheme, type SolixColorScheme, SolixProvider } from "@solix/core";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect } from "storybook/test";
 
@@ -12,7 +6,7 @@ const themedPadding = "3rem";
 
 function schemeOfThePage(): SolixColorScheme | undefined {
   const scheme = document.documentElement.getAttribute("data-color-scheme");
-  return isSolixColorScheme(scheme) ? scheme : undefined;
+  return isColorScheme(scheme) ? scheme : undefined;
 }
 
 const meta = {

@@ -1,5 +1,5 @@
 import { isServer } from "@solidjs/web";
-import { isSolixColorScheme, type SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
+import { isColorScheme, type SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
 
 export type LocalStorageColorSchemeManagerOptions = { key?: string };
 
@@ -27,7 +27,7 @@ export function localStorageColorSchemeManager({
     get: (fallback) => {
       try {
         const stored = storage()?.getItem(key);
-        return isSolixColorScheme(stored) ? stored : fallback;
+        return isColorScheme(stored) ? stored : fallback;
       } catch {
         return fallback;
       }
@@ -37,11 +37,7 @@ export function localStorageColorSchemeManager({
       if (isServer) return;
       stopListening();
       const listener = (event: StorageEvent) => {
-        if (
-          event.key === key &&
-          event.storageArea === storage() &&
-          isSolixColorScheme(event.newValue)
-        ) {
+        if (event.key === key && event.storageArea === storage() && isColorScheme(event.newValue)) {
           onUpdate(event.newValue);
         }
       };
