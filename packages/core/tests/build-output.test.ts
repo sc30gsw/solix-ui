@@ -68,13 +68,13 @@ const ownerColorSchemes: [scheme: string, colorScheme: string][] = [
 const ownerAttribute = "data-color-scheme";
 const whereSchemeIs = (scheme: string) => `[${ownerAttribute}="${scheme}"]`;
 const stylePropClass = `.${LIBRARY_CLASS_PREFIX}-`;
+const stylePropCustomProperty = `--${LIBRARY_CLASS_PREFIX}-`;
 const ownerSchemeHiding: [className: string, scheme: string, property: string][] = [
-  [`${LIBRARY_CLASS_PREFIX}-light-hidden`, "light", "--light-hidden"],
-  [`${LIBRARY_CLASS_PREFIX}-dark-hidden`, "dark", "--dark-hidden"],
+  [`${LIBRARY_CLASS_PREFIX}-light-hidden`, "light", `${stylePropCustomProperty}light-hidden`],
+  [`${LIBRARY_CLASS_PREFIX}-dark-hidden`, "dark", `${stylePropCustomProperty}dark-hidden`],
 ];
 const ownerDefaultScheme = "light";
 const pageRoot = ":root";
-const stylePropCustomProperty = `--${LIBRARY_CLASS_PREFIX}-`;
 const builtStylePropTable = "style-prop-table.js";
 const boxSides = ["top", "right", "bottom", "left"];
 const sidesOfLogicalPart: Record<string, string[]> = {
@@ -660,7 +660,7 @@ test("no light-dark() reaches the stylesheet: each colour token's default is its
   );
 });
 
-test("lightHidden and darkHidden each read one inherited custom property in the colour-scheme layer, which ranks after every style prop: none where the scheme hides the element, set by :root for the light scheme, by data-color-scheme for its own, and by auto under each prefers-color-scheme, and elsewhere a value that leaves the display to the layers before", () => {
+test("lightHidden and darkHidden each read one inherited custom property with the style props' prefix in the colour-scheme layer, which ranks after every style prop: none where the scheme hides the element, set by :root for the light scheme, by data-color-scheme for its own, and by auto under each prefers-color-scheme, and elsewhere a value that leaves the display to the layers before", () => {
   const { inside } = colorSchemeLayerRules();
   const hidingIn = (scheme: string) =>
     ownerSchemeHiding.map(

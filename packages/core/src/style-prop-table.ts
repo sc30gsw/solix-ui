@@ -332,15 +332,8 @@ export const visibilityClasses = visibilityPropNames.flatMap((name) => [
 
 export const hiddenInAScheme = visibilityPropNames.flatMap((name) => {
   const row: HiddenAtAWidth | HiddenInAScheme = visibilityTable[name];
-  return "scheme" in row
-    ? [
-        {
-          scheme: row.scheme,
-          className: `${stylePropClassPrefix}-${row.className}`,
-          property: `--${row.className}`,
-        },
-      ]
-    : [];
+  const className = `${stylePropClassPrefix}-${row.className}`;
+  return "scheme" in row ? [{ scheme: row.scheme, className, property: `--${className}` }] : [];
 });
 
 function media(query: string, rules: string[]): string {
