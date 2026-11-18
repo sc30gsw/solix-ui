@@ -126,18 +126,20 @@ function trap(container: HTMLElement): () => void {
  * trap watches where focus goes instead. When focus moves from an element of the page to one
  * outside the container, by Tab, a click, a script or a frame, it moves on to the container's
  * first tab stop if the element that took it follows the container in the document, and to its
- * last tab stop if it comes before. So Tab wraps at both ends. In an engine that starts Shift+Tab
- * from the document's selection, Shift+Tab from a trap with no tab stop while that selection lies
- * inside it can still take focus out of the trap's document to whatever precedes it, as it can
- * from a modal `<dialog>`: to the page that embeds the document when the trap is in a frame, and,
- * by inference, to the browser's own controls when nothing embeds it. Focus that lands outside the
- * container with nothing focused before it in the document moves to the first tab stop, so focus
- * that comes back lands in the trap. Each move is confirmed, and an
- * element that does not take focus, such as a link without `href`, is passed over for the next
- * one. With no tab stop that takes focus, focus moves to the container, so keep the container
- * focusable with `tabindex="-1"`. Engines report a move into a frame at different times, so the
- * trap also looks on the next task after focus leaves the container or the window, and brings back
- * focus that a frame outside the container holds by then.
+ * last tab stop if it comes before. So Tab wraps at both ends. One case is the engine's. Where an
+ * engine starts Shift+Tab from the document's selection, as Firefox does, Shift+Tab pressed while
+ * focus is on the container itself, as after a click on its text or when it holds no tab stop,
+ * with the selection inside the container and no tab stop before the selection, takes focus out of
+ * the trap's document without landing on an element of it. The same key does the same there from
+ * the same element with no trap on it and from a modal `<dialog>`. Focus then goes to the page that
+ * embeds the document when the trap is in a frame, and, by inference, to the browser's own controls
+ * when nothing embeds it. Focus that lands outside the container with nothing focused before it in
+ * the document moves to the first tab stop, so focus that comes back lands in the trap. Each move
+ * is confirmed, and an element that does not take focus, such as a link without `href`, is passed
+ * over for the next one. With no tab stop that takes focus, focus moves to the container, so keep
+ * the container focusable with `tabindex="-1"`. Engines report a move into a frame at different
+ * times, so the trap also looks on the next task after focus leaves the container or the window,
+ * and brings back focus that a frame outside the container holds by then.
  *
  * Only the trap turned on last guards focus: turning one on suspends every other, in any order of
  * nesting, and turning it off or disposing it resumes them. Turning `active` off releases the trap
