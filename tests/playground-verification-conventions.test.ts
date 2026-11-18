@@ -1,12 +1,21 @@
 import { globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { expect, test } from "vite-plus/test";
+import { afterAll, expect, test } from "vite-plus/test";
 import {
   descendants,
   exportsOf,
+  fileOf,
+  findAncestor,
+  isPackageFile,
+  isTypedAny,
+  memberDeclarations,
+  nameOf,
+  openProgram,
   parse,
   parseAll,
+  type Program,
   staticPropertyName,
+  stringsIn,
   ts,
 } from "#/scripts/syntax.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
@@ -16,6 +25,7 @@ const skillFile = `${skill}/SKILL.md`;
 const featureDirectory = `${skill}/features`;
 const featureIndex = `${featureDirectory}/README.md`;
 const driveScript = `${skill}/scripts/drive.mjs`;
+const driveScripts = `${skill}/scripts/*.mjs`;
 const evidenceScript = `${skill}/scripts/evidence.mjs`;
 const launchScript = `${skill}/scripts/launch.sh`;
 const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
@@ -26,6 +36,10 @@ const letterOrDigit = /[\p{L}\p{N}]/u;
 const whitespace = /\s/;
 const derivingFunctions = ["panelOf", "valueOf"];
 const playgroundTestCode = "apps/playground/tests/**/*.{ts,tsx,mjs}";
+const openingModule = "apps/playground/tests/support/opening.ts";
+const openers = ["openedAndHydrated", "openedBeforeHydration"];
+const navigation = "goto";
+const playwrightPackages = ["playwright", "playwright-core"];
 const featureSections = [
   "Sub-features",
   "How to get to it (user POV)",
@@ -309,5 +323,76 @@ test("no playground test or drive script writes a name that a setups module hold
   });
 
   expect(held).not.toEqual([]);
+  expect(violations).toEqual([]);
+});
+
+function isPlaywrightsNavigation(declaration: ts.Node): boolean {
+  const file = fileOf(declaration);
+  return (
+    isPackageFile(file) &&
+    file.split(/[\\/]/).some((part) => playwrightPackages.includes(part)) &&
+    nameOf(declaration) === navigation
+  );
+}
+
+function boundName(program: Program, element: ts.Node): string[] {
+  if (!ts.isBindingElement(element)) return [];
+  const name = element.propertyName ?? element.name;
+  if (!name) return [];
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return [name.text];
+  return ts.isComputedPropertyName(name) ? stringsIn(program, name.expression) : [];
+}
+
+function namesOfMembersReadFromAny(program: Program, node: ts.Node): string[] {
+  if (ts.isPropertyAccessExpression(node)) {
+    return isTypedAny(program, node.expression) ? [node.name.text] : [];
+  }
+  if (ts.isElementAccessExpression(node)) {
+    return isTypedAny(program, node.expression) ? stringsIn(program, node.argumentExpression) : [];
+  }
+  if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+    return isTypedAny(program, node.parent) ? boundName(program, node) : [];
+  }
+  return [];
+}
+
+function insideAnOpener(node: ts.Node): boolean {
+  if (!fileOf(node).endsWith(openingModule)) return false;
+  const owner = findAncestor(node, ts.isFunctionDeclaration);
+  return owner !== undefined && openers.includes(nameOf(owner)) && ts.isSourceFile(owner.parent);
+}
+
+function navigationsIn(program: Program, file: string): ts.Node[] {
+  const source = program.sourceFile(join(repositoryRoot, file));
+  if (!source) throw new Error(`${file}: TypeScript did not open this file.`);
+  return descendants(source).filter(
+    (node) =>
+      memberDeclarations(program, node).some(isPlaywrightsNavigation) ||
+      namesOfMembersReadFromAny(program, node).includes(navigation),
+  );
+}
+
+function lineOf(node: ts.Node): number {
+  return node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
+}
+
+const openedFiles = globSync([playgroundTestCode, driveScripts], { cwd: repositoryRoot }).sort();
+const opening = openProgram(openedFiles.map((file) => join(repositoryRoot, file)));
+afterAll(() => {
+  opening.dispose();
+});
+
+test(`no playground test or drive script reaches Playwright's ${navigation} but through ${openers.join(" or ")}, by a member the type checker resolves or by a member of a value typed any`, () => {
+  const violations = openedFiles.flatMap((file) =>
+    navigationsIn(opening, file)
+      .filter((node) => !insideAnOpener(node))
+      .map(
+        (node) =>
+          `${file}:${lineOf(node)}: ${node.getText()} reaches Playwright's ${navigation}. Open the page with ${openers[0]} from ${openingModule}, or with ${openers[1]} where the test acts before hydration or with scripts off.`,
+      ),
+  );
+
+  expect(openedFiles).toEqual(expect.arrayContaining([openingModule, driveScript]));
+  expect(navigationsIn(opening, openingModule).filter(insideAnOpener)).toHaveLength(openers.length);
   expect(violations).toEqual([]);
 });

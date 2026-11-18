@@ -14,6 +14,7 @@ import {
   type OpenPage,
   scriptModes,
 } from "#/tests/support/playground.ts";
+import { openedAndHydrated, openedBeforeHydration } from "#/tests/support/opening.ts";
 import {
   pageStyleRules,
   type PageStyleRule,
@@ -90,7 +91,9 @@ inEveryEngine((browser) => {
     test("before a script runs the page adds no style but the library's own, which it marks, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, every rule of a style the library marks names the library's layer, and every important declaration on the page sits in the SDK's layer", async () => {
       const plain = await browser().newContext({ javaScriptEnabled });
       const page = await plain.newPage();
-      await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
+      await (javaScriptEnabled
+        ? openedAndHydrated(page, url)
+        : openedBeforeHydration(page, url, "load"));
       const rules = await pageStyleRules(page);
       const added = await stylesAddedToThePage(page);
       await plain.close();

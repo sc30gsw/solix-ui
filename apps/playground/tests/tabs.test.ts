@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/t
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
 import { wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
+import { openedAndHydrated } from "#/tests/support/opening.ts";
 import { computed, inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 import {
   account,
@@ -215,7 +216,7 @@ inEveryEngine((browser) => {
 
     test("a list wider than its container wraps, so every tab of every list outside a shadow root lies inside a narrow container, in either direction", async () => {
       const narrow = await browser().newPage();
-      await narrow.goto(url, { waitUntil: "networkidle" });
+      await openedAndHydrated(narrow, url);
       const outside = await narrow.locator(tabsRegion).evaluate((region) => {
         if (!(region instanceof HTMLElement)) return ["the region is no HTML element"];
         region.style.width = "12rem";
@@ -411,7 +412,7 @@ inEveryEngine((browser) => {
     test("axe-core finds no WCAG 2.2 A or AA violation in the Tabs region", async () => {
       const context = await browser().newContext();
       const page = await context.newPage();
-      await page.goto(url, { waitUntil: "networkidle" });
+      await openedAndHydrated(page, url);
       await tabNamed(page, account, members).click();
       await tabNamed(page, optional, notes).click();
       await page.addScriptTag({ path: axeSource });
@@ -494,7 +495,7 @@ inEveryEngine((browser) => {
     test("with forced colours the selected tab still differs from the others by a border, which forced colours keep", async () => {
       const forced = await browser().newContext({ forcedColors: "active" });
       const page = await forced.newPage();
-      await page.goto(url, { waitUntil: "networkidle" });
+      await openedAndHydrated(page, url);
 
       expect(await computed(tabNamed(page, account, overview), "border-bottom-style")).toBe(
         "solid",

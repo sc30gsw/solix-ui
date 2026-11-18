@@ -3,10 +3,11 @@ import type { Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
 import {
   hydrated,
-  inEveryEngine,
   openedAndHydrated,
+  openedBeforeHydration,
   pageDidNotBecomeReady,
-} from "#/tests/support/playground.ts";
+} from "#/tests/support/opening.ts";
+import { inEveryEngine } from "#/tests/support/playground.ts";
 import {
   activeAndSelected,
   clickMissedItsTab,
@@ -185,7 +186,7 @@ inEveryEngine((browser) => {
   test("on a page whose client script never hydrates it, the drive fails by saying that the page did not become ready", async () => {
     const page = await browser().newPage();
     await withItsClientScriptAfter(page, neverHydrates);
-    await page.goto(url, { waitUntil: "networkidle" });
+    await openedBeforeHydration(page, url, "networkidle");
 
     await expect(hydrated(page, { timeout: waitForAPageThatNeverHydrates })).rejects.toThrow(
       pageDidNotBecomeReady,

@@ -1,6 +1,7 @@
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import type { BrowserValuePrimitive } from "../../../packages/primitives/fixtures/primitive-kinds";
+import { openedAndHydrated, openedBeforeHydration } from "#/tests/support/opening.ts";
 import { inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
@@ -168,7 +169,7 @@ async function hydratedWhileScrolled(browser: Browser, y: number): Promise<strin
       await opened;
       await route.continue();
     });
-    await page.goto(url, { waitUntil: "commit" });
+    await openedBeforeHydration(page, url, "commit");
     await page.locator(headroomCalls).waitFor({ state: "attached" });
     await scrolledTo(page, y);
     gate.open();
@@ -198,11 +199,7 @@ async function scrollCommandsWhileLoading(browser: Browser): Promise<string[]> {
       };
     });
     const page = await context.newPage();
-    await page.goto(url);
-    await page.waitForFunction(() =>
-      document.querySelector("output[data-hydration-probe][data-hydrated-as]"),
-    );
-    await page.waitForLoadState("networkidle");
+    await openedAndHydrated(page, url);
     return await page.evaluate((): string[] => Reflect.get(window, "scrollCommands"));
   } finally {
     await context.close();

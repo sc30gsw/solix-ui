@@ -256,6 +256,11 @@ export function stringsIn(program: Program, expression: ts.Expression | undefine
   return expression ? stringLiteralTypesOf(program.checker, expression) : [];
 }
 
+export function isTypedAny(program: Program, node: ts.Node): boolean {
+  const type = program.checker.getTypeAtLocation(node);
+  return type !== undefined && (type.flags & TypeFlags.Any) !== 0;
+}
+
 export function assertedType(program: Program, node: ts.Node): AssertedType | undefined {
   if (!ts.isAsExpression(node) && !ts.isTypeAssertion(node)) return undefined;
   if (isConstTypeReference(node.type)) return undefined;

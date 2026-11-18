@@ -12,6 +12,7 @@ export {
   isDefaultLibraryFile,
   isDomLibraryFile,
   isGlobalObject,
+  isTypedAny,
   isPackageFile,
   memberDeclarations,
   parameterAliases,

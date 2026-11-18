@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import type { Locator, Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
+import { openedAndHydrated } from "#/tests/support/opening.ts";
 import { inEveryEngine } from "#/tests/support/playground.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
 
@@ -178,7 +179,7 @@ inEveryEngine((browser) => {
       await assertProperty(
         context,
         fc.asyncProperty(fc.commands(steps, { maxCommands: longestSequence }), async (sequence) => {
-          await page.goto(url, { waitUntil: "networkidle" });
+          await openedAndHydrated(page, url);
           const real: Real = {
             page,
             dialog: page.locator("dialog"),
@@ -206,7 +207,7 @@ inEveryEngine((browser) => {
       Reflect.deleteProperty(HTMLDialogElement.prototype, "closedBy");
     });
     const page = await context.newPage();
-    await page.goto(url, { waitUntil: "networkidle" });
+    await openedAndHydrated(page, url);
     const dialog = page.locator("dialog");
     await dialog.evaluate((node) => node.removeAttribute("closedby"));
     const opener = page.getByRole("button", { name: "Open modal" });
