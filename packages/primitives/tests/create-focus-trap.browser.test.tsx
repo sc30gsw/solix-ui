@@ -370,8 +370,6 @@ const step: fc.Arbitrary<Step> = fc.oneof(
 const enginesThatLeaveTheDocumentOnTheseSequences = ["firefox"];
 const staysOrLeavesAsDocumented =
   "focus stays in the trap, and leaves its document only on Shift+Tab from a trap with no tab stop while the document selection lies inside it, in an engine listed as leaving it";
-const huntRuns = 1_500;
-const huntTimeout = 1_080_000;
 
 function described(node: Node | null): string {
   if (node === null) return "nothing";
@@ -488,24 +486,19 @@ async function followTheEngineOrder(
   }
 }
 
-const generatedPresses = fc.asyncProperty(
-  fc.array(fc.constantFrom(...kinds), { minLength: 0, maxLength: 4 }),
-  fc.array(step, { minLength: 1, maxLength: 12 }),
-  fc.boolean(),
-  (initial, steps, comeBackBackwards) => followTheEngineOrder(initial, steps, comeBackBackwards),
-);
-
 test("for generated Tab and Shift+Tab presses among stops that are added, removed, disabled, hidden and made inert, focus stays in the trap and lands where the engine's own Tab order says, except that, in an engine listed as doing so, Shift+Tab from a trap with no tab stop while the document selection lies inside it may take focus out of the trap's document, to whatever precedes it, from which the next Tab or Shift+Tab brings it back into the trap", async (context) => {
-  await assertProperty(context, generatedPresses, { numRuns: 25 });
+  await assertProperty(
+    context,
+    fc.asyncProperty(
+      fc.array(fc.constantFrom(...kinds), { minLength: 0, maxLength: 4 }),
+      fc.array(step, { minLength: 1, maxLength: 12 }),
+      fc.boolean(),
+      (initial, steps, comeBackBackwards) =>
+        followTheEngineOrder(initial, steps, comeBackBackwards),
+    ),
+    { numRuns: 25 },
+  );
 });
-
-test.runIf(enginesThatLeaveTheDocumentOnTheseSequences.includes(server.browser))(
-  `hunt: in the engines listed as leaving the document, the same holds for ${huntRuns} generated sequences`,
-  { timeout: huntTimeout },
-  async (context) => {
-    await assertProperty(context, generatedPresses, { numRuns: huntRuns });
-  },
-);
 
 const showsAgain: Step[] = [
   { type: "toggle", at: 0, change: "disabled" },

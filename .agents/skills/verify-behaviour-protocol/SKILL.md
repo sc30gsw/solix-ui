@@ -48,7 +48,7 @@ Last confirmed against commit `d67b2cc`. Run `git diff d67b2cc -- packages/core/
 vp test apps/playground/tests/roving-list-model.test.ts apps/playground/tests/tabs-protocol.test.ts apps/playground/tests/tabs.test.ts
 ```
 
-With one engine installed, `tabs-protocol.test.ts` alone takes about eighty seconds, most of it the observation of fifty repetitions. With `CI` set, all three engines must be installed.
+It takes about thirty seconds with one engine installed. With `CI` set, all three engines must be installed.
 
 ## The tool and why
 

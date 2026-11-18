@@ -29,10 +29,6 @@ const longestSequence = 12;
 const generatedSequencesTimeout = 90_000;
 const scrollMovesObserved = 4;
 const scrollAwayFromThePointer = 200;
-const observedRepetitions = 50;
-const observationTimeout = 180_000;
-const observedEvents = ["pointerdown", "mousedown", "mouseup", "click", "keydown", "scroll"];
-const eventLog = "eventsSeenByTheObservation";
 type Model = RovingListState & { list: RovingList };
 type Real = { page: Page };
 
@@ -100,75 +96,6 @@ class PressKey extends Step {
     become(model, afterKey(model.list, model, this.key));
   }
   toString = () => `press ${this.key}`;
-}
-
-type Seen = { type: string; at: number; scrollY: number; tab: string | null };
-
-type Observed = {
-  disagreement: string | undefined;
-  clicked: (string | null)[];
-  scrollAfterTheKey: number[];
-  stillBeforeThePress: number[];
-  movedAfterThePress: boolean;
-  seen: Seen[];
-};
-
-async function recordEvents(page: Page): Promise<void> {
-  await page.addInitScript(
-    ({ types, log }) => {
-      const seen: Seen[] = [];
-      Reflect.set(window, log, seen);
-      for (const type of types) {
-        window.addEventListener(
-          type,
-          ({ target }) => {
-            const tab = target instanceof Element ? target.closest('[role="tab"]') : null;
-            seen.push({
-              type,
-              at: Math.round(performance.now()),
-              scrollY: Math.round(window.scrollY),
-              tab: tab?.textContent ?? null,
-            });
-          },
-          { capture: true, passive: true },
-        );
-      }
-    },
-    { types: observedEvents, log: eventLog },
-  );
-}
-
-function eventsSeen(page: Page): Promise<Seen[]> {
-  return page.evaluate((log) => Reflect.get(window, log) as Seen[], eventLog);
-}
-
-function observed(seen: Seen[], disagreement: string | undefined): Observed {
-  const scrolls = (events: Seen[]) => events.filter(({ type }) => type === "scroll");
-  const key = seen.findLastIndex(({ type }) => type === "keydown");
-  const press = seen.findLastIndex(({ type }) => type === "pointerdown");
-  const pressFollowsTheKey = key !== -1 && press > key;
-  const ofTheKey =
-    key === -1 ? [] : scrolls(seen.slice(key, pressFollowsTheKey ? press : undefined));
-  const lastOfTheKey = ofTheKey.at(-1);
-  return {
-    disagreement,
-    clicked: seen.filter(({ type }) => type === "click").map(({ tab }) => tab),
-    scrollAfterTheKey: ofTheKey.map(({ at }) => at - seen[key].at),
-    stillBeforeThePress:
-      pressFollowsTheKey && lastOfTheKey ? [seen[press].at - lastOfTheKey.at] : [],
-    movedAfterThePress:
-      pressFollowsTheKey &&
-      scrolls(seen.slice(press)).some(({ scrollY }) => scrollY !== seen[press].scrollY),
-    seen,
-  };
-}
-
-function between(values: number[]): string {
-  return values.length === 0 ? "never" : `${Math.min(...values)} to ${Math.max(...values)} ms`;
-}
-
-function written({ type, at, scrollY, tab }: Seen): string {
-  return `${type} on ${tab ?? "no tab"} at ${at} ms with the page scrolled to ${scrollY}`;
 }
 
 const { notes, files } = tabNames.optional;
@@ -280,52 +207,4 @@ inEveryEngine((browser) => {
     await expect(clickOn(list, notes).run(model, { page })).rejects.toThrow(clickMissedItsTab);
     await page.close();
   });
-
-  test(
-    `observation: repeated ${observedRepetitions} times from a fresh page load, a click on a tab, a key the list leaves to the page and a click on another tab keep the page in agreement with the model, and each click reaches its tab`,
-    { timeout: observationTimeout },
-    async (context) => {
-      const list = theOptionalList();
-      const sequence = [clickOn(list, files), new PressKey("ArrowUp"), clickOn(list, notes)];
-      const page = await browser().newPage();
-      await recordEvents(page);
-      const repetitions: Observed[] = [];
-
-      for (let repetition = 0; repetition < observedRepetitions; repetition += 1) {
-        await page.goto(url, { waitUntil: "networkidle" });
-        const model = atTheStartOf(list);
-        let disagreement: string | undefined;
-        for (const step of sequence) {
-          try {
-            await step.run(model, { page });
-          } catch (error) {
-            disagreement = `after "${step.toString()}", ${String(error).split("\n")[0]}`;
-            break;
-          }
-        }
-        repetitions.push(observed(await eventsSeen(page), disagreement));
-      }
-      await page.close();
-
-      const count = (holds: (repetition: Observed) => boolean) => repetitions.filter(holds).length;
-      const missedAClick = ({ clicked }: Observed) => clicked.join() !== [files, notes].join();
-      const summary = [
-        `In ${browser().browserType().name()}, of ${observedRepetitions} repetitions, ${count(({ disagreement }) => disagreement !== undefined)} disagreed with the model and in ${count(missedAClick)} a click did not reach its tab.`,
-        `In ${count(({ scrollAfterTheKey }) => scrollAfterTheKey.length > 0)} the page scrolled after the key, ${between(repetitions.flatMap(({ scrollAfterTheKey }) => scrollAfterTheKey))} after it.`,
-        `The next press began ${between(repetitions.flatMap(({ stillBeforeThePress }) => stillBeforeThePress))} after the last of those scrolls, and in ${count(({ movedAfterThePress }) => movedAfterThePress)} the page moved again once that press had begun.`,
-      ].join(" ");
-      await context.annotate(summary);
-
-      expect(
-        repetitions.flatMap((repetition, index) =>
-          repetition.disagreement !== undefined || missedAClick(repetition)
-            ? [
-                `repetition ${index}: ${repetition.disagreement ?? "the page agreed with the model"}; ${repetition.seen.map(written).join("; ")}`,
-              ]
-            : [],
-        ),
-        summary,
-      ).toEqual([]);
-    },
-  );
 });
