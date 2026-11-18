@@ -1,0 +1,75 @@
+import type { JSX } from "@solidjs/web";
+import { omit, useContext } from "solid-js";
+import {
+  colorSchemeAttribute,
+  colorSchemes,
+  defaultColorScheme,
+  isColorScheme,
+  prefersColorScheme,
+  resolvedColorScheme,
+  type SolixColorScheme,
+  systemColorScheme,
+} from "#/src/color-schemes.ts";
+import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
+import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
+import { PageNonceContext } from "#/src/run-time-style.ts";
+
+export type ColorSchemeScriptOptions = {
+  defaultColorScheme?: SolixColorScheme;
+  forceColorScheme?: SolixComputedColorScheme;
+  localStorageKey?: string;
+};
+
+export type ColorSchemeScriptProps = ColorSchemeScriptOptions &
+  Omit<JSX.ScriptHTMLAttributes<HTMLScriptElement>, "children" | "innerHTML" | "textContent"> & {
+    children?: never;
+    textContent?: never;
+  };
+
+type OptionsAsGiven = {
+  defaultColorScheme?: unknown;
+  forceColorScheme?: unknown;
+  localStorageKey?: string;
+};
+
+function inScript(value: unknown): string {
+  return JSON.stringify(value).replaceAll("<", "\\u003c");
+}
+
+export function colorSchemeScriptText(options: OptionsAsGiven): string {
+  const setTo = (scheme: string) =>
+    `document.documentElement.setAttribute(${inScript(colorSchemeAttribute)},${scheme})`;
+  if (isColorScheme(options.forceColorScheme))
+    return `${setTo(inScript(options.forceColorScheme))};`;
+  const fallback = isColorScheme(options.defaultColorScheme)
+    ? options.defaultColorScheme
+    : defaultColorScheme;
+  return [
+    `(function(){var c=${inScript(fallback)};`,
+    `try{var s=localStorage.getItem(${inScript(options.localStorageKey ?? colorSchemeStorageKey)});`,
+    `if(${inScript(colorSchemes)}.indexOf(s)!==-1)c=s}catch(e){}`,
+    `try{if(c===${inScript(systemColorScheme)})c=matchMedia(${inScript(prefersColorScheme("dark"))}).matches?`,
+    `${inScript(resolvedColorScheme(systemColorScheme, true))}:${inScript(resolvedColorScheme(systemColorScheme, false))}}catch(e){}`,
+    `${setTo("c")}})();`,
+  ].join("");
+}
+
+export function ColorSchemeScript(props: ColorSchemeScriptProps) {
+  const pageNonce = useContext(PageNonceContext);
+  const others = omit(
+    props,
+    "defaultColorScheme",
+    "forceColorScheme",
+    "localStorageKey",
+    "nonce",
+    "children",
+    "textContent",
+  );
+  return (
+    <script
+      {...others}
+      nonce={props.nonce ?? pageNonce()}
+      innerHTML={colorSchemeScriptText(props)}
+    />
+  );
+}

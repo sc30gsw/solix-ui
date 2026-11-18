@@ -38,6 +38,7 @@
     "@stylexjs/babel-plugin": "catalog:",
     "@stylexjs/stylex": "catalog:",
     "postcss": "catalog:",
+    "postcss-selector-parser": "catalog:",
     "solid-js": "catalog:"
   },
   "peerDependencies": {

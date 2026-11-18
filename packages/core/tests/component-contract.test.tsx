@@ -9,7 +9,6 @@ import type * as Library from "#/src/index.ts";
 import type { PolymorphicProps } from "#/src/parts.ts";
 import {
   baseKey,
-  breakpoints,
   canonicalOf,
   layerOrder,
   libraryStyleMark,
@@ -24,8 +23,7 @@ import {
   variableNames,
   variableRow,
   variablesOf,
-  visibilityClass,
-  visibilityPropNames,
+  visibilityClasses,
 } from "#/src/style-prop-table.ts";
 import {
   classTokens,
@@ -82,6 +80,7 @@ import {
   valuesOf,
   withoutLeadingRules,
 } from "#/tests/markup.ts";
+import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
 
 const generatedRuns = 300;
@@ -102,9 +101,7 @@ const stylePropClasses = new Set([
   ...canonicalStylePropNames.flatMap((name) =>
     responsiveKeys.map((key) => stylePropClass(name, key)),
   ),
-  ...visibilityPropNames.flatMap((name) =>
-    breakpoints.map((breakpoint) => visibilityClass(name, breakpoint)),
-  ),
+  ...visibilityClasses,
 ]);
 
 function rootOf(name: string, html: string): Element {
@@ -401,7 +398,7 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
     ),
   );
   const visibilityGiven = Object.values(visibility).filter(
-    (breakpoint) => breakpoint !== null && breakpoint !== undefined,
+    (given) => given !== null && given !== undefined && given !== false,
   ).length;
   const libraryClasses = classes.filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`));
   const styleClasses = libraryClasses.filter((found) => stylePropClasses.has(found));
@@ -420,7 +417,7 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
   ).toBe(keptPairs.size);
   expect(
     styleClasses.length - readByAClass.length,
-    "one class and no custom property for each of hiddenFrom and visibleFrom given",
+    "one class and no custom property for each of hiddenFrom and visibleFrom given, and for each of lightHidden and darkHidden given true",
   ).toBe(visibilityGiven);
   expect(
     libraryClasses.filter((found) => !stylePropClasses.has(found) && !declared.has(`--${found}`)),
@@ -516,11 +513,11 @@ function Card(props: JSX.HTMLAttributes<HTMLElement>) {
 }
 
 test.each(polymorphicComponents)(
-  "%s resolves every style prop, display ones included, for a function component its component prop names, which gets the sx- classes and custom properties and no display or hiddenFrom attribute",
+  "%s resolves every style prop, display ones included, for a function component its component prop names, which gets the sx- classes and custom properties and no display, hiddenFrom or darkHidden attribute",
   (name) => {
     const root = rootOf(
       name,
-      render(name, { component: Card, display: "flex", hiddenFrom: "sm", p: 4 }),
+      render(name, { component: Card, display: "flex", hiddenFrom: "sm", darkHidden: true, p: 4 }),
     );
 
     expect(root.tag).toBe("section");
@@ -528,14 +525,14 @@ test.each(polymorphicComponents)(
       classesOf(root)
         .filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`))
         .sort(),
-    ).toEqual(["sx-display", "sx-hidden-from-sm", "sx-p"]);
+    ).toEqual(["sx-dark-hidden", "sx-display", "sx-hidden-from-sm", "sx-p"]);
     expect(Object.fromEntries(declarationsIn(valuesOf(root, "style")[0]))).toEqual({
       "--sx-display": "flex",
       "--sx-p": "0.25rem",
     });
     expect(
       root.attributes.filter(([attribute]) =>
-        ["display", "hiddenfrom"].includes(attribute.toLowerCase()),
+        ["display", "hiddenfrom", "darkhidden"].includes(attribute.toLowerCase()),
       ),
     ).toEqual([]);
   },
@@ -693,6 +690,15 @@ test.each(builtComponents)(
   "%s marks each style element it renders as the library's, and starts it with the library's layer order, then writes, in the container-queries layer, registrations not inherited and, in ascending container widths, rules that each set a variable's custom property from its own class, for one instance's classes",
   (name) => {
     expect(containerRuleProblems(name, render(name))).toEqual([]);
+  },
+);
+
+test.each(builtComponents)(
+  "%s renders no rule that styles a page's own <html> or <body>: none whose subject names an element type, and none that requires no class beside more than custom properties and color-scheme",
+  (name) => {
+    expect(
+      rulesOf(render(name)).flatMap((rules) => rulesThatStyleThePage(postcss.parse(rules))),
+    ).toEqual([]);
   },
 );
 

@@ -10,7 +10,7 @@ import { usePrimitive } from "@ui-sdk/solid/primitive";
 import { isServer, type JSX } from "@solidjs/web";
 import { merge, omit, untrack, useContext } from "solid-js";
 import { rootPart } from "#/src/parts.ts";
-import { StyleNonceContext } from "#/src/run-time-style.ts";
+import { PageNonceContext } from "#/src/run-time-style.ts";
 import { withConsumerStyle } from "#/src/style-props.ts";
 
 export { tabs } from "@ui-sdk/core/tabs";
@@ -156,7 +156,7 @@ export function createBehaviour<P extends Primitive>(
   primitive: P,
   options: () => OptionsOf<P>,
 ): Behaviour<P> {
-  giveTheSdkThePageNonce(untrack(useContext(StyleNonceContext)));
+  giveTheSdkThePageNonce(untrack(useContext(PageNonceContext)));
   const handle = usePrimitive(primitive, options);
   const bind = (
     parts: StyledParts<AnyProps, string, AnyProps>,

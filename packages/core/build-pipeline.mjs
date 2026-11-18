@@ -6,10 +6,13 @@ import presetTypescript from "@babel/preset-typescript";
 import stylexPlugin from "@stylexjs/babel-plugin";
 import postcss from "postcss";
 import { distSpecifiers, libraryLayout } from "../../scripts/dist-specifiers.ts";
+import { tokensPerScheme } from "../../scripts/tokens-per-scheme.ts";
+import { colorSchemeRules, defaultColorScheme } from "#/src/color-schemes.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 
 import {
   behaviourSdkLayer,
+  colorSchemeLayer,
   componentLayer,
   hiddenLayer,
   libraryCascadeLayer,
@@ -150,7 +153,10 @@ function scopedToLibraryParts(css) {
 }
 
 export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
-  const css = stylexPlugin.processStylexRules(rules, { useLayers: true });
+  const { css, tokens } = tokensPerScheme(
+    stylexPlugin.processStylexRules(rules, { useLayers: true }),
+    defaultColorScheme,
+  );
   return [
     outerLayerOrder,
     scopedToLibraryParts(behaviourSdkRules),
@@ -161,6 +167,9 @@ export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
     "}",
     `@layer ${STYLE_PROP_LAYER} {`,
     stylePropRules,
+    "}",
+    `@layer ${colorSchemeLayer} {`,
+    colorSchemeRules(tokens),
     "}",
     `@layer ${HIDDEN_LAYER} {`,
     `${HIDDEN_PART_SELECTOR}{display:none}`,

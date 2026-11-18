@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
+import { schemeValues, tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
 import { parse, ts } from "../../../scripts/syntax";
 
 type Minimum = { ratio: number; criterion: string };
@@ -20,9 +20,10 @@ const sourceDirectory = dirname(tokensFile);
 
 const remLength = /^\d+(?:\.\d+)?rem$/;
 const number = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
-const oklchNotation = new RegExp(
-  String.raw`^oklch\(${number} ${number} ${number}(?: / ${number})?\)$`,
-);
+const oklchText = String.raw`oklch\(${number} ${number} ${number}(?: / ${number})?\)`;
+const oklchNotation = new RegExp(`^${oklchText}$`);
+const schemes = ["light", "dark"] as const;
+type Scheme = (typeof schemes)[number];
 const gamutTolerance = 1e-4;
 
 type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
@@ -38,8 +39,17 @@ function oklch(value: string): Oklch | undefined {
   return { lightness, chroma, hue, alpha: match[4] === undefined ? 1 : Number(match[4]) };
 }
 
-function opaqueColour(name: string): Oklch | undefined {
-  const colour = oklch(tokens[name]);
+function valueIn(name: string, scheme: Scheme): string | undefined {
+  return schemeValues(tokens[name])?.[scheme];
+}
+
+function colourIn(name: string, scheme: Scheme): Oklch | undefined {
+  const value = valueIn(name, scheme);
+  return value === undefined ? undefined : oklch(value);
+}
+
+function opaqueColour(name: string, scheme: Scheme): Oklch | undefined {
+  const colour = colourIn(name, scheme);
   return colour?.alpha === 1 ? colour : undefined;
 }
 
@@ -195,12 +205,12 @@ const pairings = readdirSync(join(repositoryRoot, sourceDirectory))
   .sort()
   .flatMap((entry) => pairingsIn(join(sourceDirectory, entry)));
 
-test("every colour token is written in OKLCH", () => {
+test("every colour token is written in OKLCH, once for the light scheme and once for the dark", () => {
   const violations = colourTokens
-    .filter((name) => oklch(tokens[name]) === undefined)
+    .filter((name) => schemes.some((scheme) => colourIn(name, scheme) === undefined))
     .map(
       (name) =>
-        `${name} is "${tokens[name]}" in ${tokensFile}. Write it as oklch(L C H), or as oklch(L C H / A) for a translucent colour.`,
+        `${name} is "${tokens[name]}" in ${tokensFile}. Write it as light-dark(<light>, <dark>), each oklch(L C H), or oklch(L C H / A) for a translucent colour.`,
     );
 
   expect(colourTokens.length).toBeGreaterThan(0);
@@ -219,39 +229,41 @@ test("every other token is a length in rem, so it means the same wherever it is 
   expect(violations).toEqual([]);
 });
 
-test("every colour token lies inside sRGB", () => {
-  const violations = colourTokens.flatMap((name) => {
-    const colour = oklch(tokens[name]);
-    if (!colour) return [];
-    const channels = linearSrgb(colour);
-    const inside = channels.every(
-      (channel) => channel >= -gamutTolerance && channel <= 1 + gamutTolerance,
-    );
-    return inside
-      ? []
-      : [
-          `${name} is "${tokens[name]}", outside sRGB (linear red, green, blue ${channels.map((channel) => channel.toFixed(4)).join(", ")}). Lower its chroma in ${tokensFile}.`,
-        ];
-  });
+test("every colour token lies inside sRGB in both schemes", () => {
+  const violations = colourTokens.flatMap((name) =>
+    schemes.flatMap((scheme) => {
+      const colour = colourIn(name, scheme);
+      if (!colour) return [];
+      const channels = linearSrgb(colour);
+      const inside = channels.every(
+        (channel) => channel >= -gamutTolerance && channel <= 1 + gamutTolerance,
+      );
+      return inside
+        ? []
+        : [
+            `${name} is "${valueIn(name, scheme)}" in the ${scheme} scheme, outside sRGB (linear red, green, blue ${channels.map((channel) => channel.toFixed(4)).join(", ")}). Lower its chroma in ${tokensFile}.`,
+          ];
+    }),
+  );
 
   expect(violations).toEqual([]);
 });
 
-test("in every stylex.create block and condition, text and borders meet their contrast against the background", () => {
-  const violations = pairings.flatMap(({ where, foreground, background, minimum }) => {
-    const front = foreground.token;
-    const back = background.token;
-    if (front === undefined || back === undefined) {
-      return [foreground, background]
-        .filter(({ token }) => token === undefined)
-        .map(
-          ({ property, written }) =>
-            `${where}: ${property} is ${written}, which is not a token. Use a --solix-color-* token from ${tokensFile}.`,
-        );
-    }
-    const frontColour = opaqueColour(front);
-    const backColour = opaqueColour(back);
-    const pair = `${foreground.property} ${front} on ${background.property} ${back}`;
+function measured({ where, foreground, background, minimum }: Pairing): string[] {
+  const front = foreground.token;
+  const back = background.token;
+  if (front === undefined || back === undefined) {
+    return [foreground, background]
+      .filter(({ token }) => token === undefined)
+      .map(
+        ({ property, written }) =>
+          `${where}: ${property} is ${written}, which is not a token. Use a --solix-color-* token from ${tokensFile}.`,
+      );
+  }
+  return schemes.flatMap((scheme) => {
+    const frontColour = opaqueColour(front, scheme);
+    const backColour = opaqueColour(back, scheme);
+    const pair = `${foreground.property} ${front} on ${background.property} ${back} in the ${scheme} scheme`;
     if (!frontColour || !backColour) {
       return [
         `${where}: ${pair} cannot be measured. Make both opaque OKLCH colours in ${tokensFile}.`,
@@ -264,6 +276,10 @@ test("in every stylex.create block and condition, text and borders meet their co
           `${where}: ${pair} has contrast ${ratio.toFixed(2)}:1, below the ${minimum.ratio}:1 that ${minimum.criterion} asks for. Change one of them in ${tokensFile}.`,
         ];
   });
+}
+
+test("in every stylex.create block and condition, in the light and the dark scheme, text and borders meet their contrast against the background", () => {
+  const violations = pairings.flatMap(measured);
 
   expect(pairings.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);

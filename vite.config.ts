@@ -1,5 +1,8 @@
 import solid from "@solidjs/vite-plugin";
 import { defineConfig, lazyPlugins } from "vite-plus";
+import { join } from "node:path";
+import { storiesProject } from "#/apps/storybook/stories-project.ts";
+import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
@@ -8,7 +11,7 @@ const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
-const storiesProjectConfig = "apps/storybook/vite.config.ts";
+const storybookConfigDirectory = join(import.meta.dirname, "apps/storybook/.storybook");
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 const propertyRunner = "tests/support/properties.ts";
 const fastCheckRunners = [
@@ -88,6 +91,7 @@ export default defineConfig({
           "vite.config.ts",
           "apps/*/vite.config.ts",
           "apps/*/src/App.tsx",
+          "apps/playground/src/Document.tsx",
           "apps/playground/src/middleware.ts",
           "apps/storybook/**/vite.config.ts",
           "apps/storybook/**/.storybook/*.ts",
@@ -127,7 +131,10 @@ export default defineConfig({
           browser: browserInEveryEngine(),
         },
       },
-      storiesProjectConfig,
+      ...storiesServers.map((server) => ({
+        extends: false as const,
+        ...storiesProject(server, storybookConfigDirectory),
+      })),
     ],
   },
 });

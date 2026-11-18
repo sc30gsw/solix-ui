@@ -1,0 +1,4 @@
+body {
+  background-color: var(--solix-color-body);
+  color: var(--solix-color-text);
+}
