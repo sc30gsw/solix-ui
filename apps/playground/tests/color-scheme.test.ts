@@ -17,7 +17,6 @@ import { computed, inEveryEngine } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
 const ownerAttribute = "data-color-scheme";
-const ownerDefault = pageColorScheme;
 const schemes = ["light", "dark"] as const;
 type Scheme = (typeof schemes)[number];
 const tokens = tokenValues();
@@ -138,7 +137,7 @@ function storedIn(page: Page): Promise<string | null> {
   return page.evaluate((key) => localStorage.getItem(key), playgroundColorSchemeKey);
 }
 
-test("the server writes data-color-scheme=auto on <html> and, in <head>, one script with the page's nonce that sets the scheme before the page paints", async () => {
+test("the server writes the page's scheme on <html> and, in <head>, one script with the page's nonce that sets the scheme before the page paints", async () => {
   const response = await fetch(url);
   const nonce = /'nonce-([^']+)'/.exec(response.headers.get(policyHeader) ?? "")?.[1];
   const html = await response.text();
@@ -149,7 +148,7 @@ test("the server writes data-color-scheme=auto on <html> and, in <head>, one scr
   );
 
   expect(nonce).toBeDefined();
-  expect(valuesOf(root, ownerAttribute)).toEqual([ownerDefault]);
+  expect(valuesOf(root, ownerAttribute)).toEqual([pageColorScheme]);
   expect(prePaint).toHaveLength(1);
   expect(prePaint.map(([, tag]) => valuesOf(elementsOf(tag)[0], "nonce"))).toEqual([[nonce]]);
 });
@@ -161,7 +160,7 @@ inEveryEngine((browser) => {
     test("with scripts off, auto follows the system: the tokens, color-scheme and lightHidden or darkHidden", async () => {
       const { page, close } = await open(browser(), system, { javaScriptEnabled: false });
 
-      expect(await attributeOf(page)).toBe(ownerDefault);
+      expect(await attributeOf(page)).toBe(pageColorScheme);
       await expectTheScheme(page, system);
       await close();
     });
@@ -178,7 +177,7 @@ inEveryEngine((browser) => {
       const { page, problems, close } = await open(browser(), system);
       await settledOn(page, system);
 
-      expect(await chosen(page)).toBe(ownerDefault);
+      expect(await chosen(page)).toBe(pageColorScheme);
       expect(await chosen(page, schemeTexts.computed)).toBe(system);
       await expectTheScheme(page, system);
       const themedInTheSystemScheme = await computed(
@@ -211,7 +210,7 @@ inEveryEngine((browser) => {
       await settledOn(page, other);
       await press(page, schemeButtons.clear);
       await settledOn(page, system);
-      expect(await chosen(page)).toBe(ownerDefault);
+      expect(await chosen(page)).toBe(pageColorScheme);
       expect(await storedIn(page)).toBeNull();
       expect(problems).toEqual([]);
       await close();

@@ -13,7 +13,7 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const ReadsTheStoredScheme: Story = {
+export const NamesItsStorageKey: Story = {
   play: async ({ canvasElement }) => {
     const script = canvasElement.querySelector("script");
     await expect(script?.textContent).toContain(JSON.stringify(storageKey));
