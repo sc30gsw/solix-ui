@@ -21,7 +21,9 @@ const storageKeys = {
   shared: "story-shared-color-scheme",
   outer: "story-outer-color-scheme",
   mounted: "story-mounted-color-scheme",
+  inline: "story-inline-color-scheme",
 };
+const storeOfThePage = localStorageColorSchemeManager();
 
 function OnItsOwnElement(props: SolixProviderProps & { label?: string }) {
   const [root, setRoot] = createSignal<HTMLElement>();
@@ -53,6 +55,7 @@ const meta = {
   args: { theme: createTheme({ spacing: { md: themedPadding } }) },
   beforeEach: () => {
     for (const key of Object.values(storageKeys)) localStorage.removeItem(key);
+    storeOfThePage.clear();
   },
   render: (args) => (
     <OnItsOwnElement {...args}>
@@ -145,6 +148,68 @@ export const TwoProvidersFollowOneManager: Story = {
     await waitFor(() => expect(schemes()).toEqual(["dark", "dark"]));
     await userEvent.click(canvas.getByRole("button", { name: "Clear in the second" }));
     await waitFor(() => expect(schemes()).toEqual(["light", "light"]));
+  },
+};
+
+type Canvas = Parameters<NonNullable<Story["play"]>>[0]["canvas"];
+
+type Press = readonly [button: string, scheme: string, stored: SolixColorScheme | undefined];
+
+async function pressAndSee(
+  canvas: Canvas,
+  stored: () => SolixColorScheme | undefined,
+  presses: readonly Press[],
+) {
+  for (const [button, scheme, kept] of presses) {
+    await userEvent.click(canvas.getByRole("button", { name: button }));
+    await waitFor(() =>
+      expect(canvas.getAllByRole("region").map(schemeOn)).toEqual(
+        canvas.getAllByRole("region").map(() => scheme),
+      ),
+    );
+    for (const chosen of canvas.getAllByRole("status")) {
+      await expect(chosen).toHaveTextContent(scheme);
+    }
+    await expect(stored()).toBe(kept);
+  }
+}
+
+export const KeepsAManagerWrittenInTheProp: Story = {
+  render: () => (
+    <OnItsOwnElement
+      colorSchemeManager={localStorageColorSchemeManager({ key: storageKeys.inline })}
+    >
+      <SchemeButtons of="the provider" />
+    </OnItsOwnElement>
+  ),
+  play: async ({ canvas }) => {
+    await pressAndSee(canvas, localStorageColorSchemeManager({ key: storageKeys.inline }).get, [
+      ["Dark in the provider", "dark", "dark"],
+      ["Toggle in the provider", "light", "light"],
+      ["Toggle in the provider", "dark", "dark"],
+      ["Clear in the provider", "light", undefined],
+    ]);
+  },
+};
+
+export const SharesThePageManagerWhenGivenNone: Story = {
+  render: () => (
+    <>
+      <OnItsOwnElement label="the first">
+        <SchemeButtons of="the first" />
+      </OnItsOwnElement>
+      <OnItsOwnElement label="the second">
+        <SchemeButtons of="the second" />
+      </OnItsOwnElement>
+    </>
+  ),
+  play: async ({ canvas }) => {
+    await pressAndSee(canvas, storeOfThePage.get, [
+      ["Dark in the first", "dark", "dark"],
+      ["Toggle in the second", "light", "light"],
+      ["Toggle in the first", "dark", "dark"],
+      ["Clear in the second", "light", undefined],
+    ]);
   },
 };
 

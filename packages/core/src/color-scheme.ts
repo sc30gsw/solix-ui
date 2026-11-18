@@ -1,5 +1,12 @@
 import { createMediaQuery } from "@solix/primitives";
-import { type Accessor, createContext, createEffect, createSignal, useContext } from "solid-js";
+import {
+  type Accessor,
+  createContext,
+  createEffect,
+  createMemo,
+  createSignal,
+  useContext,
+} from "solid-js";
 import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
 import {
   colorSchemeAttribute,
@@ -34,18 +41,19 @@ export function createProvidedColorScheme(options: ColorSchemeOptions): Provided
   const [read, setRead] = createSignal<{ stored: SolixColorScheme | undefined } | undefined>(
     undefined,
   );
+  const manager = createMemo(options.manager);
   const followed = () => {
     const forced = options.forceColorScheme();
-    return forced === undefined ? options.manager() : undefined;
+    return forced === undefined ? manager() : undefined;
   };
   const colorScheme = () =>
     options.forceColorScheme() ?? read()?.stored ?? options.defaultColorScheme();
   const computedColorScheme = () => resolvedColorScheme(colorScheme(), prefersDark());
   const setColorScheme = (value: SolixColorScheme) => followed()?.set(value);
 
-  createEffect(followed, (manager) => {
-    setRead({ stored: manager?.get() });
-    return manager?.subscribe((stored) => setRead({ stored }));
+  createEffect(followed, (store) => {
+    setRead({ stored: store?.get() });
+    return store?.subscribe((stored) => setRead({ stored }));
   });
 
   createEffect(
