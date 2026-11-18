@@ -29,6 +29,7 @@ export type LibraryKind = "primitives" | "components" | "logic";
 export const libraryKinds: Readonly<Record<string, LibraryKind>> = {
   "packages/primitives": "primitives",
   "packages/core": "components",
+  "packages/form": "logic",
 };
 
 export const libraryHome = "packages/*";

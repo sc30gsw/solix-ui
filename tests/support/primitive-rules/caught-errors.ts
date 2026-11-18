@@ -17,6 +17,14 @@ const errorBoundaries: Readonly<Record<string, ErrorBoundaries>> = {
     advice:
       "Find a missing browser API with lookUp or browserMethod, and let any other error reach the caller.",
   },
+  "packages/form": {
+    homes: [
+      { file: "internal-validate.ts", fn: "runRule" },
+      { file: "is-json-string.ts", fn: "isJSONString" },
+    ],
+    advice:
+      "A rule's error is resolved where the rule runs, so let any other error reach the caller.",
+  },
 };
 
 const noBoundary: ErrorBoundaries = { homes: [], advice: "Let the error reach the caller." };
