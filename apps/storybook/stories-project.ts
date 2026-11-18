@@ -1,13 +1,13 @@
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import solid from "@solidjs/vite-plugin";
 import { storybookTest } from "@storybook/addon-vitest/vitest-plugin";
 import { defineConfig } from "vite-plus";
 import { browserInEveryEngine } from "../../scripts/browser-instances.ts";
 import { allowedRuntimeDependencyNames } from "../../scripts/runtime-dependencies.ts";
+import "#/story-color-scheme.ts";
+import type { StoriesServer } from "#/tests/support/test-servers.ts";
 
-type StoriesServer = { project: string; port: number; colorScheme: "light" | "dark" };
-
-export const storyColorSchemeVariable = "STORY_COLOR_SCHEME";
+const schemeOfEachStory = join(import.meta.dirname, "story-color-scheme.setup.ts");
 
 const preBundledForStories = ["@stylexjs/stylex"];
 const storyTimeout = 30_000;
@@ -22,7 +22,8 @@ export function storiesProject({ project, port, colorScheme }: StoriesServer, co
     },
     test: {
       name: project,
-      env: { [storyColorSchemeVariable]: colorScheme },
+      provide: { storyColorScheme: colorScheme },
+      setupFiles: [schemeOfEachStory],
       testTimeout: storyTimeout,
       hookTimeout: storyTimeout,
       api: { port, strictPort: true },

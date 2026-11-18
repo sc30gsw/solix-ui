@@ -1,15 +1,21 @@
-export const storiesServer = { project: "stories", port: 4325, colorScheme: "light" } as const;
-export const darkStoriesServer = {
-  project: "stories in the dark scheme",
-  port: 4332,
-  colorScheme: "dark",
-} as const;
-export const storiesServers = [storiesServer, darkStoriesServer] as const;
+import type { StoryColorScheme } from "#/story-color-scheme.ts";
+
+export type StoriesServer = { project: string; port: number; colorScheme: StoryColorScheme };
+
+export const storiesServer = {
+  project: "stories",
+  port: 4325,
+  colorScheme: "light",
+} satisfies StoriesServer;
+export const storiesServers = [
+  storiesServer,
+  { project: "stories in the dark scheme", port: 4332, colorScheme: "dark" },
+] satisfies StoriesServer[];
 export const brokenStoriesServer = {
   project: "broken stories",
   port: 4328,
-  colorScheme: "light",
-} as const;
+  colorScheme: "dark",
+} satisfies StoriesServer;
 export const staticStorybookPort = 4326;
 export const brokenStoriesTelemetryPort = 4329;
 export const interfaceTelemetryPort = 4330;

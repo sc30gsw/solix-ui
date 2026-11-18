@@ -7,7 +7,7 @@ import type {
   RunSettings,
   TestFilesOfEachProject,
 } from "../../../../tests/support/global-setup.ts";
-import { storiesServers } from "#/tests/support/test-servers.ts";
+import { type StoriesServer, storiesServers } from "#/tests/support/test-servers.ts";
 
 export type StoriesRun = {
   listing: TestFilesOfEachProject;
@@ -38,8 +38,6 @@ export async function storyIndex(
 export function storyFileOf({ importPath }: StoryIndexEntry): string {
   return relative(repositoryRoot, resolve(importPath));
 }
-
-export type StoriesServer = (typeof storiesServers)[number];
 
 export function storiesProjectIn(engine: string, server: StoriesServer): string {
   return `${server.project} (${engine})`;

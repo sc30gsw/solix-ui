@@ -1,4 +1,4 @@
-import { Button } from "@solix/core";
+import { Button, colorSchemeAttribute } from "@solix/core";
 import { createEffect, onCleanup } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect } from "storybook/test";
@@ -102,4 +102,12 @@ export const PlayTurnsTheCheckOff: Story = {
 
 export const NamelessLinkAfterAWrite: Story = {
   render: () => <a href="#after-a-write" />,
+};
+
+export const SetsTheOtherScheme: Story = {
+  play: async () => {
+    const page = document.documentElement;
+    const other = page.getAttribute(colorSchemeAttribute) === "dark" ? "light" : "dark";
+    page.setAttribute(colorSchemeAttribute, other);
+  },
 };

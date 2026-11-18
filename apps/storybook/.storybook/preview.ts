@@ -10,20 +10,8 @@ import {
   globalSwitchesThatSkipTheAccessibilityScan,
   selectorsTheAccessibilityAddonLeavesUnscanned,
 } from "#/accessibility-scan.ts";
-import { colorSchemeAttribute } from "@solix/core";
 import "@solix/core/styles.css";
 import "#/.storybook/preview.css";
-
-const storyColorScheme: string = import.meta.env.STORY_COLOR_SCHEME ?? "light";
-
-function schemeProblems(): string[] {
-  const applied = getComputedStyle(document.documentElement).colorScheme;
-  return applied === storyColorScheme
-    ? []
-    : [
-        `the page's color-scheme is ${applied}, not the ${storyColorScheme} scheme its project runs it in`,
-      ];
-}
 
 const projectAccessibility: Record<string, unknown> = {
   test: "error",
@@ -82,7 +70,6 @@ function giveTheStoryItsOwnAccessibilityParameters({ parameters }: StoryState): 
 }
 
 const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
-  document.documentElement.setAttribute(colorSchemeAttribute, storyColorScheme);
   refuseAnyWayOut("before it ran", waysOutOfTheGate(context));
   giveTheStoryItsOwnAccessibilityParameters(context);
   if (import.meta.env.DEV && !solidDevelopmentBuildLoaded()) {
@@ -96,11 +83,7 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
 const afterEachStory: AfterEach<SolidRenderer> = (context) => {
   const raised = diagnosticsRaised();
   diagnosticsRaised = () => [];
-  refuseAnyWayOut("while it ran", [
-    ...waysOutOfTheGate(context),
-    ...unscannedIn(context),
-    ...schemeProblems(),
-  ]);
+  refuseAnyWayOut("while it ran", [...waysOutOfTheGate(context), ...unscannedIn(context)]);
   if (raised.length > 0) {
     throw new Error(`The story raised a Solid development diagnostic:\n${raised.join("\n")}`);
   }

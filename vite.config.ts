@@ -1,5 +1,8 @@
 import solid from "@solidjs/vite-plugin";
 import { defineConfig, lazyPlugins } from "vite-plus";
+import { join } from "node:path";
+import { storiesProject } from "#/apps/storybook/stories-project.ts";
+import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
@@ -8,10 +11,7 @@ const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
-const storiesProjectConfigs = [
-  "apps/storybook/vite.config.ts",
-  "apps/storybook/dark/vite.config.ts",
-];
+const storybookConfigDirectory = join(import.meta.dirname, "apps/storybook/.storybook");
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 
 export default defineConfig({
@@ -97,7 +97,10 @@ export default defineConfig({
           browser: browserInEveryEngine(),
         },
       },
-      ...storiesProjectConfigs,
+      ...storiesServers.map((server) => ({
+        extends: false as const,
+        ...storiesProject(server, storybookConfigDirectory),
+      })),
     ],
   },
 });

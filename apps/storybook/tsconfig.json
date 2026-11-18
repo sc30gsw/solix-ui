@@ -10,7 +10,8 @@
     ".storybook/*.ts",
     "fixtures/.storybook/*.ts",
     "vite.config.ts",
-    "dark/vite.config.ts",
-    "stories-project.ts"
+    "stories-project.ts",
+    "story-color-scheme.ts",
+    "story-color-scheme.setup.ts"
   ]
 }

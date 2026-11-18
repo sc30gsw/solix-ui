@@ -1,5 +1,5 @@
 import type { StoryIndexEntry } from "storybook/internal/types";
-import { beforeAll, describe, expect, inject, test } from "vite-plus/test";
+import { beforeAll, describe, expect, inject, type ProvidedContext, test } from "vite-plus/test";
 import { enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import {
   isRunByTheProject,
@@ -9,7 +9,6 @@ import {
   storyFileOf,
   storyIndex,
 } from "#/tests/support/stories.ts";
-import { storyColorSchemeVariable } from "#/stories-project.ts";
 import { storiesServers } from "#/tests/support/test-servers.ts";
 
 const run: StoriesRun = {
@@ -40,8 +39,10 @@ describe.each(
     expect([...(run.listing[project] ?? [])].sort()).toEqual(indexed);
   });
 
-  test("the stories project hands the preview the colour scheme it runs every story in", () => {
-    expect(run.settings[project]?.env[storyColorSchemeVariable]).toBe(server.colorScheme);
+  test("the stories project provides the colour scheme it runs every story in", () => {
+    const provided: Partial<ProvidedContext> = run.settings[project]?.provided ?? {};
+
+    expect(provided.storyColorScheme).toBe(server.colorScheme);
   });
 
   test("the stories project runs every story Storybook indexes: no tag of the test plugin leaves one out, and the project narrows test names no further than the run", () => {
