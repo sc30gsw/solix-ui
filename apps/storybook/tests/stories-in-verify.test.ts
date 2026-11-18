@@ -25,6 +25,10 @@ beforeAll(async () => {
   stories = await storyIndex();
 }, indexTimeout);
 
+test("the stories projects are one for the light scheme and one for the dark", () => {
+  expect(storiesServers.map(({ colorScheme }) => colorScheme).sort()).toEqual(["dark", "light"]);
+});
+
 describe.each(
   run.engines.flatMap((engine) =>
     storiesServers.map((server) => ({ engine, server, label: `${engine}, ${server.colorScheme}` })),
