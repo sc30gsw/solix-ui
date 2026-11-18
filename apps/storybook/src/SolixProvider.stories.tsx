@@ -4,32 +4,62 @@ import {
   colorSchemeAttribute,
   createColorScheme,
   createTheme,
-  isColorScheme,
   localStorageColorSchemeManager,
   type SolixColorScheme,
-  type SolixColorSchemeManager,
   SolixProvider,
+  type SolixProviderProps,
 } from "@solix/core";
 import { createSignal, Show } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect, spyOn, userEvent, waitFor } from "storybook/test";
 
 const themedPadding = "3rem";
+const schemeRoot = "Scheme root";
+const storageKeys = {
+  unused: "story-default-color-scheme",
+  changingDefault: "story-changing-default",
+  shared: "story-shared-color-scheme",
+  outer: "story-outer-color-scheme",
+  mounted: "story-mounted-color-scheme",
+};
 
-function schemeOfThePage(): SolixColorScheme | undefined {
-  const scheme = document.documentElement.getAttribute(colorSchemeAttribute);
-  return isColorScheme(scheme) ? scheme : undefined;
+function OnItsOwnElement(props: SolixProviderProps & { label?: string }) {
+  const [root, setRoot] = createSignal<HTMLElement>();
+  return (
+    <section aria-label={props.label ?? schemeRoot} ref={setRoot}>
+      <SolixProvider getRootElement={root} {...props} />
+    </section>
+  );
+}
+
+function SchemeButtons(props: { of: string }) {
+  const { colorScheme, setColorScheme, toggleColorScheme, clearColorScheme } = createColorScheme();
+  return (
+    <>
+      <Button onClick={() => setColorScheme("dark")}>Dark in {props.of}</Button>
+      <Button onClick={toggleColorScheme}>Toggle in {props.of}</Button>
+      <Button onClick={clearColorScheme}>Clear in {props.of}</Button>
+      <output aria-label={`Chosen in ${props.of}`}>{colorScheme()}</output>
+    </>
+  );
+}
+
+function schemeOn(element: HTMLElement): string | null {
+  return element.getAttribute(colorSchemeAttribute);
 }
 
 const meta = {
   component: SolixProvider,
   args: { theme: createTheme({ spacing: { md: themedPadding } }) },
+  beforeEach: () => {
+    for (const key of Object.values(storageKeys)) localStorage.removeItem(key);
+  },
   render: (args) => (
-    <SolixProvider defaultColorScheme={schemeOfThePage()} {...args}>
+    <OnItsOwnElement {...args}>
       <Box p="md" data-testid="themed">
         Padded by the theme's md spacing
       </Box>
-    </SolixProvider>
+    </OnItsOwnElement>
   ),
 } satisfies Meta<typeof SolixProvider>;
 
@@ -52,39 +82,64 @@ export const WithoutCssVariables: Story = {
   args: { withCssVariables: false },
 };
 
-function SchemeButtons(props: { of: string }) {
-  const { setColorScheme, clearColorScheme } = createColorScheme();
+const unusedManager = localStorageColorSchemeManager({ key: storageKeys.unused });
+
+export const DefaultsToLight: Story = {
+  render: () => (
+    <OnItsOwnElement colorSchemeManager={unusedManager}>
+      <SchemeButtons of="the provider" />
+    </OnItsOwnElement>
+  ),
+  play: async ({ canvas }) => {
+    await waitFor(() => expect(schemeOn(canvas.getByRole("region"))).toBe("light"));
+    await expect(canvas.getByRole("status")).toHaveTextContent("light");
+  },
+};
+
+const managerOfTheChangingDefault = localStorageColorSchemeManager({
+  key: storageKeys.changingDefault,
+});
+
+function ChangingDefault() {
+  const [given, setGiven] = createSignal<SolixColorScheme>("light");
   return (
-    <>
-      <Button onClick={() => setColorScheme("dark")}>Dark in {props.of}</Button>
-      <Button onClick={clearColorScheme}>Clear in {props.of}</Button>
-    </>
+    <OnItsOwnElement colorSchemeManager={managerOfTheChangingDefault} defaultColorScheme={given()}>
+      <Button onClick={() => setGiven("dark")}>Default to dark</Button>
+      <SchemeButtons of="the provider" />
+    </OnItsOwnElement>
   );
 }
 
-function SchemeOnItsOwnElement(props: { label: string; manager: SolixColorSchemeManager }) {
-  let root: HTMLElement | undefined;
-  return (
-    <section aria-label={props.label} ref={(element: HTMLElement) => (root = element)}>
-      <SolixProvider colorSchemeManager={props.manager} getRootElement={() => root}>
-        <SchemeButtons of={props.label} />
-      </SolixProvider>
-    </section>
-  );
-}
+export const FollowsItsDefaultWhileNothingIsStored: Story = {
+  render: () => <ChangingDefault />,
+  play: async ({ canvas }) => {
+    const scheme = () => schemeOn(canvas.getByRole("region"));
 
-const sharedManager = localStorageColorSchemeManager({ key: "story-shared-color-scheme" });
+    await waitFor(() => expect(scheme()).toBe("light"));
+    await userEvent.click(canvas.getByRole("button", { name: "Default to dark" }));
+    await waitFor(() => expect(scheme()).toBe("dark"));
+    await userEvent.click(canvas.getByRole("button", { name: "Toggle in the provider" }));
+    await waitFor(() => expect(scheme()).toBe("light"));
+    await userEvent.click(canvas.getByRole("button", { name: "Clear in the provider" }));
+    await waitFor(() => expect(scheme()).toBe("dark"));
+  },
+};
+
+const sharedManager = localStorageColorSchemeManager({ key: storageKeys.shared });
 
 export const TwoProvidersFollowOneManager: Story = {
   render: () => (
     <>
-      <SchemeOnItsOwnElement label="the first" manager={sharedManager} />
-      <SchemeOnItsOwnElement label="the second" manager={sharedManager} />
+      <OnItsOwnElement label="the first" colorSchemeManager={sharedManager}>
+        <SchemeButtons of="the first" />
+      </OnItsOwnElement>
+      <OnItsOwnElement label="the second" colorSchemeManager={sharedManager}>
+        <SchemeButtons of="the second" />
+      </OnItsOwnElement>
     </>
   ),
   play: async ({ canvas }) => {
-    const schemes = () =>
-      canvas.getAllByRole("region").map((section) => section.getAttribute(colorSchemeAttribute));
+    const schemes = () => canvas.getAllByRole("region").map(schemeOn);
 
     await userEvent.click(canvas.getByRole("button", { name: "Dark in the first" }));
     await waitFor(() => expect(schemes()).toEqual(["dark", "dark"]));
@@ -93,14 +148,62 @@ export const TwoProvidersFollowOneManager: Story = {
   },
 };
 
+const outerManager = localStorageColorSchemeManager({ key: storageKeys.outer });
+
+export const NestedProviderPassesTheSchemeOn: Story = {
+  render: () => (
+    <OnItsOwnElement colorSchemeManager={outerManager}>
+      <SolixProvider theme={createTheme({ spacing: { md: themedPadding } })}>
+        <SchemeButtons of="the inner provider" />
+      </SolixProvider>
+    </OnItsOwnElement>
+  ),
+  play: async ({ canvas }) => {
+    const scheme = () => schemeOn(canvas.getByRole("region"));
+    const ofThePage = schemeOn(document.documentElement);
+
+    await waitFor(() => expect(scheme()).toBe("light"));
+    await userEvent.click(canvas.getByRole("button", { name: "Dark in the inner provider" }));
+    await waitFor(() => expect(scheme()).toBe("dark"));
+    await expect(canvas.getByRole("status")).toHaveTextContent("dark");
+    await expect(schemeOn(document.documentElement)).toBe(ofThePage);
+    await userEvent.click(canvas.getByRole("button", { name: "Clear in the inner provider" }));
+    await waitFor(() => expect(scheme()).toBe("light"));
+  },
+};
+
+function RootThatMountsLater() {
+  const [shown, setShown] = createSignal(false);
+  const [root, setRoot] = createSignal<HTMLElement>();
+  return (
+    <SolixProvider forceColorScheme="dark" getRootElement={root}>
+      <Button onClick={() => setShown(true)}>Show the root</Button>
+      <Show when={shown()}>
+        <section aria-label={schemeRoot} ref={setRoot} />
+      </Show>
+    </SolixProvider>
+  );
+}
+
+export const WritesOnARootThatMountsLater: Story = {
+  render: () => <RootThatMountsLater />,
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("button", { name: "Show the root" }));
+    await waitFor(() => expect(schemeOn(canvas.getByRole("region"))).toBe("dark"));
+  },
+};
+
+const managerOfTheMounted = localStorageColorSchemeManager({ key: storageKeys.mounted });
+
 function Mounted() {
   const [mounted, setMounted] = createSignal(false);
-  const manager = localStorageColorSchemeManager({ key: "story-mounted-color-scheme" });
   return (
     <>
       <Button onClick={() => setMounted((now) => !now)}>Mount or unmount</Button>
       <Show when={mounted()}>
-        <SchemeOnItsOwnElement label="the mounted" manager={manager} />
+        <OnItsOwnElement colorSchemeManager={managerOfTheMounted}>
+          <SchemeButtons of="the mounted provider" />
+        </OnItsOwnElement>
       </Show>
     </>
   );

@@ -170,6 +170,32 @@ test("the provider writes nothing of the colour scheme on the server: its markup
   }
 });
 
+test("a provider inside another passes the outer provider's scheme on when it is given no getRootElement, and refuses a scheme prop without one, naming getRootElement", () => {
+  const nested = (props: Record<string, unknown>) =>
+    renderToString(() =>
+      createComponent(library.SolixProvider, {
+        get children() {
+          return createComponent(library.SolixProvider, {
+            ...props,
+            get children() {
+              return createComponent(library.Button, { children: "Inside" });
+            },
+          });
+        },
+      }),
+    );
+
+  expect(() => nested({})).not.toThrow();
+  expect(() => nested({ forceColorScheme: "dark", getRootElement: () => undefined })).not.toThrow();
+  for (const props of [
+    { forceColorScheme: "dark" },
+    { defaultColorScheme: "auto" },
+    { colorSchemeManager: library.localStorageColorSchemeManager() },
+  ]) {
+    expect(() => nested(props)).toThrow("getRootElement");
+  }
+});
+
 test("the library exports the name of the attribute that carries the scheme", () => {
   expect(library.colorSchemeAttribute).toBe(ownerAttribute);
 });

@@ -11,6 +11,8 @@ export const schemeButtons = {
   toggle: "Toggle the scheme",
   clear: "Clear the stored scheme",
   forcedLight: "Light scheme inside the forced section",
+  forcedToggle: "Toggle inside the forced section",
+  forcedClear: "Clear inside the forced section",
 } as const;
 
 export const schemeTexts = {

@@ -1,13 +1,5 @@
 import { createMediaQuery } from "@solix/primitives";
-import { isServer } from "@solidjs/web";
-import {
-  type Accessor,
-  createContext,
-  createEffect,
-  createSignal,
-  onSettled,
-  useContext,
-} from "solid-js";
+import { type Accessor, createContext, createEffect, createSignal, useContext } from "solid-js";
 import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
 import {
   colorSchemeAttribute,
@@ -36,54 +28,44 @@ export type SolixColorSchemeControls = {
   clearColorScheme: () => void;
 };
 
-type ProvidedColorScheme = Omit<SolixColorSchemeControls, "toggleColorScheme"> & {
+export type ProvidedColorScheme = SolixColorSchemeControls & {
   computedColorScheme: Accessor<SolixComputedColorScheme>;
-  currentColorScheme: () => SolixComputedColorScheme;
 };
 
 const darkSchemeQuery = prefersColorScheme("dark");
 
 export const ColorSchemeContext = createContext<ProvidedColorScheme | null>(null);
 
-function prefersDark(): boolean {
-  return !isServer && globalThis.matchMedia?.(darkSchemeQuery).matches === true;
-}
-
 export function createProvidedColorScheme(options: ColorSchemeOptions): ProvidedColorScheme {
-  const [chosen, setChosen] = createSignal<SolixColorScheme | undefined>(undefined);
-  const [settled, setSettled] = createSignal(false);
-  const darkPreferred = createMediaQuery(darkSchemeQuery);
-  const colorScheme = () => options.forceColorScheme() ?? chosen() ?? options.defaultColorScheme();
-  const currentColorScheme = (): SolixComputedColorScheme => {
-    darkPreferred();
-    return resolvedColorScheme(colorScheme(), prefersDark());
+  const prefersDark = createMediaQuery(darkSchemeQuery);
+  const [read, setRead] = createSignal<{ stored: SolixColorScheme | undefined } | undefined>(
+    undefined,
+  );
+  const followed = () => {
+    const forced = options.forceColorScheme();
+    return forced === undefined ? options.manager() : undefined;
   };
+  const colorScheme = () =>
+    options.forceColorScheme() ?? read()?.stored ?? options.defaultColorScheme();
+  const computedColorScheme = () => resolvedColorScheme(colorScheme(), prefersDark());
+  const setColorScheme = (value: SolixColorScheme) => followed()?.set(value);
 
-  onSettled(() => {
-    const manager = options.manager();
-    setChosen(manager.get() ?? options.defaultColorScheme());
-    setSettled(true);
-    return manager.subscribe((stored) => setChosen(stored ?? options.defaultColorScheme()));
+  createEffect(followed, (manager) => {
+    setRead({ stored: manager?.get() });
+    return manager?.subscribe((stored) => setRead({ stored }));
   });
 
   createEffect(
-    () => (settled() ? currentColorScheme() : undefined),
-    (scheme) => {
-      if (scheme !== undefined)
-        options.getRootElement()?.setAttribute(colorSchemeAttribute, scheme);
-    },
+    () => read() && { element: options.getRootElement(), scheme: computedColorScheme() },
+    (write) => write?.element?.setAttribute(colorSchemeAttribute, write.scheme),
   );
 
   return {
     colorScheme,
-    computedColorScheme: () => resolvedColorScheme(colorScheme(), darkPreferred()),
-    currentColorScheme,
-    setColorScheme: (value) => {
-      const forced = options.forceColorScheme();
-      if (forced !== undefined) return;
-      options.manager().set(value);
-    },
-    clearColorScheme: () => options.manager().clear(),
+    computedColorScheme,
+    setColorScheme,
+    toggleColorScheme: () => setColorScheme(computedColorScheme() === "light" ? "dark" : "light"),
+    clearColorScheme: () => followed()?.clear(),
   };
 }
 
@@ -96,14 +78,9 @@ export function provided(caller: string): ProvidedColorScheme {
 }
 
 export function createColorScheme(): SolixColorSchemeControls {
-  const { colorScheme, setColorScheme, clearColorScheme, currentColorScheme } =
+  const { colorScheme, setColorScheme, toggleColorScheme, clearColorScheme } =
     provided("createColorScheme");
-  return {
-    colorScheme,
-    setColorScheme,
-    clearColorScheme,
-    toggleColorScheme: () => setColorScheme(currentColorScheme() === "light" ? "dark" : "light"),
-  };
+  return { colorScheme, setColorScheme, toggleColorScheme, clearColorScheme };
 }
 
 function scriptString(value: string): string {

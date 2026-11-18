@@ -6,6 +6,7 @@ import {
   SolixProvider,
   TextInput,
 } from "@solix/core";
+import { pageColorSchemeManager } from "#/src/page-color-scheme.ts";
 import {
   colorSchemeSection,
   forcedSection,
@@ -23,15 +24,25 @@ function ChosenScheme(props: { label: string }) {
 }
 
 function ForcedControls() {
-  const { setColorScheme } = createColorScheme();
-  return <Button onClick={() => setColorScheme("light")}>{schemeButtons.forcedLight}</Button>;
+  const { setColorScheme, toggleColorScheme, clearColorScheme } = createColorScheme();
+  return (
+    <>
+      <Button onClick={() => setColorScheme("light")}>{schemeButtons.forcedLight}</Button>
+      <Button onClick={toggleColorScheme}>{schemeButtons.forcedToggle}</Button>
+      <Button onClick={clearColorScheme}>{schemeButtons.forcedClear}</Button>
+    </>
+  );
 }
 
 function ForcedScheme() {
   let section: HTMLElement | undefined;
   return (
     <section aria-label={forcedSection} ref={(node: HTMLElement) => (section = node)}>
-      <SolixProvider forceColorScheme="dark" getRootElement={() => section}>
+      <SolixProvider
+        forceColorScheme="dark"
+        colorSchemeManager={pageColorSchemeManager}
+        getRootElement={() => section}
+      >
         <ChosenScheme label={schemeTexts.forcedChosen} />
         <ForcedControls />
         <Box lightHidden display="flex">

@@ -1,4 +1,4 @@
-import { createTheme, localStorageColorSchemeManager, SolixProvider } from "@solix/core";
+import { createTheme, SolixProvider } from "@solix/core";
 import { BoxSection } from "#/src/sections/BoxSection.tsx";
 import { ButtonSection } from "#/src/sections/ButtonSection.tsx";
 import { CenterSection } from "#/src/sections/CenterSection.tsx";
@@ -17,8 +17,7 @@ import { StackSection } from "#/src/sections/StackSection.tsx";
 import { StylesApiSection } from "#/src/sections/StylesApiSection.tsx";
 import { TabsSection } from "#/src/sections/TabsSection.tsx";
 import { TextInputSection } from "#/src/sections/TextInputSection.tsx";
-import { pageColorScheme } from "#/src/page-color-scheme.ts";
-import { playgroundColorSchemeKey } from "#/src/sections/color-scheme-setups.ts";
+import { pageColorScheme, pageColorSchemeManager } from "#/src/page-color-scheme.ts";
 import { themedByTheProvider, themedSpacing } from "#/src/sections/theme-setups.ts";
 import { ThemeSection } from "#/src/sections/ThemeSection.tsx";
 import { styleNonce } from "#/src/style-nonce.ts";
@@ -26,7 +25,6 @@ import "#/src/app.css";
 import "@solix/core/styles.css";
 
 const playgroundTheme = createTheme({ spacing: themedSpacing });
-const playgroundSchemeManager = localStorageColorSchemeManager({ key: playgroundColorSchemeKey });
 
 export default function App() {
   return (
@@ -35,7 +33,7 @@ export default function App() {
       cssVariablesSelector={`[${themedByTheProvider}]`}
       getStyleNonce={styleNonce}
       defaultColorScheme={pageColorScheme}
-      colorSchemeManager={playgroundSchemeManager}
+      colorSchemeManager={pageColorSchemeManager}
     >
       <main>
         <h1>Solix playground</h1>

@@ -1,6 +1,10 @@
 import type { JSX } from "@solidjs/web";
-import { Show, useContext } from "solid-js";
-import { ColorSchemeContext, createProvidedColorScheme } from "#/src/color-scheme.ts";
+import { Show, untrack, useContext } from "solid-js";
+import {
+  ColorSchemeContext,
+  createProvidedColorScheme,
+  type ProvidedColorScheme,
+} from "#/src/color-scheme.ts";
 import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
 import {
   defaultColorScheme,
@@ -25,19 +29,38 @@ export type SolixProviderProps = {
 };
 
 const storedInLocalStorage = localStorageColorSchemeManager();
+const schemeProps = [
+  "colorSchemeManager",
+  "defaultColorScheme",
+  "forceColorScheme",
+] as const satisfies readonly (keyof SolixProviderProps)[];
 
-function documentElement(): HTMLElement {
-  return document.documentElement;
+function colorSchemeOf(props: SolixProviderProps): ProvidedColorScheme {
+  const outer = useContext(ColorSchemeContext);
+  const given = untrack(() => ({
+    root: props.getRootElement !== undefined,
+    scheme: schemeProps.filter((name) => props[name] !== undefined),
+  }));
+  if (outer === null || given.root) {
+    return createProvidedColorScheme({
+      manager: () => props.colorSchemeManager ?? storedInLocalStorage,
+      defaultColorScheme: () => props.defaultColorScheme ?? defaultColorScheme,
+      forceColorScheme: () => props.forceColorScheme,
+      getRootElement: () =>
+        props.getRootElement === undefined ? document.documentElement : props.getRootElement(),
+    });
+  }
+  if (given.scheme.length > 0) {
+    throw new Error(
+      `A SolixProvider inside another is given ${given.scheme.join(", ")} and no getRootElement. Give it getRootElement, the element its own scheme is written on, or leave these props out, and it passes on the scheme of the provider around it.`,
+    );
+  }
+  return outer;
 }
 
 export function SolixProvider(props: SolixProviderProps) {
   const outerNonce = useContext(StyleNonceContext);
-  const colorScheme = createProvidedColorScheme({
-    manager: () => props.colorSchemeManager ?? storedInLocalStorage,
-    defaultColorScheme: () => props.defaultColorScheme ?? defaultColorScheme,
-    forceColorScheme: () => props.forceColorScheme,
-    getRootElement: () => (props.getRootElement ?? documentElement)(),
-  });
+  const colorScheme = colorSchemeOf(props);
   const styleSheet = () =>
     (props.withCssVariables ?? true)
       ? themeStyleSheet(props.theme ?? {}, props.cssVariablesSelector ?? ":root")

@@ -373,9 +373,50 @@ inEveryEngine((browser) => {
       await context.close();
     });
 
-    test("a provider given forceColorScheme and getRootElement writes the forced scheme on its own element, which its controls neither change nor store, and leaves <html> to the page's provider", async () => {
-      const { page, close } = await open(browser(), system);
-      await settledOn(page, system);
+    test("the scheme on <html> is written by the pre-paint script and then once by the provider, both times the stored scheme, or with nothing stored the system's, and never the default between them", async () => {
+      for (const stored of [other, undefined]) {
+        const context = await browser().newContext({ colorScheme: system });
+        await context.addInitScript((name) => {
+          const valuesBeforeEachWrite: (string | null)[] = [];
+          new MutationObserver((records) => {
+            for (const { target, oldValue } of records) {
+              if (target === document.documentElement) valuesBeforeEachWrite.push(oldValue);
+            }
+          }).observe(document, {
+            subtree: true,
+            attributeFilter: [name],
+            attributeOldValue: true,
+          });
+          Object.assign(window, { valuesBeforeEachWrite });
+        }, ownerAttribute);
+        if (stored !== undefined) {
+          await context.addInitScript(
+            ([key, value]) => localStorage.setItem(key, value),
+            [playgroundColorSchemeKey, stored],
+          );
+        }
+        const page = await context.newPage();
+        await page.goto(url, { waitUntil: "networkidle" });
+        const scheme = stored ?? system;
+
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (name) => [
+                ...Reflect.get(window, "valuesBeforeEachWrite").slice(1),
+                document.documentElement.getAttribute(name),
+              ],
+              ownerAttribute,
+            ),
+          )
+          .toEqual([scheme, scheme]);
+        await context.close();
+      }
+    });
+
+    test("a provider given forceColorScheme and getRootElement writes the forced scheme on its own element, takes no manager, so its controls neither change, store nor clear a scheme, and leaves <html> to the page's provider", async () => {
+      const { page, close } = await open(browser(), system, { stored: other });
+      await settledOn(page, other);
       const forced = page.getByRole("region", { name: forcedSection });
       const input = forced.getByRole("textbox", { name: schemeTexts.forcedInput });
 
@@ -391,17 +432,22 @@ inEveryEngine((browser) => {
       expect(await computed(input, "background-color")).toBe(
         await colourOf(page, written("--solix-color-body", "dark")),
       );
-      expect(await attributeOf(page)).toBe(system);
+      expect(await attributeOf(page)).toBe(other);
 
-      await forced.getByRole("button", { name: schemeButtons.forcedLight }).click();
+      for (const control of ["forcedLight", "forcedToggle", "forcedClear"] as const) {
+        await forced.getByRole("button", { name: schemeButtons[control] }).click();
+      }
+      expect(await storedIn(page)).toBe(other);
+      expect(await chosen(page)).toBe(other);
+      expect(await attributeOf(page)).toBe(other);
       expect(await chosen(page, schemeTexts.forcedChosen)).toBe("dark");
       expect(await forced.evaluate((node, name) => node.getAttribute(name), ownerAttribute)).toBe(
         "dark",
       );
       expect(
-        await page.evaluate(() => Object.keys(localStorage)),
-        "a forced provider stores nothing",
-      ).toEqual([]);
+        await page.evaluate(() => Object.fromEntries(Object.entries(localStorage))),
+        "a forced provider stores and clears nothing",
+      ).toEqual({ [playgroundColorSchemeKey]: other });
       await close();
     });
   });
