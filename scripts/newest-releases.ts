@@ -1,10 +1,8 @@
 import semver from "semver";
-import { unique } from "#/scripts/repository.ts";
 
 export const heldBackFile = "scripts/held-back-releases.json";
 export const packageManagerPinName = "packageManager";
 export const nodePinName = "engines.node";
-export const lockfile = "pnpm-lock.yaml";
 
 export type VersionManifest = {
   dependencies?: Record<string, string>;
@@ -20,13 +18,7 @@ export type RegistryDocument = {
 
 export type NodeRelease = { version: string; lts: string | false };
 
-type RegistryPin = {
-  source: "registry";
-  name: string;
-  registryName: string;
-  pinned: string;
-  exact: boolean;
-};
+type RegistryPin = { source: "registry"; name: string; registryName: string; pinned: string };
 
 export type Pin = RegistryPin | { source: "node"; name: typeof nodePinName; pinned: string };
 
@@ -40,10 +32,7 @@ function directionOf(held: HeldBack): string {
 
 export type Release = { name: string; version: string };
 
-export type ReleasePolicy = {
-  minimumReleaseAgeMinutes: number;
-  exempted: readonly Release[];
-};
+export type ReleasePolicy = { minimumReleaseAgeMinutes: number };
 
 type Compared = { pin: Pin; channel: string; newest: string };
 
@@ -85,7 +74,6 @@ const minute = 60_000;
 export const solidMajor = 2;
 const aliasedPackage = /^npm:((?:@[^/@]+\/)?[^@]+)@(.+)$/;
 const packageAndVersion = /^((?:@[^/@]+\/)?[^@]+)@(.+)$/;
-const packageName = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/;
 const nodeChannel = "Node's newest LTS";
 
 export function isStable({ version }: Published): boolean {
@@ -218,7 +206,6 @@ export function pinsOf(
       name,
       registryName,
       pinned: lowestVersion(`catalog entry ${name}`, version),
-      exact: semver.valid(version) === version,
     };
   });
   const [, manager, managerVersion] =
@@ -235,7 +222,6 @@ export function pinsOf(
       name: packageManagerPinName,
       registryName: manager,
       pinned: lowestVersion(packageManagerPinName, managerVersion),
-      exact: semver.valid(managerVersion) === managerVersion,
     },
     {
       source: "node",
@@ -272,69 +258,10 @@ export function prereleasePinsOnlyNamedBy(
     .sort();
 }
 
-export function exemptionsIn(entries: readonly string[]): Release[] {
-  return entries.map((entry) => {
-    const [, name = "", version = ""] = packageAndVersion.exec(entry) ?? [];
-    if (!packageName.test(name) || semver.valid(version) !== version) {
-      throw new Error(
-        `minimumReleaseAgeExclude: "${entry}" is not <name>@<exact version>. An exemption names the one release it is for.`,
-      );
-    }
-    return { name, version };
-  });
-}
-
-function isExempted(registryName: string, version: string, policy: ReleasePolicy): boolean {
-  return policy.exempted.some(
-    (exemption) => exemption.name === registryName && exemption.version === version,
-  );
-}
-
-function oldEnoughAt(at: number, minutes: number): number {
-  return at + minutes * minute;
-}
-
 export function exactlyRequiredBy(manifest: VersionManifest | undefined): Release[] {
   return Object.entries({ ...manifest?.dependencies, ...manifest?.optionalDependencies })
     .filter(([, specifier]) => semver.valid(specifier) === specifier)
     .map(([name, version]) => ({ name, version }));
-}
-
-function installedByTheCatalog(pin: Pin): pin is RegistryPin {
-  return pin.source === "registry" && pin.name !== packageManagerPinName;
-}
-
-export function exactCatalogReleases(pins: readonly Pin[]): Release[] {
-  return pins
-    .filter(installedByTheCatalog)
-    .filter(({ exact }) => exact)
-    .map(({ registryName, pinned }) => ({ name: registryName, version: pinned }));
-}
-
-function named(release: Release): string {
-  return `${release.name}@${release.version}`;
-}
-
-export function unjustifiedExemptions(
-  exempted: readonly Release[],
-  sources: { locked: readonly string[]; pinned: readonly Release[]; required: readonly Release[] },
-): string[] {
-  const pinnedOrRequired = [...sources.pinned, ...sources.required].map(named);
-  return exempted.flatMap((exemption) => {
-    const release = named(exemption);
-    return [
-      ...(sources.locked.includes(release)
-        ? []
-        : [
-            `minimumReleaseAgeExclude names ${release}, which ${lockfile} does not lock, so nothing installs it; remove the entry.`,
-          ]),
-      ...(pinnedOrRequired.includes(release)
-        ? []
-        : [
-            `minimumReleaseAgeExclude names ${release}, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.`,
-          ]),
-    ];
-  });
 }
 
 function publishedAt(document: RegistryDocument, version: string): number | undefined {
@@ -343,17 +270,13 @@ function publishedAt(document: RegistryDocument, version: string): number | unde
   return Number.isNaN(at) ? undefined : at;
 }
 
-function noDocumentFor(name: string): string {
-  return `the registry answer holds no document for ${name}.`;
-}
-
 export function publishedIn(
   registryName: string,
   document: RegistryDocument | undefined,
   policy: ReleasePolicy,
 ): Published[] | Unknown {
   if (document === undefined) {
-    return { why: noDocumentFor(registryName) };
+    return { why: `the registry answer holds no document for ${registryName}.` };
   }
   const published: Published[] = [];
   const versions = Object.keys(document.versions ?? {}).filter(
@@ -366,8 +289,7 @@ export function publishedIn(
         why: `the registry gives no publish time for ${registryName}@${version}, so its age cannot be told.`,
       };
     }
-    const age = isExempted(registryName, version, policy) ? 0 : policy.minimumReleaseAgeMinutes;
-    published.push({ version, eligibleAt: oldEnoughAt(at, age) });
+    published.push({ version, eligibleAt: at + policy.minimumReleaseAgeMinutes * minute });
   }
   return published;
 }
@@ -468,40 +390,6 @@ export function holdsWithoutReason(heldBack: readonly HeldBack[]): string[] {
     );
 }
 
-export function registryNamesToFetch(pins: readonly Pin[], policy: ReleasePolicy): string[] {
-  return unique([
-    ...pins.flatMap((pin) => (pin.source === "registry" ? [pin.registryName] : [])),
-    ...policy.exempted.map(({ name }) => name),
-  ]);
-}
-
-export function outgrownExemptions(
-  documents: Record<string, RegistryDocument>,
-  policy: ReleasePolicy,
-  now: number,
-): string[] {
-  return policy.exempted.flatMap(({ name, version }) => {
-    const document = documents[name];
-    const at = document === undefined ? undefined : publishedAt(document, version);
-    if (document === undefined || at === undefined) {
-      const why =
-        document === undefined
-          ? noDocumentFor(name)
-          : document.versions?.[version] === undefined
-            ? "the registry lists no such release."
-            : `the registry gives no publish time for ${name}@${version}, so its age cannot be told.`;
-      return [
-        `${name}@${version}: ${why} So nothing tells whether minimumReleaseAgeExclude still needs it.`,
-      ];
-    }
-    return oldEnoughAt(at, policy.minimumReleaseAgeMinutes) <= now
-      ? [
-          `${name}@${version}: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.`,
-        ]
-      : [];
-  });
-}
-
 export function compareWithNewest(input: {
   pins: readonly Pin[];
   documents: Record<string, RegistryDocument>;
@@ -550,7 +438,6 @@ export function compareWithNewest(input: {
     }),
     ...holdsOfNothing(input.heldBack, comparisons),
     ...holdsWithoutReason(input.heldBack),
-    ...outgrownExemptions(input.documents, input.policy, input.now),
   ];
   return { comparisons, problems };
 }

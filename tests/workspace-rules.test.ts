@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import semver from "semver";
 import { expect, test } from "vite-plus/test";
-import { parseAllDocuments } from "yaml";
 import {
   commentsIn,
   descendants,
@@ -18,15 +17,7 @@ import {
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
-import {
-  exactCatalogReleases,
-  exactlyRequiredBy,
-  exemptionsIn,
-  lockfile,
-  pinsOf,
-  solidPackages,
-  unjustifiedExemptions,
-} from "#/scripts/newest-releases.ts";
+import { solidPackages } from "#/scripts/newest-releases.ts";
 import { type PnpmSettings, pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import { storybookAppManifest } from "#/scripts/release-sources.ts";
 import {
@@ -704,31 +695,6 @@ test("every peer range of a library package accepts the version the catalog pins
   );
 
   expect(violations).toEqual([]);
-});
-
-test(`every minimumReleaseAgeExclude entry in ${workspaceFile} is a release that ${lockfile} locks, and that the catalog pins exactly or a release it pins lists at that exact version among its dependencies or optionalDependencies`, () => {
-  const { catalog, minimumReleaseAgeExclude } = pnpmSettings();
-  const locked = parseAllDocuments(readFileSync(join(repositoryRoot, lockfile), "utf8")).flatMap(
-    (document) =>
-      Object.keys((document.toJS() as { packages?: Record<string, unknown> }).packages ?? {}),
-  );
-  const pinned = exactCatalogReleases(pinsOf(rootManifest(), catalog));
-  const required = installedVersions(pinned.map(({ name }) => name))
-    .filter((installed) =>
-      pinned.some(({ name, version }) => name === installed.name && version === installed.version),
-    )
-    .flatMap(({ name, version, path }) => {
-      if (path === undefined) {
-        throw new Error(`${name}@${version}: the package manager gives no path for it.`);
-      }
-      return exactlyRequiredBy(
-        JSON.parse(readFileSync(join(path, "package.json"), "utf8")) as Manifest,
-      );
-    });
-
-  expect(
-    unjustifiedExemptions(exemptionsIn(minimumReleaseAgeExclude), { locked, pinned, required }),
-  ).toEqual([]);
 });
 
 test("the project is MIT-licensed in its licence text, its root manifest and every library package", () => {

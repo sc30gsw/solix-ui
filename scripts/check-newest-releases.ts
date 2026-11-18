@@ -1,9 +1,4 @@
-import {
-  compareWithNewest,
-  pinsOf,
-  registryNamesToFetch,
-  reportTable,
-} from "#/scripts/newest-releases.ts";
+import { compareWithNewest, pinsOf, reportTable } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   heldBackEntries,
@@ -16,12 +11,13 @@ import { rootManifest } from "#/scripts/repository.ts";
 
 const settings = pnpmSettings();
 const pins = pinsOf(rootManifest(), settings.catalog);
-const policy = releasePolicy(settings);
 const { comparisons, problems } = compareWithNewest({
   pins,
-  documents: await registryDocuments(registryNamesToFetch(pins, policy)),
+  documents: await registryDocuments(
+    pins.flatMap((pin) => (pin.source === "registry" ? [pin.registryName] : [])),
+  ),
   nodeReleases: await nodeReleases(),
-  policy,
+  policy: releasePolicy(settings),
   now: Date.now(),
   heldBack: heldBackEntries(),
   untilStablePackages: untilStableMembers(settings.catalog),

@@ -53,9 +53,13 @@ function userConfigWith(lines: readonly string[]): string {
   return configHome;
 }
 
-test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true, ignores every pnpmfile, loads no config dependency, and does not trust the lockfile past the release-age check`, () => {
+test(`${workspaceFile} sets minimumReleaseAge and minimumReleaseAgeStrict: true, exempts no release from them, ignores every pnpmfile, loads no config dependency, and does not trust the lockfile past the release-age check`, () => {
   expect(pnpmSettings().minimumReleaseAge).toBeGreaterThan(0);
   expect(pnpmSettings().minimumReleaseAgeStrict).toBe(true);
+  expect(
+    pnpmSettings().minimumReleaseAgeExclude,
+    `${workspaceFile}: remove every minimumReleaseAgeExclude entry; a release younger than minimumReleaseAge is not installed.`,
+  ).toEqual([]);
   expect(pnpmSettings().trustLockfile).toBe(false);
   expect(pnpmSettings().ignorePnpmfile).toBe(true);
   expect(pnpmSettings().configDependencies).toEqual({});

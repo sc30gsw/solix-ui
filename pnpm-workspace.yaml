@@ -5,18 +5,6 @@ catalogMode: strict
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
 ignorePnpmfile: true
-minimumReleaseAgeExclude:
-  - solid-js@2.0.0
-  - "@solidjs/web@2.0.0"
-  - "@solidjs/compiler@2.0.0"
-  - "@solidjs/compiler-darwin-arm64@2.0.0"
-  - "@solidjs/compiler-darwin-x64@2.0.0"
-  - "@solidjs/compiler-linux-arm64-gnu@2.0.0"
-  - "@solidjs/compiler-linux-x64-gnu@2.0.0"
-  - "@solidjs/compiler-wasm32-wasi@2.0.0"
-  - "@solidjs/compiler-win32-x64-msvc@2.0.0"
-  - "@solidjs/signals@2.0.0"
-  - "@solidjs/vite-plugin@3.0.0"
 catalog:
   "@babel/core": ^8.1.2
   "@babel/plugin-syntax-jsx": ^8.0.1

@@ -43,13 +43,6 @@ test("the Solid 2 canary takes one release for every Solid package, old enough f
   expect(newestSolidRelease(lockstep, policy, now)).toBe("2.0.0");
   expect(newestSolidRelease(webTooYoung, policy, now)).toBe("2.0.0");
   expect(newestSolidRelease(peerTooNew, policy, now)).toBe("2.0.0");
-  expect(
-    newestSolidRelease(
-      lockstep,
-      { ...policy, exempted: [{ name: "solid-js", version: "2.0.1" }] },
-      now,
-    ),
-  ).toBe("2.0.1");
 });
 
 test("the Solid 2 canary refuses a peer range it cannot read instead of passing over that release, fails by name when the registry answer holds no document for a Solid package, and says when no release will do", () => {
@@ -104,13 +97,6 @@ test("the Solid 2 canary waits until every release a Solid package lists at an e
 
   expect(exactlyRequiredNames(buildTooYoung)).toEqual(["a-compiler-build"]);
   expect(newestSolidRelease(buildTooYoung, policy, now)).toBe("2.0.0");
-  expect(
-    newestSolidRelease(
-      buildTooYoung,
-      { ...policy, exempted: [{ name: "a-compiler-build", version: "2.0.1" }] },
-      now,
-    ),
-  ).toBe("2.0.1");
   expect(newestSolidRelease(withBuilds(releases, releases), policy, now)).toBe("2.0.1");
   expect(newestSolidRelease(withBuilds(releases, [["2.0.0", 20]]), policy, now)).toBe("2.0.0");
   expect(() => newestSolidRelease(noBuildDocument, policy, now)).toThrow(

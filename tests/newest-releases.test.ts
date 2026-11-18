@@ -1,7 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import {
   compareWithNewest,
-  exactCatalogReleases,
   exactlyRequiredBy,
   type HeldBack,
   heldBackFile,
@@ -9,15 +8,11 @@ import {
   holdsWithoutReason,
   type NodeRelease,
   nodePinName,
-  outgrownExemptions,
   packageManagerPinName,
   type Pin,
   pinsOf,
   prereleasePinsOnlyNamedBy,
   type RegistryDocument,
-  registryNamesToFetch,
-  type ReleasePolicy,
-  unjustifiedExemptions,
 } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
@@ -88,7 +83,6 @@ function check(
     pins?: Pin[];
     documents?: Record<string, RegistryDocument>;
     nodeReleases?: NodeRelease[];
-    exempted?: ReleasePolicy["exempted"];
     heldBack?: HeldBack[];
     untilStablePackages?: string[];
   } = {},
@@ -97,7 +91,7 @@ function check(
     pins: options.pins ?? pins,
     documents: options.documents ?? documents,
     nodeReleases: options.nodeReleases ?? nodeReleases,
-    policy: { ...policy, exempted: options.exempted ?? [] },
+    policy,
     now,
     heldBack: options.heldBack ?? [],
     untilStablePackages: options.untilStablePackages ?? [],
@@ -144,7 +138,7 @@ test("each pin is compared with the newest published release on its own channel"
   });
 });
 
-test("a release younger than the minimum release age is not yet eligible, not behind, unless an exemption names it", () => {
+test("a release younger than the minimum release age is not yet eligible, not behind", () => {
   const semver = check().comparisons.find(({ pin }) => pin.name === "semver");
 
   expect(semver).toMatchObject({
@@ -152,78 +146,13 @@ test("a release younger than the minimum release age is not yet eligible, not be
     eligibleAt: "2026-11-15T06:00:00.000Z",
   });
   expect(check().problems.join("\n")).not.toContain("semver");
-  expect(statuses({ exempted: [{ name: "semver", version: "7.8.7" }] }).semver).toBe("behind");
-  expect(statuses({ exempted: [{ name: "semver", version: "7.8.5" }] }).semver).toBe(
-    "not yet eligible",
-  );
 });
 
-test("an exemption in minimumReleaseAgeExclude fails the check by name once its release is old enough to install without it, and so does one whose release the registry does not list or whose package has no registry document", () => {
-  const exemptions = [
-    { name: "semver", version: "7.8.7" },
-    { name: "semver", version: "7.8.6" },
-    { name: "a-platform-build", version: "2.0.0" },
-    { name: "a-platform-build", version: "2.0.1" },
-    { name: "semver", version: "7.9.0" },
-    { name: "a-missing-package", version: "1.0.0" },
-  ];
-  const report = check({
-    documents: {
-      ...documents,
-      "a-platform-build": registryDocument([
-        ["2.0.0", 1],
-        ["2.0.1", 0.5],
-      ]),
-    },
-    exempted: exemptions,
+test("releasePolicy takes the minimum release age from the settings, and refuses settings that set none", () => {
+  expect(releasePolicy({ ...pnpmSettings(), minimumReleaseAge: 99 })).toEqual({
+    minimumReleaseAgeMinutes: 99,
   });
-
-  expect(report.problems.filter((problem) => problem.includes("minimumReleaseAgeExclude"))).toEqual(
-    [
-      "semver@7.8.6: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
-      "a-platform-build@2.0.0: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
-      "semver@7.9.0: the registry lists no such release. So nothing tells whether minimumReleaseAgeExclude still needs it.",
-      "a-missing-package@1.0.0: the registry answer holds no document for a-missing-package. So nothing tells whether minimumReleaseAgeExclude still needs it.",
-    ],
-  );
-  expect(
-    check({ exempted: [{ name: "semver", version: "7.8.7" }] }).problems.join("\n"),
-  ).not.toContain("minimumReleaseAgeExclude");
-});
-
-test("the weekly check fetches the registry document of every registry pin and of every exempted package, each once", () => {
-  const exemptions = [
-    { name: "a-platform-build", version: "2.0.0" },
-    { name: "semver", version: "7.8.7" },
-  ];
-
-  expect(registryNamesToFetch(pins, { ...policy, exempted: exemptions })).toEqual([
-    "semver",
-    "playwright",
-    "solid-js",
-    "@solidjs/vite-plugin",
-    "@types/node",
-    "@voidzero-dev/vite-plus-core",
-    "pnpm",
-    "a-platform-build",
-  ]);
-});
-
-test("releasePolicy reads each minimumReleaseAgeExclude entry as <name>@<exact version>, refuses any other, a bare package name included, and accepts this repository's own", () => {
-  const settings = { ...pnpmSettings(), minimumReleaseAge: 1440 };
-  const withExemptions = (minimumReleaseAgeExclude: string[]) =>
-    releasePolicy({ ...settings, minimumReleaseAgeExclude });
-
-  expect(withExemptions(["semver@7.8.7", "@types/node@26.6.7"]).exempted).toEqual([
-    { name: "semver", version: "7.8.7" },
-    { name: "@types/node", version: "26.6.7" },
-  ]);
-  expect(() => withExemptions(["semver"])).toThrow(/"semver" is not <name>@<exact version>/);
-  expect(() => withExemptions(["semver@^7"])).toThrow(/"semver@\^7" is not <name>@<exact/);
-  expect(() => withExemptions(["@types/*"])).toThrow(/is not <name>@<exact version>/);
-  expect(() => withExemptions(["semver@7.8.7 || 7.8.8"])).toThrow(/is not <name>@<exact/);
-  expect(() => withExemptions(["semver@v7.8.7"])).toThrow(/is not <name>@<exact/);
-  expect(() => releasePolicy({ ...settings, minimumReleaseAge: undefined })).toThrow(
+  expect(() => releasePolicy({ ...pnpmSettings(), minimumReleaseAge: undefined })).toThrow(
     /set minimumReleaseAge/,
   );
   expect(() => releasePolicy(pnpmSettings())).not.toThrow();
@@ -515,7 +444,7 @@ test("every job of the weekly workflow runs each week and fails the run when it 
   expectEveryJobToRunWeeklyAndFailTheRun();
 });
 
-test("the pins job has exactly one step that runs the pin check, which also names exemptions pnpm no longer needs, with no if and no continue-on-error", () => {
+test("the pins job has exactly one step that runs the pin check, with no if and no continue-on-error", () => {
   expectJobToHaveOneStepRunning("pins", "node scripts/check-newest-releases.ts");
 });
 
@@ -588,102 +517,6 @@ test("exactlyRequiredBy reads the dependencies and optionalDependencies a manife
     { name: "build", version: "2.0.0" },
   ]);
   expect(exactlyRequiredBy(undefined)).toEqual([]);
-});
-
-test("the releases the catalog pins exactly are its entries pinned to one version, aliased ones under their registry name, without a range and without packageManager", () => {
-  expect(
-    exactCatalogReleases(
-      pinsOf(manifest, {
-        semver: "7.8.6",
-        playwright: "^1.63.0",
-        vite: "npm:@voidzero-dev/vite-plus-core@1.6.0",
-      }),
-    ),
-  ).toEqual([
-    { name: "semver", version: "7.8.6" },
-    { name: "@voidzero-dev/vite-plus-core", version: "1.6.0" },
-  ]);
-});
-
-test("an exemption is unjustified unless the lockfile locks its release and the catalog pins it exactly or a pinned release requires it exactly", () => {
-  const sources = {
-    locked: ["solid-js@2.0.0", "a-build@2.0.0", "a-stray@1.0.0"],
-    pinned: [{ name: "solid-js", version: "2.0.0" }],
-    required: [{ name: "a-build", version: "2.0.0" }],
-  };
-
-  expect(
-    unjustifiedExemptions(
-      [
-        { name: "solid-js", version: "2.0.0" },
-        { name: "a-build", version: "2.0.0" },
-        { name: "a-stray", version: "1.0.0" },
-        { name: "a-build", version: "1.9.0" },
-      ],
-      sources,
-    ),
-  ).toEqual([
-    "minimumReleaseAgeExclude names a-stray@1.0.0, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.",
-    "minimumReleaseAgeExclude names a-build@1.9.0, which pnpm-lock.yaml does not lock, so nothing installs it; remove the entry.",
-    "minimumReleaseAgeExclude names a-build@1.9.0, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.",
-  ]);
-});
-
-test("once the catalog moves a Solid package to a newer release, an exemption still naming the older one is named by the weekly check when the older release was published first, and by the exemption rule whatever the order", () => {
-  const exemption = { name: "solid-js", version: "2.0.0" };
-  const afterTheMove = {
-    locked: ["solid-js@2.0.1"],
-    pinned: [{ name: "solid-js", version: "2.0.1" }],
-    required: [],
-  };
-  const outgrown = (listings: Listing[]) =>
-    outgrownExemptions(
-      { "solid-js": registryDocument(listings) },
-      { ...policy, exempted: [exemption] },
-      now,
-    );
-
-  expect(
-    outgrown([
-      ["2.0.0", 1.5],
-      ["2.0.1", 1],
-    ]),
-  ).toEqual([
-    "solid-js@2.0.0: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
-  ]);
-  expect(
-    outgrown([
-      ["2.0.1", 1],
-      ["2.0.0", 0.5],
-    ]),
-  ).toEqual([]);
-  expect(unjustifiedExemptions([exemption], afterTheMove)).toEqual([
-    "minimumReleaseAgeExclude names solid-js@2.0.0, which pnpm-lock.yaml does not lock, so nothing installs it; remove the entry.",
-    "minimumReleaseAgeExclude names solid-js@2.0.0, which the catalog does not pin and no release it pins lists at that exact version; remove the entry.",
-  ]);
-});
-
-test("an exemption is judged by its own release's publish time: one with none is unknown by name, and another version with none does not make it unknown", () => {
-  const timeless = registryDocument([
-    ["7.8.5", 30],
-    ["7.8.6", 10],
-    ["7.8.7", 5],
-  ]);
-  const { "7.8.7": _withoutTime, ...otherTimes } = timeless.time ?? {};
-  const { "7.8.5": _alsoWithoutTime, ...laterTimes } = timeless.time ?? {};
-  const outgrown = (time: Record<string, string>, version: string) =>
-    outgrownExemptions(
-      { semver: { ...timeless, time } },
-      { ...policy, exempted: [{ name: "semver", version }] },
-      now,
-    );
-
-  expect(outgrown(otherTimes, "7.8.7")).toEqual([
-    "semver@7.8.7: the registry gives no publish time for semver@7.8.7, so its age cannot be told. So nothing tells whether minimumReleaseAgeExclude still needs it.",
-  ]);
-  expect(outgrown(laterTimes, "7.8.6")).toEqual([
-    "semver@7.8.6: it is older than minimumReleaseAge, so pnpm installs it without an exemption. Remove it from minimumReleaseAgeExclude.",
-  ]);
 });
 
 test("a pin ahead of its channel passes while the held-back list holds it with a reason and a liftWhen, and fails by name without one", () => {

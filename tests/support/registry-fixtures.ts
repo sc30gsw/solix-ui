@@ -6,7 +6,7 @@ import type {
 
 export const now = Date.parse("2026-11-14T12:00:00Z");
 export const day = 24 * 60 * 60_000;
-export const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60, exempted: [] };
+export const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60 };
 
 export type Listing = [version: string, daysAgo: number, manifest?: VersionManifest];
 

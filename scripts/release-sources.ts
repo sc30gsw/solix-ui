@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  exemptionsIn,
   prereleasePinsOnlyNamedBy,
   type HeldBack,
   heldBackFile,
@@ -19,10 +18,7 @@ export function releasePolicy(settings: PnpmSettings): ReleasePolicy {
   if (settings.minimumReleaseAge === undefined) {
     throw new Error(`${workspaceFile}: set minimumReleaseAge.`);
   }
-  return {
-    minimumReleaseAgeMinutes: settings.minimumReleaseAge,
-    exempted: exemptionsIn(settings.minimumReleaseAgeExclude),
-  };
+  return { minimumReleaseAgeMinutes: settings.minimumReleaseAge };
 }
 
 export const storybookAppManifest = "apps/storybook/package.json";

@@ -18,7 +18,7 @@ const fixtureFile = "tests/fixtures/registry/2026-11-16.json";
 const revisitJob = "revisits";
 const revisitCheck = "node scripts/check-revisits.ts";
 const now = Date.parse("2026-11-16T22:39:45Z");
-const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60, exempted: [] };
+const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60 };
 
 const registryFixture = JSON.parse(
   readFileSync(join(repositoryRoot, fixtureFile), "utf8"),
@@ -185,17 +185,6 @@ test("once every release the condition names is stable and old enough to install
   expect(report.problems).toEqual([
     `ReactiveScript: its condition in ${roadmapFile} is met by solid-js@2.0.0, @reactivescript/compiler@1.0.0. Decide on the revisit: take it up, or give it a new condition.`,
   ]);
-});
-
-test("a young release that minimumReleaseAgeExclude names counts as old enough", () => {
-  const report = evaluateRevisits({
-    revisits: [reactiveScript],
-    documents: bothButYoung,
-    policy: { ...policy, exempted: [{ name: "@reactivescript/compiler", version: "1.0.0" }] },
-    now,
-  });
-
-  expect(report.evaluations[0].met).toBe(true);
 });
 
 test("a revisit without a condition or a reason is never met and fails the check, and so do a package with no registry document and a release with no publish time", () => {
