@@ -653,7 +653,19 @@ test("every package on the Solid 2 channel is pinned to one release and installe
   expect(violations).toEqual([]);
 });
 
-test("every peer range of a library package accepts the version the catalog pins", () => {
+function prereleasesNamedBy(range: string): string[] {
+  return new semver.Range(range).set
+    .flat()
+    .filter(
+      ({ operator, semver: bound }) =>
+        Array.isArray(bound.prerelease) &&
+        bound.prerelease.length > 0 &&
+        !(operator === "<" && bound.prerelease.join(".") === "0"),
+    )
+    .map(({ value }) => value);
+}
+
+test("every peer range of a library package accepts the version the catalog pins, and where the catalog pins a stable release, names no prerelease and accepts nothing below the pinned major", () => {
   const { catalog } = pnpmSettings();
   const violations = libraryPackages.flatMap(({ path, manifest }) =>
     Object.entries(manifest.peerDependencies ?? {}).flatMap(([name, range]) => {
@@ -661,11 +673,24 @@ test("every peer range of a library package accepts the version the catalog pins
       const pinned = catalog[name];
       if (pinned === undefined)
         return [`${workspaceFile}: add "${name}" to the catalog, which ${path} names as a peer.`];
-      return semver.satisfies(pinned, range, { includePrerelease: true })
-        ? []
-        : [
-            `${path}: widen the peer range "${range}" of "${name}" so it accepts ${pinned}, the version the catalog in ${workspaceFile} pins.`,
-          ];
+      if (!semver.satisfies(pinned, range, { includePrerelease: true })) {
+        return [
+          `${path}: widen the peer range "${range}" of "${name}" so it accepts ${pinned}, the version the catalog in ${workspaceFile} pins.`,
+        ];
+      }
+      if (semver.prerelease(pinned) !== null) return [];
+      const lowest = semver.minVersion(range)?.version ?? "";
+      return [
+        ...prereleasesNamedBy(range).map(
+          (comparator) =>
+            `${path}: the peer range "${range}" of "${name}" names the prerelease ${comparator}; the catalog pins ${pinned}, a stable release, so name stable releases only.`,
+        ),
+        ...(semver.major(lowest) === semver.major(pinned)
+          ? []
+          : [
+              `${path}: the lowest version the peer range "${range}" of "${name}" accepts, ${lowest}, is not on major ${semver.major(pinned)} of ${pinned}, which the catalog pins.`,
+            ]),
+      ];
     }),
   );
 

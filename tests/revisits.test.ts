@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { parse as parseYaml } from "yaml";
 import type { RegistryDocument, ReleasePolicy } from "#/scripts/newest-releases.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 import {
@@ -13,13 +12,13 @@ import {
   revisitsWithoutReasonOrCondition,
 } from "#/scripts/revisits.ts";
 import { roadmapFile } from "#/scripts/roadmap.ts";
+import { expectJobToHaveOneStepRunning } from "#/tests/support/weekly-workflow.ts";
 
 const fixtureFile = "tests/fixtures/registry/2026-11-16.json";
-const weeklyWorkflow = ".github/workflows/newest-releases.yml";
 const revisitJob = "revisits";
 const revisitCheck = "node scripts/check-revisits.ts";
 const now = Date.parse("2026-11-16T22:39:45Z");
-const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60, excluded: [] };
+const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60 };
 
 const registryFixture = JSON.parse(
   readFileSync(join(repositoryRoot, fixtureFile), "utf8"),
@@ -98,21 +97,8 @@ test(`no revisit in ${roadmapFile} is met by the registry fixture in ${fixtureFi
   expect(report.problems).toEqual([]);
 });
 
-test(`the scheduled workflow runs the revisit check in a ${revisitJob} job with no if and a timeout`, () => {
-  const workflow = parseYaml(readFileSync(join(repositoryRoot, weeklyWorkflow), "utf8")) as {
-    on?: { schedule?: unknown[] };
-    jobs?: Record<string, Record<string, unknown> & { steps?: Record<string, unknown>[] }>;
-  };
-  const job = workflow.jobs?.[revisitJob];
-  const steps = (job?.steps ?? []).filter((step) => step.run === revisitCheck);
-
-  expect(workflow.on?.schedule?.length).toBeGreaterThan(0);
-  expect(job).toBeDefined();
-  expect(job).not.toHaveProperty("if");
-  expect(typeof job?.["timeout-minutes"]).toBe("number");
-  expect(steps.length).toBe(1);
-  expect(steps[0]).not.toHaveProperty("if");
-  expect(steps[0]).not.toHaveProperty("continue-on-error");
+test(`the ${revisitJob} job has exactly one step that runs the revisit check, with no if and no continue-on-error`, () => {
+  expectJobToHaveOneStepRunning(revisitJob, revisitCheck);
 });
 
 test("the revisits read the reason and the condition of each revisit", () => {
@@ -201,17 +187,6 @@ test("once every release the condition names is stable and old enough to install
   ]);
 });
 
-test("a young release that minimumReleaseAgeExclude names counts as old enough", () => {
-  const report = evaluateRevisits({
-    revisits: [reactiveScript],
-    documents: bothButYoung,
-    policy: { ...policy, excluded: [{ name: "@reactivescript/compiler", version: "1.0.0" }] },
-    now,
-  });
-
-  expect(report.evaluations[0].met).toBe(true);
-});
-
 test("a revisit without a condition or a reason is never met and fails the check, and so do a package with no registry document and a release with no publish time", () => {
   const unexplained: Revisit = { name: "Unexplained", reason: "", condition: [] };
   const elsewhere: Revisit = {
@@ -226,7 +201,7 @@ test("a revisit without a condition or a reason is never met and fails the check
     `${roadmapFile}: give the revisit Unexplained a "- Why not now:" reason and a "- Condition:" the weekly check can evaluate.`,
   ]);
   expect(evaluated(registryFixture, [elsewhere]).problems).toEqual([
-    "Elsewhere: the registry answer holds no document for not-in-the-fixture, so nothing tells whether it is published.",
+    "Elsewhere: the registry answer holds no document for not-in-the-fixture.",
   ]);
   expect(evaluated(timeless).problems).toEqual([
     "ReactiveScript: the registry gives no publish time for solid-js@2.0.0, so its age cannot be told.",

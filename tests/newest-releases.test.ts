@@ -1,11 +1,11 @@
 import { expect, test } from "vite-plus/test";
 import {
   compareWithNewest,
+  exactlyRequiredBy,
   type HeldBack,
   heldBackFile,
   holdsOfNothing,
   holdsWithoutReason,
-  newestSolidRelease,
   type NodeRelease,
   nodePinName,
   packageManagerPinName,
@@ -13,7 +13,6 @@ import {
   pinsOf,
   prereleasePinsOnlyNamedBy,
   type RegistryDocument,
-  type ReleasePolicy,
 } from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
@@ -23,29 +22,14 @@ import {
   untilStableMembers,
 } from "#/scripts/release-sources.ts";
 import { manifestAt, manifestPaths, rootManifest } from "#/scripts/repository.ts";
+import { type Listing, now, policy, registryDocument } from "#/tests/support/registry-fixtures.ts";
+import {
+  cronProblems,
+  expectEveryJobToRunWeeklyAndFailTheRun,
+  expectJobToHaveOneStepRunning,
+} from "#/tests/support/weekly-workflow.ts";
 
-const now = Date.parse("2026-11-14T12:00:00Z");
-const day = 24 * 60 * 60_000;
-const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60, excluded: [] };
 const manifest = { packageManager: "pnpm@12.18.0", engines: { node: "^26.13.1" } };
-
-type Release = [version: string, daysAgo: number, peers?: Record<string, string>];
-
-function registryDocument(releases: Release[], unpublished: Release[] = []): RegistryDocument {
-  const at = ([version, daysAgo]: Release) => [
-    version,
-    new Date(now - daysAgo * day).toISOString(),
-  ];
-  return {
-    versions: Object.fromEntries(
-      releases.map(([version, , peers]) => [version, { peerDependencies: peers }]),
-    ),
-    time: {
-      created: "2020-01-01T00:00:00Z",
-      ...Object.fromEntries([...releases, ...unpublished].map(at)),
-    },
-  };
-}
 
 const documents = {
   semver: registryDocument([
@@ -60,14 +44,17 @@ const documents = {
   ]),
   "solid-js": registryDocument([
     ["1.9.19", 90],
-    ["2.0.0-rc.21", 20],
-    ["2.0.0-rc.22", 3],
+    ["2.0.0-rc.23", 30],
+    ["2.0.0", 20],
+    ["2.0.1", 3],
+    ["2.1.0-rc.1", 2],
   ]),
   "@solidjs/vite-plugin": registryDocument([
-    ["3.0.0-next.35", 200],
-    ["3.0.0-next.57", 20],
-    ["3.0.0-next.58", 4],
-    ["4.0.0-next.0", 4],
+    ["3.0.0-next.57", 30],
+    ["3.0.0", 20],
+    ["3.0.1", 4],
+    ["3.1.0-next.0", 3],
+    ["4.0.0", 4],
   ]),
   "@types/node": registryDocument([
     ["26.6.6", 20],
@@ -85,8 +72,8 @@ const nodeReleases: NodeRelease[] = [
 const pins = pinsOf(manifest, {
   semver: "7.8.6",
   playwright: "^1.63.0",
-  "solid-js": "2.0.0-rc.21",
-  "@solidjs/vite-plugin": "3.0.0-next.57",
+  "solid-js": "2.0.0",
+  "@solidjs/vite-plugin": "3.0.0",
   "@types/node": "^26.6.6",
   vite: "npm:@voidzero-dev/vite-plus-core@1.6.0",
 });
@@ -96,7 +83,6 @@ function check(
     pins?: Pin[];
     documents?: Record<string, RegistryDocument>;
     nodeReleases?: NodeRelease[];
-    excluded?: ReleasePolicy["excluded"];
     heldBack?: HeldBack[];
     untilStablePackages?: string[];
   } = {},
@@ -105,7 +91,7 @@ function check(
     pins: options.pins ?? pins,
     documents: options.documents ?? documents,
     nodeReleases: options.nodeReleases ?? nodeReleases,
-    policy: { ...policy, excluded: options.excluded ?? [] },
+    policy,
     now,
     heldBack: options.heldBack ?? [],
     untilStablePackages: options.untilStablePackages ?? [],
@@ -115,7 +101,7 @@ function check(
 function checkOf(
   name: string,
   pinned: string,
-  releases: Release[],
+  releases: Listing[],
   untilStablePackages: string[] = [],
 ) {
   const report = check({
@@ -132,18 +118,7 @@ function statuses(options: Parameters<typeof check>[0] = {}): Record<string, str
   );
 }
 
-function solidLine(webPeer: (version: string) => string, releases: Release[]) {
-  return {
-    "solid-js": registryDocument(releases),
-    "@solidjs/web": registryDocument(
-      releases.map(([version, daysAgo]) => [version, daysAgo, { "solid-js": webPeer(version) }]),
-    ),
-    "@solidjs/compiler": registryDocument(releases),
-    "@solidjs/signals": registryDocument(releases),
-  };
-}
-
-test("each pin is compared with the newest published release on its own channel, not with a dist-tag", () => {
+test("each pin is compared with the newest published release on its own channel", () => {
   const newest = Object.fromEntries(
     check().comparisons.map((comparison) => [
       comparison.pin.name,
@@ -154,8 +129,8 @@ test("each pin is compared with the newest published release on its own channel,
   expect(newest).toEqual({
     semver: "7.8.7",
     playwright: "1.65.1",
-    "solid-js": "2.0.0-rc.22",
-    "@solidjs/vite-plugin": "3.0.0-next.58",
+    "solid-js": "2.0.1",
+    "@solidjs/vite-plugin": "3.0.1",
     "@types/node": "26.6.7",
     vite: "1.6.0",
     [packageManagerPinName]: "12.18.0",
@@ -163,7 +138,7 @@ test("each pin is compared with the newest published release on its own channel,
   });
 });
 
-test("a release younger than the minimum release age is not yet eligible, not behind, unless an exclusion names it", () => {
+test("a release younger than the minimum release age is not yet eligible, not behind", () => {
   const semver = check().comparisons.find(({ pin }) => pin.name === "semver");
 
   expect(semver).toMatchObject({
@@ -171,32 +146,19 @@ test("a release younger than the minimum release age is not yet eligible, not be
     eligibleAt: "2026-11-15T06:00:00.000Z",
   });
   expect(check().problems.join("\n")).not.toContain("semver");
-  expect(statuses({ excluded: [{ name: "semver", version: "7.8.7" }] }).semver).toBe("behind");
-  expect(statuses({ excluded: [{ name: "semver", version: "7.8.5" }] }).semver).toBe(
-    "not yet eligible",
-  );
-  expect(statuses({ excluded: [{ name: "semver" }] }).semver).toBe("behind");
 });
 
-test("releasePolicy reads each minimumReleaseAgeExclude entry as a package name or <name>@<exact version>, refuses any other, and accepts this repository's own", () => {
-  const settings = { ...pnpmSettings(), minimumReleaseAge: 1440 };
-  const withExclusions = (minimumReleaseAgeExclude: string[]) =>
-    releasePolicy({ ...settings, minimumReleaseAgeExclude });
-
-  expect(withExclusions(["semver", "@types/node@26.6.7"]).excluded).toEqual([
-    { name: "semver" },
-    { name: "@types/node", version: "26.6.7" },
-  ]);
-  expect(() => withExclusions(["semver", "semver@^7"])).toThrow(/"semver@\^7" is not a package/);
-  expect(() => withExclusions(["@types/*"])).toThrow(/is not a package name/);
-  expect(() => withExclusions(["semver@7.8.7 || 7.8.8"])).toThrow(/is not a package name/);
-  expect(() => releasePolicy({ ...settings, minimumReleaseAge: undefined })).toThrow(
+test("releasePolicy takes the minimum release age from the settings, and refuses settings that set none", () => {
+  expect(releasePolicy({ ...pnpmSettings(), minimumReleaseAge: 99 })).toEqual({
+    minimumReleaseAgeMinutes: 99,
+  });
+  expect(() => releasePolicy({ ...pnpmSettings(), minimumReleaseAge: undefined })).toThrow(
     /set minimumReleaseAge/,
   );
   expect(() => releasePolicy(pnpmSettings())).not.toThrow();
 });
 
-test("each channel finds what is behind: stable, the Solid 2 line, the plugin's pinned major, the Node LTS major and Node's newest LTS", () => {
+test("each channel finds what is behind: stable, the stable Solid 2 line, the plugin's stable releases on its pinned major, the Node LTS major and Node's newest LTS", () => {
   expect(statuses()).toEqual({
     semver: "not yet eligible",
     playwright: "behind",
@@ -209,77 +171,32 @@ test("each channel finds what is behind: stable, the Solid 2 line, the plugin's 
   });
 });
 
-test("the Solid 2 line takes a stable 2.x once one is old enough to install, and never a Solid 3 release", () => {
-  const afterStable: Release[] = [
-    ["2.0.0-rc.22", 30],
-    ["2.0.0", 20],
+test("the Solid 2 line takes only stable 2.x releases: never a prerelease, and never a Solid 3 release", () => {
+  const releases: Listing[] = [
+    ["2.0.0", 30],
     ["2.0.1", 10],
-    ["3.0.0-alpha.1", 5],
+    ["2.1.0-rc.1", 5],
+    ["3.0.0", 5],
   ];
-  const beforeStable: Release[] = [
-    ["2.0.0-rc.21", 20],
-    ["2.0.0-rc.22", 10],
+  const noNewerStable: Listing[] = [
+    ["2.0.0", 30],
+    ["2.1.0-rc.1", 5],
     ["3.0.0-alpha.1", 5],
   ];
 
-  expect(checkOf("solid-js", "2.0.0-rc.22", afterStable).comparison).toMatchObject({
+  expect(checkOf("solid-js", "2.0.0", releases).comparison).toMatchObject({
     status: "behind",
     newest: "2.0.1",
     eligible: "2.0.1",
   });
-  expect(checkOf("solid-js", "2.0.0-rc.22", beforeStable).comparison).toMatchObject({
+  expect(checkOf("solid-js", "2.0.0", noNewerStable).comparison).toMatchObject({
     status: "current",
-    newest: "2.0.0-rc.22",
-  });
-});
-
-test("on the first day of a stable Solid 2, a newer release candidate that is old enough is still what a pin is behind", () => {
-  const firstDay: Release[] = [
-    ["2.0.0-rc.22", 60],
-    ["2.0.0-rc.23", 5],
-    ["2.0.0", 0.25],
-  ];
-
-  expect(checkOf("solid-js", "2.0.0-rc.22", firstDay).comparison).toMatchObject({
-    status: "behind",
-    eligible: "2.0.0-rc.23",
     newest: "2.0.0",
   });
-  expect(checkOf("solid-js", "2.0.0-rc.23", firstDay).comparison).toMatchObject({
-    status: "not yet eligible",
-    eligibleAt: "2026-11-15T06:00:00.000Z",
-  });
-  expect(
-    newestSolidRelease(
-      solidLine(() => "*", firstDay),
-      policy,
-      now,
-    ),
-  ).toBe("2.0.0-rc.23");
-});
-
-test("while @solidjs/web has no stable Solid 2 yet, the canary takes the newest release every Solid package has", () => {
-  const lagging = {
-    "solid-js": registryDocument([
-      ["2.0.0-rc.23", 9],
-      ["2.0.0", 5],
-    ]),
-    "@solidjs/web": registryDocument([["2.0.0-rc.23", 9]]),
-    "@solidjs/compiler": registryDocument([
-      ["2.0.0-rc.23", 9],
-      ["2.0.0", 5],
-    ]),
-    "@solidjs/signals": registryDocument([
-      ["2.0.0-rc.23", 9],
-      ["2.0.0", 5],
-    ]),
-  };
-
-  expect(newestSolidRelease(lagging, policy, now)).toBe("2.0.0-rc.23");
 });
 
 test("a prerelease pin with no channel of its own is behind a newer prerelease of the version it pins that carries the pin's own identifier, and behind that version once it is stable", () => {
-  const betas: Release[] = [
+  const betas: Listing[] = [
     ["0.9.0", 99],
     ["1.0.0-beta.3", 50],
     ["1.0.0-beta.9", 20],
@@ -302,7 +219,7 @@ test("a prerelease pin with no channel of its own is behind a newer prerelease o
 });
 
 test("a prerelease pin of a package with no stable release yet is behind its newest prerelease of any version that carries the pin's own identifier, and takes its channel back once a stable release is published", () => {
-  const neverStable: Release[] = [
+  const neverStable: Listing[] = [
     ["2.9.0-stage", 9],
     ["3.0.0-beta.3", 6],
     ["3.0.0-beta.7", 5],
@@ -372,20 +289,20 @@ test("every member of the until-stable channel that the weekly check uses is nam
 });
 
 test("a pin on the until-stable channel is behind the newest release of the major it pins, nightly, beta or release candidate, and follows stable releases once that major has one old enough to install", () => {
-  const nightlies: Release[] = [
+  const nightlies: Listing[] = [
     ["10.7.4", 30],
     ["11.0.0-next-20261020160717", 28],
     ["11.0.0-next-20261105190313", 12],
     ["11.0.0-next-20261116090000", 0.5],
     ["12.0.0-next-20261101000000", 10],
   ];
-  const beforeStable: Release[] = [
+  const beforeStable: Listing[] = [
     ["10.6.7", 7],
     ["11.0.0-beta.3", 4],
     ["11.0.0-rc.0", 2],
     ["11.0.0-rc.1", 0.5],
   ];
-  const afterStable: Release[] = [
+  const afterStable: Listing[] = [
     ...beforeStable,
     ["11.0.0", 2],
     ["11.0.1", 0.5],
@@ -441,9 +358,6 @@ test("a published version with no publish time, or one that is not a date, is a 
   expect(
     check({ pins: pinsOfSemver, documents: { ...documents, semver: notADate } }).problems[0],
   ).toBe("semver: the registry gives no publish time for semver@7.8.6, so its age cannot be told.");
-  expect(() =>
-    newestSolidRelease({ "solid-js": noTime, "@solidjs/web": noTime }, policy, now),
-  ).toThrow("solid-js: the registry gives no publish time for solid-js@7.8.7");
 });
 
 test("a Node release index with no LTS release is a problem for engines.node and for @types/node, whose channel follows it", () => {
@@ -470,79 +384,6 @@ test("a version the registry lists only in time, unpublished, is not counted", (
   expect(vite).toMatchObject({ status: "current", newest: "1.6.0" });
 });
 
-test("the Solid 2 canary takes one release for every Solid package, old enough for each and accepted by their peer ranges", () => {
-  const lockstep = solidLine(
-    (version) => `^${version}`,
-    [
-      ["2.0.0-rc.21", 20],
-      ["2.0.0-rc.22", 2],
-    ],
-  );
-  lockstep["solid-js"] = registryDocument([
-    ["2.0.0-rc.21", 20],
-    ["2.0.0-rc.22", 0.25],
-  ]);
-  const peerTooNew = solidLine(
-    (version) => (version === "2.0.0-rc.22" ? "^2.0.0-rc.23" : "*"),
-    [
-      ["2.0.0-rc.21", 20],
-      ["2.0.0-rc.22", 2],
-    ],
-  );
-
-  const webTooYoung = {
-    "solid-js": lockstep["@solidjs/web"],
-    "@solidjs/web": lockstep["solid-js"],
-    "@solidjs/compiler": lockstep["@solidjs/compiler"],
-    "@solidjs/signals": lockstep["@solidjs/signals"],
-  };
-
-  expect(newestSolidRelease(lockstep, policy, now)).toBe("2.0.0-rc.21");
-  expect(newestSolidRelease(webTooYoung, policy, now)).toBe("2.0.0-rc.21");
-  expect(newestSolidRelease(peerTooNew, policy, now)).toBe("2.0.0-rc.21");
-  expect(
-    newestSolidRelease(
-      lockstep,
-      { ...policy, excluded: [{ name: "solid-js", version: "2.0.0-rc.22" }] },
-      now,
-    ),
-  ).toBe("2.0.0-rc.22");
-});
-
-test("the Solid 2 canary refuses a peer range it cannot read instead of passing over that release, and says when no release will do", () => {
-  const unreadable = solidLine(
-    (version) => (version === "2.0.0-rc.22" ? "workspace:^" : "*"),
-    [
-      ["2.0.0-rc.21", 20],
-      ["2.0.0-rc.22", 2],
-    ],
-  );
-
-  expect(() => newestSolidRelease(unreadable, policy, now)).toThrow(
-    '@solidjs/web@2.0.0-rc.22: its peer range "workspace:^" for solid-js is not a semver range',
-  );
-  expect(() => newestSolidRelease({}, policy, now)).toThrow(
-    "No Solid 2 release is published for solid-js, @solidjs/web, @solidjs/compiler and @solidjs/signals alike, old enough to install and accepted by their peer ranges.",
-  );
-});
-
-test("the Solid 2 canary stays on Solid 2 when next moves to Solid 3, and takes 2.x stable once it is old enough to install", () => {
-  const releases: Release[] = [
-    ["2.0.0-rc.22", 30],
-    ["2.0.0", 20],
-    ["2.0.1", 10],
-    ["3.0.0-alpha.1", 5],
-  ];
-
-  expect(
-    newestSolidRelease(
-      solidLine(() => "*", releases),
-      policy,
-      now,
-    ),
-  ).toBe("2.0.1");
-});
-
 test("a pin behind its channel fails the check, unless the held-back list holds it with a reason and a liftWhen", () => {
   const hold = {
     name: "playwright",
@@ -565,9 +406,11 @@ test("a held-back entry that holds nothing back, or has no reason or no liftWhen
 
   expect(
     holdsOfNothing([idle, unexplained], check({ heldBack: [unexplained] }).comparisons),
-  ).toEqual(["vite: the held-back list holds it, but it is not behind; remove the entry."]);
+  ).toEqual([
+    "vite: the held-back list holds it, but it is neither behind nor ahead of its channel; remove the entry.",
+  ]);
   expect(holdsWithoutReason([idle, unexplained])).toEqual([
-    `playwright: give the entry in ${heldBackFile} a reason and a liftWhen.`,
+    `playwright: give the entry in ${heldBackFile} a reason, a liftWhen and, for a pin ahead of its channel, holds: "ahead".`,
   ]);
   expect(check({ heldBack: [idle, unexplained] }).problems).toEqual(
     expect.arrayContaining([
@@ -595,4 +438,185 @@ test(`${heldBackFile} names only pins of this repository, and holds each back wi
 
   expect(heldBack.filter(({ name }) => !names.includes(name))).toEqual([]);
   expect(holdsWithoutReason(heldBack)).toEqual([]);
+});
+
+test("every job of the weekly workflow runs each week and fails the run when it fails: a schedule GitHub can run has * for day-of-month and month, and no job sets if, needs or continue-on-error or lacks a timeout", () => {
+  expectEveryJobToRunWeeklyAndFailTheRun();
+});
+
+test("the pins job has exactly one step that runs the pin check, with no if and no continue-on-error", () => {
+  expectJobToHaveOneStepRunning("pins", "node scripts/check-newest-releases.ts");
+});
+
+test("a UI SDK pin follows the release the latest dist-tag names, once it is old enough to install: a release ahead of latest is not newer, a pin ahead of latest fails by name, and a document with no latest tag fails by name", () => {
+  const betas: Listing[] = [
+    ["0.1.0-beta.5", 3],
+    ["0.1.0-beta.6", 2],
+    ["0.1.0-beta.7", 1.5],
+  ];
+  const tagged = (latest: string, releases: Listing[] = betas): RegistryDocument => ({
+    ...registryDocument(releases),
+    "dist-tags": { latest, beta: "0.1.0-beta.7" },
+  });
+  const sdk = (pinned: string, document: RegistryDocument) =>
+    check({
+      pins: pinsOf(manifest, { "@ui-sdk/core": pinned }),
+      documents: { ...documents, "@ui-sdk/core": document },
+    });
+
+  expect(sdk("0.1.0-beta.5", tagged("0.1.0-beta.6")).comparisons[0]).toMatchObject({
+    status: "behind",
+    newest: "0.1.0-beta.6",
+    eligible: "0.1.0-beta.6",
+    channel: "the release its registry document's latest dist-tag names",
+  });
+  expect(sdk("0.1.0-beta.6", tagged("0.1.0-beta.6")).comparisons[0]).toMatchObject({
+    status: "current",
+    newest: "0.1.0-beta.6",
+  });
+  const ahead = sdk("0.1.0-beta.7", tagged("0.1.0-beta.6"));
+  expect(ahead.comparisons[0]).toMatchObject({ status: "ahead", newest: "0.1.0-beta.6" });
+  expect(ahead.problems[0]).toBe(
+    "@ui-sdk/core: 0.1.0-beta.7 is ahead of 0.1.0-beta.6, the newest release on its channel (the release its registry document's latest dist-tag names). Pin 0.1.0-beta.6.",
+  );
+  expect(
+    sdk(
+      "0.1.0-beta.5",
+      tagged("0.1.0-beta.6", [
+        ["0.1.0-beta.5", 3],
+        ["0.1.0-beta.6", 0.25],
+      ]),
+    ).comparisons[0],
+  ).toMatchObject({ status: "not yet eligible", eligibleAt: "2026-11-15T06:00:00.000Z" });
+  expect(sdk("0.1.0-beta.5", registryDocument(betas)).problems[0]).toBe(
+    "@ui-sdk/core: its registry document has no latest dist-tag.",
+  );
+});
+
+test("on any channel, a pin ahead of the newest release published on it fails by name, whatever that release's age, and a pin whose package has no registry document says so", () => {
+  expect(checkOf("a-package", "2.0.0", [["1.9.0", 10]]).problems[0]).toBe(
+    "a-package: 2.0.0 is ahead of 1.9.0, the newest release on its channel (its newest stable release). Pin 1.9.0.",
+  );
+  expect(checkOf("a-package", "1.9.1", [["1.9.0", 0.25]]).comparison).toMatchObject({
+    status: "ahead",
+  });
+  expect(
+    check({ pins: pinsOf(manifest, { "a-package": "1.0.0" }), documents: {} }).problems[0],
+  ).toBe("a-package: the registry answer holds no document for a-package.");
+});
+
+test("exactlyRequiredBy reads the dependencies and optionalDependencies a manifest names at one exact version, and nothing it names by a range", () => {
+  expect(
+    exactlyRequiredBy({
+      dependencies: { exact: "1.2.3", ranged: "^1.2.3", tagged: "latest" },
+      optionalDependencies: { build: "2.0.0", "loose-build": "~2.0.0" },
+      peerDependencies: { peer: "3.0.0" },
+    }),
+  ).toEqual([
+    { name: "exact", version: "1.2.3" },
+    { name: "build", version: "2.0.0" },
+  ]);
+  expect(exactlyRequiredBy(undefined)).toEqual([]);
+});
+
+test("a pin ahead of its channel passes while the held-back list holds it with a reason and a liftWhen, and fails by name without one", () => {
+  const hold = {
+    name: "a-package",
+    reason: "A release candidate tried ahead of the stable release.",
+    liftWhen: "the stable release is out.",
+    holds: "ahead",
+  };
+  const ahead = () =>
+    check({
+      pins: pinsOf(manifest, { "a-package": "2.1.0-rc.1" }),
+      documents: { ...documents, "a-package": registryDocument([["2.0.1", 10]]) },
+      heldBack: [hold],
+    });
+
+  expect(ahead().comparisons[0]).toMatchObject({ status: "held ahead", held: hold });
+  expect(ahead().problems.filter((problem) => problem.startsWith("a-package"))).toEqual([]);
+  expect(checkOf("a-package", "2.1.0-rc.1", [["2.0.1", 10]]).problems[0]).toMatch(
+    /^a-package: 2\.1\.0-rc\.1 is ahead of 2\.0\.1, the newest release on its channel \(.+\)\. Pin 2\.0\.1\.$/,
+  );
+});
+
+test("a held-back entry says which way it holds: one written for a pin ahead fails by name once the pin falls behind, one with no direction holds a pin behind and not one ahead, and an unknown direction fails", () => {
+  const aheadHold = {
+    name: "a-package",
+    reason: "Tried ahead.",
+    liftWhen: "2.1.0 is out.",
+    holds: "ahead",
+  };
+  const behindHold = { name: "a-package", reason: "Waiting.", liftWhen: "it is fixed." };
+  const run = (pinned: string, held: HeldBack) =>
+    check({
+      pins: pinsOf(manifest, { "a-package": pinned }),
+      documents: {
+        ...documents,
+        "a-package": registryDocument([
+          ["2.0.1", 30],
+          ["2.1.0", 10],
+        ]),
+      },
+      heldBack: [held],
+    });
+  const aboutThePackage = (pinned: string, held: HeldBack) =>
+    run(pinned, held).problems.filter((problem) => problem.startsWith("a-package"));
+
+  expect(aboutThePackage("2.1.0-rc.1", aheadHold)).toEqual([
+    expect.stringMatching(/^a-package: 2\.1\.0-rc\.1 is behind 2\.1\.0/),
+    "a-package: the held-back list holds it ahead of its channel, but it is behind; remove the entry, or rewrite it to hold the pin behind with a reason and a liftWhen for that.",
+  ]);
+  expect(run("2.1.0-rc.1", behindHold).comparisons[0]).toMatchObject({ status: "held back" });
+  expect(aboutThePackage("2.1.0-rc.1", behindHold)).toEqual([]);
+  expect(aboutThePackage("2.2.0", behindHold)).toEqual([
+    expect.stringMatching(/^a-package: 2\.2\.0 is ahead of 2\.1\.0/),
+    "a-package: the held-back list holds it behind its channel, but it is ahead; remove the entry, or rewrite it to hold the pin ahead with a reason and a liftWhen for that.",
+  ]);
+  expect(holdsWithoutReason([{ ...behindHold, holds: "sideways" }])).toEqual([
+    `a-package: give the entry in ${heldBackFile} a reason, a liftWhen and, for a pin ahead of its channel, holds: "ahead".`,
+  ]);
+});
+
+test("a second held-back entry for one pin fails by name, whichever way either holds and whichever comes first", () => {
+  const aheadHold = {
+    name: "a-package",
+    reason: "Tried ahead.",
+    liftWhen: "2.1.0 is out.",
+    holds: "ahead",
+  };
+  const behindHold = { name: "a-package", reason: "Waiting.", liftWhen: "it is fixed." };
+  const aboutThePackage = (pinned: string, heldBack: HeldBack[]) =>
+    check({
+      pins: pinsOf(manifest, { "a-package": pinned }),
+      documents: { ...documents, "a-package": registryDocument([["2.1.0", 10]]) },
+      heldBack,
+    }).problems.filter((problem) => problem.startsWith("a-package"));
+  const twice = "a-package: the held-back list names it more than once; keep one entry.";
+
+  expect(aboutThePackage("2.2.0", [aheadHold, behindHold])).toEqual([twice]);
+  expect(aboutThePackage("2.0.0", [behindHold, aheadHold])).toEqual([twice]);
+  expect(aboutThePackage("2.2.0", [aheadHold, aheadHold])).toEqual([twice]);
+  expect(aboutThePackage("2.2.0", [behindHold, aheadHold])).toEqual([
+    expect.stringMatching(/^a-package: 2\.2\.0 is ahead of 2\.1\.0/),
+    "a-package: the held-back list holds it behind its channel, but it is ahead; remove the entry, or rewrite it to hold the pin ahead with a reason and a liftWhen for that.",
+    twice,
+  ]);
+});
+
+test("a cron that GitHub cannot run, or that does not fire every week, fails naming the entry and each field at fault", () => {
+  expect(cronProblems("29 5 * * 1")).toEqual([]);
+  expect(cronProblems("*/15 0-6,12 * * mon-fri")).toEqual([]);
+  expect(cronProblems("29 24 * * 9")).toEqual([
+    'cron "29 24 * * 9": the hour field "24" is not within 0-23, with no range reversed.',
+    'cron "29 24 * * 9": the day of week field "9" is not within 0-6 or SUN-SAT, with no range reversed.',
+  ]);
+  expect(cronProblems("29 5 * * 5-1")).toEqual([
+    'cron "29 5 * * 5-1": the day of week field "5-1" is not within 0-6 or SUN-SAT, with no range reversed.',
+  ]);
+  expect(cronProblems("29 5 31 2 *")).toEqual([
+    'cron "29 5 31 2 *": the day of month field "31" is not *.',
+    'cron "29 5 31 2 *": the month field "2" is not *.',
+  ]);
+  expect(cronProblems("29 5 * *")).toEqual(['cron "29 5 * *": give it five fields.']);
 });
