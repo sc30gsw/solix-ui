@@ -14,7 +14,7 @@ import {
 import { type SolixTheme, themeStyleSheet } from "#/src/create-theme.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { localStorageColorSchemeManager } from "#/src/local-storage-manager.ts";
-import { type GetStyleNonce, StyleNonceContext } from "#/src/run-time-style.ts";
+import { type GetStyleNonce, PageNonceContext } from "#/src/run-time-style.ts";
 
 export type SolixProviderProps = {
   theme?: SolixTheme;
@@ -59,18 +59,18 @@ function colorSchemeOf(props: SolixProviderProps): ProvidedColorScheme {
 }
 
 export function SolixProvider(props: SolixProviderProps) {
-  const outerNonce = useContext(StyleNonceContext);
+  const outerNonce = useContext(PageNonceContext);
   const colorScheme = colorSchemeOf(props);
   const styleSheet = () =>
     (props.withCssVariables ?? true)
       ? themeStyleSheet(props.theme ?? {}, props.cssVariablesSelector ?? ":root")
       : undefined;
   return (
-    <StyleNonceContext value={() => props.getStyleNonce?.() ?? outerNonce()}>
+    <PageNonceContext value={() => props.getStyleNonce?.() ?? outerNonce()}>
       <ColorSchemeContext value={colorScheme}>
         <Show when={styleSheet()}>{(css) => <LibraryStyle of="theme" css={css()} />}</Show>
         {props.children}
       </ColorSchemeContext>
-    </StyleNonceContext>
+    </PageNonceContext>
   );
 }

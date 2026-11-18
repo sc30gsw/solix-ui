@@ -3,17 +3,17 @@ import { runInNewContext } from "node:vm";
 import { createComponent, renderToString } from "@solidjs/web";
 import fc from "fast-check";
 import { expect, test } from "vite-plus/test";
-import type * as ColorScheme from "#/src/color-scheme.ts";
-import type { SolixColorScheme } from "#/src/color-schemes.ts";
-import { dist, library } from "#/tests/built-library.ts";
+import type * as ColorSchemeScript from "#/src/color-scheme-script.tsx";
+import { builtNamed, dist, library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
 
 const { colorSchemeScriptText } = (await import(
-  join(dist, "color-scheme.js")
-)) as typeof ColorScheme;
+  join(dist, "color-scheme-script.jsx")
+)) as typeof ColorSchemeScript;
 
 const generatedRuns = 300;
 const ownerSchemes = ["light", "dark", "auto"];
+const anOwnerScheme: readonly unknown[] = ownerSchemes;
 const ownerAttribute = "data-color-scheme";
 const ownerStorageKey = "solix-color-scheme-value";
 const darkQuery = "(prefers-color-scheme: dark)";
@@ -50,10 +50,9 @@ const page = fc.record({
   ),
 });
 
-function expectedScheme(drawn: Page): string | undefined {
+function expectedScheme(drawn: Page): string {
   if (drawn.forceColorScheme !== undefined) return drawn.forceColorScheme;
-  if (drawn.stored.kind === "throws") return undefined;
-  const { value } = drawn.stored;
+  const value = drawn.stored.kind === "throws" ? null : drawn.stored.value;
   const chosen =
     value !== null && ownerSchemes.includes(value)
       ? value
@@ -64,7 +63,9 @@ function expectedScheme(drawn: Page): string | undefined {
   return drawn.prefersDark ? "dark" : "light";
 }
 
-function runScript(drawn: Page): { attributes: Map<string, string>; keysRead: string[] } {
+type Run = { attributes: Map<string, string>; keysRead: string[]; globals: string[] };
+
+function runScript(drawn: Page, before = ""): Run {
   const attributes = new Map<string, string>();
   const keysRead: string[] = [];
   const localStorage = {
@@ -74,34 +75,30 @@ function runScript(drawn: Page): { attributes: Map<string, string>; keysRead: st
       return drawn.stored.value;
     },
   };
-  runInNewContext(
-    colorSchemeScriptText({
-      defaultColorScheme: drawn.defaultColorScheme as SolixColorScheme | undefined,
-      forceColorScheme: drawn.forceColorScheme,
-      localStorageKey: drawn.localStorageKey,
-    }),
-    {
-      localStorage,
-      matchMedia: (query: string) => ({ matches: query === darkQuery && drawn.prefersDark }),
-      document: {
-        documentElement: {
-          setAttribute: (name: string, value: string) => attributes.set(name, value),
-        },
+  const page = {
+    localStorage,
+    matchMedia: (query: string) => ({ matches: query === darkQuery && drawn.prefersDark }),
+    document: {
+      documentElement: {
+        setAttribute: (name: string, value: string) => attributes.set(name, value),
       },
     },
-  );
-  return { attributes, keysRead };
+  };
+  const given = Object.keys(page);
+  runInNewContext(`${before}${colorSchemeScriptText(drawn)}`, page);
+  return {
+    attributes,
+    keysRead,
+    globals: Object.keys(page).filter((name) => !given.includes(name)),
+  };
 }
 
-test("the pre-paint script sets data-color-scheme on <html> to the forced scheme, else to the stored scheme, else to the default, with auto resolved by prefers-color-scheme, reads the storage key it is given, and sets nothing when the storage throws, for generated pages", () => {
+test("the pre-paint script sets data-color-scheme on <html> to the forced scheme, else to the stored scheme, else, and when the storage throws, to the default, with auto resolved by prefers-color-scheme, and reads the storage key it is given, for generated pages", () => {
   fc.assert(
     fc.property(page, (drawn) => {
       const { attributes, keysRead } = runScript(drawn);
-      const expected = expectedScheme(drawn);
 
-      expect(Object.fromEntries(attributes)).toEqual(
-        expected === undefined ? {} : { [ownerAttribute]: expected },
-      );
+      expect(Object.fromEntries(attributes)).toEqual({ [ownerAttribute]: expectedScheme(drawn) });
       expect(keysRead).toEqual(
         drawn.forceColorScheme === undefined ? [drawn.localStorageKey ?? ownerStorageKey] : [],
       );
@@ -110,14 +107,25 @@ test("the pre-paint script sets data-color-scheme on <html> to the forced scheme
   );
 });
 
+test("the pre-paint script leaves no global behind, and runs on a page whose own script declared every one-letter name before it", () => {
+  const declared = `let ${"abcdefghijklmnopqrstuvwxyz".split("").join(",")};`;
+
+  fc.assert(
+    fc.property(page, (drawn) => {
+      const alone = runScript(drawn);
+      const beside = runScript(drawn, declared);
+
+      expect(alone.globals).toEqual([]);
+      expect(Object.fromEntries(beside.attributes)).toEqual(Object.fromEntries(alone.attributes));
+    }),
+    { numRuns: generatedRuns },
+  );
+});
+
 test("the pre-paint script never holds the text that would end its <script> element", () => {
   fc.assert(
     fc.property(page, (drawn) => {
-      const text = colorSchemeScriptText({
-        defaultColorScheme: drawn.defaultColorScheme as SolixColorScheme | undefined,
-        forceColorScheme: drawn.forceColorScheme,
-        localStorageKey: drawn.localStorageKey,
-      });
+      const text = colorSchemeScriptText(drawn);
 
       expect(text.toLowerCase()).not.toContain("</script");
       expect(text).not.toContain("<!--");
@@ -126,7 +134,7 @@ test("the pre-paint script never holds the text that would end its <script> elem
   );
 });
 
-test("ColorSchemeScript renders one <script> with that text, the nonce of the provider around it unless it is given its own, and the attributes it is given", () => {
+test("ColorSchemeScript renders one <script> with that text and nothing else in it, the nonce of the provider around it unless it is given one that is not undefined, and the attributes it is given", () => {
   const options = { defaultColorScheme: "auto" as const, localStorageKey: "theme" };
   const inside = renderToString(() =>
     createComponent(library.SolixProvider, {
@@ -139,10 +147,26 @@ test("ColorSchemeScript renders one <script> with that text, the nonce of the pr
   const own = renderToString(() =>
     createComponent(library.ColorSchemeScript, { ...options, nonce: "own", id: "scheme" }),
   );
+  const withUndefined = renderToString(() =>
+    createComponent(library.SolixProvider, {
+      getStyleNonce: () => "page",
+      get children() {
+        return createComponent(builtNamed("ColorSchemeScript"), {
+          ...options,
+          nonce: undefined,
+          children: "alert(1)",
+          textContent: "alert(2)",
+        });
+      },
+    }),
+  );
   const [script] = elementsOf(inside).filter(({ tag }) => tag === "script");
   const [ownScript] = elementsOf(own).filter(({ tag }) => tag === "script");
 
   expect(elementsOf(inside).filter(({ tag }) => tag === "script")).toHaveLength(1);
+  expect(withUndefined, "a nonce of undefined, children and textContent change nothing").toBe(
+    inside,
+  );
   expect(valuesOf(script, "nonce")).toEqual(["page"]);
   expect(valuesOf(ownScript, "nonce")).toEqual(["own"]);
   expect(valuesOf(ownScript, "id")).toEqual(["scheme"]);
@@ -204,7 +228,7 @@ test("isColorScheme is true for light, dark and auto, and false for any other va
   for (const scheme of ownerSchemes) expect(library.isColorScheme(scheme)).toBe(true);
   fc.assert(
     fc.property(
-      fc.anything().filter((value) => !ownerSchemes.includes(value as string)),
+      fc.anything().filter((value) => !anOwnerScheme.includes(value)),
       (value) => {
         expect(library.isColorScheme(value)).toBe(false);
       },
