@@ -536,6 +536,14 @@ const addsStopsBehindTheSelection: Step[] = [
   { type: "tab", backwards: true },
 ];
 
+const addsAStopBehindTheSelection: Step[] = [
+  { type: "remove", at: 0 },
+  { type: "toggle", at: 0, change: "disabled" },
+  { type: "tab", backwards: false },
+  { type: "add", at: 0, kind: "button" },
+  { type: "tab", backwards: true },
+];
+
 type Sequence = { initial: readonly Kind[]; steps: Step[]; leavesTheTrapWithNoTabStop: boolean };
 
 const leaveTheDocument: Record<string, Sequence> = {
@@ -548,6 +556,12 @@ const leaveTheDocument: Record<string, Sequence> = {
   },
   "its only stop, a focused input, is removed, Tab brings focus to the container, and two buttons are added":
     { initial: [], steps: addsStopsBehindTheSelection, leavesTheTrapWithNoTabStop: false },
+  "its focused textarea is removed and its button disabled, Tab brings focus to the container, and a button is added":
+    {
+      initial: ["textarea", "button"],
+      steps: addsAStopBehindTheSelection,
+      leavesTheTrapWithNoTabStop: false,
+    },
 };
 
 for (const [sequence, { initial, steps, leavesTheTrapWithNoTabStop }] of Object.entries(
