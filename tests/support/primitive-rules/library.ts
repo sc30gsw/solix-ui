@@ -22,6 +22,7 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 export const kebabCaseModule = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts$/;
 export const typesModule = "types.ts";
+export const constantsModule = "constants.ts";
 export const barrelModule = "index.ts";
 export const browserTestSuffixes = [".browser.test.ts", ".browser.test.tsx"];
 export const nodeTestSuffixes = [".test.ts", ".test.tsx"];
@@ -45,6 +46,7 @@ export const stateCommandRole = "StateCommandBody";
 export type Module = { file: string; path: string; source: ts.SourceFile };
 
 export type Library = {
+  directory: string;
   source: string;
   testDirectory: string;
   entries: string[];
@@ -88,6 +90,7 @@ export function loadLibrary(directory: string): Library {
     return parsed ? [{ file: basename(path), path, source: parsed }] : [];
   });
   return {
+    directory,
     source,
     testDirectory,
     entries,
@@ -127,7 +130,9 @@ export function isInternal(file: string): boolean {
 
 export function isPublic(file: string): boolean {
   return (
-    kebabCaseModule.test(file) && !isInternal(file) && file !== typesModule && file !== barrelModule
+    kebabCaseModule.test(file) &&
+    !isInternal(file) &&
+    ![typesModule, constantsModule, barrelModule].includes(file)
   );
 }
 
@@ -139,6 +144,14 @@ export function functionNameFor(file: string): string {
   return basename(file, ".ts").replace(/-([a-z0-9])/g, (_match, letter: string) =>
     letter.toUpperCase(),
   );
+}
+
+export function isNamedFor(file: string, name: string): boolean {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase();
+  return words === basename(file, ".ts");
 }
 
 export function publicModules(library: Library): Module[] {
@@ -166,10 +179,11 @@ export function importsFrom(module: Module, specifier: string): boolean {
 }
 
 export function exportedFunction(module: Module): ts.FunctionDeclaration | undefined {
-  const name = functionNameFor(module.file);
   return module.source.statements.find(
     (statement): statement is ts.FunctionDeclaration =>
-      ts.isFunctionDeclaration(statement) && statement.name?.text === name,
+      ts.isFunctionDeclaration(statement) &&
+      statement.name !== undefined &&
+      isNamedFor(module.file, statement.name.text),
   );
 }
 

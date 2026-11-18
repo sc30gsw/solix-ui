@@ -30,13 +30,16 @@ import {
   type Installed,
   type Manifest,
   installedVersions,
+  type LibraryKind,
+  libraryHome,
   libraryNames,
   libraryPackages,
   listed,
+  listedButAbsent,
   outsideGeneratedOrInstalled,
   packages,
-  primitivesDirectory,
   primitivesPackage,
+  unlistedLibraries,
   repositoryRoot,
   rootManifest,
   scriptFiles,
@@ -60,8 +63,12 @@ const vitePlusCommandFor: Record<string, string> = {
 
 const projectLicence = "MIT";
 const frameworkPeers = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
-const allowedForPrimitives = ["solid-js"];
-const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name ?? ""];
+const allowedByKind: Record<LibraryKind, [what: string, allowed: string[]]> = {
+  primitives: ["the primitives package", ["solid-js"]],
+  components: ["a component library", [...frameworkPeers, primitivesPackage.manifest.name ?? ""]],
+  logic: ["a logic library", ["solid-js"]],
+};
+const libraryList = "libraryKinds in tests/support/workspace.ts";
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
 const catalogReference = "catalog:";
@@ -359,12 +366,22 @@ test(`a library has no runtime dependency, in any list that installs with it, bu
   ]);
 });
 
+test(`every package in ${libraryHome} is a library that ${libraryList} lists with its kind, and the list names no other directory`, () => {
+  expect([
+    ...unlistedLibraries.map(
+      (directory) =>
+        `${directory}: list it in ${libraryList} as a library of the primitives, components or logic kind.`,
+    ),
+    ...listedButAbsent.map(
+      (directory) =>
+        `${directory}: ${libraryList} lists it, but no package is there. Remove it from the list.`,
+    ),
+  ]).toEqual([]);
+});
+
 test("a library names as a peer, or as a library of this repository in any dependency list, only what its kind allows", () => {
-  const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
-    const [kind, allowed] =
-      directory === primitivesDirectory
-        ? ["the primitives package", allowedForPrimitives]
-        : ["a component library", allowedForComponents];
+  const violations = libraryPackages.flatMap(({ path, kind: libraryKind, manifest }) => {
+    const [kind, allowed] = allowedByKind[libraryKind];
     const named = [
       ...Object.keys(manifest.peerDependencies ?? {}),
       ...installedDependencies(manifest)

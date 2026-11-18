@@ -24,9 +24,16 @@ export {
   whyInstalled,
 } from "#/scripts/repository.ts";
 
-export const primitivesDirectory = join(repositoryRoot, "packages/primitives");
+export type LibraryKind = "primitives" | "components" | "logic";
 
-const peerDependencyThatMarksALibrary = "solid-js";
+export const libraryKinds: Readonly<Record<string, LibraryKind>> = {
+  "packages/primitives": "primitives",
+  "packages/core": "components",
+};
+
+export const libraryHome = "packages/*";
+
+const inTheLibraryHome = /^packages\/[^/]+$/;
 
 export const scriptFiles = scriptFilesIn();
 
@@ -38,23 +45,38 @@ export const packages = manifestPaths().map((path) => ({
   manifest: manifestAt(path),
 }));
 
-export const libraryPackages = packages.filter(
-  ({ manifest }) => peerDependencyThatMarksALibrary in (manifest.peerDependencies ?? {}),
+export const unlistedLibraries = packages
+  .map(({ path }) => dirname(path))
+  .filter((directory) => inTheLibraryHome.test(directory) && !(directory in libraryKinds));
+
+export const listedButAbsent = Object.keys(libraryKinds).filter(
+  (directory) => !packages.some(({ path }) => dirname(path) === directory),
 );
 
+export const libraryPackages = packages.flatMap((found) => {
+  const kind = libraryKinds[dirname(found.path)];
+  return kind === undefined ? [] : [{ ...found, kind }];
+});
+
+export function librariesOfKind(kind: LibraryKind): typeof libraryPackages {
+  return libraryPackages.filter((library) => library.kind === kind);
+}
+
 function thePrimitivesPackage(): (typeof libraryPackages)[number] {
-  const found = libraryPackages.find(({ directory }) => directory === primitivesDirectory);
-  if (!found?.manifest.name) {
-    throw new Error(`${primitivesDirectory}: no library package with a name was found there.`);
+  const [found, ...others] = librariesOfKind("primitives");
+  if (!found?.manifest.name || others.length > 0) {
+    throw new Error(
+      `tests/support/workspace.ts: list exactly one library of the primitives kind, with a name, in libraryKinds.`,
+    );
   }
   return found;
 }
 
 export const primitivesPackage = thePrimitivesPackage();
 
-export const componentLibraries = libraryPackages.filter(
-  ({ directory }) => directory !== primitivesDirectory,
-);
+export const primitivesDirectory = primitivesPackage.directory;
+
+export const componentLibraries = librariesOfKind("components");
 
 export const libraryNames = libraryPackages.flatMap(({ manifest }) =>
   manifest.name === undefined ? [] : [manifest.name],

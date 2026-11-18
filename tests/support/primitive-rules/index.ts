@@ -33,6 +33,8 @@ import { sourceFileKindsRule } from "#/tests/support/primitive-rules/source-file
 import { styleAndClassWritesRule } from "#/tests/support/primitive-rules/style-and-class-writes.ts";
 import { testsNamedForModulesRule } from "#/tests/support/primitive-rules/tests-named-for-modules.ts";
 
+import { type LibraryKind } from "#/tests/support/workspace.ts";
+
 export { loadLibrary, publicModules } from "#/tests/support/primitive-rules/library.ts";
 
 export const primitiveRules = {
@@ -67,3 +69,24 @@ export const primitiveRules = {
 } satisfies Record<string, PrimitiveRule>;
 
 export type PrimitiveRuleName = keyof typeof primitiveRules;
+
+const sharedWithLogicLibraries: readonly PrimitiveRuleName[] = [
+  "sourceFileKinds",
+  "publicExports",
+  "barrelOrder",
+  "serverBranches",
+  "moduleState",
+  "readOnceArguments",
+  "argumentReads",
+  "browserGlobalReads",
+  "caughtErrors",
+  "instanceofChecks",
+];
+
+export const rulesOfKind: Readonly<Record<LibraryKind, readonly PrimitiveRuleName[]>> = {
+  primitives: Object.keys(primitiveRules).filter(
+    (name): name is PrimitiveRuleName => name in primitiveRules,
+  ),
+  logic: sharedWithLogicLibraries,
+  components: [],
+};

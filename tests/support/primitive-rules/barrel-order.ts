@@ -4,6 +4,7 @@ import { exportsOf, ts } from "#/scripts/syntax.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   barrelModule,
+  constantsModule,
   isPublic,
   type Module,
   type PrimitiveRule,
@@ -16,8 +17,11 @@ function exportLine(names: readonly string[], file: string | undefined): string 
 }
 
 function barrelLine(module: Module): string {
-  const { functions, types } = exportsOf(module.source);
-  return exportLine([...functions, ...types.sort().map((type) => `type ${type}`)], module.path);
+  const { functions, others, types } = exportsOf(module.source);
+  return exportLine(
+    [...functions, ...others, ...types.sort().map((type) => `type ${type}`)],
+    module.path,
+  );
 }
 
 function barrelLinesIn(barrel: ts.SourceFile): string[] {
@@ -39,7 +43,9 @@ function barrelLinesIn(barrel: ts.SourceFile): string[] {
 }
 
 const barrelOrder: Rule = (library) => {
-  const exported = library.modules.filter(({ file }) => isPublic(file) || file === typesModule);
+  const exported = library.modules.filter(
+    ({ file }) => isPublic(file) || file === constantsModule || file === typesModule,
+  );
   const barrel = library.modules.find(({ file }) => file === barrelModule);
   const actual = barrel ? barrelLinesIn(barrel.source) : [];
   const barrelFile = join(library.source, barrelModule);
@@ -47,12 +53,12 @@ const barrelOrder: Rule = (library) => {
   return actual.join("\n") === expected.join("\n")
     ? []
     : [
-        `${relative(repositoryRoot, barrelFile)}: re-export each public module and its types, then ${typesModule}, sorted by file name, and no internal-* module. Expected:\n${expected.join("\n")}`,
+        `${relative(repositoryRoot, barrelFile)}: re-export each public module and its types, ${constantsModule} and ${typesModule}, sorted by file name, and no internal-* module. Expected:\n${expected.join("\n")}`,
       ];
 };
 
 export const barrelOrderRule: PrimitiveRule = {
   description:
-    "the barrel re-exports every public module with its types, then the shared types, in file order, and nothing internal",
+    "the barrel re-exports every public module with its types, the shared constants and the shared types, in file order, and nothing internal",
   rule: barrelOrder,
 };

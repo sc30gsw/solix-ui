@@ -6,10 +6,11 @@ import {
   primitiveRules,
   type PrimitiveRuleName,
   publicModules,
+  rulesOfKind,
 } from "#/tests/support/primitive-rules/index.ts";
 import { fileNamedBy, namesAPackage } from "#/scripts/subpath.ts";
 import { importsOf, isTypeOnlyImport, parse, ts } from "#/scripts/syntax.ts";
-import { primitivesPackage, repositoryRoot } from "#/tests/support/workspace.ts";
+import { libraryPackages, repositoryRoot } from "#/tests/support/workspace.ts";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
 const viteConfig = "vite.config.ts";
@@ -17,14 +18,29 @@ const preBundledName = "preBundledForBrowserTests";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const servedByVitestOrTheSolidPlugin = ["vite-plus/test", "solid-js", "@solidjs/web"];
 
-const library = loadLibrary(primitivesPackage.directory);
-afterAll(library.dispose);
-
-test("the primitives package has public modules to check", () => {
-  expect(publicModules(library)).not.toEqual([]);
+const checked = libraryPackages
+  .filter(({ kind }) => rulesOfKind[kind].length > 0)
+  .map(({ directory, kind }) => ({
+    name: relative(repositoryRoot, directory),
+    kind,
+    library: loadLibrary(directory),
+  }));
+afterAll(() => {
+  for (const { library } of checked) library.dispose();
 });
 
-test.each(Object.values(primitiveRules))("$description", ({ rule }) => {
+test.each(checked)(
+  "$name, a library of the $kind kind, has public modules to check",
+  ({ library }) => {
+    expect(publicModules(library)).not.toEqual([]);
+  },
+);
+
+test.each(
+  checked.flatMap(({ name, kind, library }) =>
+    rulesOfKind[kind].map((rule) => ({ name, library, ...primitiveRules[rule] })),
+  ),
+)("$name: $description", ({ library, rule }) => {
   expect(rule(library)).toEqual([]);
 });
 
@@ -48,6 +64,8 @@ const forbiddenAt = (file: string, snippet?: string) => located("forbidden", fil
 const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
   sourceFileKinds: [forbiddenAt("src/GetThing.ts"), forbiddenAt("src/notes.md")],
   publicExports: [
+    forbiddenAt("src/constants.ts"),
+    forbiddenAt("src/constants.ts"),
     forbiddenAt("src/get-other.ts"),
     forbiddenAt("src/create-relayed.ts", "export function createRelayed"),
   ],
