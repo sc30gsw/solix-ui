@@ -84,6 +84,7 @@ import {
   valuesOf,
   withoutLeadingRules,
 } from "#/tests/markup.ts";
+import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
 
 const generatedRuns = 300;
 const containerPart = "container";
@@ -689,6 +690,15 @@ test.each(builtComponents)(
   "%s marks each style element it renders as the library's, and starts it with the library's layer order, then writes, in the container-queries layer, registrations not inherited and, in ascending container widths, rules that each set a variable's custom property from its own class, for one instance's classes",
   (name) => {
     expect(containerRuleProblems(name, render(name))).toEqual([]);
+  },
+);
+
+test.each(builtComponents)(
+  "%s renders no rule that styles a page's own <html> or <body>: none whose subject names an element type, and none that requires no class beside more than custom properties and color-scheme",
+  (name) => {
+    expect(
+      rulesOf(render(name)).flatMap((rules) => rulesThatStyleThePage(postcss.parse(rules))),
+    ).toEqual([]);
   },
 );
 

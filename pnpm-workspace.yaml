@@ -27,6 +27,7 @@ catalog:
   modern-web-guidance: 1.0.0
   playwright: 1.65.1
   postcss: 8.5.33
+  postcss-selector-parser: 7.2.1
   semver: 7.8.6
   solid-js: 2.0.0-rc.22
   solid2-agent-kit: 0.26.1
