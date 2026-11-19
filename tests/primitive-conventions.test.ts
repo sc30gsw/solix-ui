@@ -12,8 +12,8 @@ import { fileNamedBy, namesAPackage } from "#/scripts/subpath.ts";
 import { importsOf, isTypeOnlyImport, parse, ts } from "#/scripts/syntax.ts";
 import {
   type Home,
-  kindsWithRules,
   libraryKindNames,
+  libraryKinds,
   type LibraryRegistration,
   libraryPackages,
   repositoryRoot,
@@ -39,10 +39,8 @@ afterAll(() => {
 });
 
 test("these rules skip only a library of a kind libraryKinds gives no rule, the components kind, which the component contract checks instead", () => {
-  expect(libraryKindNames.filter((kind) => rulesOfKind(kind).length === 0)).toEqual(
-    kindsWithRules(["none"]),
-  );
-  expect(kindsWithRules(["none"])).toEqual(["components"]);
+  expect(libraryKindNames.filter((kind) => rulesOfKind(kind).length === 0)).toEqual(["components"]);
+  expect(libraryKinds.components.rules).toBe("none");
   expect(
     libraryPackages.filter(({ kind }) => rulesOfKind(kind).length === 0).map(({ kind }) => kind),
   ).toEqual(["components"]);

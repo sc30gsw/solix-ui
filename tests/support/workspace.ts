@@ -141,10 +141,6 @@ export const libraryKinds: Readonly<Record<LibraryKind, LibraryKindTraits>> = {
   },
 };
 
-export function kindsWithRules(sets: readonly RuleSet[]): LibraryKind[] {
-  return libraryKindNames.filter((kind) => sets.includes(libraryKinds[kind].rules));
-}
-
 export const libraryNames = libraryPackages.flatMap(({ manifest }) =>
   manifest.name === undefined ? [] : [manifest.name],
 );

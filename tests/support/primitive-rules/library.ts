@@ -20,7 +20,6 @@ import {
 } from "#/scripts/syntax.ts";
 import {
   type Home,
-  type LibraryKind,
   libraryKinds,
   type LibraryRegistration,
   repositoryRoot,
@@ -67,8 +66,6 @@ export type Library = {
 export type Rule = (library: Library) => string[];
 
 export type PrimitiveRule = { description: string; rule: Rule };
-
-export type KindRule = PrimitiveRule & { kinds: readonly LibraryKind[] };
 
 export type Declared = { file: string; name: string };
 
