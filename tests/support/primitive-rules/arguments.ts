@@ -132,11 +132,11 @@ const argumentReads: Rule = (library) =>
 
 export const readOnceArgumentsRule: PrimitiveRule = {
   description:
-    "a primitive reads once, when it is created, only an argument named and typed as read once",
+    "a function reads once, when it is created, only an argument named and typed as read once",
   rule: readOnceArguments,
 };
 
 export const argumentReadsRule: PrimitiveRule = {
-  description: "no primitive destructures or copies its arguments when it is created",
+  description: "no module-level function destructures or copies its arguments when it is called",
   rule: argumentReads,
 };

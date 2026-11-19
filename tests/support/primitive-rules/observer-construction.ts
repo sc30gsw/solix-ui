@@ -16,7 +16,7 @@ function isObserver({ name, file }: ClassRef): boolean {
 
 export const observerConstructionRule = forbidOutside({
   description: `only ${observerModule} constructs a DOM observer, or holds a call or a reference to a DOM member whose type constructs one`,
-  home: { file: observerModule },
+  homes: () => [{ file: observerModule }],
   find: (library, node) =>
     constructedClass(library.compiled, node).some(isObserver) ||
     (!(ts.isNewExpression(node.parent) && node.parent.expression === node) &&
