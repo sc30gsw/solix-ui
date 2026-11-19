@@ -5,6 +5,7 @@ import {
   colorClass,
   colorVariantTable,
   isShade,
+  luminanceWeights,
   ownPaletteOf,
   type Palette,
   paletteAliases,
@@ -145,7 +146,7 @@ function linearSrgb({ lightness, chroma, hue }: Oklch): [number, number, number]
 
 function relativeLuminance(colour: Rgb): number {
   const [red, green, blue] = colour.map(decoded);
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  return luminanceWeights.r * red + luminanceWeights.g * green + luminanceWeights.b * blue;
 }
 
 function contrastRatio(first: Rgb, second: Rgb): number {
