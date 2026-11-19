@@ -15,7 +15,7 @@ The pstack skills come from the pstack plugin that `.claude/settings.json` enabl
 vp run verify
 ```
 
-Run the matching `verify-*` skills for the code the change touches. `verify-served-page` matches any change to what the playground serves.
+Run the matching `verify-*` skills for the code the change touches. `verify-served-page` matches any change to what the playground serves. To look at a component's states, download the `storybook` artifact of the pull request's CI run and serve the unpacked folder with a static file server.
 
 ## 2. Correct
 
