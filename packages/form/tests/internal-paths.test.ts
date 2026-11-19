@@ -1,14 +1,13 @@
 import fc from "fast-check";
 import { expect, expectTypeOf, test } from "vite-plus/test";
+import { getPath, setPath, splitPath } from "#/src/internal-paths.ts";
 import {
+  type FormArrayElement,
   type FormPathValue,
-  getPath,
+  type LooseKeys,
   type Path,
   type PathValue,
-  setPath,
-  splitPath,
-} from "#/src/internal-paths.ts";
-import { type FormArrayElement, type LooseKeys } from "#/src/types.ts";
+} from "#/src/types.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
 
 const values = {

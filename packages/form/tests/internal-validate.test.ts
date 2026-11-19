@@ -2,7 +2,6 @@ import fc from "fast-check";
 import { expect, test, vi } from "vite-plus/test";
 import { FORM_INDEX, formRootRule } from "#/src/constants.ts";
 import {
-  isThenable,
   messageOf,
   ruleForPath,
   runRule,
@@ -10,6 +9,7 @@ import {
   validateFieldValue,
   validateValues,
 } from "#/src/internal-validate.ts";
+import { isThenable } from "#/src/internal-outcome.ts";
 import { type FormValidateInput } from "#/src/types.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
 

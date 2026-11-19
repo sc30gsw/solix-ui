@@ -1,5 +1,44 @@
 import type { formRootRule } from "#/src/constants.ts";
-import type { FormPathValue, Path } from "#/src/internal-paths.ts";
+
+type Leaf = string | number | boolean | bigint | symbol | null | undefined;
+
+type Shallower = [never, 0, 1, 2, 3, 4];
+
+type Indexes<List extends readonly unknown[]> = number extends List["length"]
+  ? number
+  : Exclude<keyof List, keyof unknown[]>;
+
+type Step<Key extends string | number, Value, Depth extends number> = Value extends Leaf
+  ? `${Key}`
+  : `${Key}` | `${Key}.${Path<Value, Shallower[Depth]>}`;
+
+export type Path<Values, Depth extends number = 5> = [Depth] extends [never]
+  ? never
+  : Values extends readonly unknown[]
+    ? {
+        [Key in Indexes<Values>]-?: Step<Key & (string | number), Values[Key], Depth>;
+      }[Indexes<Values>]
+    : { [Key in keyof Values]-?: Step<Key & string, Values[Key], Depth> }[keyof Values];
+
+type ItemAt<Values, Segment extends string> = Segment extends `${number}`
+  ? Values extends readonly (infer Item)[]
+    ? Item
+    : never
+  : never;
+
+export type PathValue<Values, Target extends string> = Values extends unknown
+  ? Target extends `${infer Head}.${infer Rest}`
+    ? Head extends keyof Values
+      ? PathValue<Values[Head], Rest> | (undefined extends Values[Head] ? undefined : never)
+      : PathValue<ItemAt<Values, Head>, Rest>
+    : Target extends keyof Values
+      ? Values[Target]
+      : ItemAt<Values, Target>
+  : never;
+
+type OrUnknown<Type> = [Type] extends [never] ? unknown : Type;
+
+export type FormPathValue<Values, Target extends string> = OrUnknown<PathValue<Values, Target>>;
 
 export type FormError = NonNullable<unknown>;
 
@@ -58,11 +97,9 @@ export type LooseKeys<Values> = Path<Values> | (string & NonNullable<unknown>);
 
 type ItemOf<List> = List extends readonly (infer Item)[] ? Item : never;
 
-export type FormArrayElement<Values, Target extends string> = [
-  ItemOf<FormPathValue<Values, Target>>,
-] extends [never]
-  ? unknown
-  : ItemOf<FormPathValue<Values, Target>>;
+export type FormArrayElement<Values, Target extends string> = OrUnknown<
+  ItemOf<FormPathValue<Values, Target>>
+>;
 
 export type StandardSchemaIssue = {
   readonly message: string;

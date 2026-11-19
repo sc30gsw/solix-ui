@@ -1,4 +1,4 @@
-import { failureOf } from "#/src/internal-validate.ts";
+import { failureOf } from "#/src/internal-failure.ts";
 import { type FormError } from "#/src/types.ts";
 
 /** Fails a value that is not a string `JSON.parse` reads, with `error`, or `true` when no error is given. */

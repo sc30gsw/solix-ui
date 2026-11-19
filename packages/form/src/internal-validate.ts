@@ -8,9 +8,9 @@ import {
   splitPath,
   withIndexesAs,
 } from "#/src/internal-paths.ts";
+import { allOrNow, isThenable, thenOrNow } from "#/src/internal-outcome.ts";
 import { filterErrors, isError } from "#/src/internal-status.ts";
 import {
-  type FormError,
   type FormFieldValidationResult,
   type FormValidateInput,
   type FormValidationResult,
@@ -24,14 +24,6 @@ type Outcome = RuleResult | Promise<RuleResult>;
 type AnyRule = Rule<unknown, unknown>;
 
 type Validation = { values: unknown; resolve: ResolveValidationError; signal: AbortSignal };
-
-export function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return (
-    (typeof value === "object" || typeof value === "function") &&
-    value !== null &&
-    typeof Reflect.get(value, "then") === "function"
-  );
-}
 
 export function messageOf(error: unknown): string {
   return Object.prototype.toString.call(error) === "[object Error]"
@@ -48,7 +40,7 @@ export function runRule(rule: AnyRule, path: string, validation: Validation): Ou
       validation.signal,
     );
     return isThenable(result)
-      ? Promise.resolve(result).then((value) => value, validation.resolve)
+      ? Promise.resolve(result).then(undefined, validation.resolve)
       : result;
   } catch (error) {
     return validation.resolve(error);
@@ -91,19 +83,6 @@ function resultOf(errors: Readonly<Record<string, RuleResult>>): FormValidationR
     : { hasErrors: true, errors: filtered };
 }
 
-function settled(outcomes: [string, Outcome][]): Promise<FormValidationResult> {
-  return Promise.all(
-    outcomes.map(async ([path, outcome]): Promise<[string, RuleResult]> => [path, await outcome]),
-  ).then((entries) => resultOf(Object.fromEntries(entries)));
-}
-
-function settledNow(outcomes: [string, Outcome][]): [string, RuleResult][] | undefined {
-  const results = outcomes.flatMap(([path, outcome]): [string, RuleResult][] =>
-    isThenable(outcome) ? [] : [[path, outcome]],
-  );
-  return results.length === outcomes.length ? results : undefined;
-}
-
 export function validateValues<Values>(
   validate: FormValidateInput<Values> | undefined,
   values: Values,
@@ -111,12 +90,12 @@ export function validateValues<Values>(
   signal: AbortSignal = new AbortController().signal,
 ): FormValidationResult | Promise<FormValidationResult> {
   if (typeof validate === "function") {
-    const errors = validate(values);
-    return isThenable(errors) ? Promise.resolve(errors).then(resultOf) : resultOf(errors);
+    return thenOrNow(validate(values), resultOf);
   }
-  const outcomes = outcomesOf(validate, "", { values, resolve, signal });
-  const now = settledNow(outcomes);
-  return now === undefined ? settled(outcomes) : resultOf(Object.fromEntries(now));
+  const entries = outcomesOf(validate, "", { values, resolve, signal }).map(([path, outcome]) =>
+    thenOrNow(outcome, (result): [string, RuleResult] => [path, result]),
+  );
+  return allOrNow(entries, (settled) => resultOf(Object.fromEntries(settled)));
 }
 
 function isRecord(value: unknown): value is object {
@@ -176,15 +155,11 @@ export function validateFieldValue<Values>(
   if (typeof path !== "string") return { hasError: false, error: null };
   const rule = typeof validate === "function" ? undefined : ruleForPath(path, validate, values);
   if (rule) {
-    const outcome = runRule(rule, path, { values, resolve, signal });
-    return isThenable(outcome)
-      ? Promise.resolve(outcome).then(fieldOutcomeOf)
-      : fieldOutcomeOf(outcome);
+    return thenOrNow(runRule(rule, path, { values, resolve, signal }), fieldOutcomeOf);
   }
-  const result = validateValues(validate, values, resolve, signal);
-  return isThenable(result)
-    ? Promise.resolve(result).then((settledResult) => fieldResultOf(path, settledResult))
-    : fieldResultOf(path, result);
+  return thenOrNow(validateValues(validate, values, resolve, signal), (result) =>
+    fieldResultOf(path, result),
+  );
 }
 
 export function shouldValidateOnChange(
@@ -194,8 +169,4 @@ export function shouldValidateOnChange(
   if (typeof validateInputOnChange === "boolean") return validateInputOnChange;
   const general = withIndexesAs(path, FORM_INDEX);
   return general !== undefined && validateInputOnChange.includes(general);
-}
-
-export function failureOf(error: FormError | undefined): FormError {
-  return error || true;
 }

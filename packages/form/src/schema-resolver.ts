@@ -1,5 +1,4 @@
-import { filterErrors } from "#/src/internal-status.ts";
-import { isThenable } from "#/src/internal-validate.ts";
+import { thenOrNow } from "#/src/internal-outcome.ts";
 import {
   type FormErrors,
   type StandardSchema,
@@ -19,7 +18,7 @@ function errorsOf(result: StandardSchemaResult): FormErrors {
     const key = keyOf(issue);
     if (!errors.get(key)) errors.set(key, issue.message);
   }
-  return filterErrors(Object.fromEntries(errors));
+  return Object.fromEntries(errors);
 }
 
 /** Turns a Standard Schema into a validate function, which gives each issue's message under its path joined with dots, the first issue with a message winning for a path. The function returns a promise unless `options.sync` is `true` and the schema validates synchronously. */
@@ -40,8 +39,7 @@ export function schemaResolver(
   options?: { sync?: boolean },
 ): (values: unknown) => FormErrors | Promise<FormErrors> {
   return (values) => {
-    const result = schema["~standard"].validate(values);
-    if (isThenable(result)) return Promise.resolve(result).then(errorsOf);
-    return options?.sync === true ? errorsOf(result) : Promise.resolve(errorsOf(result));
+    const errors = thenOrNow(schema["~standard"].validate(values), errorsOf);
+    return options?.sync === true ? errors : Promise.resolve(errors);
   };
 }

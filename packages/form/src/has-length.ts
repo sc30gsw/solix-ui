@@ -1,4 +1,4 @@
-import { failureOf } from "#/src/internal-validate.ts";
+import { failureOf } from "#/src/internal-failure.ts";
 import { type FormError, type Bounds } from "#/src/types.ts";
 
 function hasValidLength(bounds: number | Bounds, length: unknown): boolean {
