@@ -1,4 +1,12 @@
-import { getPath, isIndexSegment, isNestedUnder, setPath } from "#/src/internal-paths.ts";
+import {
+  getPath,
+  isIndexSegment,
+  isListIndex,
+  isNestedUnder,
+  joinPath,
+  setPath,
+  splitPath,
+} from "#/src/internal-paths.ts";
 import { type ReorderPayload } from "#/src/types.ts";
 
 export type ListOperation =
@@ -9,10 +17,6 @@ export type ListOperation =
 
 function listIndexOf(segment: string): number | undefined {
   return isIndexSegment(segment) ? Number(segment) : undefined;
-}
-
-function isListIndex(index: number): boolean {
-  return Number.isSafeInteger(index) && index >= 0;
 }
 
 function inRange(operation: ListOperation, length: number): ListOperation | undefined {
@@ -91,11 +95,11 @@ function movedIndex(index: number, operation: ListOperation): number | undefined
 
 function movedKey(key: string, path: string, operation: ListOperation): string | undefined {
   if (!isNestedUnder(key, path)) return key;
-  const [segment = "", ...rest] = key.slice(path.length + 1).split(".");
+  const [segment, ...rest] = splitPath(key.slice(path.length + 1)) ?? [""];
   const index = listIndexOf(segment);
   if (index === undefined) return key;
   const moved = movedIndex(index, operation);
-  return moved === undefined ? undefined : [path, moved, ...rest].join(".");
+  return moved === undefined ? undefined : rest.reduce(joinPath, joinPath(path, String(moved)));
 }
 
 export function moveListKeys<Value>(

@@ -15,9 +15,16 @@ export function splitPath(path: unknown): PathSegments | undefined {
   return segments.some((segment) => unsafeSegments.includes(segment)) ? undefined : segments;
 }
 
+export function joinPath(parent: string, key: string): string {
+  return parent === "" ? key : `${parent}.${key}`;
+}
+
+export function isListIndex(index: number): boolean {
+  return Number.isSafeInteger(index) && index >= 0;
+}
+
 export function isIndexSegment(segment: string): boolean {
-  const index = Number(segment);
-  return Number.isSafeInteger(index) && index >= 0 && String(index) === segment;
+  return isListIndex(Number(segment)) && String(Number(segment)) === segment;
 }
 
 export function isNestedUnder(key: string, path: string): boolean {

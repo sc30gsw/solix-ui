@@ -5,12 +5,13 @@ import {
   isAtOrUnder,
   isContainer,
   isIndexSegment,
+  joinPath,
   type PathSegments,
   splitPath,
   tagOf,
   withIndexesAs,
 } from "#/src/internal-paths.ts";
-import { allOrNow, isThenable, thenOrNow } from "#/src/internal-outcome.ts";
+import { allOrNow, thenOrNow } from "#/src/internal-outcome.ts";
 import { filterErrors, isError } from "#/src/internal-status.ts";
 import {
   type FormFieldValidationResult,
@@ -36,15 +37,11 @@ export function messageOf(error: unknown): string {
 
 export function runRule(rule: AnyRule, path: string, validation: Validation): Outcome {
   try {
-    const result = rule(
-      getPath(path, validation.values),
-      validation.values,
-      path,
-      validation.signal,
+    return thenOrNow(
+      rule(getPath(path, validation.values), validation.values, path, validation.signal),
+      (result) => result,
+      validation.resolve,
     );
-    return isThenable(result)
-      ? Promise.resolve(result).then(undefined, validation.resolve)
-      : result;
   } catch (error) {
     return validation.resolve(error);
   }
@@ -60,18 +57,16 @@ function rootRuleOf(rules: object): AnyRule | undefined {
 }
 
 function outcomesOf(rules: unknown, path: string, validation: Validation): [string, Outcome][] {
-  if (typeof rules !== "object" || rules === null) return [];
+  if (!isContainer(rules)) return [];
   return Object.keys(rules).flatMap((key): [string, Outcome][] => {
     const rule: unknown = Reflect.get(rules, key);
-    const rulePath = path === "" ? key : `${path}.${key}`;
+    const rulePath = joinPath(path, key);
     if (isRule(rule)) return [[rulePath, runRule(rule, rulePath, validation)]];
     const value = getPath(rulePath, validation.values);
-    if (typeof rule !== "object" || rule === null || typeof value !== "object" || value === null) {
-      return [];
-    }
+    if (!isContainer(rule) || !isContainer(value)) return [];
     const nested = Array.isArray(value)
       ? Array.from(value, (_item, index) =>
-          outcomesOf(rule, `${rulePath}.${index}`, validation),
+          outcomesOf(rule, joinPath(rulePath, String(index)), validation),
         ).flat()
       : outcomesOf(rule, rulePath, validation);
     const root = rootRuleOf(rule);
@@ -110,7 +105,7 @@ function ruleAt(
 ): AnyRule | undefined {
   if (!isContainer(rules)) return undefined;
   const segment = segments.at(depth) ?? "";
-  const next = at === "" ? segment : `${at}.${segment}`;
+  const next = joinPath(at, segment);
   const last = depth === segments.length - 1;
   if (walk.items !== undefined) {
     return isIndexSegment(segment) && Number(segment) < walk.items && !last
