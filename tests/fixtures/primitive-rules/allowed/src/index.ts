@@ -6,5 +6,6 @@ export { createElement } from "#/tests/fixtures/primitive-rules/allowed/src/crea
 export { createEventListener } from "#/tests/fixtures/primitive-rules/allowed/src/create-event-listener.ts";
 export { createMeasured } from "#/tests/fixtures/primitive-rules/allowed/src/create-measured.ts";
 export { createWatched } from "#/tests/fixtures/primitive-rules/allowed/src/create-watched.ts";
+export { get2dContext } from "#/tests/fixtures/primitive-rules/allowed/src/get-2d-context.ts";
 export { getHotkeyHandler } from "#/tests/fixtures/primitive-rules/allowed/src/get-hotkey-handler.ts";
 export { getHTMLText } from "#/tests/fixtures/primitive-rules/allowed/src/get-html-text.ts";
