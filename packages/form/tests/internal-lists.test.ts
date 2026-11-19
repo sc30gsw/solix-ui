@@ -72,6 +72,13 @@ test("a remove and a reorder keep each hole of a list a hole, so each moved key 
   });
 });
 
+test("keys of a list at the field named by the empty string move under that field, and a root field named 0 stays", () => {
+  expect(moveListKeys("", removeAt(0), { ".1.x": "moved", "0.x": "other" }, 2)).toStrictEqual({
+    ".0.x": "moved",
+    "0.x": "other",
+  });
+});
+
 test("a reorder moves the item from one index to another, at the root or nested, and changes nothing where the path holds no list", () => {
   expect(changeListAt("a", reorder(2, 0), { a: [1, 2, 3] })).toStrictEqual({ a: [3, 1, 2] });
   expect(changeListAt("a", reorder(1, 2), { a: [1, 2, 3] })).toStrictEqual({ a: [1, 3, 2] });

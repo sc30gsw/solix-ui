@@ -65,7 +65,7 @@ test("a resolved schema reads path segments given as objects with a key, mixed w
   expect(validate({})).toStrictEqual({ "nested.field": "Error", "list.0.name": "Mixed" });
 });
 
-test("a resolved schema joins an issue's path as a rules record's keys join, an empty first segment naming the root", () => {
+test("a resolved schema joins an issue's path segments as they are, so a field named by the empty string keeps its leading dot", () => {
   const validate = schemaResolver(
     schemaOf(() => [{ message: "Inner", path: ["", "inner"] }]),
     {
@@ -73,7 +73,7 @@ test("a resolved schema joins an issue's path as a rules record's keys join, an 
     },
   );
 
-  expect(validate({})).toStrictEqual({ inner: "Inner" });
+  expect(validate({})).toStrictEqual({ ".inner": "Inner" });
 });
 
 test("a resolved schema puts an issue with no path under the empty key, and keeps the first message of a path", () => {

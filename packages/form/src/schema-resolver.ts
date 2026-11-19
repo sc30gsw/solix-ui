@@ -1,5 +1,4 @@
 import { thenOrNow } from "#/src/internal-outcome.ts";
-import { joinPath } from "#/src/internal-paths.ts";
 import {
   type FormErrors,
   type StandardSchema,
@@ -10,7 +9,7 @@ import {
 function keyOf(issue: StandardSchemaIssue): string {
   return (issue.path ?? [])
     .map((segment) => String(typeof segment === "object" ? segment.key : segment))
-    .reduce(joinPath, "");
+    .join(".");
 }
 
 function errorsOf(result: StandardSchemaResult): FormErrors {

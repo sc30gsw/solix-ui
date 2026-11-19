@@ -382,6 +382,22 @@ test("a rule for a field named constructor or prototype runs on that field's val
   });
 });
 
+test("a field named by the empty string is a field, not the root: its list's items are validated under its own path", () => {
+  const rules = {
+    "": { x: (value: unknown, _values: unknown, path: string) => `${path}=${String(value)}` },
+  };
+  const values = { "": [{ x: 1 }] };
+
+  expect(validateValues(rules, values)).toStrictEqual({
+    hasErrors: true,
+    errors: { ".0.x": ".0.x=1" },
+  });
+  expect(validateFieldValue(".0.x", rules, values)).toStrictEqual({
+    hasError: true,
+    error: ".0.x=1",
+  });
+});
+
 test("validateFieldValue of an item past a list's end runs no rule, as validateValues reaches none", () => {
   const rules = { jobs: { title: (value: unknown) => (value ? null : "required") } };
   const values = { jobs: [{ title: "x" }] };

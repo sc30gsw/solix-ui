@@ -56,7 +56,11 @@ function rootRuleOf(rules: object): AnyRule | undefined {
   return isRule(rule) ? rule : undefined;
 }
 
-function outcomesOf(rules: unknown, path: string, validation: Validation): [string, Outcome][] {
+function outcomesOf(
+  rules: unknown,
+  path: string | undefined,
+  validation: Validation,
+): [string, Outcome][] {
   if (!isContainer(rules)) return [];
   return Object.keys(rules).flatMap((key): [string, Outcome][] => {
     const rule: unknown = Reflect.get(rules, key);
@@ -90,8 +94,8 @@ export function validateValues<Values>(
   if (typeof validate === "function") {
     return thenOrNow(validate(values), resultOf);
   }
-  const entries = outcomesOf(validate, "", { values, resolve, signal }).map(([path, outcome]) =>
-    thenOrNow(outcome, (result): [string, RuleResult] => [path, result]),
+  const entries = outcomesOf(validate, undefined, { values, resolve, signal }).map(
+    ([path, outcome]) => thenOrNow(outcome, (result): [string, RuleResult] => [path, result]),
   );
   return allOrNow(entries, (settled) => resultOf(Object.fromEntries(settled)));
 }
@@ -100,7 +104,7 @@ function ruleAt(
   rules: unknown,
   segments: PathSegments,
   depth: number,
-  at: string,
+  at: string | undefined,
   walk: { values: unknown; items: number | undefined },
 ): AnyRule | undefined {
   if (!isContainer(rules)) return undefined;
@@ -126,7 +130,7 @@ export function ruleForPath(path: string, rules: unknown, values: unknown): AnyR
   const segments = splitPath(path);
   return segments === undefined
     ? undefined
-    : ruleAt(rules, segments, 0, "", { values, items: undefined });
+    : ruleAt(rules, segments, 0, undefined, { values, items: undefined });
 }
 
 function fieldResultOf(path: string, result: FormValidationResult): FormFieldValidationResult {

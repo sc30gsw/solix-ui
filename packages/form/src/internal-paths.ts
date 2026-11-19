@@ -15,8 +15,8 @@ export function splitPath(path: unknown): PathSegments | undefined {
   return segments.some((segment) => unsafeSegments.includes(segment)) ? undefined : segments;
 }
 
-export function joinPath(parent: string, key: string): string {
-  return parent === "" ? key : `${parent}.${key}`;
+export function joinPath(parent: string | undefined, key: string): string {
+  return parent === undefined ? key : `${parent}.${key}`;
 }
 
 export function isListIndex(index: number): boolean {
