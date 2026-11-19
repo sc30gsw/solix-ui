@@ -6,7 +6,6 @@ import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
-const generatedEvidence = ["docs/verification/**"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
@@ -55,12 +54,7 @@ export default defineConfig({
     "*.{ts,tsx,jsx}": "solid2-kit check",
   },
   fmt: {
-    ignorePatterns: [
-      ...filesOwnedByOtherTools,
-      ...generatedEvidence,
-      ...tablesKeptCompact,
-      ...ruleFixtures,
-    ],
+    ignorePatterns: [...filesOwnedByOtherTools, ...tablesKeptCompact, ...ruleFixtures],
   },
   lint: {
     ignorePatterns: [...filesOwnedByOtherTools, ...ruleFixtures],

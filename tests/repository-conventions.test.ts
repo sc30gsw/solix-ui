@@ -155,7 +155,7 @@ test("every file a verification skill's covered-code table names exists", () => 
 
 test("every verification skill says which commit it was last confirmed against", () => {
   const violations = skillNames
-    .filter((name) => name.startsWith("verify-") && name !== "verify-playground")
+    .filter((name) => name.startsWith("verify-"))
     .filter(
       (name) =>
         !/Last confirmed against commit `[0-9a-f]{7,40}`/.test(
@@ -393,10 +393,8 @@ test("every check in the repository runs through vp run verify, before a commit,
   for (const file of workflowFiles) {
     const workflow = read(file);
     const installs = workflow.split("\n").filter((line) => line.includes("playwright install"));
-    if (/vp run (verify|evidence)/.test(workflow)) {
-      expect(installs.length, `${file} installs the browser engines`).toBeGreaterThan(0);
-    }
     if (/vp run verify/.test(workflow)) {
+      expect(installs.length, `${file} installs the browser engines`).toBeGreaterThan(0);
       expect(workflow, `${file} gives verify the private-term list`).toMatch(
         verifyWithPrivateTerms,
       );
