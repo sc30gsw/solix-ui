@@ -44,6 +44,31 @@ export const textWithoutAPalette = "white";
 export const contrastLuminance = Math.sqrt(1.05 * 0.05) - 0.05;
 export const luminanceWeights = { r: 0.2126, g: 0.7152, b: 0.0722 } as const;
 
+export type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
+
+export const transparentOklch: Oklch = { lightness: 0, chroma: 0, hue: 0, alpha: 0 };
+
+export function mixedInOklab(colour: Oklch, percent: number, toward: Oklch): Oklch {
+  const lab = ({ lightness, chroma, hue }: Oklch) => {
+    const radians = (hue * Math.PI) / 180;
+    return [lightness, chroma * Math.cos(radians), chroma * Math.sin(radians)];
+  };
+  const share = percent / 100;
+  const alpha = colour.alpha * share + toward.alpha * (1 - share);
+  if (alpha === 0) return transparentOklch;
+  const [l1, a1, b1] = lab(colour);
+  const [l2, a2, b2] = lab(toward);
+  const at = (one: number, other: number) =>
+    (one * colour.alpha * share + other * toward.alpha * (1 - share)) / alpha;
+  const [a, b] = [at(a1, a2), at(b1, b2)];
+  return {
+    lightness: at(l1, l2),
+    chroma: Math.hypot(a, b),
+    hue: (Math.atan2(b, a) * 180) / Math.PI,
+    alpha,
+  };
+}
+
 export const slotDefaults = {
   "--solixc-variant-background": "transparent",
   "--solixc-variant-hover": "var(--solixc-variant-background)",

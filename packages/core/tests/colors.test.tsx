@@ -11,6 +11,7 @@ import {
   colorVariantTable,
   customColorClass,
   type Palette,
+  type Shade,
   paletteAliases,
   paletteClass,
   palettes,
@@ -23,9 +24,13 @@ import {
   shades,
   shadeSource,
   slotDefaults,
-  tintShades,
   contrastLuminance,
   luminanceWeights,
+  mixedInOklab,
+  type Oklch,
+  ownPaletteOf,
+  textWithoutAPalette,
+  transparentOklch,
   variantAttribute,
   writtenColor,
 } from "#/src/color-table.ts";
@@ -42,7 +47,7 @@ import { layersAround } from "#/tests/cascade-layers.ts";
 import { render } from "#/tests/fixtures.ts";
 import { classesOf, declarationsIn, rootElementOf, valuesOf } from "#/tests/markup.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
-import { tokenKind, tokenValues } from "../../../scripts/tokens";
+import { schemeValues, tokenKind, tokenValues } from "../../../scripts/tokens";
 
 const primaryColorsFile = "packages/core/src/primary-colors.stylex.ts";
 const named: Palette[] = [
@@ -245,19 +250,6 @@ test("any other CSS colour writes one custom property, itself, with the shade an
   );
 });
 
-test("a given shade or colour tints the light variant from shades 1 and 2, which the shade class mixes from it, and never paints it solid", () => {
-  const light = ruleFor(`.${shadeClass}[${variantAttribute}="light"]`);
-  const shade = ruleFor(`.${shadeClass}`);
-
-  expect(light["--solixc-variant-background"]).toBe(`var(${shadeProperty("1")})`);
-  expect(light["--solixc-variant-hover"]).toBe(`var(${shadeProperty("2")})`);
-  expect(Object.keys(tintShades).map((name) => shade[shadeProperty(name)])).toEqual(
-    Object.values(tintShades).map(
-      ([percent, toward]) => `color-mix(in oklab, var(${colorProperty}) ${percent}%, ${toward})`,
-    ),
-  );
-});
-
 test("the autoContrast threshold is the WCAG crossover, where black and white text contrast alike, and its weights are WCAG's", () => {
   const withWhite = 1.05 / (contrastLuminance + 0.05);
   const withBlack = (contrastLuminance + 0.05) / 0.05;
@@ -273,6 +265,216 @@ test("the colour style props resolve a palette, its shade and the primary the wa
   expect(styleOfBox({ c: "primary" })).toEqual({ "--sx-c": `var(${primaryProperty("6")})` });
   expect(styleOfBox({ bg: "red.3" })).toEqual({ "--sx-bg": `var(${paletteToken("red", "3")})` });
   expect(styleOfBox({ c: "red-6" })).toEqual({ "--sx-c": `var(${paletteToken("red", "6")})` });
+});
+
+const schemes = ["light", "dark"] as const;
+type Scheme = (typeof schemes)[number];
+type InScheme = (scheme: Scheme) => Oklch;
+type Given = { color: string; colour: InScheme; text: InScheme; nine: InScheme };
+type Painted = Record<"background" | "hover" | "color" | "border", Oklch>;
+
+const tokens = tokenValues();
+const namedColours: Record<string, Oklch> = {
+  [textWithoutAPalette]: { lightness: 1, chroma: 0, hue: 0, alpha: 1 },
+};
+const transparent = "transparent";
+const slotOf = {
+  background: "--solixc-variant-background",
+  hover: "--solixc-variant-hover",
+  color: "--solixc-variant-color",
+  border: "--solixc-variant-border",
+} as const satisfies Record<keyof Painted, string>;
+const aliasDeclarations =
+  rules.find(
+    ({ layers, declarations }) =>
+      layers.includes(colorSchemeLayer) && primaryProperty("6") in declarations,
+  )?.declarations ?? {};
+
+function oklchOf(written: string): Oklch {
+  const match = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+))?\)$/.exec(written);
+  if (!match) throw new Error(`${written} is no oklch() colour`);
+  const [lightness, chroma, hue] = match.slice(1, 4).map(Number);
+  return { lightness, chroma, hue, alpha: match[4] === undefined ? 1 : Number(match[4]) };
+}
+
+function argumentsOf(inside: string): string[] {
+  const found = [""];
+  let depth = 0;
+  for (const character of inside) {
+    depth += character === "(" ? 1 : character === ")" ? -1 : 0;
+    if (character === "," && depth === 0) found.push("");
+    else found[found.length - 1] += character;
+  }
+  return found.map((each) => each.trim());
+}
+
+function matches(selector: string, classes: string[], variant: string): boolean {
+  const match = /^((?:\.[\w-]+)+)(?:\[([\w-]+)="([^"]*)"\])?$/.exec(selector.trim());
+  if (!match) throw new Error(`the colour rule ${selector} is no class with an optional attribute`);
+  const [, classList, attribute, value] = match;
+  return (
+    classList
+      .split(".")
+      .slice(1)
+      .every((name) => classes.includes(name)) &&
+    (attribute === undefined || (attribute === variantAttribute && value === variant))
+  );
+}
+
+function declarationsOn(color: string, variant: string): Record<string, string> {
+  const props = { color, variant };
+  const classes = classesOf(rootOf(props));
+  const matched = colourRules.flatMap((rule, order) => {
+    const selectors = rule.selector.split(",").filter((each) => matches(each, classes, variant));
+    return selectors.length === 0
+      ? []
+      : [{ rule, order, weight: selectors[0].split(/[.[]/).length }];
+  });
+  return Object.assign(
+    {},
+    ...matched
+      .toSorted((one, other) => one.weight - other.weight || one.order - other.order)
+      .map(({ rule }) => rule.declarations),
+    styleOf(props),
+  );
+}
+
+function evaluated(value: string, on: Record<string, string>, scheme: Scheme): Oklch {
+  const written = value.trim();
+  if (written === transparent) return transparentOklch;
+  if (written in namedColours) return namedColours[written];
+  if (written.startsWith("oklch(")) return oklchOf(written);
+  const call = /^([\w-]+)\((.*)\)$/.exec(written);
+  if (call?.[1] === "var") {
+    const name = call[2].trim();
+    const declared = on[name] ?? aliasDeclarations[name];
+    if (declared !== undefined) return evaluated(declared, on, scheme);
+    const token = tokens[name] === undefined ? undefined : schemeValues(tokens[name]);
+    if (token === undefined) throw new Error(`nothing sets ${name}`);
+    return oklchOf(token[scheme]);
+  }
+  if (call?.[1] === "color-mix") {
+    const [space, first, second] = argumentsOf(call[2]);
+    const percent = /^(.*) ([\d.]+)%$/.exec(first);
+    if (space !== "in oklab" || !percent) throw new Error(`${written} is no oklab mix`);
+    return mixedInOklab(
+      evaluated(percent[1], on, scheme),
+      Number(percent[2]),
+      evaluated(second, on, scheme),
+    );
+  }
+  throw new Error(`${written} is no colour this check reads`);
+}
+
+function painted(color: string, variant: string, scheme: Scheme): Painted {
+  const on = declarationsOn(color, variant);
+  return {
+    background: evaluated(on[slotOf.background], on, scheme),
+    hover: evaluated(on[slotOf.hover], on, scheme),
+    color: evaluated(on[slotOf.color], on, scheme),
+    border: evaluated(on[slotOf.border], on, scheme),
+  };
+}
+
+function tokenIn(name: string, scheme: Scheme): Oklch {
+  return evaluated(`var(${name})`, {}, scheme);
+}
+
+const documentedMixes: Record<string, (given: Given, scheme: Scheme) => Painted> = {
+  filled: (given, scheme) => {
+    const text = given.text(scheme);
+    const colour = given.colour(scheme);
+    return {
+      background: colour,
+      hover: mixedInOklab(colour, 90, text),
+      color: text,
+      border: transparentOklch,
+    };
+  },
+  light: (given, scheme) => ({
+    background: mixedInOklab(given.colour(scheme), 15, transparentOklch),
+    hover: mixedInOklab(given.colour(scheme), 20, transparentOklch),
+    color: given.nine(scheme),
+    border: transparentOklch,
+  }),
+  outline: (given, scheme) => ({
+    background: transparentOklch,
+    hover: mixedInOklab(given.colour(scheme), 5, transparentOklch),
+    color: given.colour(scheme),
+    border: given.colour(scheme),
+  }),
+  subtle: (given, scheme) => ({
+    background: transparentOklch,
+    hover: mixedInOklab(given.colour(scheme), 12, transparentOklch),
+    color: given.colour(scheme),
+    border: transparentOklch,
+  }),
+  transparent: (given, scheme) => ({
+    background: transparentOklch,
+    hover: transparentOklch,
+    color: given.colour(scheme),
+    border: transparentOklch,
+  }),
+};
+
+function inOklab({ lightness, chroma, hue, alpha }: Oklch): number[] {
+  const radians = (hue * Math.PI) / 180;
+  return [lightness, chroma * Math.cos(radians), chroma * Math.sin(radians), alpha].map(
+    (channel) => Math.round(channel * 1e6) / 1e6 || 0,
+  );
+}
+
+function asLab(colours: Painted): Record<string, number[]> {
+  return Object.fromEntries(
+    Object.entries(colours).map(([slot, colour]) => [slot, inOklab(colour)]),
+  );
+}
+
+const givenShade = fc
+  .constantFrom(
+    ...named.flatMap((palette) =>
+      shades.map((shade): { palette: Palette; shade: Shade } => ({ palette, shade })),
+    ),
+  )
+  .map(({ palette, shade }): Given => ({
+    color: `${palette}.${shade}`,
+    colour: (scheme) => tokenIn(shadeSource(palette, shade), scheme),
+    text: (scheme) => tokenIn(paletteToken(ownPaletteOf(palette), "contrast"), scheme),
+    nine: (scheme) => tokenIn(paletteToken(ownPaletteOf(palette), "9"), scheme),
+  }));
+const givenCssColour = fc
+  .tuple(
+    fc.integer({ min: 0, max: 1000 }),
+    fc.integer({ min: 0, max: 400 }),
+    fc.integer({ min: 0, max: 3599 }),
+  )
+  .map(([lightness, chroma, hue]): Given => {
+    const color = `oklch(${lightness / 1000} ${chroma / 1000} ${hue / 10})`;
+    return {
+      color,
+      colour: () => oklchOf(color),
+      text: () => namedColours[textWithoutAPalette],
+      nine: (scheme) => mixedInOklab(oklchOf(color), 70, tokenIn("--solix-color-text", scheme)),
+    };
+  });
+
+test("a given shade or CSS colour is painted with the documented mixes in every variant, filled with its hover 90% toward the text, light at 15% and hovered at 20%, outline hovered at 5%, subtle hovered at 12%, and transparent, in both schemes; its contrast is the consumer's", async (context) => {
+  expect(Object.keys(documentedMixes).toSorted()).toEqual(
+    variants.filter((variant) => variant !== "default").toSorted(),
+  );
+  await assertProperty(
+    context,
+    fc.property(
+      fc.oneof(givenShade, givenCssColour),
+      fc.constantFrom(...Object.keys(documentedMixes)),
+      fc.constantFrom(...schemes),
+      (given, variant, scheme) => {
+        expect(asLab(painted(given.color, variant, scheme))).toEqual(
+          asLab(documentedMixes[variant](given, scheme)),
+        );
+      },
+    ),
+  );
 });
 
 type Probe<Own> = Own & { class?: string };
