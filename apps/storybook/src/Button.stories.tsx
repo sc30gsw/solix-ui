@@ -29,7 +29,7 @@ export const Disabled: Story = {
 };
 
 export const NeverBelowTheTargetSize: Story = {
-  args: { size: 1, radius: 1, children: "S" },
+  args: { size: 1, radius: 1, fz: "sm", children: "S" },
   play: async ({ canvas }) => {
     const { width, height } = canvas.getByRole("button", { name: "S" }).getBoundingClientRect();
     await expect(Math.min(width, height)).toBeGreaterThanOrEqual(24);
