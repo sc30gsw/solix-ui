@@ -64,6 +64,12 @@ function variantRule(selector: string, slots: VariantRow[keyof VariantRow]): str
 export function colorRules(): string {
   const variants = Object.entries(colorVariantTable);
   const rules = [
+    `${schemeRoots}{${declared(
+      shades.map((shade) => [
+        paletteToken(primaryName, shade),
+        `var(${paletteToken(primaryPalette, shade)})`,
+      ]),
+    )}}`,
     ...namedPalettes.map(
       (palette) =>
         `.${paletteClass(palette)}{${shadesFrom((shade) => shadeSource(palette, shade))}}`,
@@ -92,13 +98,4 @@ export function colorRules(): string {
     ),
   ];
   return rules.join("\n");
-}
-
-export function primaryRule(): string {
-  return `${schemeRoots}{${declared(
-    shades.map((shade) => [
-      paletteToken(primaryName, shade),
-      `var(${paletteToken(primaryPalette, shade)})`,
-    ]),
-  )}}`;
 }

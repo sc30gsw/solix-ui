@@ -30,12 +30,7 @@ import {
   variantAttribute,
   writtenColor,
 } from "#/src/color-table.ts";
-import {
-  colorLayer,
-  colorSchemeLayer,
-  libraryLayers,
-  stylePropClassPrefix,
-} from "#/src/style-prop-table.ts";
+import { colorLayer, libraryLayers, stylePropClassPrefix } from "#/src/style-prop-table.ts";
 import { type ColorProps, resolveColor, type SolixColor } from "#/src/colors.ts";
 import type { createParts, PartsOptions } from "#/src/parts.ts";
 import { stylesheet } from "#/tests/built-library.ts";
@@ -53,6 +48,7 @@ import { assertProperty } from "../../../tests/support/properties.ts";
 import { schemeValues, tokenKind, tokenValues } from "../../../scripts/tokens";
 
 const primaryColorsFile = "packages/core/src/primary-colors.stylex.ts";
+const primaryRoots = ":root,[data-color-scheme]";
 const named = namedPalettes;
 const variants = Object.keys(colorVariantTable);
 const slots = Object.keys(colorVariantTable.default.palette);
@@ -98,7 +94,14 @@ test("the colour tokens hold exactly one token for each shade of each palette of
   );
 });
 
-test("every rule of the colours layer, the first sub-layer of the library's, selects a class with the colours' own prefix, which neither starts nor is started by the prefix of StyleX and the style props, and sets custom properties only", () => {
+const primaryPointed = Object.fromEntries(
+  shades.map((shade) => [
+    paletteToken(primaryName, shade),
+    `var(${paletteToken(primaryPalette, shade)})`,
+  ]),
+);
+
+test("every rule of the colours layer, the first sub-layer of the library's, but the primary's on the scheme roots, selects a class with the colours' own prefix, which neither starts nor is started by the prefix of StyleX and the style props, and sets custom properties only", () => {
   expect(libraryLayers[0]).toBe(colorLayer);
   expect(colorClassPrefix.startsWith(stylePropClassPrefix)).toBe(false);
   expect(stylePropClassPrefix.startsWith(colorClassPrefix)).toBe(false);
@@ -106,14 +109,19 @@ test("every rule of the colours layer, the first sub-layer of the library's, sel
   expect(
     colourRules.filter(
       ({ selector, declarations, layers }) =>
-        !selector.startsWith(`.${colorClassPrefix}`) ||
+        (!selector.startsWith(`.${colorClassPrefix}`) &&
+          !(
+            selector === primaryRoots &&
+            Object.keys(declarations).every((name) => name in primaryPointed)
+          )) ||
         Object.keys(declarations).some((property) => !property.startsWith("--")) ||
         layers.join(" ") !== [colorLayer, LIBRARY_CASCADE_LAYER].join(" "),
     ),
   ).toEqual([]);
 });
 
-test("the primary's alias declares exactly the shades shadeSource names for the primary, in the order of the shades", () => {
+test("the primary's StyleX tokens declare exactly the shades shadeSource names for the primary, in the order of the shades, each pointing at the primary palette's token", () => {
+  expect(tokenValues(primaryColorsFile)).toEqual(primaryPointed);
   expect(Object.keys(tokenValues(primaryColorsFile))).toEqual(
     shades.map((shade) => shadeSource(primaryName, shade)),
   );
@@ -128,22 +136,20 @@ test.each(named)(
   },
 );
 
-test("the primary's alias is written once, on :root and on every element with a colour scheme, from the primary palette's tokens", () => {
-  const aliases = rules.filter(
-    ({ declarations, layers }) =>
-      layers.includes(colorSchemeLayer) &&
-      Object.keys(declarations).some((property) => property === paletteToken(primaryName, "6")),
-  );
+test("the primary's tokens point at the primary palette's in the colours layer, on :root and on every element with a colour scheme, and elsewhere only in StyleX's defaults on :root, with the same values", () => {
+  const pointing = rules
+    .filter(({ declarations }) => paletteToken(primaryName, "6") in declarations)
+    .map(({ selector, declarations, layers }) => ({
+      selector: selector.split(/,\s*/)[0],
+      inColors: layers.includes(colorLayer),
+      declarations,
+    }));
 
-  expect(aliases.map(({ selector }) => selector)).toEqual([":root,[data-color-scheme]"]);
-  expect(aliases[0]?.declarations).toEqual(
-    Object.fromEntries(
-      shades.map((shade) => [
-        paletteToken(primaryName, shade),
-        `var(${paletteToken(primaryPalette, shade)})`,
-      ]),
-    ),
-  );
+  expect(pointing).toEqual([
+    { selector: ":root", inColors: true, declarations: primaryPointed },
+    { selector: ":root", inColors: false, declarations: primaryPointed },
+  ]);
+  expect(colourRules.filter(({ selector }) => selector === primaryRoots)).toHaveLength(1);
 });
 
 test("an element with a colour class resets every slot to a default, so a variant the table does not hold falls back to the default variant and a custom variant that sets only its background and colour hovers on its background with no border", () => {
@@ -295,7 +301,7 @@ const slotOf = {
 const aliasDeclarations =
   rules.find(
     ({ layers, declarations }) =>
-      layers.includes(colorSchemeLayer) && paletteToken(primaryName, "6") in declarations,
+      layers.includes(colorLayer) && paletteToken(primaryName, "6") in declarations,
   )?.declarations ?? {};
 
 function oklchOf(written: string): Oklch {
@@ -332,6 +338,7 @@ function declarationsOn(color: string, variant: string): Record<string, string> 
   const props = { color, variant };
   const classes = classesOf(rootOf(props));
   const matched = colourRules.flatMap((rule, order) => {
+    if (rule.selector === primaryRoots) return [];
     const selectors = rule.selector.split(",").filter((each) => matches(each, classes, variant));
     return selectors.length === 0
       ? []

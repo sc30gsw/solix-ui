@@ -30,6 +30,7 @@ import {
   variableClass,
   visibilityClasses,
 } from "#/src/style-prop-table.ts";
+import { paletteToken, primaryName, shades } from "#/src/color-table.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 import {
   builtComponents,
@@ -586,9 +587,14 @@ test("each value of data-color-scheme sets color-scheme on its element, both sch
   expect(outside.filter((rule) => colorSchemeOf(rule).length > 0)).toEqual([]);
 });
 
-test("the colour-scheme layer holds every rule that names data-color-scheme, beside the defaults on :root and the classes of lightHidden and darkHidden, and no other layer holds one", () => {
+test("the colour-scheme layer holds every rule that names data-color-scheme, beside the defaults on :root and the classes of lightHidden and darkHidden, and no other layer holds one but the rule that points the primary's tokens at the primary palette in each scheme", () => {
   const { inside, outside } = colorSchemeLayerRules();
   const others = [pageRoot, ...ownerSchemeHiding.map(([className]) => `.${className}`)];
+  const primaryTokens = shades.map((shade) => paletteToken(primaryName, shade));
+  const setsOnlyThePrimary = ({ declarations }: PlacedRule) =>
+    declarations.every((declaration) =>
+      primaryTokens.some((token) => declaration.startsWith(`${token}:`)),
+    );
 
   expect(inside.length).toBeGreaterThan(0);
   expect(
@@ -596,7 +602,9 @@ test("the colour-scheme layer holds every rule that names data-color-scheme, bes
       ({ selector }) => !selector.includes(ownerAttribute) && !others.includes(selector),
     ),
   ).toEqual([]);
-  expect(outside.filter(({ selector }) => selector.includes(ownerAttribute))).toEqual([]);
+  expect(
+    outside.filter((rule) => rule.selector.includes(ownerAttribute) && !setsOnlyThePrimary(rule)),
+  ).toEqual([]);
 });
 
 test("hiddenFrom and visibleFrom hide the element from, or below, each breakpoint, after every style-prop rule", () => {

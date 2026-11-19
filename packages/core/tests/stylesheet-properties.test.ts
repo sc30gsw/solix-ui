@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import fc from "fast-check";
 import postcss from "postcss";
-import { colorRules, primaryRule } from "#/src/color-rules.ts";
+import { colorRules } from "#/src/color-rules.ts";
 import { expect, test } from "vite-plus/test";
 import {
   compileLibrarySource,
@@ -14,7 +14,6 @@ import {
 } from "#/build-pipeline.mjs";
 import {
   colorLayer,
-  colorSchemeLayer,
   libraryLayers,
   stylePropLayer,
   stylePropRules,
@@ -173,7 +172,6 @@ test(
             {
               [colorLayer]: colorRules(),
               [stylePropLayer]: stylePropRules(builtVariables),
-              [colorSchemeLayer]: primaryRule(),
             },
             sdkRule,
           ),
