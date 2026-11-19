@@ -1,14 +1,14 @@
 import * as stylex from "@stylexjs/stylex";
 
 export const tokens = stylex.defineVars({
-  "--solix-color-primary": "oklch(0.55 0.21 268)",
-  "--solix-color-on-primary": "oklch(1 0 0)",
-  "--solix-color-text": "oklch(0.24 0.02 268)",
-  "--solix-color-body": "oklch(1 0 0)",
-  "--solix-color-surface": "oklch(0.965 0.006 268)",
-  "--solix-color-border": "oklch(0.62 0.02 268)",
-  "--solix-color-error": "oklch(0.55 0.2 25)",
-  "--solix-color-backdrop": "oklch(0.2 0.02 268 / 0.45)",
+  "--solix-color-primary": "light-dark(oklch(0.55 0.21 268), oklch(0.74 0.13 268))",
+  "--solix-color-on-primary": "light-dark(oklch(1 0 0), oklch(0.2 0.03 268))",
+  "--solix-color-text": "light-dark(oklch(0.24 0.02 268), oklch(0.94 0.01 268))",
+  "--solix-color-body": "light-dark(oklch(1 0 0), oklch(0.21 0.015 268))",
+  "--solix-color-surface": "light-dark(oklch(0.965 0.006 268), oklch(0.27 0.018 268))",
+  "--solix-color-border": "light-dark(oklch(0.62 0.02 268), oklch(0.56 0.02 268))",
+  "--solix-color-error": "light-dark(oklch(0.55 0.2 25), oklch(0.7 0.16 25))",
+  "--solix-color-backdrop": "light-dark(oklch(0.2 0.02 268 / 0.45), oklch(0.08 0.01 268 / 0.6))",
   "--solix-radius-xs": "0.1875rem",
   "--solix-radius-sm": "0.375rem",
   "--solix-radius-md": "0.75rem",

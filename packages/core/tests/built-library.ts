@@ -126,7 +126,7 @@ export function componentExports(): string[] {
   return componentExportNames;
 }
 
-function builtNamed(name: string): Component<ConsumerProps> {
+export function builtNamed(name: string): Component<ConsumerProps> {
   const built = builtByName[name];
   if (typeof built !== "function") {
     throw new Error(`packages/core/dist/index.js: export the component ${name}.`);

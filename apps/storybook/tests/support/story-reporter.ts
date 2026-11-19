@@ -1,9 +1,15 @@
 import { writeFileSync } from "node:fs";
 import type { Reporter, TestCase } from "vite-plus/test/node";
+import "#/story-color-scheme.ts";
 
 export const storyReportVariable = "SOLIX_STORY_REPORT";
 
-export type ReportedStory = { id: string; status: string; messages: string[] };
+export type ReportedStory = {
+  id: string;
+  status: string;
+  messages: string[];
+  colorSchemeAtTheEnd: string | undefined;
+};
 
 export default class StoryReporter implements Reporter {
   private readonly stories: ReportedStory[] = [];
@@ -15,6 +21,7 @@ export default class StoryReporter implements Reporter {
       id: typeof meta.storyId === "string" ? meta.storyId : `no story id: ${testCase.fullName}`,
       status: result.state,
       messages: (result.errors ?? []).map(({ message }) => message),
+      colorSchemeAtTheEnd: testCase.meta().colorSchemeAtTheEnd,
     });
   }
 

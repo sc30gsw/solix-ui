@@ -30,6 +30,7 @@ import {
   type VariableRowOf,
   visibilityClass,
   type VisibilityPropName,
+  type VisibilityValue,
   visibilityPropNames,
 } from "#/src/style-prop-table.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
@@ -128,7 +129,7 @@ export type ResolvedVariables = ResolvedStyleProps & { readonly used: readonly U
 
 export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
-} & { [Name in VisibilityPropName]?: Breakpoint | Absent };
+} & { [Name in VisibilityPropName]?: VisibilityValue<Name> | Absent };
 
 export type ResolvedStyleProps = {
   classes: string[];
@@ -205,10 +206,8 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
     }
   }
   for (const name of visibilityPropNames) {
-    const breakpoint = props[name];
-    if (breakpoint !== undefined && breakpoint !== null) {
-      classes.add(visibilityClass(name, breakpoint));
-    }
+    const className = visibilityClass(name, props[name]);
+    if (className !== undefined) classes.add(className);
   }
   return { classes: [...classes], properties };
 }

@@ -30,10 +30,10 @@ export type TakesDisplay<Props> =
 type Polymorphic<Component> = "component" extends keyof PropsOf<Component> ? true : false;
 
 type ComponentName = {
-  [Name in keyof typeof Library]: keyof StylesApiProps<object> extends keyof PropsOf<
-    (typeof Library)[Name]
-  >
-    ? Name
+  [Name in keyof typeof Library]: (typeof Library)[Name] extends (props: infer Props) => unknown
+    ? keyof StylesApiProps<object> extends keyof Props
+      ? Name
+      : never
     : never;
 }[keyof typeof Library];
 

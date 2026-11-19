@@ -12,6 +12,7 @@ import {
 } from "#/build-pipeline.mjs";
 import { libraryLayers, stylePropRules } from "#/src/style-prop-table.ts";
 import { layersAroundDeclaration, nestedLayerOrder } from "#/tests/cascade-layers.ts";
+import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
 
 const packageRoot = join(import.meta.dirname, "..");
@@ -146,7 +147,7 @@ function sourceFor(definitions: Definition[]): string {
 }
 
 test(
-  "for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its container queries and then the hidden layer last, and nothing important in the library's layer",
+  "for every generated style definition, the stylesheet orders the behaviour SDK's layer first, holds the SDK's own hidden rule there, and stays inside the library layer with prefixed classes and registered custom properties, its components, its style props, its colour-scheme rules, its container queries and then the hidden layer last, nothing important in the library's layer, and no rule that styles a page's own <html> or <body>",
   { timeout: generatedDefinitionsTimeout },
   async (context) => {
     await assertProperty(
@@ -192,6 +193,7 @@ test(
           const inTheLibrary = layersAroundDeclaration(declaration).includes(LIBRARY_CASCADE_LAYER);
           expect(Boolean(declaration.important) && inTheLibrary).toBe(false);
         });
+        expect(rulesThatStyleThePage(stylesheet)).toEqual([]);
       }),
       { numRuns: generatedRuns },
     );

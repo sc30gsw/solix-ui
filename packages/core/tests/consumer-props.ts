@@ -1,5 +1,5 @@
 import type { JSX } from "@solidjs/web";
-import type { Breakpoint, StylePropName, VisibilityPropName } from "#/src/style-prop-table.ts";
+import type { StylePropName, VisibilityPropName, VisibilityValue } from "#/src/style-prop-table.ts";
 import type { ConsumerProps } from "#/tests/built-library.ts";
 
 export type ClassToken = { token: string; applied: boolean; writtenAs: string };
@@ -12,7 +12,7 @@ export type ConsumerStyle =
 export type DeclaredStyleProp = { written: unknown; keptKeys: string[] };
 export type StylePropCase = {
   styleProps: [StylePropName, DeclaredStyleProp][];
-  visibility: Partial<Record<VisibilityPropName, Breakpoint | null>>;
+  visibility: { [Name in VisibilityPropName]?: VisibilityValue<Name> | null };
   classTokens: ClassToken[];
   consumerStyle: ConsumerStyle;
   stylesRoot: DrawnDeclaration[];

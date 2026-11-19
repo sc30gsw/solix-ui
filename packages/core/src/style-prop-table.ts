@@ -1,4 +1,5 @@
 import type { JSX } from "@solidjs/web";
+import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 
 export type Scale = "spacing" | "font-size" | "line-height" | "radius" | "color" | "container-size";
 
@@ -28,6 +29,7 @@ export const stylePropClassPrefix = "sx";
 export const libraryCascadeLayer = "solix";
 export const componentLayer = "components";
 export const stylePropLayer = "style-props";
+export const colorSchemeLayer = "color-scheme";
 export const containerQueryLayer = "container-queries";
 export const childRuleLayer = "child-rules";
 export const hiddenLayer = "hidden";
@@ -175,10 +177,15 @@ export const variableTable = {
   },
 } as const satisfies Record<string, Record<string, VariableRow>>;
 
+type HiddenAtAWidth = { className: string; query: (width: string) => string };
+type HiddenInAScheme = { className: string; scheme: SolixComputedColorScheme };
+
 const visibilityTable = {
   hiddenFrom: { className: "hidden-from", query: (width: string) => `(min-width: ${width})` },
   visibleFrom: { className: "visible-from", query: (width: string) => `(width < ${width})` },
-} satisfies Record<string, { className: string; query: (width: string) => string }>;
+  lightHidden: { className: "light-hidden", scheme: "light" },
+  darkHidden: { className: "dark-hidden", scheme: "dark" },
+} satisfies Record<string, HiddenAtAWidth | HiddenInAScheme>;
 
 export const baseKey = "base";
 
@@ -195,6 +202,11 @@ export type RowOf<Name extends StylePropName> = Rows[Name] extends {
 export type Breakpoint = keyof typeof breakpointWidths;
 export type ResponsiveKey = typeof baseKey | Breakpoint;
 export type VisibilityPropName = keyof typeof visibilityTable;
+export type VisibilityValue<Name extends VisibilityPropName> = Name extends VisibilityPropName
+  ? (typeof visibilityTable)[Name] extends HiddenAtAWidth
+    ? Breakpoint
+    : boolean
+  : never;
 type Groups = typeof variableTable;
 export type VariableGroup = keyof Groups;
 export type VariablesOf<Group extends VariableGroup> = keyof Groups[Group] & string;
@@ -297,9 +309,32 @@ export function containerVariableClass(name: VariableName, scope: string, slot: 
   return `${responsiveClass(name, baseKey)}-c${scope}-${slot}`;
 }
 
-export function visibilityClass(name: VisibilityPropName, breakpoint: Breakpoint): string {
-  return `${stylePropClassPrefix}-${visibilityTable[name].className}-${breakpoint}`;
+function visibilityClassesOf(name: VisibilityPropName): Map<unknown, string> {
+  const row: HiddenAtAWidth | HiddenInAScheme = visibilityTable[name];
+  const className = `${stylePropClassPrefix}-${row.className}`;
+  return new Map<unknown, string>(
+    "query" in row
+      ? breakpoints.map((breakpoint) => [breakpoint, `${className}-${breakpoint}`])
+      : [[true, className]],
+  );
 }
+
+export function visibilityClass(
+  name: VisibilityPropName,
+  given: VisibilityValue<VisibilityPropName> | null | undefined,
+): string | undefined {
+  return visibilityClassesOf(name).get(given);
+}
+
+export const visibilityClasses = visibilityPropNames.flatMap((name) => [
+  ...visibilityClassesOf(name).values(),
+]);
+
+export const hiddenInAScheme = visibilityPropNames.flatMap((name) => {
+  const row: HiddenAtAWidth | HiddenInAScheme = visibilityTable[name];
+  const className = `${stylePropClassPrefix}-${row.className}`;
+  return "scheme" in row ? [{ scheme: row.scheme, className, property: `--${className}` }] : [];
+});
 
 function media(query: string, rules: string[]): string {
   return `@media ${query}{\n${rules.join("\n")}\n}`;
@@ -363,6 +398,7 @@ const outerLayers = [behaviourSdkLayer, libraryCascadeLayer] as const;
 export const libraryLayers = [
   componentLayer,
   stylePropLayer,
+  colorSchemeLayer,
   containerQueryLayer,
   hiddenLayer,
 ] as const;
@@ -380,13 +416,16 @@ export function stylePropRules(): string {
   const ordered = depths.flatMap((depth) =>
     readersAtEveryBreakpoint(readers.filter((reader) => reader.depth === depth)),
   );
-  const visibility = visibilityPropNames.flatMap((name) =>
-    breakpoints.map((breakpoint) =>
-      media(visibilityTable[name].query(breakpointWidths[breakpoint]), [
-        `.${visibilityClass(name, breakpoint)}{display:none}`,
-      ]),
-    ),
-  );
+  const visibility = visibilityPropNames.flatMap((name) => {
+    const row: HiddenAtAWidth | HiddenInAScheme = visibilityTable[name];
+    return "query" in row
+      ? breakpoints.map((breakpoint) =>
+          media(row.query(breakpointWidths[breakpoint]), [
+            `.${visibilityClassesOf(name).get(breakpoint)}{display:none}`,
+          ]),
+        )
+      : [];
+  });
   return [
     `@layer ${childRuleLayer}{\n${childRules().join("\n")}\n}`,
     ...registrations,

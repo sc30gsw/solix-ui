@@ -2,6 +2,7 @@ import { createTheme, SolixProvider } from "@solix/core";
 import { BoxSection } from "#/src/sections/BoxSection.tsx";
 import { ButtonSection } from "#/src/sections/ButtonSection.tsx";
 import { CenterSection } from "#/src/sections/CenterSection.tsx";
+import { ColorSchemeSection } from "#/src/sections/ColorSchemeSection.tsx";
 import { ContainerSection } from "#/src/sections/ContainerSection.tsx";
 import { ChangingPropsSection } from "#/src/sections/ChangingPropsSection.tsx";
 import { DisclosureSection } from "#/src/sections/DisclosureSection.tsx";
@@ -16,6 +17,7 @@ import { StackSection } from "#/src/sections/StackSection.tsx";
 import { StylesApiSection } from "#/src/sections/StylesApiSection.tsx";
 import { TabsSection } from "#/src/sections/TabsSection.tsx";
 import { TextInputSection } from "#/src/sections/TextInputSection.tsx";
+import { pageColorScheme, pageColorSchemeManager } from "#/src/page-color-scheme.ts";
 import { themedByTheProvider, themedSpacing } from "#/src/sections/theme-setups.ts";
 import { ThemeSection } from "#/src/sections/ThemeSection.tsx";
 import { styleNonce } from "#/src/style-nonce.ts";
@@ -30,6 +32,8 @@ export default function App() {
       theme={playgroundTheme}
       cssVariablesSelector={`[${themedByTheProvider}]`}
       getStyleNonce={styleNonce}
+      defaultColorScheme={pageColorScheme}
+      colorSchemeManager={pageColorSchemeManager}
     >
       <main>
         <h1>Solix playground</h1>
@@ -50,6 +54,7 @@ export default function App() {
         <GridSection />
         <TabsSection />
         <ThemeSection />
+        <ColorSchemeSection />
         <PrimitivesSection />
       </main>
     </SolixProvider>

@@ -12,13 +12,15 @@ export function enclosingAtRules(node: postcss.Node): postcss.AtRule[] {
   return [parent, ...enclosingAtRules(parent)];
 }
 
+export function layersAround(node: postcss.Node): string[] {
+  return enclosingAtRules(node)
+    .filter(({ name }) => name === "layer")
+    .map(({ params }) => params);
+}
+
 export function layersAroundDeclaration(declaration: postcss.Declaration): string[] {
   const rule = declaration.parent;
-  return rule === undefined
-    ? []
-    : enclosingAtRules(rule)
-        .filter(({ name }) => name === "layer")
-        .map(({ params }) => params);
+  return rule === undefined ? [] : layersAround(rule);
 }
 
 export function inStylePropLayer(node: postcss.Node): boolean {

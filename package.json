@@ -26,6 +26,7 @@
     "modern-web-guidance": "catalog:",
     "playwright": "catalog:",
     "postcss": "catalog:",
+    "postcss-value-parser": "catalog:",
     "semver": "catalog:",
     "solid-js": "catalog:",
     "solid2-agent-kit": "catalog:",
