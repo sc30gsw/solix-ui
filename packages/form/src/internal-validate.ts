@@ -28,11 +28,22 @@ type AnyRule = Rule<unknown, unknown>;
 
 type Validation = { values: unknown; resolve: ResolveValidationError; signal: AbortSignal };
 
-const errorTags: readonly string[] = ["[object Error]", "[object DOMException]"] as const;
+export const unreadableError = "Unknown error";
+
+function isAnError(value: unknown): boolean {
+  return Error.isError(value) || Error.prototype.isPrototypeOf(Object(value));
+}
+
+function textOf(value: unknown): string {
+  return isContainer(value) || typeof value === "function" ? tagOf(value) : String(value);
+}
 
 export function messageOf(error: unknown): string {
-  if (errorTags.includes(tagOf(error))) return String(Reflect.get(Object(error), "message"));
-  return isContainer(error) || typeof error === "function" ? tagOf(error) : String(error);
+  try {
+    return textOf(isAnError(error) ? Reflect.get(Object(error), "message") : error);
+  } catch {
+    return unreadableError;
+  }
 }
 
 export function runRule(rule: AnyRule, path: string, validation: Validation): Outcome {

@@ -3,6 +3,7 @@ import { expect, test, vi } from "vite-plus/test";
 import { FORM_INDEX, formRootRule } from "#/src/constants.ts";
 import {
   messageOf,
+  unreadableError,
   ruleForPath,
   runRule,
   shouldValidateOnChange,
@@ -317,6 +318,34 @@ test("messageOf gives an Error's or a DOMException's message, a primitive as a s
       { a: 0 },
     ),
   ).toStrictEqual({ hasErrors: true, errors: { a: "[object Object]" } });
+});
+
+test("messageOf gives the message of any Error, whatever its tag or realm-free shape, and never throws", () => {
+  class Tagged extends Error {
+    get [Symbol.toStringTag]() {
+      return "Tagged";
+    }
+  }
+  const oldStyle: unknown = Object.create(Error.prototype, { message: { value: "old style" } });
+  const objectMessage = Object.defineProperty(new Error(), "message", {
+    value: Object.create(null),
+  });
+  const throwingTag = {
+    get [Symbol.toStringTag]() {
+      throw new Error("no tag");
+    },
+  };
+  const throwingMessage = Object.defineProperty(new Error(), "message", {
+    get() {
+      throw new Error("no message");
+    },
+  });
+
+  expect(messageOf(new Tagged("tagged"))).toBe("tagged");
+  expect(messageOf(oldStyle)).toBe("old style");
+  expect(messageOf(objectMessage)).toBe("[object Object]");
+  expect(messageOf(throwingTag)).toBe(unreadableError);
+  expect(messageOf(throwingMessage)).toBe(unreadableError);
 });
 
 test("runRule hands the rule the value at its path, the values, the path and the signal", () => {

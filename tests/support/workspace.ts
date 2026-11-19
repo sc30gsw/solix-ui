@@ -48,6 +48,7 @@ export const registeredLibraries: Readonly<Record<string, LibraryRegistration>> 
   "packages/form": {
     kind: "logic",
     errorBoundaries: [
+      { file: "internal-validate.ts", fn: "messageOf" },
       { file: "internal-validate.ts", fn: "runRule" },
       { file: "is-json-string.ts", fn: "isJSONString" },
     ],
