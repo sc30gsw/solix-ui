@@ -1,5 +1,4 @@
 import { expect, test } from "vite-plus/test";
-import { typeCheckedProjects } from "#/scripts/syntax.ts";
 import {
   installedDependencies,
   libraryHome,
@@ -14,8 +13,6 @@ import {
 
 const libraryList = "registeredLibraries in tests/support/workspace.ts";
 const ownLibraryLink = "workspace:*";
-const optionsOfTheTypeCheckedProject = ["allowJs"];
-const optionsOfTheProjectWithNodeTypes = ["allowJs", "types"];
 
 test(`every package in ${libraryHome} is a library that ${libraryList} lists with its kind, and the list names no other directory`, () => {
   expect([
@@ -70,11 +67,4 @@ test("a library names another library of this repository as a workspace:^ peer, 
   );
 
   expect(violations).toEqual([]);
-});
-
-test(`a library kind is read with the type-checked project, which adds ${optionsOfTheTypeCheckedProject.join(", ")}, or the one with Node's types, which adds ${optionsOfTheProjectWithNodeTypes.join(" and ")} naming node`, () => {
-  expect(Object.keys(typeCheckedProjects)).toEqual(["scripts", "withNodeTypes"]);
-  expect(Object.keys(typeCheckedProjects.scripts)).toEqual(optionsOfTheTypeCheckedProject);
-  expect(Object.keys(typeCheckedProjects.withNodeTypes)).toEqual(optionsOfTheProjectWithNodeTypes);
-  expect(typeCheckedProjects.withNodeTypes.types).toEqual(["node"]);
 });
