@@ -13,7 +13,8 @@ import {
   shadeClass,
   variantAttribute,
 } from "#/src/color-table.ts";
-import type { ResolvedStyleProps } from "#/src/style-props.ts";
+import { createMemo } from "solid-js";
+import type { Resolved, Resolver } from "#/src/style-props.ts";
 
 export type SolixColor = Palette | `${Palette}.${Shade}` | (string & {});
 
@@ -36,13 +37,9 @@ function isColorPropKey(name: PropertyKey): name is ColorPropKey {
 
 export const colorPropKeys = Object.keys(colorProps).filter(isColorPropKey);
 
-export type ResolvedColor = ResolvedStyleProps & {
-  readonly attributes: Readonly<Partial<Record<typeof variantAttribute, string>>>;
-};
-
 const defaultPalette = primaryAlias satisfies Palette;
 
-function given(color: unknown): ResolvedStyleProps {
+function given(color: unknown): Omit<Resolved, "attributes"> {
   const parsed = parseColor(color);
   if (parsed === undefined) {
     return { classes: [colorClass, paletteClass(defaultPalette)], properties: {} };
@@ -62,7 +59,7 @@ function given(color: unknown): ResolvedStyleProps {
 export function resolveColor(
   defaultVariant: ColorVariant,
   props: Readonly<Record<string, unknown>>,
-): ResolvedColor {
+): Resolved {
   const resolved = given(props.color);
   return {
     classes:
@@ -77,6 +74,6 @@ export function resolveColor(
 export function colorResolver(
   defaultVariant: ColorVariant,
   props: Readonly<Record<string, unknown>>,
-): { readonly keys: readonly ColorPropKey[]; readonly resolved: () => ResolvedColor } {
-  return { keys: colorPropKeys, resolved: () => resolveColor(defaultVariant, props) };
+): Resolver {
+  return { keys: colorPropKeys, resolved: createMemo(() => resolveColor(defaultVariant, props)) };
 }
