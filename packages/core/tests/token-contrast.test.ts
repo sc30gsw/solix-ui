@@ -278,7 +278,7 @@ function inEachPaletteAndVariant(pairing: Pairing): Pairing[] {
   const { foreground, background } = pairing;
   if (foreground.slot === undefined && background.slot === undefined) return [pairing];
   return palettes.flatMap((palette) =>
-    variants.flatMap(([variant, slots]): Pairing[] => {
+    variants.flatMap(([variant, { named: slots }]): Pairing[] => {
       const resolve = (given: Side): Side | undefined => {
         if (given.slot === undefined) return given;
         const token = slotToken(given.slot, palette, slots);
