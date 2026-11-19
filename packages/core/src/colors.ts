@@ -4,7 +4,6 @@ import {
   colorProperty,
   type ColorVariant,
   customColorClass,
-  isColorVariant,
   type Palette,
   paletteClass,
   parseColor,
@@ -25,13 +24,18 @@ export type SolixColor =
   | `#${string}`
   | `${CssColorFunction}(${string})`;
 
-export type ColorProps = {
+export type ColorProps<Variant extends ColorVariant> = {
   color?: SolixColor;
-  variant?: ColorVariant;
+  variant?: Variant;
   autoContrast?: boolean;
 };
 
-export type ColorPropKey = keyof ColorProps;
+export type ColorOption<Variant extends ColorVariant = ColorVariant> = {
+  readonly variants: readonly Variant[];
+  readonly default: NoInfer<Variant>;
+};
+
+export type ColorPropKey = keyof ColorProps<ColorVariant>;
 
 const colorProps = { color: true, variant: true, autoContrast: true } satisfies Record<
   ColorPropKey,
@@ -70,7 +74,7 @@ function classesOf(color: unknown): Omit<Resolved, "attributes"> {
 }
 
 export function resolveColor(
-  defaultVariant: ColorVariant,
+  option: ColorOption,
   props: Readonly<Record<string, unknown>>,
 ): Resolved {
   const resolved = classesOf(props.color);
@@ -79,14 +83,15 @@ export function resolveColor(
       props.autoContrast === true ? [...resolved.classes, autoContrastClass] : resolved.classes,
     properties: resolved.properties,
     attributes: {
-      [variantAttribute]: isColorVariant(props.variant) ? props.variant : defaultVariant,
+      [variantAttribute]:
+        option.variants.find((variant) => variant === props.variant) ?? option.default,
     },
   };
 }
 
 export function colorResolver(
-  defaultVariant: ColorVariant,
+  option: ColorOption,
   props: Readonly<Record<string, unknown>>,
 ): Resolver {
-  return { keys: colorPropKeys, resolved: createMemo(() => resolveColor(defaultVariant, props)) };
+  return { keys: colorPropKeys, resolved: createMemo(() => resolveColor(option, props)) };
 }

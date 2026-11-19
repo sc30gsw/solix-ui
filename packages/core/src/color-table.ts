@@ -239,7 +239,3 @@ export function colorValueOf(written: string): string | undefined {
   if (parsed?.kind === "palette") return `var(${shadeSource(parsed.palette, solid)})`;
   return parsed?.kind === "shade" ? parsed.value : undefined;
 }
-
-export function isColorVariant(name: unknown): name is ColorVariant {
-  return typeof name === "string" && Object.hasOwn(colorVariantTable, name);
-}

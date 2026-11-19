@@ -37,7 +37,7 @@ import {
   libraryLayers,
   stylePropClassPrefix,
 } from "#/src/style-prop-table.ts";
-import type { ColorProps, SolixColor } from "#/src/colors.ts";
+import { type ColorProps, resolveColor, type SolixColor } from "#/src/colors.ts";
 import type { createParts, PartsOptions } from "#/src/parts.ts";
 import { stylesheet } from "#/tests/built-library.ts";
 import { layersAround } from "#/tests/cascade-layers.ts";
@@ -485,12 +485,39 @@ type PropsTaken<Own, Options extends PartsOptions<string, Probe<Own>>> = Paramet
   typeof createParts<string, Record<"root", CompiledStyles>, Probe<Own>, Options>
 >[2];
 
+type Listed = "filled" | "light";
+type ListedOption = { readonly variants: readonly Listed[]; readonly default: "filled" };
+
 test("createParts refuses, by type, the props of a component that takes ColorProps unless its options give the color option", () => {
-  expectTypeOf<Probe<ColorProps>>().not.toExtend<PropsTaken<ColorProps, { keep: [] }>>();
-  expectTypeOf<Probe<ColorProps>>().toExtend<PropsTaken<ColorProps, { color: "filled" }>>();
+  expectTypeOf<Probe<ColorProps<Listed>>>().not.toExtend<
+    PropsTaken<ColorProps<Listed>, { keep: [] }>
+  >();
+  expectTypeOf<Probe<ColorProps<Listed>>>().toExtend<
+    PropsTaken<ColorProps<Listed>, { color: ListedOption }>
+  >();
   expectTypeOf<Probe<{ label?: string }>>().toExtend<
     PropsTaken<{ label?: string }, { keep: ["label"] }>
   >();
+});
+
+test("createParts refuses, by type, a component whose variant takes one its color option does not list, and lets a component without the color option have a variant of its own", () => {
+  expectTypeOf<Probe<ColorProps<Listed | "outline">>>().not.toExtend<
+    PropsTaken<ColorProps<Listed | "outline">, { color: ListedOption }>
+  >();
+  expectTypeOf<Probe<{ variant?: "pills" }>>().toExtend<
+    PropsTaken<{ variant?: "pills" }, { keep: ["variant"] }>
+  >();
+});
+
+test("a variant the component's color option does not list falls back to its default", () => {
+  const option: ListedOption = { variants: ["filled", "light"], default: "filled" };
+
+  expect(resolveColor(option, { variant: "light" }).attributes).toEqual({
+    [variantAttribute]: "light",
+  });
+  expect(resolveColor(option, { variant: "outline" }).attributes).toEqual({
+    [variantAttribute]: "filled",
+  });
 });
 
 test("SolixColor takes a palette, a palette's shade, a CSS colour keyword, a hex colour and a colour function, and refuses, by type, a typo, a CSS-wide keyword and a name in capitals", () => {

@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
-import type { ColorProps } from "#/src/colors.ts";
+import type { ColorOption, ColorProps } from "#/src/colors.ts";
 import { createParts, type PolymorphicProps } from "#/src/parts.ts";
 import { buttonVariables } from "#/src/Button.variables.ts";
 import type { ScaleValue, VariableProp } from "#/src/style-props.ts";
@@ -41,10 +41,15 @@ const styles = stylex.create({
   },
 });
 
+const colorOfButton = {
+  variants: ["default", "filled", "light", "outline", "subtle", "transparent"],
+  default: "filled",
+} as const satisfies ColorOption;
+
 export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<
   T,
   typeof styles,
-  ColorProps & {
+  ColorProps<(typeof colorOfButton.variants)[number]> & {
     size?: VariableProp<typeof buttonVariables, "button-height", ScaleValue<"control-height">>;
     radius?: VariableProp<typeof buttonVariables, "button-radius">;
   }
@@ -60,7 +65,7 @@ export function Button<T extends ValidComponent = "button">(props: ButtonProps<T
       "button-padding-x": "size",
       "button-radius": "radius",
     },
-    color: "filled",
+    color: colorOfButton,
   });
   const Root = dynamic(() => props.component ?? "button");
   return <Root {...root} />;

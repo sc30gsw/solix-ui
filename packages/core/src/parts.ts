@@ -1,8 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
-import type { ColorVariant } from "#/src/color-table.ts";
-import { type ColorPropKey, colorResolver } from "#/src/colors.ts";
+import { type ColorOption, type ColorPropKey, colorResolver } from "#/src/colors.ts";
 import { stableClass } from "#/src/stable-class.ts";
 import { stylePropKeys, type Variables } from "#/src/style-prop-table.ts";
 import {
@@ -97,7 +96,7 @@ type VariablesOption<Of, Props> = [Of] extends [Variables<infer Rows>]
 
 export type PartsOptions<Of, Props> = VariablesOption<Of, Props> & {
   readonly keep?: readonly (keyof Props & string)[];
-  readonly color?: ColorVariant;
+  readonly color?: ColorOption;
   readonly queries?: QueryContainer;
   readonly carried?: CarriedStyling;
 };
@@ -105,11 +104,11 @@ export type PartsOptions<Of, Props> = VariablesOption<Of, Props> & {
 type KeptBy<Options> =
   | (Options extends { keep: readonly (infer Kept)[] } ? Kept : never)
   | (Options extends { variables: infer Sources } ? Extract<Sources[keyof Sources], string> : never)
-  | (Options extends { color: ColorVariant } ? ColorPropKey : never);
+  | (Options extends { color: ColorOption } ? ColorPropKey : never);
 
-type TakenWith<Options, Props> = Options extends { color: ColorVariant }
-  ? Props
-  : Props & { readonly [Key in ColorPropKey]?: never };
+type TakenWith<Options, Props> = Options extends { color: ColorOption<infer Variant> }
+  ? Props & { readonly variant?: Variant }
+  : Props & { readonly [Key in Exclude<ColorPropKey, "variant">]?: never };
 
 type Parts<Styles, Props, KeptOffRoot extends keyof Props> = {
   root: RootProps<Props, KeptOffRoot>;
