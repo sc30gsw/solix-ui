@@ -146,7 +146,7 @@ export type Resolver = {
   readonly resolved: () => Resolved;
 };
 
-export type Given<Props> = (keyof Props & string) | ((props: Props) => VariableValue);
+export type VariableSource<Props> = (keyof Props & string) | ((props: Props) => VariableValue);
 
 function keyedEntries<Key extends string>(
   value: VariableValue,
@@ -285,7 +285,7 @@ function isVariableValue(value: unknown): value is VariableValue {
 
 export function resolveVariables(
   variables: Variables,
-  given: Readonly<Record<string, unknown>>,
+  values: Readonly<Record<string, unknown>>,
   queries: ContainerQueries | undefined,
   leaveOut: (row: VariableRow) => boolean,
 ): ResolvedVariables {
@@ -294,7 +294,7 @@ export function resolveVariables(
   const used: Used[] = [];
   for (const [name, row] of Object.entries(variables.rows)) {
     if (leaveOut(row)) continue;
-    const value = given[name];
+    const value = values[name];
     const keyed = isVariableValue(value) ? value : undefined;
     for (const [className, written, slot] of placed(name, row, keyed, queries)) {
       const value = cssValue(row, written);
@@ -309,7 +309,7 @@ export function resolveVariables(
 
 export function variablesResolver<Props extends Readonly<Record<string, unknown>>>(
   variables: Variables,
-  from: Readonly<Record<string, Given<Props>>>,
+  from: Readonly<Record<string, VariableSource<Props>>>,
   props: Props,
   queries: QueryContainer | undefined,
 ): Resolver {
@@ -317,9 +317,9 @@ export function variablesResolver<Props extends Readonly<Record<string, unknown>
     resolveVariables(
       variables,
       Object.fromEntries(
-        Object.entries(from).map(([name, given]) => [
+        Object.entries(from).map(([name, source]) => [
           name,
-          typeof given === "string" ? props[given] : given(props),
+          typeof source === "string" ? props[source] : source(props),
         ]),
       ),
       queries?.queries(),
@@ -328,7 +328,7 @@ export function variablesResolver<Props extends Readonly<Record<string, unknown>
   );
   queries?.report(() => resolved().used);
   return {
-    keys: Object.values(from).filter((given) => typeof given === "string"),
+    keys: Object.values(from).filter((source) => typeof source === "string"),
     resolved,
   };
 }

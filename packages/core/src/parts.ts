@@ -6,7 +6,7 @@ import { type ColorPropKey, colorResolver } from "#/src/colors.ts";
 import { stableClass } from "#/src/stable-class.ts";
 import { stylePropKeys, type Variables } from "#/src/style-prop-table.ts";
 import {
-  type Given,
+  type VariableSource,
   presentStyle,
   type QueryContainer,
   type Resolver,
@@ -92,7 +92,7 @@ export type CarriedStyling = {
 };
 
 type VariablesOption<Of, Props> = [Of] extends [Variables<infer Rows>]
-  ? { readonly variables: { readonly [Variable in keyof Rows & string]: Given<Props> } }
+  ? { readonly variables: { readonly [Variable in keyof Rows & string]: VariableSource<Props> } }
   : { readonly variables?: never };
 
 export type PartsOptions<Of, Props> = VariablesOption<Of, Props> & {
@@ -104,7 +104,7 @@ export type PartsOptions<Of, Props> = VariablesOption<Of, Props> & {
 
 type KeptBy<Options> =
   | (Options extends { keep: readonly (infer Kept)[] } ? Kept : never)
-  | (Options extends { variables: infer Given } ? Extract<Given[keyof Given], string> : never)
+  | (Options extends { variables: infer Sources } ? Extract<Sources[keyof Sources], string> : never)
   | (Options extends { color: ColorVariant } ? ColorPropKey : never);
 
 type Parts<Styles, Props, KeptOffRoot extends keyof Props> = {

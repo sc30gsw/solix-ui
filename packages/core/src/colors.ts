@@ -39,7 +39,7 @@ export const colorPropKeys = Object.keys(colorProps).filter(isColorPropKey);
 
 const defaultPalette = primaryAlias satisfies Palette;
 
-function given(color: unknown): Omit<Resolved, "attributes"> {
+function classesOf(color: unknown): Omit<Resolved, "attributes"> {
   const parsed = parseColor(color);
   if (parsed === undefined) {
     return { classes: [colorClass, paletteClass(defaultPalette)], properties: {} };
@@ -60,7 +60,7 @@ export function resolveColor(
   defaultVariant: ColorVariant,
   props: Readonly<Record<string, unknown>>,
 ): Resolved {
-  const resolved = given(props.color);
+  const resolved = classesOf(props.color);
   return {
     classes:
       props.autoContrast === true ? [...resolved.classes, autoContrastClass] : resolved.classes,

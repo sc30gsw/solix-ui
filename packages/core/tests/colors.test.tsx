@@ -26,6 +26,7 @@ import {
   contrastLuminance,
   luminanceWeights,
   variantAttribute,
+  writtenColor,
 } from "#/src/color-table.ts";
 import {
   colorLayer,
@@ -48,7 +49,7 @@ const named: Palette[] = [
   ),
 ];
 const variants = Object.keys(colorVariantTable);
-const slots = Object.keys(colorVariantTable.default.named);
+const slots = Object.keys(colorVariantTable.default.palette);
 
 type Placed = { selector: string; declarations: Record<string, string>; layers: string[] };
 
@@ -155,16 +156,16 @@ test.each(variants)(
   (variant) => {
     const forAPalette = ruleFor(`.${colorClass}[${variantAttribute}="${variant}"]`);
     const forAShade = ruleFor(`.${shadeClass}[${variantAttribute}="${variant}"]`);
-    const givenSlots = Object.entries(
-      colorVariantTable[variant as keyof typeof colorVariantTable].given,
+    const slotsReadingTheColor = Object.entries(
+      colorVariantTable[variant as keyof typeof colorVariantTable].color,
     )
-      .filter(([, value]) => value.startsWith("given"))
+      .filter(([, value]) => value === writtenColor || typeof value !== "string")
       .map(([slot]) => slot);
 
     expect(Object.keys(forAPalette)).toEqual(slots);
     expect(Object.keys(forAShade)).toEqual(slots);
     expect(
-      givenSlots.filter((slot) => !forAShade[slot]?.includes(`var(${colorProperty})`)),
+      slotsReadingTheColor.filter((slot) => !forAShade[slot]?.includes(`var(${colorProperty})`)),
     ).toEqual([]);
   },
 );

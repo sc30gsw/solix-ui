@@ -18,6 +18,8 @@ import {
   paletteToken,
   primaryPalette,
   primaryProperty,
+  type ColorSlotValue,
+  type Mix,
   type Shade,
   shadeClass,
   shadeProperty,
@@ -25,10 +27,10 @@ import {
   textWithoutAPalette,
   variantAttribute,
   type VariantRow,
+  writtenColor,
 } from "#/src/color-table.ts";
 
-const given = `var(${colorProperty})`;
-const contrast = `var(${shadeProperty(contrastShade)})`;
+const theColor = `var(${colorProperty})`;
 const solidShade = "6" satisfies Shade;
 const schemeRoots = ":root,[data-color-scheme]";
 
@@ -38,8 +40,8 @@ export function contrastingText(colour: string): string {
   return `color(from ${colour} srgb-linear ${channel} ${channel} ${channel})`;
 }
 
-function mixed(colour: string, percent: number, toward: string): string {
-  return `color-mix(in oklab, ${colour} ${percent}%, ${toward})`;
+function mixed([percent, toward]: Mix): string {
+  return `color-mix(in oklab, ${theColor} ${percent}%, ${slotValue(toward)})`;
 }
 
 function declared(declarations: readonly (readonly [string, string])[]): string {
@@ -50,16 +52,14 @@ function shadesFrom(source: (shade: Shade) => string): string {
   return declared(shades.map((shade) => [shadeProperty(shade), `var(${source(shade)})`]));
 }
 
-function slotValue(value: string): string {
+function slotValue(value: ColorSlotValue): string {
+  if (typeof value !== "string") return mixed(value);
   if (value === "transparent") return value;
-  if (value === "given") return given;
-  if (value === "given-hover") return mixed(given, 90, contrast);
-  const alpha = /^given\/(\d+)$/.exec(value)?.[1];
-  if (alpha !== undefined) return mixed(given, Number(alpha), "transparent");
+  if (value === writtenColor) return theColor;
   return value.startsWith("--") ? `var(${value})` : `var(${shadeProperty(value)})`;
 }
 
-function variantRule(selector: string, slots: VariantRow["named"] | VariantRow["given"]): string {
+function variantRule(selector: string, slots: VariantRow[keyof VariantRow]): string {
   return `${selector}{${declared(Object.entries(slots).map(([slot, value]) => [slot, slotValue(value)]))}}`;
 }
 
@@ -71,26 +71,26 @@ export function colorRules(): string {
         `.${paletteClass(palette)}{${shadesFrom((shade) => shadeSource(palette, shade))}}`,
     ),
     `.${shadeClass}{${declared([
-      [shadeProperty(solidShade), given],
-      ...Object.entries(tintShades).map(([shade, [percent, toward]]): [string, string] => [
+      [shadeProperty(solidShade), theColor],
+      ...Object.entries(tintShades).map(([shade, mix]): [string, string] => [
         shadeProperty(shade),
-        mixed(given, percent, toward),
+        mixed(mix),
       ]),
     ])}}`,
     `.${customColorClass}{${declared([
-      ...Object.entries(derivedShades).map(([shade, [percent, toward]]): [string, string] => [
+      ...Object.entries(derivedShades).map(([shade, mix]): [string, string] => [
         shadeProperty(shade),
-        mixed(given, percent, toward),
+        mixed(mix),
       ]),
       [shadeProperty(contrastShade), textWithoutAPalette],
     ])}}`,
     `.${autoContrastClass}{${declared([[shadeProperty(contrastShade), contrastingText(`var(${shadeProperty(solidShade)})`)]])}}`,
     `.${colorClass}{${declared(Object.entries(slotDefaults))}}`,
     ...variants.map(([variant, row]) =>
-      variantRule(`.${colorClass}[${variantAttribute}="${variant}"]`, row.named),
+      variantRule(`.${colorClass}[${variantAttribute}="${variant}"]`, row.palette),
     ),
     ...variants.map(([variant, row]) =>
-      variantRule(`.${shadeClass}[${variantAttribute}="${variant}"]`, row.given),
+      variantRule(`.${shadeClass}[${variantAttribute}="${variant}"]`, row.color),
     ),
   ];
   return rules.join("\n");
