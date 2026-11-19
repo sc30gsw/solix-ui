@@ -6,6 +6,7 @@ import {
   behaviourSdkHiddenRule,
   compileLibrarySource,
   componentLibraryLayout,
+  definedVariables,
   libraryStylesheet,
 } from "#/build-pipeline.mjs";
 
@@ -29,7 +30,7 @@ await writeFile(
   join(layout.outputDirectory, "styles.css"),
   libraryStylesheet(
     rules,
-    stylePropRules(),
+    stylePropRules(await definedVariables(layout.outputDirectory)),
     { colors: colorRules(), primary: primaryRule() },
     behaviourSdkHiddenRule(packageRoot),
   ),

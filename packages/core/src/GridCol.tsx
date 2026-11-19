@@ -4,6 +4,7 @@ import { Show } from "solid-js";
 import { useGrid } from "#/src/grid-context.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { createParts, type ElementProps } from "#/src/parts.ts";
+import { gridColVariables } from "#/src/GridCol.variables.ts";
 import { variableProperty } from "#/src/style-prop-table.ts";
 import { eachValue, type StyleProp, type VariableProp, withBase } from "#/src/style-props.ts";
 
@@ -37,9 +38,13 @@ export type GridColProps = ElementProps<
   typeof styles,
   {
     span?: StyleProp<Span>;
-    order?: VariableProp<"col-order", number>;
+    order?: VariableProp<typeof gridColVariables, "col-order", number>;
     offset?: StyleProp<number>;
-    align?: VariableProp<"col-align-self", JSX.CSSProperties["align-self"]>;
+    align?: VariableProp<
+      typeof gridColVariables,
+      "col-align-self",
+      JSX.CSSProperties["align-self"]
+    >;
   }
 >;
 
@@ -58,7 +63,7 @@ export function GridCol(props: GridColProps) {
     if (!given) return undefined;
     return `calc((100% + ${gap}) * ${share(given, grid.columns())} - ${gap})`;
   };
-  const { root } = createParts("GridCol", styles, props, {
+  const { root } = createParts(gridColVariables, styles, props, {
     variables: {
       "col-align-self": "align",
       "col-flex-basis": (given) => eachValue<Span>(span(given), basis),

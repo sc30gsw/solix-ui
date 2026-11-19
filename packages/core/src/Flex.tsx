@@ -1,6 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
 import { createParts, type PolymorphicProps } from "#/src/parts.ts";
+import { flexVariables } from "#/src/Flex.variables.ts";
 import type { VariableProp } from "#/src/style-props.ts";
 
 const styles = stylex.create({
@@ -26,20 +27,28 @@ export type FlexProps<T extends ValidComponent = "div"> = PolymorphicProps<
   T,
   typeof styles,
   {
-    gap?: VariableProp<"flex-gap">;
-    rowGap?: VariableProp<"flex-row-gap">;
-    columnGap?: VariableProp<"flex-column-gap">;
-    align?: VariableProp<"flex-align", JSX.CSSProperties["align-items"]>;
-    justify?: VariableProp<"flex-justify", JSX.CSSProperties["justify-content"]>;
-    wrap?: VariableProp<"flex-wrap", JSX.CSSProperties["flex-wrap"]>;
-    direction?: VariableProp<"flex-direction", JSX.CSSProperties["flex-direction"]>;
+    gap?: VariableProp<typeof flexVariables, "flex-gap">;
+    rowGap?: VariableProp<typeof flexVariables, "flex-row-gap">;
+    columnGap?: VariableProp<typeof flexVariables, "flex-column-gap">;
+    align?: VariableProp<typeof flexVariables, "flex-align", JSX.CSSProperties["align-items"]>;
+    justify?: VariableProp<
+      typeof flexVariables,
+      "flex-justify",
+      JSX.CSSProperties["justify-content"]
+    >;
+    wrap?: VariableProp<typeof flexVariables, "flex-wrap", JSX.CSSProperties["flex-wrap"]>;
+    direction?: VariableProp<
+      typeof flexVariables,
+      "flex-direction",
+      JSX.CSSProperties["flex-direction"]
+    >;
   }
 >;
 
 export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>): JSX.Element;
 export function Flex(props: FlexProps): JSX.Element;
 export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>) {
-  const { root } = createParts("Flex", styles, props, {
+  const { root } = createParts(flexVariables, styles, props, {
     variables: {
       "flex-align": "align",
       "flex-column-gap": "columnGap",

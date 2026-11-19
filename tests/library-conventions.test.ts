@@ -1,18 +1,14 @@
 import { existsSync, globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
-import {
-  stylePropKeys,
-  stylePropTable,
-  variableGroups,
-  variableNames,
-  variableRow,
-} from "#/packages/core/src/style-prop-table.ts";
+import { VARIABLES_MODULE } from "#/packages/core/build-pipeline.mjs";
+import { stylePropKeys, stylePropTable } from "#/packages/core/src/style-prop-table.ts";
 import {
   builtComponents,
   carriedComponents,
   compiledClassesOf,
   scaleOfThemeKey,
+  variableRows,
 } from "#/packages/core/tests/built-library.ts";
 import { allowedRuntimeDependencies, loads } from "#/scripts/runtime-dependencies.ts";
 import { fileNamedBy } from "#/scripts/subpath.ts";
@@ -26,6 +22,7 @@ import {
   findAncestor,
   firstLine,
   isDomLibraryFile,
+  isTypeOnlyImport,
   memberDeclarations,
   nameOf,
   moduleSpecifierOf,
@@ -51,6 +48,7 @@ const containerPart = "container";
 const variablesOption = "variables";
 const keepOption = "keep";
 const partsHelperFile = "packages/core/src/parts.ts";
+const variablesDefiner = "defineVariables";
 const partsModule = "parts.ts";
 const libraryEntry = /(?:^|\/)src\/index\.ts$/;
 const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
@@ -152,6 +150,44 @@ function callsOf(node: ts.Node, callee: string): ts.CallExpression[] {
   return descendants(node).filter(
     (found): found is ts.CallExpression =>
       ts.isCallExpression(found) && found.expression.getText() === callee,
+  );
+}
+
+function variablesFileOf(name: string): string {
+  return `${name}.variables.ts`;
+}
+
+function definedVariablesOf(declaration: ts.Node | undefined): string | undefined {
+  if (
+    !declaration ||
+    !ts.isVariableDeclaration(declaration) ||
+    !isConst(declaration) ||
+    !declaration.initializer ||
+    !ts.isCallExpression(declaration.initializer)
+  ) {
+    return undefined;
+  }
+  const called = calledDeclaration(librarySources, declaration.initializer);
+  const [component, ...others] = declaration.initializer.arguments;
+  return called &&
+    ts.isFunctionDeclaration(called) &&
+    called.name?.text === variablesDefiner &&
+    relativePath(fileOf(called)) === stylePropTableFile &&
+    component &&
+    ts.isStringLiteral(component) &&
+    others.length === 1
+    ? component.text
+    : undefined;
+}
+
+function takesItsVariables(argument: ts.Expression, name: string, fn: ts.Node): boolean {
+  const ownVariables = join(dirname(fileOf(fn)), variablesFileOf(name));
+  if (!existsSync(ownVariables)) return ts.isStringLiteral(argument) && argument.text === name;
+  const declaration = symbolOf(librarySources, argument)?.declarations?.[0]?.resolve();
+  return (
+    declaration !== undefined &&
+    fileOf(declaration) === ownVariables &&
+    definedVariablesOf(declaration) === name
   );
 }
 
@@ -616,13 +652,12 @@ function problemsWith({ name, file, source }: Component): string[] {
     !bound.includes(rootBinding) ||
     bound.some((binding) => binding !== rootBinding && binding !== partBinding) ||
     !componentName ||
-    !ts.isStringLiteral(componentName) ||
-    componentName.text !== name ||
+    !takesItsVariables(componentName, name, fn) ||
     compiled?.getText() !== stylesVariable ||
     consumer?.getText() !== "props"
   ) {
     report(
-      `call ${partsHelper} once, in a statement of the component's own body, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}("${name}", ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}, or as \`const { ${rootBinding}, ${partBinding} } = behaviour.${behaviourBinder}(${partsHelper}(...), { ... })\` with a behaviour from ${seams.join(" or ")}, so each bound part takes its slot there and none inline in JSX.`,
+      `call ${partsHelper} once, in a statement of the component's own body, as \`const { ${rootBinding}, ${partBinding} } = ${partsHelper}(<"${name}", or the variables ${variablesDefiner}("${name}", ...) gives in ${variablesFileOf(name)} when that file exists>, ${stylesVariable}, props, ...keptOffRoot)\` from ${partsHelperFile}, or as \`const { ${rootBinding}, ${partBinding} } = behaviour.${behaviourBinder}(${partsHelper}(...), { ... })\` with a behaviour from ${seams.join(" or ")}, so each bound part takes its slot there and none inline in JSX.`,
     );
     return problems;
   }
@@ -878,13 +913,16 @@ test("only a Component.tsx calls createParts, so a module that renders a styled 
   expect(violations).toEqual([]);
 });
 
-test("every other source file is the barrel, a StyleX definition, or a kebab-case module, with JSX or without", () => {
+test("every other source file is the barrel, a component's variables, a StyleX definition, or a kebab-case module, with JSX or without", () => {
   const violations = libraries.flatMap(({ source }) =>
     readdirSync(source)
-      .filter((entry) => !componentFile.test(entry) && !helperFile.test(entry))
+      .filter(
+        (entry) =>
+          !componentFile.test(entry) && !helperFile.test(entry) && !VARIABLES_MODULE.test(entry),
+      )
       .map(
         (entry) =>
-          `${relativePath(join(source, entry))}: name it Component.tsx for a component, kebab-case.ts or kebab-case.tsx for a module, or name.stylex.ts for StyleX variables.`,
+          `${relativePath(join(source, entry))}: name it Component.tsx for a component, Component.variables.ts for its variables, kebab-case.ts or kebab-case.tsx for a module, or name.stylex.ts for StyleX variables.`,
       ),
   );
 
@@ -953,7 +991,7 @@ test("the barrel exports every component and its props type once, and by name wh
 
 test("every public token is named --solix-*, is used by a component or the scale of a style prop, a variable or a theme key, and is defined once", () => {
   const scalesOfStyleProps = [
-    ...[...Object.values(stylePropTable), ...variableNames.map(variableRow)].flatMap((row) =>
+    ...[...Object.values(stylePropTable), ...variableRows.map(({ row }) => row)].flatMap((row) =>
       "scale" in row && row.scale !== undefined ? [row.scale] : [],
     ),
     ...Object.values(scaleOfThemeKey),
@@ -1119,9 +1157,49 @@ test("no array or object in a test file lists the components by hand, unless the
   expect(violations).toEqual([]);
 });
 
-test("each group of the variable table is named for a component, so createParts takes it by that component's name", () => {
-  const names = components.map(({ name }) => name);
+test("each Component.variables.ts sits beside its Component.tsx, imports at run time only the style-prop table, and exports one constant, the variables that defineVariables gives for that component", () => {
+  const variablesFiles = libraries.flatMap(({ source }) =>
+    readdirSync(source)
+      .filter((entry) => VARIABLES_MODULE.test(entry))
+      .map((entry) => join(source, entry)),
+  );
+  const violations = variablesFiles.flatMap((file) => {
+    const name = basename(file, ".variables.ts");
+    const source = typedSource(file);
+    const { functions, types, others } = exportsOf(source);
+    const runTimeImports = source.statements.filter((statement) => {
+      const specifier = moduleSpecifierOf(statement);
+      return (
+        ts.isImportDeclaration(statement) &&
+        !isTypeOnlyImport(statement.importClause) &&
+        (!specifier ||
+          !ts.isStringLiteralLikeNode(specifier) ||
+          fileNamedBy(file, specifier.text) !== join(repositoryRoot, stylePropTableFile))
+      );
+    });
+    const defined = source.statements.flatMap((statement) =>
+      ts.isVariableStatement(statement)
+        ? statement.declarationList.declarations.map(definedVariablesOf)
+        : [],
+    );
+    return [
+      ...(components.some((component) => component.file === join(dirname(file), `${name}.tsx`))
+        ? []
+        : [`name it for a component beside it, as ${name}.tsx is no component`]),
+      ...(defined.length === 1 &&
+      defined[0] === name &&
+      functions.length + types.length + others.length === 1
+        ? []
+        : [
+            `export one constant, \`${variablesDefiner}("${name}", { ... })\` from ${stylePropTableFile}, and nothing else`,
+          ]),
+      ...runTimeImports.map(
+        (statement) =>
+          `import only ${stylePropTableFile} at run time, so build.mjs loads this module in plain Node: ${firstLine(statement)}`,
+      ),
+    ].map((problem) => `${relativePath(file)}: ${problem}.`);
+  });
 
-  expect(variableGroups.length).toBeGreaterThan(0);
-  expect(variableGroups.filter((group) => !names.includes(group))).toEqual([]);
+  expect(variablesFiles.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
 });

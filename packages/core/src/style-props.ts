@@ -22,12 +22,9 @@ import {
   stylePropNames,
   stylePropTable,
   variableClass,
-  type VariableGroup,
-  type VariableName,
-  variablesOf,
   variableProperty,
-  variableRow,
-  type VariableRowOf,
+  type VariableRow,
+  type Variables,
   visibilityClass,
   type VisibilityPropName,
   type VisibilityValue,
@@ -89,25 +86,30 @@ export type ContainerProp<V> =
 
 type Keyed<V> = V | Absent | Readonly<Record<string, V | Absent>>;
 
-type Row<Name extends VariableName> = VariableRowOf<Name>;
+type DefaultValue<Row extends VariableRow> = Row extends {
+  kind: "length";
+  scale: infer Of extends Scale;
+}
+  ? ScaleValue<Of>
+  : Row extends { kind: "length" }
+    ? number | (string & {})
+    : string | number;
 
-type DefaultValue<Name extends VariableName> =
-  Row<Name> extends { kind: "length"; scale: infer Of extends Scale }
-    ? ScaleValue<Of>
-    : Row<Name> extends { kind: "length" }
-      ? number | (string & {})
-      : string | number;
-
-/** A prop that sets the variable `Name`, keyed by breakpoint when its row is responsive. */
+/**
+ * A prop that sets the variable `Name` of a component's `Of`, keyed by breakpoint when its row is
+ * responsive.
+ */
 export type VariableProp<
-  Name extends VariableName,
-  Value = DefaultValue<Name>,
-> = Row<Name>["responsive"] extends true ? StyleProp<Value> : Value | Absent;
+  Of extends Variables,
+  Name extends keyof Of["rows"],
+  Value = DefaultValue<Of["rows"][Name]>,
+> = Of["rows"][Name]["responsive"] extends true ? StyleProp<Value> : Value | Absent;
 
-/** A prop that sets the responsive variable `Name`, keyed by container width. */
+/** A prop that sets the responsive variable `Name` of a component's `Of`, keyed by container width. */
 export type ContainerVariableProp<
-  Name extends VariableName,
-  Value = DefaultValue<Name>,
+  Of extends Variables,
+  Name extends keyof Of["rows"],
+  Value = DefaultValue<Of["rows"][Name]>,
 > = ContainerProp<Value>;
 
 export type VariableValue = Keyed<string | number>;
@@ -117,7 +119,7 @@ export type ContainerQueries = {
   readonly widths: readonly (readonly [key: string, width: string])[];
 };
 
-type Used = readonly [name: VariableName, slot: number];
+type Used = readonly [name: string, slot: number];
 
 export type QueryContainer = {
   readonly queries: () => ContainerQueries | undefined;
@@ -235,11 +237,12 @@ export function withBase<V extends string | number>(value: Keyed<V>, base: V): K
 }
 
 function placed(
-  name: VariableName,
+  name: string,
+  row: VariableRow,
   value: VariableValue,
   queries: ContainerQueries | undefined,
 ): [className: string, written: string | number, slot: number | undefined][] {
-  if (!variableRow(name).responsive) {
+  if (!row.responsive) {
     return keyedEntries(value, []).map(([, written]) => [
       variableClass(name, baseKey),
       written,
@@ -261,19 +264,27 @@ function placed(
   });
 }
 
+function isVariableValue(value: unknown): value is VariableValue {
+  return (
+    value === undefined || value === null || ["string", "number", "object"].includes(typeof value)
+  );
+}
+
 export function resolveVariables(
-  group: VariableGroup,
-  given: Readonly<Partial<Record<VariableName, VariableValue>>>,
+  variables: Variables,
+  given: Readonly<Record<string, unknown>>,
   queries: ContainerQueries | undefined,
-  leaveOut: (name: VariableName) => boolean,
+  leaveOut: (row: VariableRow) => boolean,
 ): ResolvedVariables {
   const classes: string[] = [];
   const properties: Record<`--${string}`, string> = {};
   const used: Used[] = [];
-  for (const name of variablesOf(group)) {
-    if (leaveOut(name)) continue;
-    for (const [className, written, slot] of placed(name, given[name], queries)) {
-      const value = cssValue(variableRow(name), written);
+  for (const [name, row] of Object.entries(variables.rows)) {
+    if (leaveOut(row)) continue;
+    const value = given[name];
+    const keyed = isVariableValue(value) ? value : undefined;
+    for (const [className, written, slot] of placed(name, row, keyed, queries)) {
+      const value = cssValue(row, written);
       if (value === undefined) continue;
       classes.push(className);
       properties[`--${className}`] = value;
