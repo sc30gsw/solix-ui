@@ -30,7 +30,7 @@ const publicExports: Rule = (library) => [
       others.length === 0
       ? []
       : [
-          `${at(module)}: export exactly one function named for the file, whose name in kebab-case, with an acronym as one word and a word that starts with a digit apart or joined, is ${basename(module.file, ".ts")}, and types (found: ${[...functions, ...others].join(", ") || "nothing"}). Give a second function its own file, or name the file internal-<topic>.ts if no consumer should import it.`,
+          `${at(module)}: export exactly one function named for the file, whose name in kebab-case, with an acronym as one word and a digit after a lowercase letter starting a word, is ${basename(module.file, ".ts")}, and types (found: ${[...functions, ...others].join(", ") || "nothing"}). Give a second function its own file, or name the file internal-<topic>.ts if no consumer should import it.`,
         ];
   }),
   ...publicModules(library).flatMap((module) => {

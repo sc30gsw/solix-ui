@@ -39,6 +39,8 @@ export type LibraryRegistration = {
   errorBoundaries: readonly Required<Home>[];
 };
 
+export const libraryList = "registeredLibraries in tests/support/workspace.ts";
+
 export const registeredLibraries: Readonly<Record<string, LibraryRegistration>> = {
   "packages/primitives": {
     kind: "primitives",
@@ -101,7 +103,7 @@ function thePrimitivesPackageName(): string {
   const name = found?.manifest.name;
   if (!name || others.length > 0) {
     throw new Error(
-      `tests/support/workspace.ts: list exactly one library of the primitives kind, with a name, in registeredLibraries.`,
+      `${libraryList}: list exactly one library of the primitives kind, with a name.`,
     );
   }
   return name;

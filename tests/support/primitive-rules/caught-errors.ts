@@ -6,9 +6,7 @@ import {
   type Library,
   type PrimitiveRule,
 } from "#/tests/support/primitive-rules/library.ts";
-import { repositoryRoot } from "#/tests/support/workspace.ts";
-
-const boundaryList = "registeredLibraries in tests/support/workspace.ts";
+import { libraryList, repositoryRoot } from "#/tests/support/workspace.ts";
 
 function caughtErrors(library: Library): string[] {
   const catches = library.modules.flatMap((module) =>
@@ -21,13 +19,13 @@ function caughtErrors(library: Library): string[] {
       .filter(({ clause }) => !library.errorBoundaries.some((home) => isInHome(clause, home)))
       .map(
         ({ module, clause }) =>
-          `${at(module, clause)}: ${firstLine(clause)}: nothing in this library catches an error but the error boundaries ${boundaryList} names for it. Let the error reach the caller.`,
+          `${at(module, clause)}: ${firstLine(clause)}: nothing in this library catches an error but the error boundaries ${libraryList} names for it. Let the error reach the caller.`,
       ),
     ...library.errorBoundaries
       .filter((home) => !catches.some(({ clause }) => isInHome(clause, home)))
       .map(
         (home) =>
-          `${relative(repositoryRoot, join(library.source, home.file))}: ${boundaryList} names ${home.fn} here as an error boundary, but no catch is there. Name the function that catches, or remove the entry.`,
+          `${relative(repositoryRoot, join(library.source, home.file))}: ${libraryList} names ${home.fn} here as an error boundary, but no catch is there. Name the function that catches, or remove the entry.`,
       ),
   ];
 }

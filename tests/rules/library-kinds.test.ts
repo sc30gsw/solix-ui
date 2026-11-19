@@ -4,6 +4,7 @@ import {
   libraryHome,
   libraryKindNames,
   libraryKinds,
+  libraryList,
   libraryNames,
   libraryPackages,
   listedButAbsent,
@@ -11,7 +12,6 @@ import {
   unlistedLibraries,
 } from "#/tests/support/workspace.ts";
 
-const libraryList = "registeredLibraries in tests/support/workspace.ts";
 const ownLibraryLink = "workspace:*";
 
 test(`every package in ${libraryHome} is a library that ${libraryList} lists with its kind, and the list names no other directory`, () => {

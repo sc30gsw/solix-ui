@@ -21,8 +21,12 @@ export function joinPath(parent: string | undefined, key: string): string {
   return parent === undefined ? key : `${parent}.${key}`;
 }
 
+function isWholeUpTo(value: number, most: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= most;
+}
+
 export function isListIndex(index: number): boolean {
-  return Number.isSafeInteger(index) && index >= 0;
+  return isWholeUpTo(index, longestList - 1);
 }
 
 export function isIndexSegment(segment: string): boolean {
@@ -87,7 +91,7 @@ function copyWith(target: object, key: string, value: unknown): object {
 }
 
 function isListLength(value: unknown): boolean {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= longestList;
+  return typeof value === "number" && isWholeUpTo(value, longestList);
 }
 
 function withEntry(target: object, key: string, value: unknown): object {

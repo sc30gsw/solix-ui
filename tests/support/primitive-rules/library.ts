@@ -147,11 +147,11 @@ export function isPrimitive(file: string): boolean {
 
 export function isNamedFor(file: string, name: string): boolean {
   const words = name
+    .replace(/([a-z])([0-9])/g, "$1-$2")
     .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
     .toLowerCase();
-  const withDigitWords = words.replace(/([a-z])([0-9])/g, "$1-$2");
-  return [words, withDigitWords].includes(basename(file, ".ts"));
+  return words === basename(file, ".ts");
 }
 
 export function publicModules(library: Library): Module[] {
