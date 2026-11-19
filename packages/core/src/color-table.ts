@@ -1,5 +1,4 @@
 import { cssColorFunctions, isCssColorKeyword } from "#/src/css-colors.ts";
-import type { primaryColors } from "#/src/primary-colors.stylex.ts";
 import type { variantColors } from "#/src/variant-colors.stylex.ts";
 
 export const palettes = [
@@ -20,16 +19,17 @@ export const palettes = [
 
 export const shades = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "contrast"] as const;
 
-export type OwnPalette = (typeof palettes)[number];
+export type TokenPalette = (typeof palettes)[number];
 export type Shade = (typeof shades)[number];
 
-export const primaryPalette = "blue" satisfies OwnPalette;
-export const primaryAlias = "primary";
+export const primaryName = "primary";
+export const primaryPalette = "blue" satisfies TokenPalette;
+
+export type OwnPalette = TokenPalette | typeof primaryName;
 
 export const paletteAliases = {
-  [primaryAlias]: primaryPalette,
   orange: "yellow",
-} as const satisfies Record<string, OwnPalette>;
+} as const satisfies Record<string, TokenPalette>;
 
 export type Palette = OwnPalette | keyof typeof paletteAliases;
 
@@ -53,7 +53,6 @@ export const slotDefaults = {
 } as const;
 
 type ColourToken = `--solix-color-${string}`;
-type PrimaryAlias = Extract<keyof typeof primaryColors, `--${string}`>;
 type VariantSlot = Extract<keyof typeof variantColors, `--${string}`>;
 export const writtenColor = "color";
 
@@ -171,17 +170,14 @@ export function paletteToken(palette: OwnPalette, shade: Shade): ColourToken {
   return `--solix-color-${palette}-${shade}`;
 }
 
-export function primaryProperty(shade: Shade): PrimaryAlias {
-  return `--solix-${primaryAlias}-${shade}`;
-}
-
 export function shadeProperty(shade: string): string {
   return `--${colorClassPrefix}-shade-${shade}`;
 }
 
 export function isPalette(name: unknown): name is Palette {
   return (
-    typeof name === "string" && (palettes.some((palette) => palette === name) || isAlias(name))
+    typeof name === "string" &&
+    (palettes.some((palette) => palette === name) || name === primaryName || isAlias(name))
   );
 }
 
@@ -195,6 +191,7 @@ function isAlias(name: string): name is keyof typeof paletteAliases {
 
 export const namedPalettes: readonly Palette[] = [
   ...palettes,
+  primaryName,
   ...Object.keys(paletteAliases).filter(isAlias),
 ];
 
@@ -202,10 +199,8 @@ export function ownPaletteOf(palette: Palette): OwnPalette {
   return isAlias(palette) ? paletteAliases[palette] : palette;
 }
 
-export function shadeSource(palette: Palette, shade: Shade): string {
-  return palette === primaryAlias
-    ? primaryProperty(shade)
-    : paletteToken(ownPaletteOf(palette), shade);
+export function shadeSource(palette: Palette, shade: Shade): ColourToken {
+  return paletteToken(ownPaletteOf(palette), shade);
 }
 
 const solid = "6" satisfies Shade;

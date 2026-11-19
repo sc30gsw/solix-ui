@@ -7,7 +7,7 @@ import {
   type Palette,
   paletteClass,
   parseColor,
-  primaryAlias,
+  primaryName,
   type Shade,
   shadeClass,
   variantAttribute,
@@ -48,7 +48,7 @@ function isColorPropKey(name: PropertyKey): name is ColorPropKey {
 
 export const colorPropKeys = Object.keys(colorProps).filter(isColorPropKey);
 
-const defaultPalette = primaryAlias satisfies Palette;
+const defaultPalette = primaryName satisfies Palette;
 
 function classesOf(color: unknown): Omit<Resolved, "attributes"> {
   const parsed = parseColor(color);

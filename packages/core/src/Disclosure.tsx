@@ -8,11 +8,11 @@ const styles = stylex.create({
   root: {
     [disclosureState.summaryBackground]: {
       default: tokens["--solix-color-surface"],
-      "[open]": primaryColors["--solix-primary-6"],
+      "[open]": primaryColors["--solix-color-primary-6"],
     },
     [disclosureState.summaryColor]: {
       default: tokens["--solix-color-text"],
-      "[open]": primaryColors["--solix-primary-contrast"],
+      "[open]": primaryColors["--solix-color-primary-contrast"],
     },
   },
   summary: {
@@ -23,7 +23,7 @@ const styles = stylex.create({
     paddingInline: "1rem",
   },
   content: {
-    borderInlineStartColor: primaryColors["--solix-primary-6"],
+    borderInlineStartColor: primaryColors["--solix-color-primary-6"],
     borderInlineStartStyle: "solid",
     borderInlineStartWidth: "4px",
     padding: "0.5rem",

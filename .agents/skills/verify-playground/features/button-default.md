@@ -21,4 +21,4 @@ Preconditions:
 
 ## Gotchas
 
-- The primary token is `--solix-primary-6`, its contrast `--solix-primary-contrast` and the control height `--solix-control-height-sm`, in `packages/core/src/tokens.stylex.ts`. `drive.mjs` reads it from there, so a change to its value needs no change to `drive.mjs` or to this file.
+- The primary token is `--solix-color-primary-6`, its contrast `--solix-color-primary-contrast` and the control height `--solix-control-height-sm`, in `packages/core/src/tokens.stylex.ts`. `drive.mjs` reads it from there, so a change to its value needs no change to `drive.mjs` or to this file.

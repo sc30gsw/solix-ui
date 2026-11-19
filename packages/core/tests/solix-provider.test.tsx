@@ -10,8 +10,7 @@ import {
   paletteAliases,
   palettes,
   paletteToken,
-  primaryAlias,
-  primaryProperty,
+  primaryName,
   shades,
 } from "#/src/color-table.ts";
 import { colorSchemeAttribute } from "#/src/color-schemes.ts";
@@ -235,7 +234,7 @@ test("a theme's primaryColor writes every shade of the primary's alias from that
             }),
           ),
         );
-        if (!isPalette(primaryColor) || primaryColor === primaryAlias) {
+        if (!isPalette(primaryColor) || primaryColor === primaryName) {
           expect(css).toBeUndefined();
           return;
         }
@@ -254,7 +253,7 @@ test("a theme's primaryColor writes every shade of the primary's alias from that
             `:where(:scope,[${colorSchemeAttribute}])`,
             shades.map(
               (shade) =>
-                `${primaryProperty(shade)}:var(${paletteToken(ownPaletteOf(primaryColor), shade)})`,
+                `${paletteToken(primaryName, shade)}:var(${paletteToken(ownPaletteOf(primaryColor), shade)})`,
             ),
           ],
         ]);

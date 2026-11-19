@@ -14,8 +14,8 @@ import {
   namedPalettes,
   paletteClass,
   paletteToken,
+  primaryName,
   primaryPalette,
-  primaryProperty,
   type ColorSlotValue,
   type Mix,
   type Shade,
@@ -96,6 +96,9 @@ export function colorRules(): string {
 
 export function primaryRule(): string {
   return `${schemeRoots}{${declared(
-    shades.map((shade) => [primaryProperty(shade), `var(${paletteToken(primaryPalette, shade)})`]),
+    shades.map((shade) => [
+      paletteToken(primaryName, shade),
+      `var(${paletteToken(primaryPalette, shade)})`,
+    ]),
   )}}`;
 }

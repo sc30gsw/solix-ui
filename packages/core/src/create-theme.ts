@@ -1,8 +1,8 @@
 import {
   isPalette,
   type Palette,
-  primaryAlias,
-  primaryProperty,
+  paletteToken,
+  primaryName,
   shades,
   shadeSource,
 } from "#/src/color-table.ts";
@@ -23,7 +23,7 @@ type ThemeKey = keyof typeof scaleOfThemeKey;
 
 export type SolixTheme = {
   [Key in ThemeKey]?: { [Size in ScaleKey<(typeof scaleOfThemeKey)[Key]>]?: string | null };
-} & { primaryColor?: Exclude<Palette, typeof primaryAlias> };
+} & { primaryColor?: Exclude<Palette, typeof primaryName> };
 
 const characterThatLeavesItsPlace = /[<!\\]|\/\*/;
 
@@ -62,15 +62,15 @@ function isThemeKey(key: string): key is ThemeKey {
 
 function primaryDeclarationsOf(primaryColor: unknown): string[] {
   if (primaryColor === undefined) return [];
-  if (!isPalette(primaryColor) || primaryColor === primaryAlias) {
+  if (!isPalette(primaryColor) || primaryColor === primaryName) {
     warnInTheBrowserDuringDevelopment(
       () =>
-        `theme.primaryColor=${JSON.stringify(primaryColor)} is not a palette other than the ${primaryAlias}, so the theme leaves the ${primaryAlias} as it was.`,
+        `theme.primaryColor=${JSON.stringify(primaryColor)} is not a palette other than the ${primaryName}, so the theme leaves the ${primaryName} as it was.`,
     );
     return [];
   }
   return shades.map(
-    (shade) => `${primaryProperty(shade)}:var(${shadeSource(primaryColor, shade)});`,
+    (shade) => `${paletteToken(primaryName, shade)}:var(${shadeSource(primaryColor, shade)});`,
   );
 }
 

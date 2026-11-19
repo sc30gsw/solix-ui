@@ -15,9 +15,8 @@ import {
   paletteClass,
   palettes,
   paletteToken,
-  primaryAlias,
+  primaryName,
   primaryPalette,
-  primaryProperty,
   shadeClass,
   shadeProperty,
   shades,
@@ -116,7 +115,7 @@ test("every rule of the colours layer, the first sub-layer of the library's, sel
 
 test("the primary's alias declares exactly the shades shadeSource names for the primary, in the order of the shades", () => {
   expect(Object.keys(tokenValues(primaryColorsFile))).toEqual(
-    shades.map((shade) => shadeSource(primaryAlias, shade)),
+    shades.map((shade) => shadeSource(primaryName, shade)),
   );
 });
 
@@ -133,14 +132,14 @@ test("the primary's alias is written once, on :root and on every element with a 
   const aliases = rules.filter(
     ({ declarations, layers }) =>
       layers.includes(colorSchemeLayer) &&
-      Object.keys(declarations).some((property) => property === primaryProperty("6")),
+      Object.keys(declarations).some((property) => property === paletteToken(primaryName, "6")),
   );
 
   expect(aliases.map(({ selector }) => selector)).toEqual([":root,[data-color-scheme]"]);
   expect(aliases[0]?.declarations).toEqual(
     Object.fromEntries(
       shades.map((shade) => [
-        primaryProperty(shade),
+        paletteToken(primaryName, shade),
         `var(${paletteToken(primaryPalette, shade)})`,
       ]),
     ),
@@ -187,7 +186,7 @@ test.each(named)(
 
 test("with no color and no variant the root takes the primary palette and the component's default variant, and writes no custom property", () => {
   expect(classesOf(rootOf({}))).toEqual(
-    expect.arrayContaining([colorClass, paletteClass(primaryAlias)]),
+    expect.arrayContaining([colorClass, paletteClass(primaryName)]),
   );
   expect(styleOf({})).toEqual({});
   expect(valuesOf(rootOf({}), variantAttribute)).toEqual(["filled"]);
@@ -239,7 +238,7 @@ test("any other CSS colour writes one custom property, itself, with the shade an
           );
           expect(styleOf(props)).toEqual({ [colorProperty]: color });
         } else {
-          expect(classes).toEqual(expect.arrayContaining([colorClass, paletteClass(primaryAlias)]));
+          expect(classes).toEqual(expect.arrayContaining([colorClass, paletteClass(primaryName)]));
           expect(styleOf(props)).toEqual({});
         }
       },
@@ -250,7 +249,7 @@ test("any other CSS colour writes one custom property, itself, with the shade an
 test("on the server a color that is no colour falls back to the primary palette without a warning, which only the browser's development build gives", () => {
   const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
   try {
-    expect(classesOf(rootOf({ color: "red-6" }))).toContain(paletteClass(primaryAlias));
+    expect(classesOf(rootOf({ color: "red-6" }))).toContain(paletteClass(primaryName));
     expect(warn).not.toHaveBeenCalled();
   } finally {
     warn.mockRestore();
@@ -269,7 +268,9 @@ test("the colour style props resolve a palette, its shade and the primary the wa
   const styleOfBox = (props: Record<string, unknown>) =>
     Object.fromEntries(declarationsIn(valuesOf(rootElementOf(render("Box", props)), "style")[0]));
 
-  expect(styleOfBox({ c: "primary" })).toEqual({ "--sx-c": `var(${primaryProperty("6")})` });
+  expect(styleOfBox({ c: "primary" })).toEqual({
+    "--sx-c": `var(${paletteToken(primaryName, "6")})`,
+  });
   expect(styleOfBox({ bg: "red.3" })).toEqual({ "--sx-bg": `var(${paletteToken("red", "3")})` });
   expect(styleOfBox({ c: "red-6" })).toEqual({ "--sx-c": `var(${paletteToken("red", "6")})` });
 });
@@ -294,7 +295,7 @@ const slotOf = {
 const aliasDeclarations =
   rules.find(
     ({ layers, declarations }) =>
-      layers.includes(colorSchemeLayer) && primaryProperty("6") in declarations,
+      layers.includes(colorSchemeLayer) && paletteToken(primaryName, "6") in declarations,
   )?.declarations ?? {};
 
 function oklchOf(written: string): Oklch {
