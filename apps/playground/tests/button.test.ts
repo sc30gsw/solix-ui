@@ -34,7 +34,7 @@ inEveryEngine((browser) => {
       expect(await computed(overridden, "color")).toBe(expected("--solix-color-primary-contrast"));
       expect(await computed(overridden, "height")).toBe(expected("--solix-control-height-sm"));
       expect(await computed(overridden, "border-top-left-radius")).toBe(
-        `${Number.parseFloat(expected("--solix-radius-lg")) * 3}px`,
+        expected("--solix-radius-3xl"),
       );
     });
 

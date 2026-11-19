@@ -12,7 +12,7 @@ const styles = stylex.create({
     "--button-fz": tokens["--solix-font-size-sm"],
     "--button-height": tokens["--solix-control-height-sm"],
     "--button-padding-x": tokens["--solix-control-padding-sm"],
-    "--button-radius": `calc(${tokens["--solix-radius-lg"]} * 3)`,
+    "--button-radius": tokens["--solix-radius-3xl"],
     backgroundColor: {
       default: variantColors["--sx-variant-background"],
       ":hover": variantColors["--sx-variant-hover"],
