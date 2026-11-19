@@ -1,3 +1,4 @@
+import { cssColorFunctions, isCssColorKeyword } from "#/src/css-colors.ts";
 import type { primaryColors } from "#/src/primary-colors.stylex.ts";
 import type { variantColors } from "#/src/variant-colors.stylex.ts";
 
@@ -209,8 +210,10 @@ export function shadeSource(palette: Palette, shade: Shade): string {
 
 const solid = "6" satisfies Shade;
 const shadeSeparator = ".";
-const colourSyntax =
-  /^(?:#[\da-f]{3,8}|[a-z]+|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark|var)\(.+\))$/i;
+const colourSyntax = new RegExp(
+  `^(?:#[\\da-f]{3,8}|(?:${cssColorFunctions.join("|")})\\(.+\\))$`,
+  "i",
+);
 
 export type ParsedColor =
   | { readonly kind: "palette"; readonly palette: Palette }
@@ -226,7 +229,7 @@ export function parseColor(written: unknown): ParsedColor | undefined {
   if (at > 0 && isPalette(palette) && isShade(shade)) {
     return { kind: "shade", palette, value: `var(${shadeSource(palette, shade)})` };
   }
-  return colourSyntax.test(written) && !/-\d$/.test(written)
+  return isCssColorKeyword(written) || colourSyntax.test(written)
     ? { kind: "colour", value: written }
     : undefined;
 }

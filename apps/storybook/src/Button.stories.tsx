@@ -1,4 +1,4 @@
-import { Button } from "@solix/core";
+import { Button, type ButtonProps } from "@solix/core";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect, fn, spyOn, userEvent } from "storybook/test";
 
@@ -54,17 +54,34 @@ export const GivenColors: Story = {
   },
 };
 
-const notAColour = "red-6";
+const notColours = ["red-6", "bleu", "inherit", "Red"];
+
+function propsWithColor(color: string): ButtonProps {
+  const props: ButtonProps = { children: color };
+  Reflect.set(props, "color", color);
+  return props;
+}
 
 export const ColorFallsBack: Story = {
-  args: { color: notAColour },
+  render: () => (
+    <div>
+      {notColours.map((color) => (
+        <Button {...propsWithColor(color)} />
+      ))}
+    </div>
+  ),
   beforeEach: () => {
     const warnings = spyOn(globalThis.console, "warn").mockImplementation(() => undefined);
     return () => warnings.mockRestore();
   },
-  play: async () => {
-    await expect(globalThis.console.warn).toHaveBeenCalledWith(
-      expect.stringContaining(`"${notAColour}"`),
-    );
+  play: async ({ canvas }) => {
+    for (const color of notColours) {
+      await expect(globalThis.console.warn).toHaveBeenCalledWith(
+        expect.stringContaining(`"${color}"`),
+      );
+      await expect(
+        getComputedStyle(canvas.getByRole("button", { name: color })).backgroundColor,
+      ).toBe(getComputedStyle(canvas.getByRole("button", { name: notColours[0] })).backgroundColor);
+    }
   },
 };
