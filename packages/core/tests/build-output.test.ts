@@ -643,7 +643,9 @@ test("no light-dark() reaches the stylesheet: each colour token's default is its
     colours.map((name) => `${name}:${schemeValues(tokens[name])?.[scheme]}`);
   const placed = placedRules();
   const tokenDeclarations = (rule: PlacedRule) =>
-    rule.declarations.filter((declaration) => declaration.startsWith("--solix-color-"));
+    rule.declarations.filter((declaration) =>
+      colours.some((name) => declaration.startsWith(`${name}:`)),
+    );
   const rootDefaults = placed.filter((rule) => rule.selector.split(/,\s*/).includes(":root"));
   const perScheme = placed
     .filter(

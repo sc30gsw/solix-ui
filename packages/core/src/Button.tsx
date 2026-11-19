@@ -30,7 +30,7 @@ const styles = stylex.create({
     height: "var(--button-height)",
     minHeight: targetSize.minimum,
     minWidth: targetSize.minimum,
-    outlineColor: primaryColors["--solix-primary-6"],
+    outlineColor: primaryColors["--solix-color-primary-6"],
     outlineOffset: "0.125rem",
     outlineStyle: {
       default: "none",

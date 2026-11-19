@@ -11,8 +11,8 @@ import {
   type Palette,
   paletteClass,
   paletteToken,
+  primaryName,
   primaryPalette,
-  primaryProperty,
   shadeClass,
   shades,
   variantAttribute,
@@ -55,14 +55,21 @@ const pageBackground = "--solix-color-body";
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const sourceDirectory = dirname(tokensFile);
 const variantColorsFile = join(repositoryRoot, sourceDirectory, "variant-colors.stylex.ts");
-const primaryColorsFile = join(repositoryRoot, sourceDirectory, "primary-colors.stylex.ts");
 
 const remLength = /^\d+(?:\.\d+)?rem$/;
 const schemes = ["light", "dark"] as const;
 type Scheme = (typeof schemes)[number];
 const gamutTolerance = 1e-4;
 
-const tokens = tokenValues();
+const tokens: Record<string, string> = {
+  ...tokenValues(),
+  ...Object.fromEntries(
+    shades.map((shade) => [
+      paletteToken(primaryName, shade),
+      tokenValues()[paletteToken(primaryPalette, shade)],
+    ]),
+  ),
+};
 const colourTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
 const shadowTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "shadow");
 const variants = Object.entries(colorVariantTable);
@@ -203,23 +210,7 @@ function variableIn(root: Block | undefined, value: ts.Expression): Conditional 
   return ts.isPropertyAccessExpression(value) ? root?.properties.get(value.getText()) : undefined;
 }
 
-function primaryReferencedBy(value: ts.Expression): string | undefined {
-  if (
-    !ts.isElementAccessExpression(value) ||
-    !ts.isIdentifier(value.expression) ||
-    !ts.isStringLiteral(value.argumentExpression) ||
-    importedFrom(value.expression) !== primaryColorsFile
-  ) {
-    return undefined;
-  }
-  const name = value.argumentExpression.text;
-  const shade = shades.find((each) => primaryProperty(each) === name);
-  return shade === undefined ? undefined : paletteToken(primaryPalette, shade);
-}
-
 function tokenReferencedBy(value: ts.Expression | undefined): string | undefined {
-  const primary = value && primaryReferencedBy(value);
-  if (primary !== undefined) return primary;
   return value &&
     ts.isElementAccessExpression(value) &&
     ts.isStringLiteral(value.argumentExpression) &&

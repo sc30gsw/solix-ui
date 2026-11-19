@@ -1,6 +1,6 @@
 # Token theme
 
-The library's public tokens are custom properties that start with `--solix-`, written in `packages/core/src/tokens.stylex.ts`. The primary's alias, `--solix-primary-*`, names one palette's shades. For part of the page, the app wraps a nested `SolixProvider` whose theme's `primaryColor` names `brandPrimaryColor` from `apps/playground/src/sections/theme-setups.ts`, scoped by its `cssVariablesSelector` to the element with the class `brandSubtree`. A library button inside that part takes that palette's solid shade, and a button outside it does not. The journey observes only the button.
+The library's public tokens are custom properties that start with `--solix-`, written in `packages/core/src/tokens.stylex.ts`. The primary's alias, `--solix-color-primary-*`, names one palette's shades. For part of the page, the app wraps a nested `SolixProvider` whose theme's `primaryColor` names `brandPrimaryColor` from `apps/playground/src/sections/theme-setups.ts`, scoped by its `cssVariablesSelector` to the element with the class `brandSubtree`. A library button inside that part takes that palette's solid shade, and a button outside it does not. The journey observes only the button.
 
 ## Sub-features
 
