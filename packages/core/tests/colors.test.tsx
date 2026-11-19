@@ -1,6 +1,7 @@
 import fc from "fast-check";
 import postcss from "postcss";
-import { expect, test } from "vite-plus/test";
+import type { CompiledStyles } from "@stylexjs/stylex";
+import { expect, expectTypeOf, test } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "#/build-pipeline.mjs";
 import {
   autoContrastClass,
@@ -34,6 +35,8 @@ import {
   libraryLayers,
   stylePropClassPrefix,
 } from "#/src/style-prop-table.ts";
+import type { ColorProps } from "#/src/colors.ts";
+import type { createParts, PartsOptions } from "#/src/parts.ts";
 import { stylesheet } from "#/tests/built-library.ts";
 import { layersAround } from "#/tests/cascade-layers.ts";
 import { render } from "#/tests/fixtures.ts";
@@ -270,4 +273,17 @@ test("the colour style props resolve a palette, its shade and the primary the wa
   expect(styleOfBox({ c: "primary" })).toEqual({ "--sx-c": `var(${primaryProperty("6")})` });
   expect(styleOfBox({ bg: "red.3" })).toEqual({ "--sx-bg": `var(${paletteToken("red", "3")})` });
   expect(styleOfBox({ c: "red-6" })).toEqual({ "--sx-c": `var(${paletteToken("red", "6")})` });
+});
+
+type Probe<Own> = Own & { class?: string };
+type PropsTaken<Own, Options extends PartsOptions<string, Probe<Own>>> = Parameters<
+  typeof createParts<string, Record<"root", CompiledStyles>, Probe<Own>, Options>
+>[2];
+
+test("createParts refuses, by type, the props of a component that takes ColorProps unless its options give the color option", () => {
+  expectTypeOf<Probe<ColorProps>>().not.toExtend<PropsTaken<ColorProps, { keep: [] }>>();
+  expectTypeOf<Probe<ColorProps>>().toExtend<PropsTaken<ColorProps, { color: "filled" }>>();
+  expectTypeOf<Probe<{ label?: string }>>().toExtend<
+    PropsTaken<{ label?: string }, { keep: ["label"] }>
+  >();
 });
