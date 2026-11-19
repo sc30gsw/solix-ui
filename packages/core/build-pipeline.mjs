@@ -12,7 +12,6 @@ import { stableClassPrefix } from "#/src/stable-class.ts";
 
 import {
   behaviourSdkLayer,
-  colorRules,
   colorSchemeLayer,
   componentLayer,
   hiddenLayer,
@@ -153,7 +152,7 @@ function scopedToLibraryParts(css) {
   return parsed.toString();
 }
 
-export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
+export function libraryStylesheet(rules, stylePropRules, colourRules, behaviourSdkRules) {
   const { css, tokens } = tokensPerScheme(
     stylexPlugin.processStylexRules(rules, { useLayers: true }),
     defaultColorScheme,
@@ -164,7 +163,7 @@ export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
     `@layer ${LIBRARY_CASCADE_LAYER} {`,
     libraryLayerOrder,
     `@layer ${componentLayer} {`,
-    colorRules(tokens.light.map(([property]) => property)),
+    colourRules.colors,
     css,
     "}",
     `@layer ${STYLE_PROP_LAYER} {`,

@@ -16,7 +16,6 @@ import {
   breakpoints,
   canonicalStylePropNames,
   childRuleLayer,
-  colorLayer,
   colorSchemeLayer,
   componentLayer,
   containerQueryLayer,
@@ -104,7 +103,6 @@ type PlacedRule = {
   inStylePropLayer: boolean;
   inChildRuleLayer: boolean;
   inColorSchemeLayer: boolean;
-  inColorLayer: boolean;
 };
 
 function libraryLayer(): postcss.AtRule {
@@ -135,7 +133,6 @@ function placedRules(): PlacedRule[] {
       inStylePropLayer: inStylePropLayer(rule),
       inChildRuleLayer: inChildRuleLayer(rule),
       inColorSchemeLayer: layersAround(rule).includes(colorSchemeLayer),
-      inColorLayer: layersAround(rule).includes(colorLayer),
     });
   });
   return placed;
@@ -382,8 +379,8 @@ test("the style-prop layer holds the style-prop classes and the registrations of
   ).toEqual([]);
   expect(
     outside.filter(
-      ({ selector, inColorSchemeLayer, inColorLayer }) =>
-        selector.includes(stylePropClass) && !inColorSchemeLayer && !inColorLayer,
+      ({ selector, inColorSchemeLayer }) =>
+        selector.includes(stylePropClass) && !inColorSchemeLayer,
     ),
   ).toEqual([]);
   expect(

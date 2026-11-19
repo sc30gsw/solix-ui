@@ -1,7 +1,13 @@
 import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { colorVariantTable, palettesIn, paletteToken } from "#/src/style-prop-table.ts";
+import {
+  colorVariantTable,
+  isShade,
+  type Palette,
+  palettes,
+  paletteToken,
+} from "#/src/color-table.ts";
 import { contrastExceptions } from "../../../tests/support/contrast-exceptions";
 import { fileNamedBy } from "../../../scripts/subpath";
 import { schemeValues, tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
@@ -35,7 +41,6 @@ type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
 const tokens = tokenValues();
 const colourTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
 const shadowTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "shadow");
-const { palettes } = palettesIn(colourTokens);
 const variants = Object.entries(colorVariantTable);
 const lengthTokens = Object.keys(tokens).filter(
   (name) => !["colour", "shadow"].includes(tokenKind(name)),
@@ -234,12 +239,12 @@ const thePage: Side = { property: "the page", token: pageBackground, written: pa
 
 function slotToken(
   slot: string,
-  palette: string,
-  slots: Record<string, string>,
+  palette: Palette,
+  slots: Readonly<Record<string, string>>,
 ): string | undefined {
   const value = slots[slot];
   if (value === undefined || value === "transparent") return undefined;
-  return value.startsWith("--") ? value : paletteToken(palette, value);
+  return isShade(value) ? paletteToken(palette, value) : value;
 }
 
 function inEachPaletteAndVariant(pairing: Pairing): Pairing[] {

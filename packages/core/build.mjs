@@ -22,9 +22,17 @@ await buildSources(layout, async (filename, source) => {
 const { stylePropRules } = await import(
   pathToFileURL(join(layout.outputDirectory, "style-prop-table.js")).href
 );
+const { colorRules } = await import(
+  pathToFileURL(join(layout.outputDirectory, "color-rules.js")).href
+);
 await writeFile(
   join(layout.outputDirectory, "styles.css"),
-  libraryStylesheet(rules, stylePropRules(), behaviourSdkHiddenRule(packageRoot)),
+  libraryStylesheet(
+    rules,
+    stylePropRules(),
+    { colors: colorRules() },
+    behaviourSdkHiddenRule(packageRoot),
+  ),
 );
 console.log(
   `dist/styles.css: ${rules.length} rules, the style-prop rules and the SDK's hidden rule`,

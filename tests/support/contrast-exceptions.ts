@@ -7,7 +7,7 @@ import {
   paletteToken,
   type Shade,
   variantAttribute,
-} from "#/packages/core/src/style-prop-table.ts";
+} from "#/packages/core/src/color-table.ts";
 
 export type Scheme = "light" | "dark";
 

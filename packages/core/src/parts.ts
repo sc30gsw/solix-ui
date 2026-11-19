@@ -2,6 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 import { createMemo, merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
 import { type ColorPropKey, colorPropKeys, resolveColor } from "#/src/colors.ts";
+import { variantAttribute } from "#/src/color-table.ts";
 import { stableClass } from "#/src/stable-class.ts";
 import {
   hasChildRules,
@@ -9,7 +10,6 @@ import {
   stylePropKeys,
   type VariableGroup,
   type VariablesOf,
-  variantAttribute,
 } from "#/src/style-prop-table.ts";
 import {
   presentStyle,

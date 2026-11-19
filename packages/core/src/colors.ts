@@ -5,15 +5,15 @@ import {
   customColorClass,
   defaultPalette,
   fixedContrastClass,
+  isPalette,
+  isShade,
   type Palette,
   paletteClass,
-  palettesIn,
   paletteToken,
   type Shade,
   shadeClass,
-} from "#/src/style-prop-table.ts";
+} from "#/src/color-table.ts";
 import { characterThatEndsADeclaration, type ResolvedStyleProps } from "#/src/style-props.ts";
-import { tokens } from "#/src/tokens.stylex.ts";
 
 export type SolixColor = Palette | `${Palette}.${Shade}` | (string & {});
 
@@ -36,7 +36,6 @@ function isColorPropKey(name: PropertyKey): name is ColorPropKey {
 
 export const colorPropKeys = Object.keys(colorProps).filter(isColorPropKey);
 
-const { palettes, shades } = palettesIn(Object.keys(tokens));
 const shadeSeparator = ".";
 
 function named(color: string): string[] {
@@ -47,11 +46,11 @@ function given(color: unknown): ResolvedStyleProps {
   if (typeof color !== "string" || characterThatEndsADeclaration.test(color)) {
     return { classes: named(defaultPalette), properties: {} };
   }
-  if (palettes.includes(color)) return { classes: named(color), properties: {} };
+  if (isPalette(color)) return { classes: named(color), properties: {} };
   const at = color.lastIndexOf(shadeSeparator);
   const palette = color.slice(0, at);
   const shade = color.slice(at + 1);
-  if (at > 0 && palettes.includes(palette) && shades.includes(shade)) {
+  if (at > 0 && isPalette(palette) && isShade(shade)) {
     return {
       classes: [...named(palette), shadeClass],
       properties: { [colorProperty]: `var(${paletteToken(palette, shade)})` },

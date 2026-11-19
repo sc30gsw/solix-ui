@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import fc from "fast-check";
 import postcss from "postcss";
+import { colorRules } from "#/src/color-rules.ts";
 import { expect, test } from "vite-plus/test";
 import {
   compileLibrarySource,
@@ -158,7 +159,9 @@ test(
           source: sourceFor(definitions),
           packageRoot,
         });
-        const stylesheet = postcss.parse(libraryStylesheet(rules, stylePropRules(), sdkRule));
+        const stylesheet = postcss.parse(
+          libraryStylesheet(rules, stylePropRules(), { colors: colorRules() }, sdkRule),
+        );
 
         expect(rules.length).toBeGreaterThan(0);
         expect(

@@ -7,16 +7,18 @@ import {
   colorLayer,
   colorProperty,
   colorVariantTable,
-  componentLayer,
   customColorClass,
   defaultPalette,
   fixedContrastClass,
   paletteClass,
-  palettesIn,
+  palettes,
   paletteToken,
   shadeClass,
+  shadeProperty,
+  shades,
   variantAttribute,
-} from "#/src/style-prop-table.ts";
+} from "#/src/color-table.ts";
+import { componentLayer } from "#/src/style-prop-table.ts";
 import { stylesheet } from "#/tests/built-library.ts";
 import { layersAround } from "#/tests/cascade-layers.ts";
 import { render } from "#/tests/fixtures.ts";
@@ -24,8 +26,6 @@ import { classesOf, declarationsIn, rootElementOf, valuesOf } from "#/tests/mark
 import { assertProperty } from "../../../tests/support/properties.ts";
 import { tokenKind, tokenValues } from "../../../scripts/tokens";
 
-const colourTokens = Object.keys(tokenValues()).filter((name) => tokenKind(name) === "colour");
-const { palettes, shades } = palettesIn(colourTokens);
 const variants = Object.keys(colorVariantTable);
 
 type Placed = { selector: string; properties: string[]; layers: string[] };
@@ -63,20 +63,19 @@ function variantOf(props: Record<string, unknown>): unknown {
   return valuesOf(rootOf(props), variantAttribute)[0];
 }
 
-test("the build finds the palettes in the tokens: every colour name with a token for each shade the primary palette has", () => {
-  expect(palettes).toContain(defaultPalette);
-  expect(palettes.length).toBeGreaterThan(1);
-  expect(shades.length).toBeGreaterThan(1);
-  expect(
-    palettes.flatMap((palette) =>
-      shades.filter((shade) => !colourTokens.includes(paletteToken(palette, shade))),
-    ),
-  ).toEqual([]);
+test("the colour tokens hold exactly one token for each shade of each palette of the colour table", () => {
+  const colourTokens = Object.keys(tokenValues()).filter((name) => tokenKind(name) === "colour");
+  const ofAPalette = (name: string) =>
+    palettes.some((palette) => name.startsWith(`--solix-color-${palette}-`));
+
+  expect(colourTokens.filter(ofAPalette).toSorted()).toEqual(
+    palettes.flatMap((palette) => shades.map((shade) => paletteToken(palette, shade))).toSorted(),
+  );
 });
 
 test("the colours layer is the first layer inside the components layer, and holds one class per palette that sets every shade, then the shade, custom and fixed-contrast classes, then one rule per variant of the table on data-variant, which sets every slot, and nothing else", () => {
   const { rules, firstInComponents } = colourLayerRules();
-  const shadeProperties = shades.map((shade) => `--sx-shade-${shade}`);
+  const shadeProperties = shades.map(shadeProperty);
 
   expect(firstInComponents).toBe(true);
   expect(
