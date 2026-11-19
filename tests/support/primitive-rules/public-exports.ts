@@ -38,7 +38,7 @@ const publicExports: Rule = (library) => [
     return !fn || hasADocComment(module, fn)
       ? []
       : [
-          `${at(module, fn)}: write a doc comment directly above ${fn?.name?.text ?? "it"}, above its first overload if it has any, since a consumer reads it where they call the function.`,
+          `${at(module, fn)}: write a doc comment directly above ${fn.name.text}, above its first overload if it has any, since a consumer reads it where they call the function.`,
         ];
   }),
   ...library.modules

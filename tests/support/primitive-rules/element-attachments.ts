@@ -27,7 +27,7 @@ const elementAttachments: Rule = (library) =>
     const missing = reaches(library, all, attachmentHelper)
       ? []
       : [
-          `${at(module, fn.name ?? fn)}: ${fn.name?.text ?? "it"} returns a ${refSetterType}, alone or in a tuple or object, so build it on ${helper}, directly or through another primitive.`,
+          `${at(module, fn.name)}: ${fn.name.text} returns a ${refSetterType}, alone or in a tuple or object, so build it on ${helper}, directly or through another primitive.`,
         ];
     const ownNodes = descendants(module.source)
       .filter(

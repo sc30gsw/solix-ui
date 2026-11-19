@@ -182,14 +182,16 @@ export function importsFrom(module: Module, specifier: string): boolean {
   return importsOf(module.source).some((found) => found.specifier === specifier);
 }
 
+export type NamedFunction = ts.FunctionDeclaration & { name: ts.Identifier };
+
 export type ExportedFunction = {
-  first: ts.FunctionDeclaration | undefined;
-  all: ts.FunctionDeclaration[];
+  first: NamedFunction | undefined;
+  all: NamedFunction[];
 };
 
 export function exportedFunctions(module: Module): ExportedFunction {
   const all = module.source.statements.filter(
-    (statement): statement is ts.FunctionDeclaration =>
+    (statement): statement is NamedFunction =>
       ts.isFunctionDeclaration(statement) &&
       statement.name !== undefined &&
       isNamedFor(module.file, statement.name.text),

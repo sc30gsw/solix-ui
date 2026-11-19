@@ -21,7 +21,7 @@ const browserValues: Rule = (library) =>
     return returnsAlias(library.compiled, fn, browserValueType)
       ? []
       : [
-          `${at(module, fn.name ?? fn)}: ${fn.name?.text ?? "it"} reaches ${brandHome.fn}, the one place a value becomes a ${browserValueType}, so it returns its value as ${browserValueType}, alone or in a tuple or object.`,
+          `${at(module, fn.name)}: ${fn.name.text} reaches ${brandHome.fn}, the one place a value becomes a ${browserValueType}, so it returns its value as ${browserValueType}, alone or in a tuple or object.`,
         ];
   });
 
