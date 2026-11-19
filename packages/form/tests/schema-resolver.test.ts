@@ -88,9 +88,18 @@ test("a resolved schema returns a promise for a schema that validates asynchrono
   expect(await schemaResolver(schemaOf(() => [], true))({})).toStrictEqual({});
 });
 
-test("the type of a resolved schema says whether it returns a promise", () => {
-  const schema = schemaOf(() => []);
+test("with sync, a resolved schema still returns a promise for a schema that validates asynchronously, as its type says", async () => {
+  const validate = schemaResolver(
+    schemaOf(() => [{ message: "Later", path: ["field"] }], true),
+    { sync: true },
+  );
+  const pending = validate({});
 
-  expectTypeOf(schemaResolver(schema, { sync: true })).returns.toEqualTypeOf<FormErrors>();
-  expectTypeOf(schemaResolver(schema)).returns.toEqualTypeOf<Promise<FormErrors>>();
+  expectTypeOf(validate).returns.toEqualTypeOf<FormErrors | Promise<FormErrors>>();
+  expect(pending).toBeInstanceOf(Promise);
+  expect(await pending).toStrictEqual({ field: "Later" });
+});
+
+test("the type of a resolved schema without sync says it returns a promise", () => {
+  expectTypeOf(schemaResolver(schemaOf(() => []))).returns.toEqualTypeOf<Promise<FormErrors>>();
 });

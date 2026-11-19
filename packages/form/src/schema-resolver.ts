@@ -21,11 +21,7 @@ function errorsOf(result: StandardSchemaResult): FormErrors {
   return Object.fromEntries(errors);
 }
 
-/** Turns a Standard Schema into a validate function, which gives each issue's message under its path joined with dots, the first issue with a message winning for a path. The function returns a promise unless `options.sync` is `true` and the schema validates synchronously. */
-export function schemaResolver(
-  schema: StandardSchema,
-  options: { sync: true },
-): (values: unknown) => FormErrors;
+/** Turns a Standard Schema into a validate function, which gives each issue's message under its path joined with dots, the first issue with a message winning for a path. The function returns a promise unless `options.sync` is `true` and the schema validates synchronously, so with `sync` its type is `FormErrors | Promise<FormErrors>`. */
 export function schemaResolver(
   schema: StandardSchema,
   options?: { sync?: false },
