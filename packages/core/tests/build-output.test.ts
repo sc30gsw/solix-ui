@@ -9,6 +9,7 @@ import {
   HIDDEN_LAYER,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
+  LIBRARY_CLASS_PREFIXES,
   sdkHiddenRuleSource,
   STYLE_PROP_LAYER,
   VARIABLES_MODULE,
@@ -17,6 +18,7 @@ import {
   breakpoints,
   canonicalStylePropNames,
   childRuleLayer,
+  colorLayer,
   colorSchemeLayer,
   componentLayer,
   containerQueryLayer,
@@ -218,14 +220,21 @@ test("the stylesheet first orders the behaviour SDK's layer before the library's
   expect(positionsBackAtTopLevel).toEqual([layer.length - 1]);
 });
 
-test("every class name carries the library's own prefix", () => {
+test("every class name carries one of the library's own prefixes", () => {
   const classNames = stylesheet.match(/\.[A-Za-z_][\w-]*/g) ?? [];
 
   const stylexDefaultPrefix = "x";
 
-  expect(LIBRARY_CLASS_PREFIX).not.toBe(stylexDefaultPrefix);
+  expect(LIBRARY_CLASS_PREFIXES).toContain(LIBRARY_CLASS_PREFIX);
+  expect(LIBRARY_CLASS_PREFIXES.filter((prefix) => prefix.startsWith(stylexDefaultPrefix))).toEqual(
+    [],
+  );
   expect(classNames.length).toBeGreaterThan(0);
-  expect(classNames.filter((name) => !name.startsWith(`.${LIBRARY_CLASS_PREFIX}`))).toEqual([]);
+  expect(
+    classNames.filter(
+      (name) => !LIBRARY_CLASS_PREFIXES.some((prefix) => name.startsWith(`.${prefix}`)),
+    ),
+  ).toEqual([]);
 });
 
 test("every declaration marked important sits in the SDK's layer and none in the library's layer, so no rule in `solix` can outrank a consumer", () => {
@@ -336,8 +345,9 @@ test("input validity and the modal backdrop compile to the platform's own select
   expect(stylesheet).toMatch(new RegExp(`\\.${LIBRARY_CLASS_PREFIX}\\w+::backdrop\\{`));
 });
 
-test("the library layer ranks its components, then its style props, then the colour-scheme rules, then the container queries a component writes at run time, and the hidden layer last", () => {
+test("the library layer ranks its colours, then its components, then its style props, then the colour-scheme rules, then the container queries a component writes at run time, and the hidden layer last", () => {
   expect(libraryLayers).toEqual([
+    colorLayer,
     componentLayer,
     STYLE_PROP_LAYER,
     colorSchemeLayer,
