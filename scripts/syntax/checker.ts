@@ -22,6 +22,8 @@ export type ClassRef = { name: string; file: string };
 
 export type Reach = { nodes: ts.Node[]; functions: Set<ts.Node> };
 
+export type MemberRead = { owner: ts.Node; names: string[] };
+
 const packageFile = /[\\/]node_modules[\\/]/;
 const libraryDirectory = String.raw`[\\/]node_modules[\\/]@typescript[\\/]typescript-[^\\/]+[\\/]lib[\\/]`;
 const defaultLibraryFile = new RegExp(String.raw`${libraryDirectory}lib\.[^\\/]+\.d\.ts$`);
@@ -31,6 +33,10 @@ const reflectiveRead = "get";
 
 export function isPackageFile(file: string): boolean {
   return packageFile.test(file);
+}
+
+export function isFileOfPackage(file: string, names: readonly string[]): boolean {
+  return isPackageFile(file) && file.split(/[\\/]/).some((part) => names.includes(part));
 }
 
 export function isDefaultLibraryFile(file: string): boolean {
@@ -147,21 +153,26 @@ function namesAMemberOfItsFirstArgument(program: Program, call: ts.CallExpressio
   return called !== undefined && (takesAKeyOfAnother(called) || readsByName(called));
 }
 
-export function memberDeclarations(program: Program, node: ts.Node): ts.Node[] {
-  if (ts.isPropertyAccessExpression(node)) return declarationsOf(program, node.name);
+export function memberRead(program: Program, node: ts.Node): MemberRead | undefined {
+  if (ts.isPropertyAccessExpression(node)) {
+    return { owner: node.expression, names: [node.name.text] };
+  }
   if (ts.isElementAccessExpression(node)) {
-    return propertyDeclarations(
-      program,
-      node.expression,
-      stringsIn(program, node.argumentExpression),
-    );
+    return { owner: node.expression, names: stringsIn(program, node.argumentExpression) };
   }
   if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
-    return propertyDeclarations(program, node.parent, boundNames(program, node));
+    return { owner: node.parent, names: boundNames(program, node) };
   }
   if (ts.isCallExpression(node) && namesAMemberOfItsFirstArgument(program, node)) {
-    return propertyDeclarations(program, node.arguments[0], stringsIn(program, node.arguments[1]));
+    return { owner: node.arguments[0], names: stringsIn(program, node.arguments[1]) };
   }
+  return undefined;
+}
+
+export function memberDeclarations(program: Program, node: ts.Node): ts.Node[] {
+  if (ts.isPropertyAccessExpression(node)) return declarationsOf(program, node.name);
+  const read = memberRead(program, node);
+  if (read) return propertyDeclarations(program, read.owner, read.names);
   return isValueReference(node) ? declarationsOf(program, node) : [];
 }
 
@@ -254,6 +265,11 @@ export function aliasDeclarationsReturnedBy(program: Program, node: ts.Node): ts
 
 export function stringsIn(program: Program, expression: ts.Expression | undefined): string[] {
   return expression ? stringLiteralTypesOf(program.checker, expression) : [];
+}
+
+export function isTypedAny(program: Program, node: ts.Node): boolean {
+  const type = program.checker.getTypeAtLocation(node);
+  return type !== undefined && (type.flags & TypeFlags.Any) !== 0;
 }
 
 export function assertedType(program: Program, node: ts.Node): AssertedType | undefined {
