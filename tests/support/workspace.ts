@@ -96,17 +96,18 @@ function librariesOfKind(kind: LibraryKind): typeof libraryPackages {
   return libraryPackages.filter((library) => library.kind === kind);
 }
 
-function thePrimitivesPackage(): (typeof libraryPackages)[number] {
+function thePrimitivesPackageName(): string {
   const [found, ...others] = librariesOfKind("primitives");
-  if (!found?.manifest.name || others.length > 0) {
+  const name = found?.manifest.name;
+  if (!name || others.length > 0) {
     throw new Error(
       `tests/support/workspace.ts: list exactly one library of the primitives kind, with a name, in registeredLibraries.`,
     );
   }
-  return found;
+  return name;
 }
 
-export const primitivesPackage = thePrimitivesPackage();
+export const primitivesPackageName = thePrimitivesPackageName();
 
 export const componentLibraries = librariesOfKind("components");
 
@@ -129,7 +130,7 @@ export const libraryKinds: Readonly<Record<LibraryKind, LibraryKindTraits>> = {
   components: {
     what: "a component library",
     project: "scripts",
-    allowedNames: [...frameworkPeers, primitivesPackage.manifest.name ?? ""],
+    allowedNames: [...frameworkPeers, primitivesPackageName],
     rules: "none",
   },
   logic: {

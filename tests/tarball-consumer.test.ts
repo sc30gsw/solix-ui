@@ -37,6 +37,7 @@ import {
   componentLibraries,
   installedVersions,
   installedVp,
+  libraryNames,
   libraryPackages,
   packageManagerAnswerTimeout,
   repositoryRoot,
@@ -285,11 +286,10 @@ describe("installed into a consumer outside the workspace", () => {
     const { catalog } = pnpmSettings();
 
     const settings = readFileSync(join(app, workspaceFile), "utf8");
-    const names = libraryPackages.map(({ manifest }) => manifest.name ?? "");
-    const resolvedByTheLibrary = names.filter(
+    const resolvedByTheLibrary = libraryNames.filter(
       (name) => name === libraryName || name in (library.manifest.peerDependencies ?? {}),
     );
-    for (const name of names) {
+    for (const name of libraryNames) {
       expect(consumer.dependencies[name], `${name} in the consumer's own manifest`).toMatch(
         /\.tgz$/,
       );
