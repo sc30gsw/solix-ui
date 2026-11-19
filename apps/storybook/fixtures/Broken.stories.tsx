@@ -29,6 +29,17 @@ export const TargetTooSmall: Story = {
   ),
 };
 
+export const ContrastOutsideTheList: Story = {
+  render: () => (
+    <div>
+      <Button color="blue.6">Given shade</Button>
+      <Button variant="subtle" c="yellow-6">
+        Pale text
+      </Button>
+    </div>
+  ),
+};
+
 export const PlayFunctionFails: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("button")).toHaveTextContent("Cancel");

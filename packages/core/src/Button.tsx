@@ -4,6 +4,7 @@ import type { ColorProps } from "#/src/colors.ts";
 import { createParts, type PolymorphicProps } from "#/src/parts.ts";
 import type { ScaleValue, VariableProp } from "#/src/style-props.ts";
 import { targetSize } from "#/src/target-size.stylex.ts";
+import { primaryColors } from "#/src/primary-colors.stylex.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 import { variantColors } from "#/src/variant-colors.stylex.ts";
 
@@ -12,7 +13,7 @@ const styles = stylex.create({
     "--button-fz": tokens["--solix-font-size-sm"],
     "--button-height": tokens["--solix-control-height-sm"],
     "--button-padding-x": tokens["--solix-control-padding-sm"],
-    "--button-radius": `calc(${tokens["--solix-radius-lg"]} * 3)`,
+    "--button-radius": tokens["--solix-radius-3xl"],
     backgroundColor: {
       default: variantColors["--sx-variant-background"],
       ":hover": variantColors["--sx-variant-hover"],
@@ -28,7 +29,7 @@ const styles = stylex.create({
     height: "var(--button-height)",
     minHeight: targetSize.minimum,
     minWidth: targetSize.minimum,
-    outlineColor: tokens["--solix-color-focus"],
+    outlineColor: primaryColors["--solix-primary-6"],
     outlineOffset: "0.125rem",
     outlineStyle: {
       default: "none",

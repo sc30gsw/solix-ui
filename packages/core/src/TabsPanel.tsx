@@ -22,7 +22,7 @@ export type TabsPanelProps = ElementProps<
 export function TabsPanel(props: TabsPanelProps) {
   const tabs = useTabs("Tabs.Panel");
   const { root } = tabs.behaviour.bind(
-    createParts("TabsPanel", styles, props, "value", "keepMounted", "children"),
+    createParts("TabsPanel", styles, props, { keep: ["value", "keepMounted", "children"] }),
     {
       root: {
         slot: "panel",

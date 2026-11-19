@@ -5,13 +5,14 @@ import { partId } from "#/src/headless.ts";
 import { createParts, type ElementProps } from "#/src/parts.ts";
 import { rendersSomething } from "#/src/renders-something.ts";
 import { useTabs } from "#/src/tabs-context.ts";
+import { primaryColors } from "#/src/primary-colors.stylex.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   root: {
     alignItems: "center",
     backgroundColor: tokens["--solix-color-body"],
-    borderBlockEndColor: tokens["--solix-color-primary"],
+    borderBlockEndColor: primaryColors["--solix-primary-6"],
     borderBlockEndStyle: {
       default: "none",
       "[data-selected]": {
@@ -21,7 +22,7 @@ const styles = stylex.create({
     },
     borderBlockEndWidth: "0.125rem",
     borderBlockStartWidth: 0,
-    borderInlineEndColor: tokens["--solix-color-primary"],
+    borderInlineEndColor: primaryColors["--solix-primary-6"],
     borderInlineEndStyle: {
       default: "none",
       "[data-selected]": {
@@ -33,7 +34,7 @@ const styles = stylex.create({
     borderInlineStartWidth: 0,
     color: {
       default: tokens["--solix-color-text"],
-      "[data-selected]": tokens["--solix-color-primary-9"],
+      "[data-selected]": primaryColors["--solix-primary-9"],
     },
     cursor: {
       default: "pointer",
@@ -47,7 +48,7 @@ const styles = stylex.create({
       default: 1,
       ":disabled": 0.6,
     },
-    outlineColor: tokens["--solix-color-primary"],
+    outlineColor: primaryColors["--solix-primary-6"],
     outlineOffset: "0.125rem",
     outlineStyle: {
       default: "none",
@@ -99,7 +100,9 @@ export function TabsTab(props: TabsTabProps) {
   const tabs = useTabs("Tabs.Tab");
   let pressLandedInside = false;
   const { root, part } = tabs.behaviour.bind(
-    createParts("TabsTab", styles, props, "value", "leftSection", "rightSection", "children"),
+    createParts("TabsTab", styles, props, {
+      keep: ["value", "leftSection", "rightSection", "children"],
+    }),
     {
       root: {
         slot: "tab",

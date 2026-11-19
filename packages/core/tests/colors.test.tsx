@@ -3,20 +3,27 @@ import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "#/build-pipeline.mjs";
 import {
+  autoContrastClass,
   colorClass,
+  colorClassPrefix,
   colorLayer,
   colorProperty,
   colorVariantTable,
-  componentLayer,
   customColorClass,
-  defaultPalette,
-  fixedContrastClass,
+  ownPaletteOf,
+  type Palette,
+  paletteAliases,
   paletteClass,
-  palettesIn,
+  palettes,
   paletteToken,
+  primaryAlias,
+  primaryPalette,
+  primaryProperty,
   shadeClass,
+  shades,
   variantAttribute,
-} from "#/src/style-prop-table.ts";
+} from "#/src/color-table.ts";
+import { colorSchemeLayer, componentLayer } from "#/src/style-prop-table.ts";
 import { stylesheet } from "#/tests/built-library.ts";
 import { layersAround } from "#/tests/cascade-layers.ts";
 import { render } from "#/tests/fixtures.ts";
@@ -24,31 +31,36 @@ import { classesOf, declarationsIn, rootElementOf, valuesOf } from "#/tests/mark
 import { assertProperty } from "../../../tests/support/properties.ts";
 import { tokenKind, tokenValues } from "../../../scripts/tokens";
 
-const colourTokens = Object.keys(tokenValues()).filter((name) => tokenKind(name) === "colour");
-const { palettes, shades } = palettesIn(colourTokens);
+const named: Palette[] = [
+  ...palettes,
+  ...Object.keys(paletteAliases).filter((name): name is keyof typeof paletteAliases =>
+    Object.hasOwn(paletteAliases, name),
+  ),
+];
 const variants = Object.keys(colorVariantTable);
+const slots = Object.keys(colorVariantTable.default.named);
 
-type Placed = { selector: string; properties: string[]; layers: string[] };
+type Placed = { selector: string; declarations: Record<string, string>; layers: string[] };
 
-function colourLayerRules(): { rules: Placed[]; firstInComponents: boolean } {
-  const rules: Placed[] = [];
-  let firstInComponents = false;
-  postcss.parse(stylesheet).walkAtRules("layer", (layer) => {
-    if (layer.params === componentLayer && layer.parent?.type === "atrule") {
-      const [first] = layer.nodes ?? [];
-      firstInComponents =
-        first?.type === "atrule" && first.name === "layer" && first.params === colorLayer;
-    }
-    if (layer.params !== colorLayer) return;
-    layer.walkRules((rule) => {
-      rules.push({
-        selector: rule.selector,
-        properties: rule.nodes.flatMap((node) => (node.type === "decl" ? [node.prop] : [])),
-        layers: layersAround(rule),
-      });
+function placed(): Placed[] {
+  const found: Placed[] = [];
+  postcss.parse(stylesheet).walkRules((rule) => {
+    found.push({
+      selector: rule.selector,
+      declarations: Object.fromEntries(
+        rule.nodes.flatMap((node) => (node.type === "decl" ? [[node.prop, node.value]] : [])),
+      ),
+      layers: layersAround(rule),
     });
   });
-  return { rules, firstInComponents };
+  return found;
+}
+
+const rules = placed();
+const colourRules = rules.filter(({ layers }) => layers.includes(colorLayer));
+
+function ruleFor(selector: string): Record<string, string> {
+  return rules.find((rule) => rule.selector === selector)?.declarations ?? {};
 }
 
 function rootOf(props: Record<string, unknown>) {
@@ -59,49 +71,96 @@ function styleOf(props: Record<string, unknown>): Record<string, string> {
   return Object.fromEntries(declarationsIn(valuesOf(rootOf(props), "style")[0]));
 }
 
-function variantOf(props: Record<string, unknown>): unknown {
-  return valuesOf(rootOf(props), variantAttribute)[0];
-}
+test("the colour tokens hold exactly one token for each shade of each palette of the colour table, and none for an alias", () => {
+  const colourTokens = Object.keys(tokenValues()).filter((name) => tokenKind(name) === "colour");
+  const ofAPalette = (name: string) =>
+    [...palettes, ...Object.keys(paletteAliases)].some((palette) =>
+      name.startsWith(`--solix-color-${palette}-`),
+    );
 
-test("the build finds the palettes in the tokens: every colour name with a token for each shade the primary palette has", () => {
-  expect(palettes).toContain(defaultPalette);
-  expect(palettes.length).toBeGreaterThan(1);
-  expect(shades.length).toBeGreaterThan(1);
-  expect(
-    palettes.flatMap((palette) =>
-      shades.filter((shade) => !colourTokens.includes(paletteToken(palette, shade))),
-    ),
-  ).toEqual([]);
+  expect(colourTokens.filter(ofAPalette).toSorted()).toEqual(
+    palettes.flatMap((palette) => shades.map((shade) => paletteToken(palette, shade))).toSorted(),
+  );
 });
 
-test("the colours layer is the first layer inside the components layer, and holds one class per palette that sets every shade, then the shade, custom and fixed-contrast classes, then one rule per variant of the table on data-variant, which sets every slot, and nothing else", () => {
-  const { rules, firstInComponents } = colourLayerRules();
-  const shadeProperties = shades.map((shade) => `--sx-shade-${shade}`);
+test("every rule of the colours layer, the first layer inside components, selects a class with the colours' own prefix and sets custom properties only", () => {
+  const [first] =
+    postcss
+      .parse(stylesheet)
+      .nodes.flatMap((node) => (node.type === "atrule" ? (node.nodes ?? []) : []))
+      .flatMap((node) =>
+        node.type === "atrule" && node.params === componentLayer ? (node.nodes ?? []) : [],
+      ) ?? [];
 
-  expect(firstInComponents).toBe(true);
+  expect(first?.type === "atrule" && first.params).toBe(colorLayer);
+  expect(colourRules.length).toBeGreaterThan(0);
   expect(
-    rules.filter(
-      ({ layers }) =>
+    colourRules.filter(
+      ({ selector, declarations, layers }) =>
+        !selector.startsWith(`.${colorClassPrefix}`) ||
+        Object.keys(declarations).some((property) => !property.startsWith("--")) ||
         layers.join(" ") !== [colorLayer, componentLayer, LIBRARY_CASCADE_LAYER].join(" "),
     ),
   ).toEqual([]);
-  expect(rules.map(({ selector }) => selector)).toEqual([
-    ...palettes.map((palette) => `.${paletteClass(palette)}`),
-    `.${shadeClass}`,
-    `.${customColorClass}`,
-    `.${fixedContrastClass}`,
-    ...variants.map((variant) => `.${colorClass}[${variantAttribute}="${variant}"]`),
-  ]);
-  expect(rules.slice(0, palettes.length).map(({ properties }) => properties)).toEqual(
-    palettes.map(() => shadeProperties),
+});
+
+test.each(named)(
+  "the class of %s sets every shade from its own palette's tokens, or for the primary from the primary's alias",
+  (palette) => {
+    const source = (shade: (typeof shades)[number]) =>
+      palette === primaryAlias
+        ? `var(${primaryProperty(shade)})`
+        : `var(${paletteToken(ownPaletteOf(palette), shade)})`;
+
+    expect(Object.values(ruleFor(`.${paletteClass(palette)}`))).toEqual(shades.map(source));
+  },
+);
+
+test("the primary's alias is written once, on :root and on every element with a colour scheme, from the primary palette's tokens", () => {
+  const aliases = rules.filter(
+    ({ declarations, layers }) =>
+      layers.includes(colorSchemeLayer) &&
+      Object.keys(declarations).some((property) => property === primaryProperty("6")),
   );
-  expect(rules.slice(-variants.length).map(({ properties }) => properties)).toEqual(
-    Object.values(colorVariantTable).map((slots) => Object.keys(slots)),
+
+  expect(aliases.map(({ selector }) => selector)).toEqual([":root,[data-color-scheme]"]);
+  expect(aliases[0]?.declarations).toEqual(
+    Object.fromEntries(
+      shades.map((shade) => [
+        primaryProperty(shade),
+        `var(${paletteToken(primaryPalette, shade)})`,
+      ]),
+    ),
   );
 });
 
-test.each(palettes)(
-  "naming the palette %s gives the root its class and writes no custom property",
+test("an element with a colour class resets every slot, so a variant the table does not hold inherits no colour of an ancestor", () => {
+  expect(ruleFor(`.${colorClass}`)).toEqual(
+    Object.fromEntries(slots.map((slot) => [slot, "initial"])),
+  );
+});
+
+test.each(variants)(
+  "the variant %s sets every slot for a palette, and for a given shade or colour reads that colour",
+  (variant) => {
+    const forAPalette = ruleFor(`.${colorClass}[${variantAttribute}="${variant}"]`);
+    const forAShade = ruleFor(`.${shadeClass}[${variantAttribute}="${variant}"]`);
+    const givenSlots = Object.entries(
+      colorVariantTable[variant as keyof typeof colorVariantTable].given,
+    )
+      .filter(([, value]) => value.startsWith("given"))
+      .map(([slot]) => slot);
+
+    expect(Object.keys(forAPalette)).toEqual(slots);
+    expect(Object.keys(forAShade)).toEqual(slots);
+    expect(
+      givenSlots.filter((slot) => !forAShade[slot]?.includes(`var(${colorProperty})`)),
+    ).toEqual([]);
+  },
+);
+
+test.each(named)(
+  "naming the palette %s gives its class and writes no custom property",
   (palette) => {
     expect(classesOf(rootOf({ color: palette }))).toEqual(
       expect.arrayContaining([colorClass, paletteClass(palette)]),
@@ -110,32 +169,42 @@ test.each(palettes)(
   },
 );
 
-test("with no color the root takes the primary palette, writes no custom property, and takes the component's default variant", () => {
+test("with no color and no variant the root takes the primary palette and the component's default variant, and writes no custom property", () => {
   expect(classesOf(rootOf({}))).toEqual(
-    expect.arrayContaining([colorClass, paletteClass(defaultPalette)]),
+    expect.arrayContaining([colorClass, paletteClass(primaryAlias)]),
   );
   expect(styleOf({})).toEqual({});
-  expect(variantOf({})).toBe("filled");
+  expect(valuesOf(rootOf({}), variantAttribute)).toEqual(["filled"]);
 });
 
-test("a shade of a palette gives the palette's class and the shade class, and writes one custom property, the shade's token", () => {
-  for (const palette of palettes) {
+test("a shade of a palette gives the palette's class and the shade class and writes one custom property, the shade, through the primary's alias for the primary", () => {
+  for (const palette of named) {
     for (const shade of shades) {
       const color = `${palette}.${shade}`;
       expect(classesOf(rootOf({ color }))).toEqual(
         expect.arrayContaining([colorClass, paletteClass(palette), shadeClass]),
       );
       expect(styleOf({ color })).toEqual({
-        [colorProperty]: `var(${paletteToken(palette, shade)})`,
+        [colorProperty]:
+          palette === primaryAlias
+            ? `var(${primaryProperty(shade)})`
+            : `var(${paletteToken(ownPaletteOf(palette), shade)})`,
       });
     }
   }
 });
 
-test("any other colour writes one custom property, itself, with the shade and custom classes; one that holds ;, { or } is dropped for the primary palette; a variant and autoContrast={false} reach the root", async (context) => {
-  const named = new Set([
-    ...palettes,
-    ...palettes.flatMap((palette) => shades.map((shade) => `${palette}.${shade}`)),
+test("autoContrast is off unless it is true: only then does the root take the class that computes the text from the solid shade", () => {
+  expect(classesOf(rootOf({}))).not.toContain(autoContrastClass);
+  expect(classesOf(rootOf({ autoContrast: false }))).not.toContain(autoContrastClass);
+  expect(classesOf(rootOf({ autoContrast: true }))).toContain(autoContrastClass);
+  expect(Object.keys(ruleFor(`.${shadeClass}`))).not.toContain("--sxc-shade-contrast");
+});
+
+test("any other colour writes one custom property, itself, with the shade and custom classes, and one that holds ;, { or } falls back to the primary palette", async (context) => {
+  const spelled = new Set([
+    ...named,
+    ...named.flatMap((palette) => shades.map((shade) => `${palette}.${shade}`)),
   ]);
   await assertProperty(
     context,
@@ -145,20 +214,15 @@ test("any other colour writes one custom property, itself, with the shade and cu
           unit: fc.constantFrom(..."abcdefor0123456789#(),.% ;{}".split("")),
           minLength: 1,
         })
-        .filter((color) => color.trim() === color && !named.has(color)),
-      fc.string({ minLength: 1 }).filter((variant) => /^[\w-]+$/.test(variant)),
-      fc.boolean(),
-      (color, variant, autoContrast) => {
-        const props = { color, variant, autoContrast };
+        .filter((color) => color.trim() === color && !spelled.has(color)),
+      fc.constantFrom(...variants),
+      (color, variant) => {
+        const props = { color, variant };
         const classes = classesOf(rootOf(props));
-        const dropped = /[;{}]/.test(color);
 
-        expect(variantOf(props)).toBe(variant);
-        expect(classes.includes(fixedContrastClass)).toBe(!autoContrast);
-        if (dropped) {
-          expect(classes).toEqual(
-            expect.arrayContaining([colorClass, paletteClass(defaultPalette)]),
-          );
+        expect(valuesOf(rootOf(props), variantAttribute)).toEqual([variant]);
+        if (/[;{}]/.test(color)) {
+          expect(classes).toEqual(expect.arrayContaining([colorClass, paletteClass(primaryAlias)]));
           expect(styleOf(props)).toEqual({});
         } else {
           expect(classes).toEqual(

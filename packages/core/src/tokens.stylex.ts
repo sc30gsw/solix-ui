@@ -1,8 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 
 export const tokens = stylex.defineVars({
-  "--solix-color-primary": "light-dark(oklch(0.6204 0.195 253.83), oklch(0.6204 0.195 253.83))",
-  "--solix-color-on-primary": "light-dark(oklch(0.9911 0 0), oklch(0.9911 0 0))",
   "--solix-color-text": "light-dark(oklch(0.2103 0.0059 285.89), oklch(0.9911 0 0))",
   "--solix-color-body": "light-dark(oklch(0.9702 0 0), oklch(0.12 0.005 285.82))",
   "--solix-color-surface": "light-dark(oklch(1 0 0), oklch(0.2103 0.0059 285.89))",
@@ -12,9 +10,8 @@ export const tokens = stylex.defineVars({
     "light-dark(oklch(0.9373 0.0013 286.37), oklch(0.2721 0.0024 247.91))",
   "--solix-color-overlay": "light-dark(oklch(1 0 0), oklch(0.2103 0.0059 285.89))",
   "--solix-color-muted": "light-dark(oklch(0.5517 0.0138 285.94), oklch(0.705 0.015 286.07))",
-  "--solix-color-border": "light-dark(oklch(0.6446 0.0027 285.89), oklch(0.5226 0.0035 285.89))",
+  "--solix-color-border": "light-dark(oklch(0.9 0.004 286.32), oklch(0.28 0.006 286.03))",
   "--solix-color-separator": "light-dark(oklch(0.92 0.004 286.32), oklch(0.25 0.006 286.03))",
-  "--solix-color-focus": "light-dark(oklch(0.6204 0.195 253.83), oklch(0.6204 0.195 253.83))",
   "--solix-color-error": "light-dark(oklch(0.6532 0.2328 25.74), oklch(0.594 0.1967 24.63))",
   "--solix-color-backdrop": "light-dark(oklch(0 0 0 / 0.5), oklch(0 0 0 / 0.6))",
   "--solix-color-dark-0": "light-dark(oklch(0.985 0 0), oklch(0.141 0.005 285.82))",
@@ -175,38 +172,14 @@ export const tokens = stylex.defineVars({
   "--solix-color-yellow-9": "light-dark(oklch(0.5152 0.0823 71.27), oklch(0.8669 0.1009 76.34))",
   "--solix-color-yellow-contrast":
     "light-dark(oklch(0.2103 0.0059 285.89), oklch(0.2103 0.0059 285.89))",
-  "--solix-color-orange-0": "light-dark(oklch(0.98 0.0154 73.68), oklch(0.266 0.079 36.26))",
-  "--solix-color-orange-1":
-    "light-dark(oklch(0.7819 0.1585 72.33 / 0.15), oklch(0.8203 0.1388 76.34 / 0.12))",
-  "--solix-color-orange-2":
-    "light-dark(oklch(0.7819 0.1585 72.33 / 0.2), oklch(0.8203 0.1388 76.34 / 0.16))",
-  "--solix-color-orange-3": "light-dark(oklch(0.837 0.121 66.29), oklch(0.553 0.1794 38.4))",
-  "--solix-color-orange-4": "light-dark(oklch(0.75 0.1751 55.93), oklch(0.646 0.1982 41.12))",
-  "--solix-color-orange-5": "light-dark(oklch(0.705 0.1931 47.6), oklch(0.646 0.1982 41.12))",
-  "--solix-color-orange-6": "light-dark(oklch(0.7819 0.1585 72.33), oklch(0.8203 0.1388 76.34))",
-  "--solix-color-orange-7": "light-dark(oklch(0.7247 0.1422 72.2), oklch(0.7593 0.1244 76.21))",
-  "--solix-color-orange-8": "light-dark(oklch(0.47 0.1562 37.3), oklch(0.837 0.121 66.29))",
-  "--solix-color-orange-9": "light-dark(oklch(0.5152 0.0823 71.27), oklch(0.8669 0.1009 76.34))",
-  "--solix-color-orange-contrast":
-    "light-dark(oklch(0.2103 0.0059 285.89), oklch(0.2103 0.0059 285.89))",
-  "--solix-color-primary-0": "light-dark(oklch(0.97 0.014 254.6), oklch(0.282 0.091 267.94))",
-  "--solix-color-primary-1":
-    "light-dark(oklch(0.6204 0.195 253.83 / 0.15), oklch(0.6204 0.195 253.83 / 0.12))",
-  "--solix-color-primary-2":
-    "light-dark(oklch(0.6204 0.195 253.83 / 0.2), oklch(0.6204 0.195 253.83 / 0.16))",
-  "--solix-color-primary-3": "light-dark(oklch(0.809 0.0988 251.81), oklch(0.488 0.243 264.38))",
-  "--solix-color-primary-4": "light-dark(oklch(0.707 0.1558 254.62), oklch(0.546 0.245 262.88))",
-  "--solix-color-primary-5": "light-dark(oklch(0.623 0.2038 259.81), oklch(0.546 0.245 262.88))",
-  "--solix-color-primary-6": "light-dark(oklch(0.6204 0.195 253.83), oklch(0.6204 0.195 253.83))",
-  "--solix-color-primary-7": "light-dark(oklch(0.6575 0.1755 253.83), oklch(0.6575 0.1755 253.83))",
-  "--solix-color-primary-8": "light-dark(oklch(0.424 0.199 265.64), oklch(0.809 0.0988 251.81))",
-  "--solix-color-primary-9": "light-dark(oklch(0.4974 0.138 254.22), oklch(0.7215 0.1418 253.83))",
-  "--solix-color-primary-contrast": "light-dark(oklch(0.9911 0 0), oklch(0.9911 0 0))",
   "--solix-radius-xs": "0.125rem",
   "--solix-radius-sm": "0.25rem",
   "--solix-radius-md": "0.375rem",
   "--solix-radius-lg": "0.5rem",
   "--solix-radius-xl": "0.75rem",
+  "--solix-radius-2xl": "1rem",
+  "--solix-radius-3xl": "1.5rem",
+  "--solix-radius-4xl": "2rem",
   "--solix-spacing-xs": "0.5rem",
   "--solix-spacing-sm": "0.75rem",
   "--solix-spacing-md": "1rem",

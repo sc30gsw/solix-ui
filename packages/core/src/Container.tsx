@@ -39,19 +39,12 @@ export type ContainerProps = ElementProps<
 >;
 
 export function Container(props: ContainerProps) {
-  const { root } = createParts(
-    "Container",
-    styles,
-    props,
-    {
-      variables: {
-        "container-size": (given) => (given.fluid ? defaultSize : (given.size ?? defaultSize)),
-      },
+  const { root } = createParts("Container", styles, props, {
+    variables: {
+      "container-size": (given) => (given.fluid ? defaultSize : (given.size ?? defaultSize)),
     },
-    "fluid",
-    "size",
-    "strategy",
-  );
+    keep: ["fluid", "size", "strategy"],
+  });
   return (
     <div
       data-fluid={props.fluid ? "true" : undefined}

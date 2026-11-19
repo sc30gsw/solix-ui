@@ -1,40 +1,90 @@
-import { stableClass } from "#/packages/core/src/stable-class.ts";
 import {
+  colorClass,
   type ColorVariant,
   contrastShade,
+  ownPaletteOf,
   type Palette,
   paletteClass,
   paletteToken,
   type Shade,
+  shadeClass,
   variantAttribute,
-} from "#/packages/core/src/style-prop-table.ts";
+} from "#/packages/core/src/color-table.ts";
+import { colorSchemeAttribute, defaultColorScheme } from "#/packages/core/src/color-schemes.ts";
+import { stableClass } from "#/packages/core/src/stable-class.ts";
 
 export type Scheme = "light" | "dark";
+export type ContrastKind = "text" | "edge";
 
 export type ContrastException = {
   readonly foreground: string;
   readonly background: string;
   readonly scheme: Scheme;
+  readonly kind: ContrastKind;
   readonly drawnIn: string;
 };
 
 const bothSchemes: readonly Scheme[] = ["light", "dark"];
+const rootPart = "root";
+
+export function inScheme(scheme: Scheme, part: string): string {
+  const other = bothSchemes.find((each) => each !== scheme);
+  return scheme === defaultColorScheme
+    ? `:root:not([${colorSchemeAttribute}="${other}"]) ${part}`
+    : `[${colorSchemeAttribute}="${scheme}"] ${part}`;
+}
+
+export function variantPart(palette: Palette | undefined, variant: string): string {
+  const named = palette === undefined ? colorClass : paletteClass(palette);
+  return `.${named}[${variantAttribute}="${variant}"]:not(.${shadeClass})`;
+}
+
+export function componentPart(component: string, part: string, condition: string): string {
+  const own = `.${stableClass(component, part)}`;
+  if (condition === "default") return own;
+  return part === rootPart
+    ? `${own}${condition}`
+    : `.${stableClass(component, rootPart)}${condition} ${own}`;
+}
+
+function rootOf(component: string): string {
+  return componentPart(component, rootPart, "default");
+}
+
+function excused(
+  kind: ContrastKind,
+  foreground: string,
+  background: string,
+  schemes: readonly Scheme[],
+  part: string,
+): ContrastException[] {
+  return schemes.map((scheme) => ({
+    foreground,
+    background,
+    scheme,
+    kind,
+    drawnIn: inScheme(scheme, part),
+  }));
+}
 
 function inVariant(
   palette: Palette,
   variant: ColorVariant,
   pairs: readonly (readonly [foreground: Shade, background: Shade, schemes: readonly Scheme[]])[],
 ): ContrastException[] {
-  const drawnIn = `.${paletteClass(palette)}[${variantAttribute}="${variant}"]`;
+  const own = ownPaletteOf(palette);
   return pairs.flatMap(([foreground, background, schemes]) =>
-    schemes.map((scheme) => ({
-      foreground: paletteToken(palette, foreground),
-      background: paletteToken(palette, background),
-      scheme,
-      drawnIn,
-    })),
+    excused(
+      "text",
+      paletteToken(own, foreground),
+      paletteToken(own, background),
+      schemes,
+      variantPart(palette, variant),
+    ),
   );
 }
+
+const border = "--solix-color-border";
 
 export const contrastExceptions: readonly ContrastException[] = [
   ...(["primary", "blue"] as const).flatMap((palette) => [
@@ -52,17 +102,34 @@ export const contrastExceptions: readonly ContrastException[] = [
     ["9", "1", ["light"]],
     ["9", "2", ["light"]],
   ]),
-  ...bothSchemes.map((scheme) => ({
-    foreground: "--solix-color-on-primary",
-    background: "--solix-color-primary",
-    scheme,
-    drawnIn: `.${stableClass("Disclosure", "summary")}`,
-  })),
+  ...inVariant("green", "subtle", [["9", "1", ["light"]]]),
+  ...excused(
+    "text",
+    paletteToken(ownPaletteOf("primary"), contrastShade),
+    paletteToken(ownPaletteOf("primary"), "6"),
+    bothSchemes,
+    componentPart("Disclosure", "summary", "[open]"),
+  ),
+  ...excused(
+    "edge",
+    border,
+    "--solix-color-surface",
+    bothSchemes,
+    variantPart(undefined, "default"),
+  ),
+  ...excused("edge", border, "--solix-color-body", bothSchemes, variantPart(undefined, "default")),
+  ...excused("edge", border, "--solix-color-body", bothSchemes, rootOf("Modal")),
+  ...excused("edge", border, "--solix-color-body", bothSchemes, rootOf("TabsList")),
+  ...excused("edge", border, "--solix-color-body", bothSchemes, rootOf("TextInput")),
 ];
 
 export const colorContrastRule = {
   id: "color-contrast",
-  selector: `*${[...new Set(contrastExceptions.map(({ drawnIn }) => drawnIn))]
+  selector: `*${[
+    ...new Set(
+      contrastExceptions.filter(({ kind }) => kind === "text").map(({ drawnIn }) => drawnIn),
+    ),
+  ]
     .map((drawnIn) => `:not(${drawnIn})`)
     .join("")}`,
 };

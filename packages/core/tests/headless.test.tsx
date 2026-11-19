@@ -182,17 +182,9 @@ function Probe(props: ProbeProps) {
     onValueChange: (value: string | null) => props.onChange(value),
   }));
   const { root, part } = behaviour.bind(
-    createParts(
-      "Probe",
-      compiled,
-      props,
-      "tabId",
-      "disabled",
-      "preventsClick",
-      "onChange",
-      "calls",
-      "capture",
-    ),
+    createParts("Probe", compiled, props, {
+      keep: ["tabId", "disabled", "preventsClick", "onChange", "calls", "capture"],
+    }),
     {
       root: { slot: "root" },
       list: { slot: "list" },

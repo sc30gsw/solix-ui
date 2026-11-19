@@ -65,24 +65,17 @@ export function SimpleGrid(props: SimpleGridProps) {
     return [...keyed.entries()];
   });
   const autoColumns = () => props.minColWidth !== undefined;
-  const { root, part } = createParts(
-    "SimpleGrid",
-    styles,
-    props,
-    {
-      variables: {
-        "sg-auto-rows": "autoRows",
-        "sg-cols": (given) => (given.minColWidth === undefined ? given.cols : undefined),
-        "sg-min-col-width": "minColWidth",
-        "sg-spacing-x": "spacing",
-        "sg-spacing-y": "verticalSpacing",
-      },
-      queries: container,
+  const { root, part } = createParts("SimpleGrid", styles, props, {
+    variables: {
+      "sg-auto-rows": "autoRows",
+      "sg-cols": (given) => (given.minColWidth === undefined ? given.cols : undefined),
+      "sg-min-col-width": "minColWidth",
+      "sg-spacing-x": "spacing",
+      "sg-spacing-y": "verticalSpacing",
     },
-    "autoFlow",
-    "cols",
-    "type",
-  );
+    queries: container,
+    keep: ["autoFlow", "cols", "type"],
+  });
   const grid = (
     <div data-auto-cols={autoColumns() ? (props.autoFlow ?? "auto-fill") : undefined} {...root} />
   );

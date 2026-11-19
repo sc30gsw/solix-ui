@@ -64,29 +64,18 @@ export function Grid(props: GridProps) {
     const widths = props.breakpoints;
     return breakpoints.map((name) => [name, widths?.[name] ?? containerWidthOf(name)]);
   });
-  const { root, part } = createParts(
-    "Grid",
-    styles,
-    props,
-    {
-      variables: {
-        "grid-align": "align",
-        "grid-column-gap": "columnGap",
-        "grid-gap": "gap",
-        "grid-justify": "justify",
-        "grid-overflow": "overflow",
-        "grid-row-gap": "rowGap",
-      },
-      queries: container,
+  const { root, part } = createParts("Grid", styles, props, {
+    variables: {
+      "grid-align": "align",
+      "grid-column-gap": "columnGap",
+      "grid-gap": "gap",
+      "grid-justify": "justify",
+      "grid-overflow": "overflow",
+      "grid-row-gap": "rowGap",
     },
-    "breakpoints",
-    "children",
-    "classes",
-    "columns",
-    "grow",
-    "styles",
-    "type",
-  );
+    queries: container,
+    keep: ["breakpoints", "children", "classes", "columns", "grow", "styles", "type"],
+  });
   const context = {
     columns: () => props.columns ?? defaultColumns,
     grow: () => props.grow ?? false,

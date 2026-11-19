@@ -16,7 +16,6 @@ import {
   breakpoints,
   canonicalStylePropNames,
   childRuleLayer,
-  colorLayer,
   colorSchemeLayer,
   componentLayer,
   containerQueryLayer,
@@ -104,7 +103,6 @@ type PlacedRule = {
   inStylePropLayer: boolean;
   inChildRuleLayer: boolean;
   inColorSchemeLayer: boolean;
-  inColorLayer: boolean;
 };
 
 function libraryLayer(): postcss.AtRule {
@@ -135,7 +133,6 @@ function placedRules(): PlacedRule[] {
       inStylePropLayer: inStylePropLayer(rule),
       inChildRuleLayer: inChildRuleLayer(rule),
       inColorSchemeLayer: layersAround(rule).includes(colorSchemeLayer),
-      inColorLayer: layersAround(rule).includes(colorLayer),
     });
   });
   return placed;
@@ -316,10 +313,8 @@ test("the build takes the SDK's hidden rule when its writer holds one closed lay
 });
 
 test("a token keeps its public custom property name", () => {
-  expect(stylesheet).toContain("--solix-color-primary:");
-  expect(readFileSync(join(dist, "tokens.stylex.js"), "utf8")).toContain(
-    "var(--solix-color-primary)",
-  );
+  expect(stylesheet).toContain("--solix-color-text:");
+  expect(readFileSync(join(dist, "tokens.stylex.js"), "utf8")).toContain("var(--solix-color-text)");
 });
 
 test("open state compiles to a selector on the element's own open attribute", () => {
@@ -382,8 +377,8 @@ test("the style-prop layer holds the style-prop classes and the registrations of
   ).toEqual([]);
   expect(
     outside.filter(
-      ({ selector, inColorSchemeLayer, inColorLayer }) =>
-        selector.includes(stylePropClass) && !inColorSchemeLayer && !inColorLayer,
+      ({ selector, inColorSchemeLayer }) =>
+        selector.includes(stylePropClass) && !inColorSchemeLayer,
     ),
   ).toEqual([]);
   expect(

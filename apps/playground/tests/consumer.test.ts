@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
@@ -77,7 +78,7 @@ inEveryEngine((browser) => {
       const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
       const followerSummary = follower.locator("summary");
       expect(await computed(emphasise, "background-color")).toBe(
-        expected("--solix-color-primary-6"),
+        expected(paletteToken(primaryPalette, "6")),
       );
       expect(await emphasise.getAttribute("aria-pressed")).toBe("false");
       expect(await computed(follower, "outline-style")).toBe("none");
@@ -100,7 +101,7 @@ inEveryEngine((browser) => {
 
       await expect
         .poll(() => computed(emphasise, "background-color"))
-        .toBe(expected("--solix-color-primary-6"));
+        .toBe(expected(paletteToken(primaryPalette, "6")));
       expect(await computed(follower, "outline-style")).toBe("none");
       expect(await computed(followerSummary, "background-color")).toBe(
         expected("--solix-color-surface"),

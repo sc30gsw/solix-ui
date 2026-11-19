@@ -43,23 +43,16 @@ export function Group(props: GroupProps) {
     props.preventGrowOverflow === false
       ? "none"
       : `calc((100% + ${gap}) / ${present().length} - ${gap})`;
-  const { root } = createParts(
-    "Group",
-    styles,
-    props,
-    {
-      variables: {
-        "group-align": "align",
-        "group-child-width": (given) => (given.grow ? childWidth() : undefined),
-        "group-gap": "gap",
-        "group-justify": "justify",
-        "group-wrap": "wrap",
-      },
+  const { root } = createParts("Group", styles, props, {
+    variables: {
+      "group-align": "align",
+      "group-child-width": (given) => (given.grow ? childWidth() : undefined),
+      "group-gap": "gap",
+      "group-justify": "justify",
+      "group-wrap": "wrap",
     },
-    "children",
-    "grow",
-    "preventGrowOverflow",
-  );
+    keep: ["children", "grow", "preventGrowOverflow"],
+  });
   return (
     <div data-grow={props.grow ? "true" : undefined} {...root}>
       {present()}

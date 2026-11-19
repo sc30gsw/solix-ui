@@ -52,9 +52,7 @@ export const { handledKeys, rootPart, stylesApiPropKeys } = (await import(
 
 export const { resolveColor } = (await import(join(dist, "colors.js"))) as typeof Colors;
 
-export const defaultColorClasses: ReadonlySet<string> = new Set(
-  resolveColor(undefined, undefined).classes,
-);
+export const defaultColorClasses: ReadonlySet<string> = new Set(resolveColor("filled", {}).classes);
 
 export const { scaleOfThemeKey } = (await import(
   join(dist, "create-theme.js")

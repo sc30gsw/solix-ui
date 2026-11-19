@@ -1,25 +1,28 @@
 import {
+  autoContrastClass,
   colorClass,
   colorProperty,
   type ColorVariant,
   customColorClass,
-  defaultPalette,
-  fixedContrastClass,
+  isPalette,
+  isShade,
+  ownPaletteOf,
   type Palette,
   paletteClass,
-  palettesIn,
   paletteToken,
+  primaryAlias,
+  primaryProperty,
   type Shade,
   shadeClass,
-} from "#/src/style-prop-table.ts";
+  variantAttribute,
+} from "#/src/color-table.ts";
 import { characterThatEndsADeclaration, type ResolvedStyleProps } from "#/src/style-props.ts";
-import { tokens } from "#/src/tokens.stylex.ts";
 
 export type SolixColor = Palette | `${Palette}.${Shade}` | (string & {});
 
-export type ColorProps<Variant extends string = ColorVariant> = {
+export type ColorProps = {
   color?: SolixColor;
-  variant?: Variant | (string & {});
+  variant?: ColorVariant;
   autoContrast?: boolean;
 };
 
@@ -36,25 +39,31 @@ function isColorPropKey(name: PropertyKey): name is ColorPropKey {
 
 export const colorPropKeys = Object.keys(colorProps).filter(isColorPropKey);
 
-const { palettes, shades } = palettesIn(Object.keys(tokens));
-const shadeSeparator = ".";
+export type ResolvedColor = ResolvedStyleProps & {
+  readonly attributes: Readonly<Partial<Record<typeof variantAttribute, string>>>;
+};
 
-function named(color: string): string[] {
-  return [colorClass, paletteClass(color)];
+const shadeSeparator = ".";
+const defaultPalette = primaryAlias satisfies Palette;
+
+function shadeOf(palette: Palette, shade: Shade): string {
+  return palette === primaryAlias
+    ? `var(${primaryProperty(shade)})`
+    : `var(${paletteToken(ownPaletteOf(palette), shade)})`;
 }
 
 function given(color: unknown): ResolvedStyleProps {
   if (typeof color !== "string" || characterThatEndsADeclaration.test(color)) {
-    return { classes: named(defaultPalette), properties: {} };
+    return { classes: [colorClass, paletteClass(defaultPalette)], properties: {} };
   }
-  if (palettes.includes(color)) return { classes: named(color), properties: {} };
+  if (isPalette(color)) return { classes: [colorClass, paletteClass(color)], properties: {} };
   const at = color.lastIndexOf(shadeSeparator);
   const palette = color.slice(0, at);
   const shade = color.slice(at + 1);
-  if (at > 0 && palettes.includes(palette) && shades.includes(shade)) {
+  if (at > 0 && isPalette(palette) && isShade(shade)) {
     return {
-      classes: [...named(palette), shadeClass],
-      properties: { [colorProperty]: `var(${paletteToken(palette, shade)})` },
+      classes: [colorClass, paletteClass(palette), shadeClass],
+      properties: { [colorProperty]: shadeOf(palette, shade) },
     };
   }
   return {
@@ -63,9 +72,24 @@ function given(color: unknown): ResolvedStyleProps {
   };
 }
 
-export function resolveColor(color: unknown, autoContrast: unknown): ResolvedStyleProps {
-  const resolved = given(color);
-  return autoContrast === false
-    ? { ...resolved, classes: [...resolved.classes, fixedContrastClass] }
-    : resolved;
+export function resolveColor(
+  defaultVariant: ColorVariant,
+  props: Readonly<Record<string, unknown>>,
+): ResolvedColor {
+  const resolved = given(props.color);
+  return {
+    classes:
+      props.autoContrast === true ? [...resolved.classes, autoContrastClass] : resolved.classes,
+    properties: resolved.properties,
+    attributes: {
+      [variantAttribute]: typeof props.variant === "string" ? props.variant : defaultVariant,
+    },
+  };
+}
+
+export function colorResolver(
+  defaultVariant: ColorVariant,
+  props: Readonly<Record<string, unknown>>,
+): { readonly keys: readonly ColorPropKey[]; readonly resolved: () => ResolvedColor } {
+  return { keys: colorPropKeys, resolved: () => resolveColor(defaultVariant, props) };
 }

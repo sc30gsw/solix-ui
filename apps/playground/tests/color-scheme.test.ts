@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
 import type { Browser, BrowserContextOptions, Page } from "playwright";
 import { describe, expect, inject, test } from "vite-plus/test";
 import { schemeValues, tokenValues } from "../../../scripts/tokens";
@@ -195,7 +196,7 @@ inEveryEngine((browser) => {
         "a consumer's override of a token wins in either scheme",
       ).toBe(themedInTheSystemScheme);
       expect(await computed(page.getByTestId("default"), "background-color")).toBe(
-        await colourOf(page, written("--solix-color-primary-6", other)),
+        await colourOf(page, written(paletteToken(primaryPalette, "6"), other)),
       );
 
       await press(page, schemeButtons[system]);
@@ -347,7 +348,7 @@ inEveryEngine((browser) => {
     test("with the built stylesheet alone, a consumer's override of a colour token on :root is reset inside a nested scheme, and reaches it once the consumer sets it on [data-color-scheme] too", async () => {
       const context = await browser().newContext({ colorScheme: system });
       const page = await context.newPage();
-      const token = "--solix-color-primary";
+      const token = "--solix-color-text";
       const overridden = "rgb(0, 128, 0)";
       const text = (id: string) => `<p id="${id}" style="color:var(${token})">text</p>`;
       const pageWith = (selector: string) =>

@@ -49,6 +49,7 @@ const stylesFactory = "stylex.create";
 const partsHelper = "createParts";
 const containerPart = "container";
 const variablesOption = "variables";
+const keepOption = "keep";
 const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
 const libraryEntry = /(?:^|\/)src\/index\.ts$/;
@@ -337,19 +338,27 @@ function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
   };
 }
 
-function propsGivenToVariables(argument: ts.Expression): string[] {
-  if (!ts.isObjectLiteralExpression(argument)) return [];
-  const option = argument.properties.find(
-    (property) => staticPropertyName(property) === variablesOption,
-  );
-  const given = option && ts.isPropertyAssignment(option) ? option.initializer : undefined;
-  return given && ts.isObjectLiteralExpression(given)
-    ? given.properties.flatMap((property) =>
-        ts.isPropertyAssignment(property) && ts.isStringLiteral(property.initializer)
-          ? [property.initializer.text]
-          : [],
-      )
-    : [];
+function optionOf(argument: ts.Expression, name: string): ts.Expression | undefined {
+  if (!ts.isObjectLiteralExpression(argument)) return undefined;
+  const option = argument.properties.find((property) => staticPropertyName(property) === name);
+  return option && ts.isPropertyAssignment(option) ? option.initializer : undefined;
+}
+
+function propsKeptBy(argument: ts.Expression): string[] {
+  const given = optionOf(argument, variablesOption);
+  const kept = optionOf(argument, keepOption);
+  return [
+    ...(given && ts.isObjectLiteralExpression(given)
+      ? given.properties.flatMap((property) =>
+          ts.isPropertyAssignment(property) && ts.isStringLiteral(property.initializer)
+            ? [property.initializer.text]
+            : [],
+        )
+      : []),
+    ...(kept && ts.isArrayLiteralExpression(kept)
+      ? kept.elements.flatMap((element) => (ts.isStringLiteral(element) ? [element.text] : []))
+      : []),
+  ];
 }
 
 function keptOffRootProblems(
@@ -358,11 +367,7 @@ function keptOffRootProblems(
   call: ts.CallExpression,
   shape: PropsShape,
 ): string[] {
-  const kept = call.arguments
-    .slice(3)
-    .flatMap((argument) =>
-      ts.isStringLiteral(argument) ? [argument.text] : propsGivenToVariables(argument),
-    );
+  const kept = call.arguments.slice(3).flatMap(propsKeptBy);
   const readsChildren = descendants(fn).some(
     (node) => ts.isPropertyAccessExpression(node) && node.getText() === `props.${childrenProp}`,
   );
@@ -383,7 +388,7 @@ function keptOffRootProblems(
       .filter((prop) => !kept.includes(prop))
       .map(
         (prop) =>
-          `pass "${prop}" to ${partsHelper} after props, so it stays off the root: ${prop === childrenProp ? `${name} renders props.${childrenProp} itself` : `${name}Props declares it in its own props type`}.`,
+          `name "${prop}" in the ${keepOption} option of ${partsHelper}, so it stays off the root: ${prop === childrenProp ? `${name} renders props.${childrenProp} itself` : `${name}Props declares it in its own props type`}.`,
       ),
   ];
 }
