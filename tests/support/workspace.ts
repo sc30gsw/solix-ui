@@ -32,11 +32,11 @@ export type LibraryKind = (typeof libraryKindNames)[number];
 
 export type RuleSet = "every" | "shared" | "none";
 
-export type ErrorBoundary = { file: string; fn: string };
+export type Home = { file: string; fn?: string };
 
 export type LibraryRegistration = {
   kind: LibraryKind;
-  errorBoundaries: readonly ErrorBoundary[];
+  errorBoundaries: readonly Home[];
 };
 
 export const registeredLibraries: Readonly<Record<string, LibraryRegistration>> = {

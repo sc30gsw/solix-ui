@@ -19,6 +19,7 @@ import {
   ts,
 } from "#/scripts/syntax.ts";
 import {
+  type Home,
   type LibraryKind,
   libraryKinds,
   type LibraryRegistration,
@@ -68,8 +69,6 @@ export type Rule = (library: Library) => string[];
 export type PrimitiveRule = { description: string; rule: Rule };
 
 export type KindRule = PrimitiveRule & { kinds: readonly LibraryKind[] };
-
-export type Home = { file: string; fn?: string };
 
 export type Declared = { file: string; name: string };
 

@@ -11,6 +11,7 @@ import {
 import { fileNamedBy, namesAPackage } from "#/scripts/subpath.ts";
 import { importsOf, isTypeOnlyImport, parse, ts } from "#/scripts/syntax.ts";
 import {
+  type Home,
   kindsWithRules,
   libraryKindNames,
   type LibraryRegistration,
@@ -274,6 +275,30 @@ test("each rule passes a fixture that holds only what it allows", () => {
   expect(findings).toEqual(
     Object.fromEntries(Object.keys(primitiveRules).map((name) => [name, []])),
   );
+});
+
+function caughtErrorsWith(errorBoundaries: readonly Home[]): string[] {
+  const fixture = loadLibrary(join(fixtureDirectory, "forbidden"), {
+    kind: "primitives",
+    errorBoundaries,
+  });
+  const found = primitiveRules.caughtErrors.rule(fixture);
+  fixture.dispose();
+  return locationsOf(found);
+}
+
+test("the caught errors rule passes an error boundary that catches, and flags one that is missing or holds no catch", () => {
+  const catching = { file: "create-misbehaving.ts", fn: "createMisbehaving" };
+
+  expect(caughtErrorsWith([catching])).toEqual([]);
+  expect(caughtErrorsWith([{ file: catching.file }])).toEqual([]);
+  expect(
+    caughtErrorsWith([
+      catching,
+      { file: "create-gone.ts", fn: "createGone" },
+      { file: "create-sized.ts", fn: "createSized" },
+    ]),
+  ).toEqual([forbiddenAt("src/create-gone.ts"), forbiddenAt("src/create-sized.ts")]);
 });
 
 test("the rules of the logic kind read a logic fixture with Node's types, so a global Node declares too is no browser-only read", () => {
