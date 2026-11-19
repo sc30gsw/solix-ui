@@ -406,7 +406,7 @@ function operationFor(length: number): fc.Arbitrary<ListOperation> {
 
 const listCase = fc
   .record({
-    path: fc.constantFrom("list", "group.0.list", "a.b"),
+    path: fc.constantFrom("list", "group.0.list", "a.b", ""),
     bags: fc.array(fc.uniqueArray(fc.constantFrom(...suffixes)), { maxLength: 6 }),
   })
   .chain((generated) =>
@@ -420,6 +420,7 @@ const listCase = fc
 function valuesWith(path: string, items: readonly unknown[]): Record<string, unknown> {
   const sibling = { untouched: true };
   if (path === "list") return { list: items, sibling };
+  if (path === "") return { "": items, sibling };
   if (path === "a.b") return { a: { b: items, c: sibling }, sibling };
   return { group: [{ list: items, sibling }, sibling], sibling };
 }
