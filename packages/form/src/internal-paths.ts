@@ -1,3 +1,5 @@
+import { isContainer, tagOf } from "#/src/internal-values.ts";
+
 export type PathSegments = readonly [string, ...string[]];
 
 const unsafeSegments: readonly string[] = ["__proto__"] as const;
@@ -41,10 +43,6 @@ export function withIndexesAs(path: string, marker: string): string | undefined 
     .join(".");
 }
 
-export function isContainer(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
-}
-
 export function childOf(container: unknown, key: PropertyKey): unknown {
   if (container === null || container === undefined) return undefined;
   const boxed: object = Object(container);
@@ -59,10 +57,6 @@ export function getPath(path: unknown, values: unknown): unknown {
       current === null || current === undefined ? current : childOf(current, segment),
     values,
   );
-}
-
-export function tagOf(value: unknown): string {
-  return Object.prototype.toString.call(value);
 }
 
 function isCopyable(value: unknown): value is object {

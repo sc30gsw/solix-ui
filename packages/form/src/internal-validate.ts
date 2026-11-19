@@ -3,15 +3,14 @@ import {
   childOf,
   getPath,
   isAtOrUnder,
-  isContainer,
   isIndexSegment,
   joinPath,
   type PathSegments,
   splitPath,
-  tagOf,
   withIndexesAs,
 } from "#/src/internal-paths.ts";
 import { allOrNow, isThenable, thenOrNow } from "#/src/internal-outcome.ts";
+import { isContainer, tagOf } from "#/src/internal-values.ts";
 import { filterErrors, isError } from "#/src/internal-status.ts";
 import {
   type FormFieldValidationResult,
