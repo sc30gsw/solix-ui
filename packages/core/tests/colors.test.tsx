@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import postcss from "postcss";
 import type { CompiledStyles } from "@stylexjs/stylex";
-import { expect, expectTypeOf, test } from "vite-plus/test";
+import { expect, expectTypeOf, test, vi } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "#/build-pipeline.mjs";
 import {
   autoContrastClass,
@@ -248,6 +248,16 @@ test("any other CSS colour writes one custom property, itself, with the shade an
       },
     ),
   );
+});
+
+test("on the server a color that is no colour falls back to the primary palette without a warning, which only the browser's development build gives", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  try {
+    expect(classesOf(rootOf({ color: "red-6" }))).toContain(paletteClass(primaryAlias));
+    expect(warn).not.toHaveBeenCalled();
+  } finally {
+    warn.mockRestore();
+  }
 });
 
 test("the autoContrast threshold is the WCAG crossover, where black and white text contrast alike, and its weights are WCAG's", () => {
