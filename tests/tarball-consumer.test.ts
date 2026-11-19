@@ -285,13 +285,18 @@ describe("installed into a consumer outside the workspace", () => {
     const { catalog } = pnpmSettings();
 
     const settings = readFileSync(join(app, workspaceFile), "utf8");
-    for (const { manifest } of libraryPackages) {
-      const name = manifest.name ?? "";
+    const names = libraryPackages.map(({ manifest }) => manifest.name ?? "");
+    const resolvedByTheLibrary = names.filter(
+      (name) => name === libraryName || name in (library.manifest.peerDependencies ?? {}),
+    );
+    for (const name of names) {
       expect(consumer.dependencies[name], `${name} in the consumer's own manifest`).toMatch(
         /\.tgz$/,
       );
       expect(settings.includes(name), `${name} in the consumer's ${workspaceFile}`).toBe(false);
-      if (name !== libraryName && !(name in (library.manifest.peerDependencies ?? {}))) continue;
+    }
+    expect(resolvedByTheLibrary).toContain(libraryName);
+    for (const name of resolvedByTheLibrary) {
       expect(realpathSync(join(besideTheLibrary(), name)), name).toBe(
         realpathSync(join(app, "node_modules", name)),
       );
