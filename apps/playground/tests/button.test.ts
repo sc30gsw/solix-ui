@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
-import { palettes, paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
+import {
+  ownPaletteOf,
+  type Palette,
+  palettes,
+  paletteToken,
+  primaryPalette,
+} from "../../../packages/core/src/color-table";
 import {
   library,
   rootPart,
@@ -7,6 +13,7 @@ import {
   themeStyleSheet,
 } from "../../../packages/core/tests/built-library";
 import { lookOf } from "../../../scripts/expected-values";
+import { nestedThemeNames, nestedThemes } from "#/src/sections/theme-setups.ts";
 import {
   computed,
   inEveryEngine,
@@ -85,6 +92,33 @@ inEveryEngine((browser) => {
         await page.getByRole("heading").first().hover();
       }
     });
+
+    test.each([
+      [nestedThemeNames.outerIsland, nestedThemes.outer, nestedThemes.inner],
+      [nestedThemeNames.innerScope, nestedThemes.inner, nestedThemes.outer],
+      [nestedThemeNames.innerIsland, nestedThemes.inner, nestedThemes.outer],
+    ])(
+      "the nearest provider's primaryColor paints %s, in that element's own scheme, under an outer provider whose selector is an id",
+      async (name, nearest, outer) => {
+        const button = opened.page.getByRole("button", { name });
+        const paletteHere = (primaryColor: Palette) =>
+          button.evaluate(
+            (element, token) => {
+              const probe = document.createElement("span");
+              probe.style.color = `var(${token})`;
+              element.append(probe);
+              const colour = getComputedStyle(probe).color;
+              probe.remove();
+              return colour;
+            },
+            paletteToken(ownPaletteOf(primaryColor), "6"),
+          );
+        const wanted = await paletteHere(nearest.primaryColor);
+
+        expect(wanted).not.toBe(await paletteHere(outer.primaryColor));
+        expect(await computed(button, "background-color")).toBe(wanted);
+      },
+    );
 
     test("a consumer's rule for the class that classes.root names beats the library's style it targets, and nothing else", async () => {
       const { page, expected } = opened;

@@ -14,3 +14,14 @@ export const themeNames = {
   themed: "Padding the provider's theme sets",
   untouched: "Padding outside the provider's theme",
 };
+
+export const nestedThemes = {
+  outer: { scope: "brand-outer", primaryColor: "green" },
+  inner: { scope: "brand-inner", primaryColor: "red" },
+} as const satisfies Record<string, { scope: string; primaryColor: SolixTheme["primaryColor"] }>;
+
+export const nestedThemeNames = {
+  outerIsland: "Outer theme in a dark island",
+  innerScope: "Inner theme on a scope that is a dark island",
+  innerIsland: "Inner theme in a light island",
+};
