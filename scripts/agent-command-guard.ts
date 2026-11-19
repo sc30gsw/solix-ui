@@ -66,7 +66,11 @@ const commitShortOptionsWithAnAttachedValue = new Set(["u", "S"]);
 const hookSwitches = new Set(["HUSKY", "VP_GIT_HOOKS", "VITE_GIT_HOOKS"]);
 const hooksOff = "0";
 const hooksPathKey = "core.hookspath";
-const hookedSubcommands = new Set(["commit", "merge"]);
+const hookedSubcommands = new Set(["commit", "merge", "pull"]);
+const gitConfigKey = /^GIT_CONFIG_KEY_\d+$/;
+const gitConfigParameters = "GIT_CONFIG_PARAMETERS";
+const attachedConfig = "-c";
+const configEnvOption = "--config-env=";
 const configWritingOptions = new Set(["--unset", "--unset-all", "--add", "--replace-all"]);
 const configWritingSubcommands = new Set(["set", "unset"]);
 const echoes = new Set(["echo", "printf"]);
@@ -264,7 +268,11 @@ function gitSubcommand(args: readonly string[]): GitCall | undefined {
   const configs: string[] = [];
   let index = 0;
   while (index < args.length && args[index].startsWith("-")) {
-    if (args[index] === "-c" || args[index] === "--config-env") configs.push(args[index + 1] ?? "");
+    const arg = args[index];
+    if (arg === "-c" || arg === "--config-env") configs.push(args[index + 1] ?? "");
+    else if (arg.startsWith(attachedConfig) && arg.length > attachedConfig.length)
+      configs.push(arg.slice(attachedConfig.length));
+    else if (arg.startsWith(configEnvOption)) configs.push(arg.slice(configEnvOption.length));
     index += gitOptionsWithAValue.has(args[index]) ? 2 : 1;
   }
   return index < args.length
@@ -279,7 +287,9 @@ function setsTheHooksPath(config: string): boolean {
 function turnsTheHooksOff(word: string): boolean {
   if (!assignment.test(word)) return false;
   const [name, value] = [word.slice(0, word.indexOf("=")), word.slice(word.indexOf("=") + 1)];
-  return hookSwitches.has(name) && value === hooksOff;
+  if (hookSwitches.has(name)) return value === hooksOff;
+  if (gitConfigKey.test(name)) return value.toLowerCase() === hooksPathKey;
+  return name === gitConfigParameters && value.toLowerCase().includes(hooksPathKey);
 }
 
 function writesTheHooksPath(configArgs: readonly string[]): boolean {
@@ -296,7 +306,12 @@ function skipsTheHooksOf({ name, args, configs }: GitCall): boolean {
   if (name === "config") return writesTheHooksPath(args);
   if (!hookedSubcommands.has(name)) return false;
   if (configs.some(setsTheHooksPath)) return true;
-  return name === "commit" ? skipsTheHooks(args) : args.includes(noVerify);
+  return name === "commit" ? skipsTheHooks(args) : args.some(isNoVerify);
+}
+
+function isNoVerify(arg: string): boolean {
+  const option = arg.split("=")[0];
+  return option.length >= shortestNoVerifyGitAccepts.length && noVerify.startsWith(option);
 }
 
 function skipsTheHooks(commitArgs: readonly string[]): boolean {
@@ -304,9 +319,7 @@ function skipsTheHooks(commitArgs: readonly string[]): boolean {
     const arg = commitArgs[index];
     if (arg === "--") return false;
     if (arg.startsWith("--")) {
-      const option = arg.split("=")[0];
-      if (option.length >= shortestNoVerifyGitAccepts.length && noVerify.startsWith(option))
-        return true;
+      if (isNoVerify(arg)) return true;
     } else if (arg.startsWith("-") && arg.length > 1) {
       const letters = arg.slice(1).split("");
       const valueAt = letters.findIndex(
@@ -345,17 +358,13 @@ function refusalsFrom(
     if (sets) return ["releaseAge"];
   }
   if (assignmentTakers.has(program) && rest.some(assignsAReleaseAgeSetting)) return ["releaseAge"];
-  if (assignmentTakers.has(program) && rest.some(turnsTheHooksOff)) return ["hooksSkipped"];
   return [];
 }
 
 function refusalsOfCommand({ words }: SimpleCommand, inCi: boolean): Refusal[] {
   const leadingAssignments = words.findIndex((word) => !assignment.test(word));
   const assignments = leadingAssignments === -1 ? words : words.slice(0, leadingAssignments);
-  const found: Refusal[] = [
-    ...(assignments.some(assignsAReleaseAgeSetting) ? (["releaseAge"] as const) : []),
-    ...(assignments.some(turnsTheHooksOff) ? (["hooksSkipped"] as const) : []),
-  ];
+  const found: Refusal[] = assignments.some(assignsAReleaseAgeSetting) ? ["releaseAge"] : [];
   if (leadingAssignments === -1) return found;
   const program = programName(words[leadingAssignments]);
   if (readsData.has(program)) return found;
@@ -409,14 +418,20 @@ function programOf({ words }: SimpleCommand): string | undefined {
 
 function shellScriptsIn(command: SimpleCommand, before: SimpleCommand | undefined): string[] {
   const { words, input, piped } = command;
-  const scripts = words.flatMap((word, index) => {
+  const first = words.findIndex((word) => {
     const program = programName(word);
-    if (program === "eval") return [words.slice(index + 1).join(" ")];
-    if (!shells.has(program)) return [];
-    const flag = words.slice(index + 1).findIndex((arg) => shellScriptFlag.test(arg));
-    const script = flag === -1 ? undefined : words[index + 2 + flag];
-    return script === undefined ? [] : [script];
+    return program === "eval" || shells.has(program);
   });
+  const flag = words.slice(first + 1).findIndex((arg) => shellScriptFlag.test(arg));
+  const script =
+    first === -1
+      ? undefined
+      : programName(words[first]) === "eval"
+        ? words.slice(first + 1).join(" ")
+        : flag === -1
+          ? undefined
+          : words[first + 2 + flag];
+  const scripts = script === undefined ? [] : [script];
   if (scripts.length > 0 || !shells.has(programOf(command) ?? "")) return scripts;
   const echoed =
     piped && before !== undefined && echoes.has(programOf(before) ?? "")
@@ -429,16 +444,40 @@ function shellScriptsIn(command: SimpleCommand, before: SimpleCommand | undefine
   return [...input, ...echoed];
 }
 
-export function refusalsOf(line: string, inCi: boolean): Refusal[] {
+type Scan = { found: Refusal[]; runsHookedGit: boolean };
+
+function switchesTheHooksOff({ words }: SimpleCommand): boolean {
+  const leading = words.findIndex((word) => !assignment.test(word));
+  const assignments = leading === -1 ? words : words.slice(0, leading);
+  const taken = leading !== -1 && assignmentTakers.has(programName(words[leading]));
+  return [...assignments, ...(taken ? words.slice(leading + 1) : [])].some(turnsTheHooksOff);
+}
+
+function runsHookedGit({ words }: SimpleCommand): boolean {
+  return words.some(
+    (word, index) =>
+      programName(word) === "git" &&
+      hookedSubcommands.has(gitSubcommand(words.slice(index + 1))?.name ?? ""),
+  );
+}
+
+function scan(line: string, inCi: boolean): Scan {
   const commands = simpleCommands(lex(line, 0).tokens);
+  const nested = commands
+    .flatMap((command, index) => shellScriptsIn(command, commands[index - 1]))
+    .map((script) => scan(script, inCi));
+  const hookedGit = commands.some(runsHookedGit) || nested.some((inner) => inner.runsHookedGit);
   const found = [
     ...commands.flatMap((command) => refusalsOfCommand(command, inCi)),
     ...(writesAPnpmConfigFile(commands) ? (["releaseAge"] as const) : []),
-    ...commands
-      .flatMap((command, index) => shellScriptsIn(command, commands[index - 1]))
-      .flatMap((script) => refusalsOf(script, inCi)),
+    ...(hookedGit && commands.some(switchesTheHooksOff) ? (["hooksSkipped"] as const) : []),
+    ...nested.flatMap((inner) => inner.found),
   ];
-  return [...new Set(found)];
+  return { found: [...new Set(found)], runsHookedGit: hookedGit };
+}
+
+export function refusalsOf(line: string, inCi: boolean): Refusal[] {
+  return scan(line, inCi).found;
 }
 
 const standardInput = 0;

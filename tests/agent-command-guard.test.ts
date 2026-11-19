@@ -46,7 +46,14 @@ const refused: [Refusal, string[]][] = [
       "sh -c 'git commit -n -m x'",
       "HUSKY=0 git commit -m x",
       "VP_GIT_HOOKS=0 git commit -m x",
-      "export VITE_GIT_HOOKS=0",
+      "export VITE_GIT_HOOKS=0 && git commit -m x",
+      "HUSKY=0 bash -c 'git commit -m x'",
+      "git -ccore.hooksPath=x commit -m x",
+      "git --config-env=core.hooksPath=HOOKS commit -m x",
+      "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x",
+      "export GIT_CONFIG_PARAMETERS=\"'core.hooksPath'='x'\"; git merge main",
+      "git merge --no-veri main",
+      "git pull --no-verify origin main",
       "env HUSKY=0 git merge main",
       "git -c core.hooksPath=/dev/null commit -m x",
       "git -c CORE.HOOKSPATH=x merge main",
@@ -126,6 +133,11 @@ const allowed = [
   "grep minimumReleaseAge pnpm-workspace.yaml > /tmp/out",
   "cp pnpm-workspace.yaml /tmp/x && grep minimumReleaseAge /tmp/x",
   "echo git stash | grep stash",
+  "HUSKY=0 pnpm install",
+  "export VITE_GIT_HOOKS=0",
+  "git -cuser.name=x commit -m y",
+  "git --config-env=user.name=NAME commit -m y",
+  "git pull",
 ];
 
 describe("the agent command guard", () => {
@@ -138,6 +150,13 @@ describe("the agent command guard", () => {
 
   test.each(allowed)("allows %j", (line) => {
     expect(refusalsOf(line, false)).toEqual([]);
+  });
+
+  test("reads a chain of evals in time linear in its length", () => {
+    const started = performance.now();
+
+    expect(refusalsOf(`${"eval ".repeat(22)}git stash`, false)).toEqual(["stash"]);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 
   test("allows playwright install in CI, and still refuses the rest there", () => {
