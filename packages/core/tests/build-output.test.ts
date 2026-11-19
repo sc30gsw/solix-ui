@@ -313,10 +313,8 @@ test("the build takes the SDK's hidden rule when its writer holds one closed lay
 });
 
 test("a token keeps its public custom property name", () => {
-  expect(stylesheet).toContain("--solix-color-primary:");
-  expect(readFileSync(join(dist, "tokens.stylex.js"), "utf8")).toContain(
-    "var(--solix-color-primary)",
-  );
+  expect(stylesheet).toContain("--solix-color-text:");
+  expect(readFileSync(join(dist, "tokens.stylex.js"), "utf8")).toContain("var(--solix-color-text)");
 });
 
 test("open state compiles to a selector on the element's own open attribute", () => {

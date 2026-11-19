@@ -22,7 +22,7 @@ await buildSources(layout, async (filename, source) => {
 const { stylePropRules } = await import(
   pathToFileURL(join(layout.outputDirectory, "style-prop-table.js")).href
 );
-const { colorRules } = await import(
+const { colorRules, primaryRule } = await import(
   pathToFileURL(join(layout.outputDirectory, "color-rules.js")).href
 );
 await writeFile(
@@ -30,7 +30,7 @@ await writeFile(
   libraryStylesheet(
     rules,
     stylePropRules(),
-    { colors: colorRules() },
+    { colors: colorRules(), primary: primaryRule() },
     behaviourSdkHiddenRule(packageRoot),
   ),
 );

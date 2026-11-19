@@ -4,9 +4,14 @@ import { expect, test } from "vite-plus/test";
 import {
   colorVariantTable,
   isShade,
+  ownPaletteOf,
   type Palette,
-  palettes,
+  paletteAliases,
+  palettes as ownPalettes,
   paletteToken,
+  primaryPalette,
+  primaryProperty,
+  shades,
 } from "#/src/color-table.ts";
 import { contrastExceptions } from "../../../tests/support/contrast-exceptions";
 import { fileNamedBy } from "../../../scripts/subpath";
@@ -27,6 +32,7 @@ const pageBackground = "--solix-color-body";
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const sourceDirectory = dirname(tokensFile);
 const variantColorsFile = join(repositoryRoot, sourceDirectory, "variant-colors.stylex.ts");
+const primaryColorsFile = join(repositoryRoot, sourceDirectory, "primary-colors.stylex.ts");
 
 const remLength = /^\d+(?:\.\d+)?rem$/;
 const number = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
@@ -41,6 +47,7 @@ type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
 const tokens = tokenValues();
 const colourTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
 const shadowTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "shadow");
+const palettes: Palette[] = [...ownPalettes, ...Object.keys(paletteAliases).filter(isAliasName)];
 const variants = Object.entries(colorVariantTable);
 const lengthTokens = Object.keys(tokens).filter(
   (name) => !["colour", "shadow"].includes(tokenKind(name)),
@@ -48,6 +55,10 @@ const lengthTokens = Object.keys(tokens).filter(
 const shadowLength = String.raw`(?:0|-?${number}rem)`;
 const oneShadow = new RegExp(`^(?:${shadowLength} ){2,4}${oklchText}$`);
 const commaOutsideBrackets = /,\s*(?![^(]*\))/;
+
+function isAliasName(name: string): name is keyof typeof paletteAliases {
+  return Object.hasOwn(paletteAliases, name);
+}
 
 function oklch(value: string): Oklch | undefined {
   const match = oklchNotation.exec(value);
@@ -175,7 +186,23 @@ function variableIn(root: Block | undefined, value: ts.Expression): Conditional 
   return ts.isPropertyAccessExpression(value) ? root?.properties.get(value.getText()) : undefined;
 }
 
+function primaryReferencedBy(value: ts.Expression): string | undefined {
+  if (
+    !ts.isElementAccessExpression(value) ||
+    !ts.isIdentifier(value.expression) ||
+    !ts.isStringLiteral(value.argumentExpression) ||
+    importedFrom(value.expression) !== primaryColorsFile
+  ) {
+    return undefined;
+  }
+  const name = value.argumentExpression.text;
+  const shade = shades.find((each) => primaryProperty(each) === name);
+  return shade === undefined ? undefined : paletteToken(primaryPalette, shade);
+}
+
 function tokenReferencedBy(value: ts.Expression | undefined): string | undefined {
+  const primary = value && primaryReferencedBy(value);
+  if (primary !== undefined) return primary;
   return value &&
     ts.isElementAccessExpression(value) &&
     ts.isStringLiteral(value.argumentExpression) &&
@@ -244,7 +271,7 @@ function slotToken(
 ): string | undefined {
   const value = slots[slot];
   if (value === undefined || value === "transparent") return undefined;
-  return isShade(value) ? paletteToken(palette, value) : value;
+  return isShade(value) ? paletteToken(ownPaletteOf(palette), value) : value;
 }
 
 function inEachPaletteAndVariant(pairing: Pairing): Pairing[] {

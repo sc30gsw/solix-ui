@@ -3,13 +3,15 @@ import {
   colorProperty,
   type ColorVariant,
   customColorClass,
-  defaultPalette,
   fixedContrastClass,
   isPalette,
   isShade,
+  ownPaletteOf,
   type Palette,
   paletteClass,
   paletteToken,
+  primaryAlias,
+  primaryProperty,
   type Shade,
   shadeClass,
 } from "#/src/color-table.ts";
@@ -37,6 +39,13 @@ function isColorPropKey(name: PropertyKey): name is ColorPropKey {
 export const colorPropKeys = Object.keys(colorProps).filter(isColorPropKey);
 
 const shadeSeparator = ".";
+const defaultPalette = primaryAlias satisfies Palette;
+
+function shadeOf(palette: Palette, shade: Shade): string {
+  return palette === primaryAlias
+    ? `var(${primaryProperty(shade)})`
+    : `var(${paletteToken(ownPaletteOf(palette), shade)})`;
+}
 
 function named(color: string): string[] {
   return [colorClass, paletteClass(color)];
@@ -53,7 +62,7 @@ function given(color: unknown): ResolvedStyleProps {
   if (at > 0 && isPalette(palette) && isShade(shade)) {
     return {
       classes: [...named(palette), shadeClass],
-      properties: { [colorProperty]: `var(${paletteToken(palette, shade)})` },
+      properties: { [colorProperty]: shadeOf(palette, shade) },
     };
   }
   return {

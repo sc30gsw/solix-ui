@@ -1,4 +1,11 @@
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
+import {
+  palettes,
+  paletteToken,
+  primaryPalette,
+  primaryProperty,
+  shades,
+} from "../../../packages/core/src/color-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
 import { lookOf } from "../../../scripts/expected-values";
 import {
@@ -28,14 +35,57 @@ inEveryEngine((browser) => {
       const overridden = page.getByTestId("overridden");
 
       expect(await computed(page.getByTestId("default"), "background-color")).toBe(
-        expected("--solix-color-primary-6"),
+        expected(paletteToken(primaryPalette, "6")),
       );
       expect(await computed(overridden, "background-color")).toBe(expected("danger"));
-      expect(await computed(overridden, "color")).toBe(expected("--solix-color-primary-contrast"));
+      expect(await computed(overridden, "color")).toBe(
+        expected(paletteToken(primaryPalette, "contrast")),
+      );
       expect(await computed(overridden, "height")).toBe(expected("--solix-control-height-sm"));
       expect(await computed(overridden, "border-top-left-radius")).toBe(
         expected("--solix-radius-3xl"),
       );
+    });
+
+    test("one rule that sets the primary's alias re-themes the Button, its hover and its light variant, the selected tab, the open disclosure, the focused text input and the focus ring", async () => {
+      const { page, expected } = opened;
+      const other = palettes.find((palette) => palette !== primaryPalette) ?? primaryPalette;
+      const shade = (name: (typeof shades)[number]) => expected(paletteToken(other, name));
+      const rule = `:root,[data-color-scheme]{${shades
+        .map((name) => `${primaryProperty(name)}:var(${paletteToken(other, name)})`)
+        .join(";")}}`;
+      await page.evaluate((text) => {
+        const style = document.createElement("style");
+        style.nonce = document.querySelector<HTMLElement>("[nonce]")?.nonce ?? "";
+        style.id = "primary-override";
+        style.textContent = text;
+        document.head.append(style);
+      }, rule);
+      const button = page.getByTestId("default");
+      const selectedTab = page.getByRole("tab", { selected: true }).first();
+      const summary = page.locator("summary", { hasText: "Toggle" });
+
+      try {
+        await expect.poll(() => computed(button, "background-color")).toBe(shade("6"));
+        expect(await computed(button, "outline-color")).toBe(shade("6"));
+        await expect
+          .poll(() => computed(page.getByTestId("light"), "background-color"))
+          .toBe(shade("1"));
+        await expect.poll(() => computed(selectedTab, "border-bottom-color")).toBe(shade("6"));
+        await expect.poll(() => computed(selectedTab, "color")).toBe(shade("9"));
+        await button.hover();
+        await expect.poll(() => computed(button, "background-color")).toBe(shade("7"));
+        await summary.click();
+        await expect.poll(() => computed(summary, "background-color")).toBe(shade("6"));
+        await summary.click();
+        const email = page.getByRole("textbox", { name: "Email" });
+        await email.focus();
+        await page.keyboard.press("ArrowRight");
+        await expect.poll(() => computed(email, "border-top-color")).toBe(shade("6"));
+      } finally {
+        await page.evaluate(() => document.getElementById("primary-override")?.remove());
+        await page.getByRole("heading").first().hover();
+      }
     });
 
     test("a consumer's rule for the class that classes.root names beats the library's style it targets, and nothing else", async () => {
@@ -43,7 +93,9 @@ inEveryEngine((browser) => {
       const button = page.getByRole("button", { name: "Class from classes.root" });
 
       expect(await computed(button, "background-color")).toBe(expected("danger"));
-      expect(await computed(button, "color")).toBe(expected("--solix-color-primary-contrast"));
+      expect(await computed(button, "color")).toBe(
+        expected(paletteToken(primaryPalette, "contrast")),
+      );
       expect(await computed(button, "height")).toBe(expected("--solix-control-height-sm"));
     });
 

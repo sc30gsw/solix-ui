@@ -10,6 +10,9 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 }).trim();
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
+const { paletteToken, primaryPalette } = await repositoryModule("packages/core/src/color-table.ts");
+const primarySolid = paletteToken(primaryPalette, "6");
+const primaryContrast = paletteToken(primaryPalette, "contrast");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
 const { baseKey, breakpointWidths, libraryStyleMark, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
@@ -51,8 +54,8 @@ const journeys = {
     const button = page.getByRole("button", { name: "Default" });
     await shot("page", "Open the page.");
     await shot("default-button", "Look at the button named Default.", button);
-    observe("background", await style(button, "background-color"), expected("--solix-color-primary-6"));
-    observe("text colour", await style(button, "color"), expected("--solix-color-primary-contrast"));
+    observe("background", await style(button, "background-color"), expected(primarySolid));
+    observe("text colour", await style(button, "color"), expected(primaryContrast));
     observe("height", await style(button, "height"), expected("--solix-control-height-sm"));
   },
   "consumer-override": async ({ page, observe, shot, expected }) => {
@@ -61,14 +64,14 @@ const journeys = {
     await shot("overridden-button", "Look at the button named Overridden, which the app gives its own class.", overridden);
     observe("background comes from the consumer's class", await style(overridden, "background-color"), expected("danger"));
     observe("height still comes from the library", await style(overridden, "height"), expected("--solix-control-height-md"));
-    observe("text colour still comes from the library", await style(overridden, "color"), expected("--solix-color-on-primary"));
+    observe("text colour still comes from the library", await style(overridden, "color"), expected(primaryContrast));
   },
   "token-theme": async ({ page, observe, shot, expected }) => {
     const themed = page.getByRole("button", { name: "Themed" });
     await shot("page", "Open the page.");
     await shot("themed-button", "Look at the button named Themed, which sits in a subtree where the app overrides a token.", themed);
     observe("background follows the consumer's token value", await style(themed, "background-color"), expected("brandGreen"));
-    observe("a button outside the themed subtree keeps the default", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected("--solix-color-primary-6"));
+    observe("a button outside the themed subtree keeps the default", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected(primarySolid));
   },
   "provider-theme": async ({ page, observe, shot, expected }) => {
     const themed = page.getByText(themeNames.themed, { exact: true });
@@ -91,7 +94,7 @@ const journeys = {
     const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
     const followerSummary = follower.locator("summary");
     await shot("before", "Open the page. The Emphasise button has the default colour and the Follows disclosure has no outline.");
-    observe("before: Emphasise background", await style(emphasise, "background-color"), expected("--solix-color-primary-6"));
+    observe("before: Emphasise background", await style(emphasise, "background-color"), expected(primarySolid));
     observe("before: Emphasise aria-pressed", await emphasise.getAttribute("aria-pressed"), "false");
     observe("before: Follows outline", await style(follower, "outline-style"), "none");
     observe("before: Follows summary background", await style(followerSummary, "background-color"), expected("--solix-color-surface"));
@@ -106,8 +109,9 @@ const journeys = {
 
     await emphasise.click();
     await page.waitForFunction((element) => element.getAttribute("aria-pressed") === "false", await emphasise.elementHandle());
+    await page.getByRole("heading").first().hover();
     await shot("after-second-click", "Click Emphasise again. Both return to how they started.");
-    observe("after a second click: Emphasise background", await style(emphasise, "background-color"), expected("--solix-color-primary-6"));
+    observe("after a second click: Emphasise background", await style(emphasise, "background-color"), expected(primarySolid));
     observe("after a second click: Follows outline", await style(follower, "outline-style"), "none");
     observe("after a second click: Follows summary background", await style(followerSummary, "background-color"), expected("--solix-color-surface"));
   },
@@ -126,10 +130,10 @@ const journeys = {
     await content.waitFor({ state: "visible" });
     await shot("open", "Click the summary named Toggle. The content appears and the summary changes colour.");
     observe("open: the details element's open property", await isOpen(), true);
-    observe("open: summary background", await style(summary, "background-color"), expected("--solix-color-primary"));
-    observe("open: summary text colour", await style(summary, "color"), expected("--solix-color-on-primary"));
+    observe("open: summary background", await style(summary, "background-color"), expected(primarySolid));
+    observe("open: summary text colour", await style(summary, "color"), expected(primaryContrast));
     observe("open: content is visible", await content.isVisible(), true);
-    observe("open: content left border", await style(content, "border-left-color"), expected("--solix-color-primary"));
+    observe("open: content left border", await style(content, "border-left-color"), expected(primarySolid));
 
     await summary.click();
     await content.waitFor({ state: "hidden" });
@@ -152,7 +156,7 @@ const journeys = {
     await content.waitFor({ state: "visible" });
     await shot("opened-with-enter", "Focus the summary and press Enter. The disclosure opens.");
     observe("Enter on the focused summary: the details element's open property", await isOpen(), true);
-    observe("Enter on the focused summary: summary background", await style(summary, "background-color"), expected("--solix-color-primary"));
+    observe("Enter on the focused summary: summary background", await style(summary, "background-color"), expected(primarySolid));
     observe("Enter on the focused summary: content is visible", await content.isVisible(), true);
 
     await page.keyboard.press("Space");
@@ -488,7 +492,7 @@ const journeys = {
     const first = await stateOf(page, account);
     observe("at first: selected tab", first.selected, overview);
     observe("at first: panels shown", first.shown.join(), panelOf(overview));
-    observe("at first: selected tab text colour", await style(tabNamed(page, account, overview), "color"), expected("--solix-color-primary"));
+    observe("at first: selected tab text colour", await style(tabNamed(page, account, overview), "color"), expected(paletteToken(primaryPalette, "9")));
     observe("at first: another tab text colour", await style(tabNamed(page, account, members), "color"), expected("--solix-color-text"));
     observe("at first: the disabled tab is disabled", await tabNamed(page, account, billing).isDisabled(), true);
 
@@ -565,7 +569,7 @@ const journeys = {
     await shot("focus-ring", `Click ${two} in ${manual} and ${security} in ${account}. Leave the ${account} list with Shift+Tab and come back with Tab. Focus returns to the selected tab, ${security}, which shows a focus ring.`, region);
     observe("Tab into the list: focused tab", (await stateOf(page, account)).focused, security);
     observe("focus ring: outline style", await style(last, "outline-style"), "solid");
-    observe("focus ring: outline colour", await style(last, "outline-color"), expected("--solix-color-primary"));
+    observe("focus ring: outline colour", await style(last, "outline-color"), expected(primarySolid));
     await page.keyboard.press("Tab");
     await shot("focus-panel", "Press Tab. Focus leaves the list for the panel.", region);
     observe("Tab out of the list: focused element", await page.evaluate(() => document.activeElement?.textContent), panelOf(security));
@@ -611,14 +615,14 @@ const journeys = {
     const page = await scriptless.newPage();
     await page.goto(url);
     await shot("javascript-off", "Request the page with JavaScript turned off in the browser.", page);
-    observe("with JavaScript off the Default button is styled", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected("--solix-color-primary"));
+    observe("with JavaScript off the Default button is styled", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected(primarySolid));
 
     const summary = page.locator("summary").filter({ hasText: "Toggle" });
     await summary.click();
     await page.getByText("Hidden content").waitFor({ state: "visible" });
     await shot("disclosure-opens-without-javascript", "Still with JavaScript off, click the summary named Toggle. The disclosure opens.", page);
     observe("with JavaScript off the disclosure opens on a click", await page.getByText("Hidden content").isVisible(), true);
-    observe("with JavaScript off the open summary takes the primary colour", await style(summary, "background-color"), expected("--solix-color-primary"));
+    observe("with JavaScript off the open summary takes the primary colour", await style(summary, "background-color"), expected(primarySolid));
     observe("with JavaScript off the modal is not showing", await page.locator("dialog").isVisible(), false);
     observe("with JavaScript off the Email input is styled", await style(page.getByRole("textbox", { name: "Email" }), "border-top-color"), expected("--solix-color-border"));
     await scriptless.close();

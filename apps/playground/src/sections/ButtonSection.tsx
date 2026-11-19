@@ -7,6 +7,9 @@ export function ButtonSection() {
       <Button data-testid="default" ref={refOf("Button")}>
         Default
       </Button>
+      <Button data-testid="light" variant="light">
+        Light
+      </Button>
       <Button data-testid="overridden" class="danger">
         Overridden
       </Button>

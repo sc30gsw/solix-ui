@@ -171,6 +171,7 @@ export function libraryStylesheet(rules, stylePropRules, colourRules, behaviourS
     "}",
     `@layer ${colorSchemeLayer} {`,
     colorSchemeRules(tokens),
+    colourRules.primary,
     "}",
     `@layer ${HIDDEN_LAYER} {`,
     `${HIDDEN_PART_SELECTOR}{display:none}`,

@@ -8,9 +8,14 @@ import {
   customColorClass,
   derivedShades,
   fixedContrastClass,
+  type OwnPalette,
+  paletteAliases,
   paletteClass,
   palettes,
   paletteToken,
+  primaryAlias,
+  primaryPalette,
+  primaryProperty,
   type Shade,
   shadeClass,
   shadeProperty,
@@ -23,6 +28,7 @@ const given = `var(${colorProperty})`;
 const contrast = `var(${shadeProperty(contrastShade)})`;
 const solidShade = "6" satisfies Shade;
 const hoverShade = "7" satisfies Shade;
+const schemeRoots = ":root,[data-color-scheme]";
 
 export function contrastingText(colour: string): string {
   const channel = `clamp(0, (${contrastLuminance} - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1000000, 1)`;
@@ -52,6 +58,13 @@ export function colorRules(): string {
       (palette) =>
         `.${paletteClass(palette)}{${shadesFrom((shade) => paletteToken(palette, shade))}}`,
     ),
+    `.${paletteClass(primaryAlias)}{${shadesFrom(primaryProperty)}}`,
+    ...Object.entries(paletteAliases)
+      .filter(([alias]) => alias !== primaryAlias)
+      .map(
+        ([alias, palette]: [string, OwnPalette]) =>
+          `.${paletteClass(alias)}{${shadesFrom((shade) => paletteToken(palette, shade))}}`,
+      ),
     `.${shadeClass}{${declared([
       [shadeProperty(solidShade), given],
       [shadeProperty(hoverShade), mixed(given, 90, contrast)],
@@ -72,4 +85,10 @@ export function colorRules(): string {
     ),
   ];
   return `@layer ${colorLayer}{\n${rules.join("\n")}\n}`;
+}
+
+export function primaryRule(): string {
+  return `${schemeRoots}{${declared(
+    shades.map((shade) => [primaryProperty(shade), `var(${paletteToken(primaryPalette, shade)})`]),
+  )}}`;
 }

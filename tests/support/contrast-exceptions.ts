@@ -2,6 +2,7 @@ import { stableClass } from "#/packages/core/src/stable-class.ts";
 import {
   type ColorVariant,
   contrastShade,
+  ownPaletteOf,
   type Palette,
   paletteClass,
   paletteToken,
@@ -28,8 +29,8 @@ function inVariant(
   const drawnIn = `.${paletteClass(palette)}[${variantAttribute}="${variant}"]`;
   return pairs.flatMap(([foreground, background, schemes]) =>
     schemes.map((scheme) => ({
-      foreground: paletteToken(palette, foreground),
-      background: paletteToken(palette, background),
+      foreground: paletteToken(ownPaletteOf(palette), foreground),
+      background: paletteToken(ownPaletteOf(palette), background),
       scheme,
       drawnIn,
     })),
@@ -53,8 +54,8 @@ export const contrastExceptions: readonly ContrastException[] = [
     ["9", "2", ["light"]],
   ]),
   ...bothSchemes.map((scheme) => ({
-    foreground: "--solix-color-on-primary",
-    background: "--solix-color-primary",
+    foreground: paletteToken(ownPaletteOf("primary"), contrastShade),
+    background: paletteToken(ownPaletteOf("primary"), "6"),
     scheme,
     drawnIn: `.${stableClass("Disclosure", "summary")}`,
   })),
