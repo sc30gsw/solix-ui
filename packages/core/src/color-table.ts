@@ -43,6 +43,14 @@ export const autoContrastClass = `${colorClassPrefix}-auto`;
 export const contrastShade = "contrast" satisfies Shade;
 export const textWithoutAPalette = "white";
 export const contrastLuminance = Math.sqrt(1.05 * 0.05) - 0.05;
+export const luminanceWeights = { r: 0.2126, g: 0.7152, b: 0.0722 } as const;
+
+export const slotDefaults = {
+  "--sx-variant-background": "transparent",
+  "--sx-variant-hover": "var(--sx-variant-background)",
+  "--sx-variant-color": "currentColor",
+  "--sx-variant-border": "transparent",
+} as const;
 
 type ColourToken = `--solix-color-${string}`;
 type PrimaryAlias = Extract<keyof typeof primaryColors, `--${string}`>;
@@ -86,8 +94,8 @@ export const colorVariantTable = {
       "--sx-variant-border": "transparent",
     },
     given: {
-      "--sx-variant-background": "given",
-      "--sx-variant-hover": "given-hover",
+      "--sx-variant-background": "1",
+      "--sx-variant-hover": "2",
       "--sx-variant-color": "9",
       "--sx-variant-border": "transparent",
     },
@@ -138,10 +146,13 @@ export const colorVariantTable = {
 
 export type ColorVariant = keyof typeof colorVariantTable;
 
-export const derivedShades = {
-  "0": [8, "transparent"],
+export const tintShades = {
   "1": [15, "transparent"],
   "2": [20, "transparent"],
+} as const satisfies Partial<Record<Shade, readonly [percent: number, toward: string]>>;
+
+export const derivedShades = {
+  "0": [8, "transparent"],
   "3": [35, "var(--solix-color-body)"],
   "4": [50, "var(--solix-color-body)"],
   "5": [75, "var(--solix-color-body)"],
@@ -181,4 +192,44 @@ function isAlias(name: string): name is keyof typeof paletteAliases {
 
 export function ownPaletteOf(palette: Palette): OwnPalette {
   return isAlias(palette) ? paletteAliases[palette] : palette;
+}
+
+export function shadeSource(palette: Palette, shade: Shade): string {
+  return palette === primaryAlias
+    ? primaryProperty(shade)
+    : paletteToken(ownPaletteOf(palette), shade);
+}
+
+const solid = "6" satisfies Shade;
+const shadeSeparator = ".";
+const colourSyntax =
+  /^(?:#[\da-f]{3,8}|[a-z]+|(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark|var)\(.+\))$/i;
+
+export type ParsedColor =
+  | { readonly kind: "palette"; readonly palette: Palette }
+  | { readonly kind: "shade"; readonly palette: Palette; readonly value: string }
+  | { readonly kind: "colour"; readonly value: string };
+
+export function parseColor(written: unknown): ParsedColor | undefined {
+  if (typeof written !== "string" || /[;{}]/.test(written)) return undefined;
+  if (isPalette(written)) return { kind: "palette", palette: written };
+  const at = written.lastIndexOf(shadeSeparator);
+  const palette = written.slice(0, at);
+  const shade = written.slice(at + 1);
+  if (at > 0 && isPalette(palette) && isShade(shade)) {
+    return { kind: "shade", palette, value: `var(${shadeSource(palette, shade)})` };
+  }
+  return colourSyntax.test(written) && !/-\d$/.test(written)
+    ? { kind: "colour", value: written }
+    : undefined;
+}
+
+export function colorValueOf(written: string): string | undefined {
+  const parsed = parseColor(written);
+  if (parsed?.kind === "palette") return `var(${shadeSource(parsed.palette, solid)})`;
+  return parsed?.kind === "shade" ? parsed.value : undefined;
+}
+
+export function isColorVariant(name: unknown): name is ColorVariant {
+  return typeof name === "string" && Object.hasOwn(colorVariantTable, name);
 }

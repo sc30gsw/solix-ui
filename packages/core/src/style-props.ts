@@ -33,9 +33,11 @@ import {
   type VisibilityValue,
   visibilityPropNames,
 } from "#/src/style-prop-table.ts";
+import { colorValueOf } from "#/src/color-table.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const pixelsPerRem = 16;
+const colorScale = "color" satisfies Scale;
 export const characterThatEndsADeclaration = /[;{}]/;
 const containerWidthUnits = ["rem", "px", "em"] as const;
 const fractionLeadingZeros = ["", "0", "00", "000"] as const;
@@ -163,7 +165,8 @@ function cssValue(
   }
   if (characterThatEndsADeclaration.test(written)) return undefined;
   const token = row.scale === undefined ? undefined : tokenOf(row.scale, written);
-  return token === undefined ? written : `var(${token})`;
+  if (token !== undefined) return `var(${token})`;
+  return row.scale === colorScale ? (colorValueOf(written) ?? written) : written;
 }
 
 function presentEntries(style: JSX.CSSProperties): [string, string | number][] {

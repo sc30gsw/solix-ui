@@ -4,19 +4,16 @@ import {
   colorProperty,
   type ColorVariant,
   customColorClass,
-  isPalette,
-  isShade,
-  ownPaletteOf,
+  isColorVariant,
   type Palette,
   paletteClass,
-  paletteToken,
+  parseColor,
   primaryAlias,
-  primaryProperty,
   type Shade,
   shadeClass,
   variantAttribute,
 } from "#/src/color-table.ts";
-import { characterThatEndsADeclaration, type ResolvedStyleProps } from "#/src/style-props.ts";
+import type { ResolvedStyleProps } from "#/src/style-props.ts";
 
 export type SolixColor = Palette | `${Palette}.${Shade}` | (string & {});
 
@@ -43,32 +40,22 @@ export type ResolvedColor = ResolvedStyleProps & {
   readonly attributes: Readonly<Partial<Record<typeof variantAttribute, string>>>;
 };
 
-const shadeSeparator = ".";
 const defaultPalette = primaryAlias satisfies Palette;
 
-function shadeOf(palette: Palette, shade: Shade): string {
-  return palette === primaryAlias
-    ? `var(${primaryProperty(shade)})`
-    : `var(${paletteToken(ownPaletteOf(palette), shade)})`;
-}
-
 function given(color: unknown): ResolvedStyleProps {
-  if (typeof color !== "string" || characterThatEndsADeclaration.test(color)) {
+  const parsed = parseColor(color);
+  if (parsed === undefined) {
     return { classes: [colorClass, paletteClass(defaultPalette)], properties: {} };
   }
-  if (isPalette(color)) return { classes: [colorClass, paletteClass(color)], properties: {} };
-  const at = color.lastIndexOf(shadeSeparator);
-  const palette = color.slice(0, at);
-  const shade = color.slice(at + 1);
-  if (at > 0 && isPalette(palette) && isShade(shade)) {
-    return {
-      classes: [colorClass, paletteClass(palette), shadeClass],
-      properties: { [colorProperty]: shadeOf(palette, shade) },
-    };
+  if (parsed.kind === "palette") {
+    return { classes: [colorClass, paletteClass(parsed.palette)], properties: {} };
   }
   return {
-    classes: [colorClass, shadeClass, customColorClass],
-    properties: { [colorProperty]: color },
+    classes:
+      parsed.kind === "shade"
+        ? [colorClass, paletteClass(parsed.palette), shadeClass]
+        : [colorClass, shadeClass, customColorClass],
+    properties: { [colorProperty]: parsed.value },
   };
 }
 
@@ -82,7 +69,7 @@ export function resolveColor(
       props.autoContrast === true ? [...resolved.classes, autoContrastClass] : resolved.classes,
     properties: resolved.properties,
     attributes: {
-      [variantAttribute]: typeof props.variant === "string" ? props.variant : defaultVariant,
+      [variantAttribute]: isColorVariant(props.variant) ? props.variant : defaultVariant,
     },
   };
 }
