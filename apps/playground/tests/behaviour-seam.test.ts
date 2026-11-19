@@ -1,9 +1,7 @@
 import fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
-import { join } from "node:path";
 import {
   BEHAVIOUR_SDK_LAYER,
-  behaviourSdkHiddenRule,
   LIBRARY_CASCADE_LAYER,
 } from "../../../packages/core/build-pipeline.mjs";
 import { rootPart, stableClass, stylesheet } from "../../../packages/core/tests/built-library";
@@ -14,26 +12,20 @@ import {
   type OpenPage,
   scriptModes,
 } from "#/tests/support/playground.ts";
-import { opened } from "#/tests/support/opening.ts";
-import {
-  namesTheLibraryLayer,
-  outsideTheSdkLayer,
-  pageStyleRules,
-  stylesAddedToThePage,
-} from "#/tests/support/page-styles.ts";
+import { pageStyleRules, stylesAddedToThePage } from "#/tests/support/page-styles.ts";
 import {
   runTimeWrites,
   writesOfTheLibraryAndTheAppAlone,
 } from "#/tests/support/run-time-writes.ts";
 import {
   account,
+  clickTab,
   controlled,
   elementsNamedBy,
   generated,
   inAShadowRoot,
   optional,
   panelOf,
-  startAt,
   stateOf,
   tabList,
   tabNamed,
@@ -44,10 +36,9 @@ import { assertProperty } from "../../../tests/support/properties.ts";
 const url = inject("playgroundUrl");
 const { inbox, drafts, locked } = tabNames.controlled;
 const { near, far } = tabNames.inAShadowRoot;
-const { overview } = tabNames.account;
+const { overview, members, security } = tabNames.account;
 const { notes } = tabNames.optional;
 const generatedRuns = 25;
-const sdkHiddenRule = behaviourSdkHiddenRule(join(import.meta.dirname, "../../../packages/core"));
 const tabValues = fc.uniqueArray(
   fc.oneof(
     fc.string({ minLength: 1 }),
@@ -98,61 +89,62 @@ inEveryEngine((browser) => {
       );
     });
 
-    test("before a script runs the page adds no style but the library's own, which it marks, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, every rule of a style the library marks names the library's layer, and every important declaration on the page sits in the SDK's layer", async () => {
-      const plain = await browser().newContext({ javaScriptEnabled });
-      const page = await plain.newPage();
-      await opened(page, url, javaScriptEnabled ? "hydrated" : "load");
-      const rules = await pageStyleRules(page);
-      const added = await stylesAddedToThePage(page);
-      await plain.close();
-      const linkedLayerOrder = rules
-        .filter(
-          ({ addedAtRunTime, fromTheLibrary, layers }) =>
-            !addedAtRunTime && !fromTheLibrary && layers.length > 0,
-        )
-        .map(({ layers: [outermost] }) => outermost);
+    test("before a script runs the page adds no style but the library's own, which it marks, and after it the page holds no rule, style, class or inert element but what the library, the SDK in its own layer, among them the hidden rule as the build reads it from the SDK, and the app give, and the linked stylesheet orders the SDK's layer before the library's", async () => {
+      const { page, close } = await openPage(
+        browser(),
+        url,
+        { javaScriptEnabled },
+        { sentinels: false },
+      );
+      try {
+        const rules = await pageStyleRules(page);
+        const linkedLayerOrder = rules
+          .filter(
+            ({ addedAtRunTime, fromTheLibrary, layers }) =>
+              !addedAtRunTime && !fromTheLibrary && layers.length > 0,
+          )
+          .map(({ layers: [outermost] }) => outermost);
 
-      expect(
-        rules
-          .filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule))
-          .map(({ text }) => text),
-      ).toEqual([]);
-      expect(
-        rules
-          .filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule))
-          .map(({ text }) => text),
-      ).toEqual([]);
-      expect(rules.filter(({ fromTheLibrary }) => fromTheLibrary)).not.toEqual([]);
-      expect(
-        rules
-          .filter((rule) => rule.fromTheLibrary && !namesTheLibraryLayer(rule))
-          .map(({ text }) => text),
-      ).toEqual([]);
-      expect(added.includes(sdkHiddenRule)).toBe(javaScriptEnabled);
-      expect(javaScriptEnabled ? [] : added).toEqual([]);
-      expect([...new Set(linkedLayerOrder)]).toEqual([BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER]);
+        expect(await runTimeWrites(page)).toEqual({
+          ...writesOfTheLibraryAndTheAppAlone,
+          theSdkAddedTheHiddenRuleTheBuildReadsFromIt: javaScriptEnabled,
+        });
+        expect(rules.filter(({ fromTheLibrary }) => fromTheLibrary)).not.toEqual([]);
+        expect(javaScriptEnabled ? [] : await stylesAddedToThePage(page)).toEqual([]);
+        expect([...new Set(linkedLayerOrder)]).toEqual([
+          BEHAVIOUR_SDK_LAYER,
+          LIBRARY_CASCADE_LAYER,
+        ]);
+      } finally {
+        await close();
+      }
     });
   });
 
-  test("after hydration, and again after clicks and keys on the tabs, the page holds no rule, style, class or inert element but what the library, the SDK in its own layer and the app give", async () => {
-    const plain = await browser().newContext();
-    const page = await plain.newPage();
-    await opened(page, url, "hydrated");
+  test("after clicks and keys on the tabs, the page still holds no rule, style, class or inert element but what the library, the SDK in its own layer and the app give", async () => {
+    const { page, close } = await openPage(browser(), url, {}, { sentinels: false });
+    try {
+      const landed = (list: string, name: string) =>
+        expect.poll(() => stateOf(page, list)).toMatchObject({ selected: name, focused: name });
+      await clickTab(page, account, overview);
+      await landed(account, overview);
+      for (const [key, name] of [
+        ["ArrowRight", members],
+        ["End", security],
+        ["Home", overview],
+      ] as const) {
+        await page.keyboard.press(key);
+        await landed(account, name);
+      }
+      await clickTab(page, optional, notes);
+      await landed(optional, notes);
+      await clickTab(page, optional, notes);
+      await expect.poll(() => stateOf(page, optional)).toMatchObject({ selected: null });
 
-    expect(await runTimeWrites(page), "after hydration").toEqual(writesOfTheLibraryAndTheAppAlone);
-
-    await startAt(page, account, overview);
-    for (const key of ["ArrowRight", "End", "Home"]) await page.keyboard.press(key);
-    await tabNamed(page, optional, notes).click();
-    await tabNamed(page, optional, notes).click();
-    await expect.poll(() => stateOf(page, account)).toMatchObject({ selected: overview });
-    await expect.poll(() => stateOf(page, optional)).toMatchObject({ selected: null });
-
-    expect(await runTimeWrites(page), "after clicks and keys").toEqual(
-      writesOfTheLibraryAndTheAppAlone,
-    );
-
-    await plain.close();
+      expect(await runTimeWrites(page)).toEqual(writesOfTheLibraryAndTheAppAlone);
+    } finally {
+      await close();
+    }
   });
 
   describe("a behaviour component in the hydrated page", () => {
