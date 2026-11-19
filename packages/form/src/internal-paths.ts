@@ -28,7 +28,7 @@ export function withIndexesAs(path: string, marker: string): string | undefined 
     .join(".");
 }
 
-function isContainer(value: unknown): value is object {
+export function isContainer(value: unknown): value is object {
   return typeof value === "object" && value !== null;
 }
 

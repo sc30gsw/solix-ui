@@ -3,6 +3,7 @@ import {
   childOf,
   getPath,
   isAtOrUnder,
+  isContainer,
   isIndexSegment,
   type PathSegments,
   splitPath,
@@ -98,32 +99,28 @@ export function validateValues<Values>(
   return allOrNow(entries, (settled) => resultOf(Object.fromEntries(settled)));
 }
 
-function isRecord(value: unknown): value is object {
-  return typeof value === "object" && value !== null;
-}
-
 function ruleAt(
   rules: unknown,
   segments: PathSegments,
   depth: number,
   at: string,
-  validation: { values: unknown; perItem: boolean },
+  walk: { values: unknown; perItem: boolean },
 ): AnyRule | undefined {
-  if (!isRecord(rules)) return undefined;
+  if (!isContainer(rules)) return undefined;
   const segment = segments.at(depth) ?? "";
   const next = at === "" ? segment : `${at}.${segment}`;
   const last = depth === segments.length - 1;
-  if (validation.perItem) {
+  if (walk.perItem) {
     return isIndexSegment(segment) && !last
-      ? ruleAt(rules, segments, depth + 1, next, { values: validation.values, perItem: false })
+      ? ruleAt(rules, segments, depth + 1, next, { values: walk.values, perItem: false })
       : undefined;
   }
   const child = childOf(rules, segment);
   if (last) return isRule(child) ? child : undefined;
-  const value = getPath(next, validation.values);
-  if (!isRecord(child) || !isRecord(value)) return undefined;
+  const value = getPath(next, walk.values);
+  if (!isContainer(child) || !isContainer(value)) return undefined;
   return ruleAt(child, segments, depth + 1, next, {
-    values: validation.values,
+    values: walk.values,
     perItem: Array.isArray(value),
   });
 }
