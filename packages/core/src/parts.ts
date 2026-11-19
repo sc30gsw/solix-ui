@@ -1,8 +1,8 @@
 import * as stylex from "@stylexjs/stylex";
 import { createMemo, merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
-import { type ColorPropKey, colorPropKeys, resolveColor } from "#/src/colors.ts";
-import { variantAttribute } from "#/src/color-table.ts";
+import type { ColorVariant } from "#/src/color-table.ts";
+import { type ColorPropKey, colorResolver, type ResolvedColor } from "#/src/colors.ts";
 import { stableClass } from "#/src/stable-class.ts";
 import {
   hasChildRules,
@@ -105,7 +105,7 @@ type VariablesOption<Name extends string, Props> = Name extends VariableGroup
 
 export type PartsOptions<Name extends string, Props> = VariablesOption<Name, Props> & {
   readonly keep?: readonly (keyof Props & string)[];
-  readonly color?: string;
+  readonly color?: ColorVariant;
   readonly queries?: QueryContainer;
   readonly carried?: CarriedStyling;
 };
@@ -113,7 +113,7 @@ export type PartsOptions<Name extends string, Props> = VariablesOption<Name, Pro
 type KeptBy<Options> =
   | (Options extends { keep: readonly (infer Kept)[] } ? Kept : never)
   | (Options extends { variables: infer Given } ? Extract<Given[keyof Given], string> : never)
-  | (Options extends { color: string } ? ColorPropKey : never);
+  | (Options extends { color: ColorVariant } ? ColorPropKey : never);
 
 type Parts<Styles, Props, KeptOffRoot extends keyof Props> = {
   root: RootProps<Props, KeptOffRoot>;
@@ -125,11 +125,12 @@ type PartsInput = StylesApiProps<Compiled> &
   Styling & { component?: unknown } & Record<string, unknown>;
 
 const noVariables: ResolvedVariables = { classes: [], properties: {}, used: [] };
+const noColor: ResolvedColor = { classes: [], properties: {}, attributes: {} };
 
 type GivenOptions = {
   readonly variables?: Readonly<Record<string, Given<Record<string, unknown>>>>;
   readonly keep?: readonly string[];
-  readonly color?: string;
+  readonly color?: ColorVariant;
   readonly queries?: QueryContainer;
   readonly carried?: CarriedStyling;
 };
@@ -150,14 +151,12 @@ export function createParts<
   const ownProps = Object.values(options.variables ?? {}).filter(
     (prop): prop is string => typeof prop === "string",
   );
-  const defaultVariant = options.color;
-  const colorProps = defaultVariant === undefined ? [] : colorPropKeys;
-  const rest = omit(input, ...(options.keep ?? []), ...ownProps, ...colorProps);
-  const colored = createMemo(() =>
-    defaultVariant === undefined
-      ? noVariables
-      : { ...resolveColor(input.color, input.autoContrast), used: [] },
-  );
+  const color =
+    options.color === undefined
+      ? { keys: [], resolved: () => noColor }
+      : colorResolver(options.color, input);
+  const rest = omit(input, ...(options.keep ?? []), ...ownProps, ...color.keys);
+  const colored = createMemo(color.resolved);
   const resolved = createMemo(() => resolveStyleProps(rest));
   const variables = createMemo(() => {
     if (options.variables === undefined || !isVariableGroup(component)) return noVariables;
@@ -187,13 +186,7 @@ export function createParts<
   const root = merge(
     omit<Record<string, unknown>, typeof handledKeys>(rest, ...handledKeys),
     () => (wrapsAComponent() ? stylesApi : {}),
-    defaultVariant === undefined
-      ? {}
-      : {
-          get [variantAttribute]() {
-            return typeof input.variant === "string" ? input.variant : defaultVariant;
-          },
-        },
+    () => colored().attributes,
     {
       get class() {
         return [
