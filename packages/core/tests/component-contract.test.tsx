@@ -761,7 +761,7 @@ test("every variable drops null and a value that holds ;, { or }, and writes eac
 
         expect(Object.values(properties).filter((css) => /[;{}]/.test(css))).toEqual([]);
         expect(Object.keys(properties).sort()).toEqual(classes.map((found) => `--${found}`).sort());
-        expect(classes.sort()).toEqual(kept.map((key) => variableClass(name, key)).sort());
+        expect(classes.toSorted()).toEqual(kept.map((key) => variableClass(name, key)).sort());
       },
     ),
     { numRuns: generatedRuns },

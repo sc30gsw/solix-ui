@@ -1,5 +1,5 @@
 import type { JSX } from "@solidjs/web";
-import { createSignal, onCleanup } from "solid-js";
+import { createMemo, createSignal, onCleanup } from "solid-js";
 import {
   baseKey,
   type Breakpoint,
@@ -17,6 +17,7 @@ import {
   type RowOf,
   type Scale,
   stylePropClass,
+  stylePropKeys,
   containerQueryLayer,
   type StylePropName,
   stylePropNames,
@@ -128,16 +129,24 @@ export type QueryContainer = {
   readonly member: () => QueryContainer;
 };
 
-export type ResolvedVariables = ResolvedStyleProps & { readonly used: readonly Used[] };
+export type ResolvedVariables = Resolved & { readonly used: readonly Used[] };
 
 export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
 } & { [Name in VisibilityPropName]?: VisibilityValue<Name> | Absent };
 
-export type ResolvedStyleProps = {
-  classes: string[];
-  properties: Record<`--${string}`, string>;
+export type Resolved = {
+  readonly classes: readonly string[];
+  readonly properties: Readonly<Record<`--${string}`, string>>;
+  readonly attributes: Readonly<Record<string, string>>;
 };
+
+export type Resolver = {
+  readonly keys: readonly string[];
+  readonly resolved: () => Resolved;
+};
+
+export type Given<Props> = (keyof Props & string) | ((props: Props) => VariableValue);
 
 function keyedEntries<Key extends string>(
   value: VariableValue,
@@ -196,7 +205,7 @@ export function withConsumerStyle(
   return { ...own, ...presentStyle(consumer) };
 }
 
-export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
+export function resolveStyleProps(props: StyleProps): Resolved {
   const classes = new Set<string>();
   const properties: Record<`--${string}`, string> = {};
   for (const name of stylePropNames) {
@@ -213,7 +222,11 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
     const className = visibilityClass(name, props[name]);
     if (className !== undefined) classes.add(className);
   }
-  return { classes: [...classes], properties };
+  return { classes: [...classes], properties, attributes: {} };
+}
+
+export function stylePropResolver(props: StyleProps): Resolver {
+  return { keys: stylePropKeys, resolved: createMemo(() => resolveStyleProps(props)) };
 }
 
 export function eachValue<V extends string | number>(
@@ -291,7 +304,33 @@ export function resolveVariables(
       if (slot !== undefined) used.push([name, slot]);
     }
   }
-  return { classes, properties, used };
+  return { classes, properties, attributes: {}, used };
+}
+
+export function variablesResolver<Props extends Readonly<Record<string, unknown>>>(
+  variables: Variables,
+  from: Readonly<Record<string, Given<Props>>>,
+  props: Props,
+  queries: QueryContainer | undefined,
+): Resolver {
+  const resolved = createMemo(() =>
+    resolveVariables(
+      variables,
+      Object.fromEntries(
+        Object.entries(from).map(([name, given]) => [
+          name,
+          typeof given === "string" ? props[given] : given(props),
+        ]),
+      ),
+      queries?.queries(),
+      (row) => props.unstyled === true && row.children !== undefined,
+    ),
+  );
+  queries?.report(() => resolved().used);
+  return {
+    keys: Object.values(from).filter((given) => typeof given === "string"),
+    resolved,
+  };
 }
 
 export function containerKeysOf(value: Keyed<unknown>): [key: string, width: string][] {
