@@ -1,25 +1,24 @@
 import type { Browser, Locator } from "playwright";
 import { afterAll, beforeAll, describe } from "vite-plus/test";
 import { browserType, enginesToVerify } from "#/scripts/browser-engines.mjs";
-import {
-  localUrl,
-  type RunningServer,
-  type ServedApp,
-  startServer,
-} from "#/tests/support/server-process.ts";
+import { type RunningServer, type ServedApp, startServer } from "#/tests/support/server-process.ts";
 
-export function serveApp(app: ServedApp): string {
+export function serveApp(app: ServedApp): () => string {
   let running: RunningServer | undefined;
 
   beforeAll(async () => {
     running = await startServer(app);
   });
 
-  afterAll(() => {
-    running?.stop();
+  afterAll(async () => {
+    await running?.stop();
   });
 
-  return localUrl(app.port);
+  return () => {
+    if (running === undefined)
+      throw new Error("Read the app's URL in a test or a hook, once it serves.");
+    return running.url;
+  };
 }
 
 export function inEveryEngine(define: (browser: () => Browser) => void): void {

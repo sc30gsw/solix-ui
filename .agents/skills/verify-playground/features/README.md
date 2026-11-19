@@ -4,7 +4,7 @@ This directory is the maintained source for verifying what a user sees and does 
 
 ## Baseline preconditions
 
-- Launch with `.agents/skills/verify-playground/scripts/launch.sh`. The page is at `http://127.0.0.1:4331/` unless `VERIFY_PLAYGROUND_PORT` is set.
+- Launch with `.agents/skills/verify-playground/scripts/launch.sh`. The page is at the URL it prints, on the port recorded in `.verify-playground/server.port`.
 - Run `.agents/skills/verify-playground/scripts/doctor.sh` and require exit code 0.
 - Never drive an instance that this checkout did not launch.
 - The page has no stored data, so every journey starts from the same state after a page load.

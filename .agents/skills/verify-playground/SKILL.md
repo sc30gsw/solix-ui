@@ -32,9 +32,9 @@ The sections below are the same steps run one at a time, for driving a single jo
 .agents/skills/verify-playground/scripts/launch.sh
 ```
 
-It builds the library and then the app in production mode, starts the built server, and prints `ready: http://127.0.0.1:4331/ (pid N)` once the page serves markup whose `class` attribute holds a library class, one that contains `solix-`. Set `VERIFY_PLAYGROUND_PORT` to use another port. The app has no data, migrations or sign-in.
+It builds the library and then the app in production mode, starts the built server, and prints `ready: <url> (pid N)` once the page serves markup whose `class` attribute holds a library class, one that contains `solix-`. The server listens on a port the system gives it, which `launch.sh` reads from what the server prints and records in `server.port`, where `drive.mjs` and `doctor.sh` read it. The app has no data, migrations or sign-in.
 
-It refuses to start while this checkout already runs an instance. Two checkouts can run side by side on different ports. State lives in `.verify-playground/` at the repository root: `server.pid`, `server.port`, `server.log`.
+It refuses to start while this checkout already runs an instance. Two checkouts can run side by side, each on its own port. State lives in `.verify-playground/` at the repository root: `server.pid`, `server.port`, `server.log`.
 
 ## Doctor
 
