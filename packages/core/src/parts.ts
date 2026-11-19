@@ -107,6 +107,10 @@ type KeptBy<Options> =
   | (Options extends { variables: infer Sources } ? Extract<Sources[keyof Sources], string> : never)
   | (Options extends { color: ColorVariant } ? ColorPropKey : never);
 
+type TakenWith<Options, Props> = Options extends { color: ColorVariant }
+  ? Props
+  : Props & { readonly [Key in ColorPropKey]?: never };
+
 type Parts<Styles, Props, KeptOffRoot extends keyof Props> = {
   root: RootProps<Props, KeptOffRoot>;
   part: (name: OtherPart<Styles>) => Part;
@@ -128,7 +132,7 @@ export function createParts<
 >(
   of: Of,
   compiled: Styles,
-  props: Props,
+  props: TakenWith<Options, Props>,
   ...[options]: [Of] extends [Variables] ? [options: Options] : [options?: Options]
 ): Parts<Styles, Props, KeptBy<Options> & keyof Props>;
 export function createParts(

@@ -1,56 +1,46 @@
-import { existsSync, globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { basename, dirname, join, relative } from "node:path";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { VARIABLES_MODULE } from "#/packages/core/build-pipeline.mjs";
-import { stylePropKeys, stylePropTable } from "#/packages/core/src/style-prop-table.ts";
-import {
-  builtComponents,
-  carriedComponents,
-  compiledClassesOf,
-  scaleOfThemeKey,
-  variableRows,
-} from "#/packages/core/tests/built-library.ts";
-import { allowedRuntimeDependencies, loads } from "#/scripts/runtime-dependencies.ts";
+import { builtComponents, compiledClassesOf } from "#/packages/core/tests/built-library.ts";
 import { fileNamedBy } from "#/scripts/subpath.ts";
-import { tokenValues } from "#/scripts/tokens.ts";
 import {
   calledDeclaration,
-  constructedClass,
   descendants,
   exportsOf,
   fileOf,
   findAncestor,
   firstLine,
-  isDomLibraryFile,
-  isTypeOnlyImport,
   memberDeclarations,
-  nameOf,
-  moduleSpecifierOf,
-  openProgram,
-  parse,
-  parseAll,
-  parseText,
   staticPropertyName,
-  stringsIn,
   symbolOf,
   ts,
 } from "#/scripts/syntax.ts";
-import { componentLibraries, repositoryRoot, scriptFiles } from "#/tests/support/workspace.ts";
+import {
+  type Component,
+  components,
+  definedVariablesOf,
+  isConst,
+  libraries,
+  librarySourceFiles,
+  librarySources,
+  libraryStyleModule,
+  lineOf,
+  partsHelper,
+  partsHelperFile,
+  partsModule,
+  relativePath,
+  seams,
+  stylesVariable,
+  typedSource,
+  unwrapped,
+  variablesDefiner,
+  variablesFileOf,
+} from "#/tests/support/library-sources.ts";
 
-const componentFile = /^[A-Z][A-Za-z0-9]*\.tsx$/;
-const helperFile =
-  /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.tsx?|[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.stylex\.ts|index\.ts)$/;
-const tokenName = /^--solix-[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const stylesVariable = "styles";
 const stylesFactory = "stylex.create";
-const partsHelper = "createParts";
 const containerPart = "container";
 const variablesOption = "variables";
 const keepOption = "keep";
-const partsHelperFile = "packages/core/src/parts.ts";
-const variablesDefiner = "defineVariables";
-const partsModule = "parts.ts";
-const libraryEntry = /(?:^|\/)src\/index\.ts$/;
 const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
 const colorPropsType = "ColorProps";
 const colorPropsFile = "packages/core/src/colors.ts";
@@ -59,57 +49,13 @@ const rootBinding = "root";
 const partBinding = "part";
 const stylesApiTypeArgument = `typeof ${stylesVariable}`;
 const childrenProp = "children";
-const stylexModule = "@stylexjs/stylex";
-const stylexRuntimeFunctions = ["attrs", "props"];
 const intrinsicElement = /^[a-z][a-z0-9-]*$/;
 const elementPropsType = "ElementProps";
 const polymorphicPropsType = "PolymorphicProps";
-const featureDirectory = join(repositoryRoot, ".agents/skills/verify-playground/features");
-const stylePropTableFile = "packages/core/src/style-prop-table.ts";
-const builtLibraryFile = "packages/core/tests/built-library.ts";
-const fixturesFile = "packages/core/tests/fixtures.ts";
-const testDirectory = "tests";
-const libraryCode = ["*.{ts,tsx,mjs,js}", "src/**/*.{ts,tsx,mjs,js}"];
-const importedThroughASeam = allowedRuntimeDependencies();
-const seams = [...new Set(importedThroughASeam.map(({ seam }) => seam))];
 const behaviourType = "Behaviour";
 const behaviourBinder = "bind";
 
-const libraries = componentLibraries.map(({ directory, manifest }) => ({
-  name: manifest.name ?? directory,
-  directory,
-  source: join(directory, "src"),
-}));
-
-type Component = { name: string; file: string; source: ts.SourceFile };
-
 type JsxTag = ts.JsxOpeningElement | ts.JsxSelfClosingElement;
-
-function relativePath(file: string): string {
-  return relative(repositoryRoot, file);
-}
-
-const librarySourceFiles = libraries.flatMap(({ source }) =>
-  globSync("**/*.{ts,tsx}", { cwd: source }).map((entry) => join(source, entry)),
-);
-const librarySources = openProgram(librarySourceFiles);
-
-function typedSource(file: string): ts.SourceFile {
-  const source = librarySources.sourceFile(file);
-  if (!source) throw new Error(`${relativePath(file)}: TypeScript could not read this file.`);
-  return source;
-}
-
-const components: Component[] = libraries.flatMap(({ source }) =>
-  readdirSync(source)
-    .filter((entry) => componentFile.test(entry))
-    .sort()
-    .map((entry) => ({
-      name: basename(entry, ".tsx"),
-      file: join(source, entry),
-      source: typedSource(join(source, entry)),
-    })),
-);
 
 function isTheBinder(member: ts.Node | undefined): boolean {
   return (
@@ -137,10 +83,6 @@ function referencesToTheBinder(node: ts.Node): ts.Node[] {
   );
 }
 
-function lineOf(node: ts.Node): number {
-  return node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
-}
-
 function exportedNames(source: ts.SourceFile): string[] {
   const { functions, types, others } = exportsOf(source);
   return [...functions, ...types, ...others];
@@ -151,33 +93,6 @@ function callsOf(node: ts.Node, callee: string): ts.CallExpression[] {
     (found): found is ts.CallExpression =>
       ts.isCallExpression(found) && found.expression.getText() === callee,
   );
-}
-
-function variablesFileOf(name: string): string {
-  return `${name}.variables.ts`;
-}
-
-function definedVariablesOf(declaration: ts.Node | undefined): string | undefined {
-  if (
-    !declaration ||
-    !ts.isVariableDeclaration(declaration) ||
-    !isConst(declaration) ||
-    !declaration.initializer ||
-    !ts.isCallExpression(declaration.initializer)
-  ) {
-    return undefined;
-  }
-  const called = calledDeclaration(librarySources, declaration.initializer);
-  const [component, ...others] = declaration.initializer.arguments;
-  return called &&
-    ts.isFunctionDeclaration(called) &&
-    called.name?.text === variablesDefiner &&
-    relativePath(fileOf(called)) === stylePropTableFile &&
-    component &&
-    ts.isStringLiteral(component) &&
-    others.length === 1
-    ? component.text
-    : undefined;
 }
 
 function takesItsVariables(argument: ts.Expression, name: string, fn: ts.Node): boolean {
@@ -196,17 +111,6 @@ function variableNamed(node: ts.Node, name: string): ts.VariableDeclaration | un
     (found): found is ts.VariableDeclaration =>
       ts.isVariableDeclaration(found) && ts.isIdentifier(found.name) && found.name.text === name,
   );
-}
-
-function isConst(declaration: ts.VariableDeclaration): boolean {
-  return (
-    ts.isVariableDeclarationList(declaration.parent) &&
-    (declaration.parent.flags & ts.NodeFlags.Const) !== 0
-  );
-}
-
-function unwrapped(node: ts.Expression): ts.Expression {
-  return ts.isParenthesizedExpression(node) ? unwrapped(node.expression) : node;
 }
 
 function tagOf(node: ts.Node): JsxTag | undefined {
@@ -328,7 +232,7 @@ function propsShapeOf(alias: ts.TypeAliasDeclaration | undefined): PropsShape | 
   return { kind, element, stylesApi, ownProps, alias };
 }
 
-type OwnPropNames = { names: string[]; unread: string[]; colored: boolean };
+type OwnPropNames = { names: string[]; unread: string[] };
 
 function isColorProps(member: ts.TypeNode): boolean {
   if (!ts.isTypeReferenceNode(member)) return false;
@@ -338,13 +242,6 @@ function isColorProps(member: ts.TypeNode): boolean {
     ts.isTypeAliasDeclaration(declaration) &&
     declaration.name.text === colorPropsType &&
     relativePath(fileOf(declaration)) === colorPropsFile
-  );
-}
-
-function hasColorOption(argument: ts.Expression): boolean {
-  return (
-    ts.isObjectLiteralExpression(argument) &&
-    argument.properties.some((property) => staticPropertyName(property) === colorOption)
   );
 }
 
@@ -361,7 +258,6 @@ function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
   const literalMembers = members.filter(ts.isTypeLiteralNode).flatMap((literal) => literal.members);
   return {
     names: [...new Set(literalMembers.flatMap((member) => staticPropertyName(member) ?? []))],
-    colored: members.some(isColorProps),
     unread: [
       ...members.filter(
         (member) =>
@@ -407,19 +303,13 @@ function keptOffRootProblems(
   const readsChildren = descendants(fn).some(
     (node) => ts.isPropertyAccessExpression(node) && node.getText() === `props.${childrenProp}`,
   );
-  const { names, unread, colored } = ownPropNames(shape.ownProps);
-  const givesColor = call.arguments.slice(3).some(hasColorOption);
+  const { names, unread } = ownPropNames(shape.ownProps);
   const handledByTheComponent = [...names, ...(readsChildren ? [childrenProp] : [])];
   return [
     ...unread.map(
       (member) =>
-        `write ${member} in the own props of ${name}Props as an inline type literal, such as { label: string }, so this check reads each key it declares and requires it off the root. Only ${displayPropsRefused} and ${colorPropsType}, whose members the ${colorOption} option keeps off the root, may stand on their own.`,
+        `write ${member} in the own props of ${name}Props as an inline type literal, such as { label: string }, so this check reads each key it declares and requires it off the root. Only ${displayPropsRefused} and ${colorPropsType}, whose members the ${colorOption} option that ${partsHelper} requires for them by type keeps off the root, may stand on their own.`,
     ),
-    ...(colored && !givesColor
-      ? [
-          `pass { ${colorOption}: <its default variant> } to ${partsHelper}, so it keeps the members of ${colorPropsType} off the root and turns them into the palette's class and data-variant.`,
-        ]
-      : []),
     ...handledByTheComponent
       .filter((prop) => !kept.includes(prop))
       .map(
@@ -427,34 +317,6 @@ function keptOffRootProblems(
           `name "${prop}" in the ${keepOption} option of ${partsHelper}, so it stays off the root: ${prop === childrenProp ? `${name} renders props.${childrenProp} itself` : `${name}Props declares it in its own props type`}.`,
       ),
   ];
-}
-
-function stylexRuntimeCalls(source: ts.SourceFile): string[] {
-  const callees = source.statements.flatMap((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      statement.moduleSpecifier.text !== stylexModule
-    ) {
-      return [];
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamespaceImport(bindings)) {
-      return stylexRuntimeFunctions.map((runtime) => `${bindings.name.text}.${runtime}`);
-    }
-    return bindings && ts.isNamedImports(bindings)
-      ? bindings.elements
-          .filter(({ name, propertyName }) =>
-            stylexRuntimeFunctions.includes((propertyName ?? name).text),
-          )
-          .map(({ name }) => name.text)
-      : [];
-  });
-  return descendants(source).flatMap((node) =>
-    ts.isCallExpression(node) && callees.includes(node.expression.getText())
-      ? [node.expression.getText()]
-      : [],
-  );
 }
 
 function polymorphicDefault(
@@ -714,177 +576,6 @@ test("every component is written the one way: one function, and its root and eve
   expect([...components.flatMap(problemsWith), ...boundElsewhere]).toEqual([]);
 });
 
-function loadsOutsideTheSeam(file: string, source: ts.SourceFile): string[] {
-  return descendants(source).flatMap((node) => {
-    const specifier = moduleSpecifierOf(node);
-    if (!specifier || !ts.isStringLiteralLikeNode(specifier)) return [];
-    return importedThroughASeam
-      .filter(({ dependency, seam }) => loads(dependency, specifier.text) && file !== seam)
-      .map(
-        ({ dependency, seam }) =>
-          `${file}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${node.getText().split("\n")[0]} loads ${dependency}. Only ${seam} imports it; take what you need from that module.`,
-      );
-  });
-}
-
-function packageDirectoryOf(library: string, dependency: string): string {
-  const owner = libraries.find(({ name }) => name === library);
-  if (!owner) throw new Error(`${library}: no component library of this repository has this name.`);
-  return realpathSync(join(owner.directory, "node_modules", dependency));
-}
-
-const seamDependencies = importedThroughASeam.map((entry) => ({
-  ...entry,
-  directory: packageDirectoryOf(entry.library, entry.dependency),
-}));
-
-function resolvesOutsideTheSeam(file: string): string[] {
-  const source = typedSource(file);
-  const where = (node: ts.Node) => `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)}`;
-  return descendants(source).flatMap((node) => {
-    const specifier = moduleSpecifierOf(node);
-    if (specifier === undefined) return [];
-    if (!ts.isStringLiteralLikeNode(specifier)) {
-      return [`${where(node)} loads a module it names at run time. Name it with a string literal.`];
-    }
-    const resolved = symbolOf(librarySources, specifier)?.declarations?.[0]?.resolve();
-    if (resolved === undefined) {
-      return [
-        `${where(node)} names a module that resolves to no file, so nothing tells which package it loads. Import a module the library's program resolves, from a package its manifest names.`,
-      ];
-    }
-    const resolvedFile = realpathSync(fileOf(resolved));
-    return seamDependencies
-      .filter(
-        ({ directory, seam }) =>
-          resolvedFile.startsWith(`${directory}/`) && relativePath(file) !== seam,
-      )
-      .map(
-        ({ dependency, seam, directory }) =>
-          `${where(node)} resolves to ${relative(directory, resolvedFile)} of ${dependency}. Only ${seam} loads it; take what you need from that module.`,
-      );
-  });
-}
-
-test("every module a source of a library loads resolves to a file, no source but its seam loads one that resolves inside a runtime dependency the allow-list names with one, however the specifier is spelt, and no source of a library loads a module it names at run time", () => {
-  expect(librarySourceFiles.flatMap(resolvesOutsideTheSeam)).toEqual([]);
-});
-
-test("no file but its seam loads a runtime dependency the allow-list names with one, by an import, an export, a dynamic import, a require or an import type", () => {
-  const sources = parseAll(scriptFiles.map((file) => join(repositoryRoot, file)));
-  const violations = scriptFiles.flatMap((file, index) =>
-    loadsOutsideTheSeam(file, sources[index]),
-  );
-  const [{ dependency }] = importedThroughASeam;
-  const flagged = loadsOutsideTheSeam(
-    "packages/core/src/Elsewhere.tsx",
-    parseText(
-      [
-        `import { tabs } from "${dependency}/tabs";`,
-        `import type { Primitive } from "${dependency}";`,
-        `export { usePrimitive } from "${dependency}/primitive";`,
-        `const later = await import("${dependency}");`,
-        `const required = require("${dependency}");`,
-        `type Handle = import("${dependency}/primitive").PrimitiveHandle<never>;`,
-        'import { createBehaviour } from "#/src/headless.ts";',
-        `const named = "${dependency}";`,
-        `import { other } from "${dependency}-and-more";`,
-      ].join("\n"),
-      ".tsx",
-    ),
-  ).map((violation) => /^[^:]+:(\d+):/.exec(violation)?.[1]);
-
-  for (const { dependency: imported, seam } of importedThroughASeam) {
-    expect(
-      descendants(parse(join(repositoryRoot, seam))).some((node) => {
-        const specifier = moduleSpecifierOf(node);
-        return (
-          specifier !== undefined &&
-          ts.isStringLiteralLikeNode(specifier) &&
-          loads(imported, specifier.text)
-        );
-      }),
-      `${seam} imports ${imported}`,
-    ).toBe(true);
-  }
-  expect(violations).toEqual([]);
-  expect(flagged).toEqual(["1", "2", "3", "4", "5", "6"]);
-});
-
-test("no source file of the library but parts.ts calls stylex.attrs or stylex.props", () => {
-  const files = libraries.flatMap(({ source }) =>
-    globSync("**/*.{ts,tsx}", { cwd: source })
-      .filter((entry) => entry !== partsModule)
-      .map((entry) => join(source, entry)),
-  );
-  const sources = parseAll(files);
-  const violations = files.flatMap((file, index) =>
-    stylexRuntimeCalls(sources[index]).map(
-      (callee) =>
-        `${relativePath(file)}: call no ${callee}. ${partsHelper} in ${partsHelperFile} gives each part the classes of its ${stylesVariable} entry, and no other file calls the StyleX runtime.`,
-    ),
-  );
-
-  expect(files.length).toBeGreaterThan(components.length);
-  expect(violations).toEqual([]);
-});
-
-const libraryStyleModule = "packages/core/src/library-style.tsx";
-const styleElement = "style";
-const styleSheetClass = "CSSStyleSheet";
-const adoptedStyleSheets = "adoptedStyleSheets";
-const elementNameAt: Record<string, number> = { createElement: 0, createElementNS: 1 };
-
-function domMembersOf(node: ts.Node): string[] {
-  return memberDeclarations(librarySources, node).flatMap((declaration) =>
-    ts.isBindingElement(declaration)
-      ? domMembersOf(declaration)
-      : isDomLibraryFile(fileOf(declaration))
-        ? [nameOf(declaration)]
-        : [],
-  );
-}
-
-function writesAStyle(node: ts.Node): boolean {
-  if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
-    return node.tagName.getText() === styleElement;
-  }
-  if (domMembersOf(node).includes(adoptedStyleSheets)) return true;
-  if (
-    constructedClass(librarySources, node).some(
-      ({ name, file }) => name === styleSheetClass && isDomLibraryFile(file),
-    )
-  ) {
-    return true;
-  }
-  if (!ts.isCallExpression(node)) return false;
-  return domMembersOf(unwrapped(node.expression)).some((member) =>
-    stringsIn(librarySources, node.arguments[elementNameAt[member] ?? -1]).some(
-      (name) => name.toLowerCase() === styleElement,
-    ),
-  );
-}
-
-function styleWritesIn(file: string, source: ts.SourceFile): string[] {
-  return descendants(source)
-    .filter(writesAStyle)
-    .map(
-      (node) =>
-        `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)} writes a style element or a style sheet. Render LibraryStyle from ${libraryStyleModule}.`,
-    );
-}
-
-test("no source of a library but library-style.tsx renders a <style>, creates a style element, or constructs or adopts a style sheet", () => {
-  expect(
-    librarySourceFiles
-      .filter((file) => relativePath(file) !== libraryStyleModule)
-      .flatMap((file) => styleWritesIn(file, typedSource(file))),
-  ).toEqual([]);
-  expect(
-    styleWritesIn(libraryStyleModule, typedSource(join(repositoryRoot, libraryStyleModule))),
-  ).toHaveLength(1);
-});
-
 function callsCreateParts(node: ts.Node): boolean {
   if (!ts.isCallExpression(node)) return false;
   const called = calledDeclaration(librarySources, node);
@@ -910,296 +601,5 @@ test("only a Component.tsx calls createParts, so a module that renders a styled 
     );
 
   expect(components.some(({ source }) => descendants(source).some(callsCreateParts))).toBe(true);
-  expect(violations).toEqual([]);
-});
-
-test("every other source file is the barrel, a component's variables, a StyleX definition, or a kebab-case module, with JSX or without", () => {
-  const violations = libraries.flatMap(({ source }) =>
-    readdirSync(source)
-      .filter(
-        (entry) =>
-          !componentFile.test(entry) && !helperFile.test(entry) && !VARIABLES_MODULE.test(entry),
-      )
-      .map(
-        (entry) =>
-          `${relativePath(join(source, entry))}: name it Component.tsx for a component, Component.variables.ts for its variables, kebab-case.ts or kebab-case.tsx for a module, or name.stylex.ts for StyleX variables.`,
-      ),
-  );
-
-  expect(violations).toEqual([]);
-});
-
-const barrelLine = /^export \{ [^}]+ \} from "([^"]+)";$/;
-
-function moduleNameOf(file: string): string {
-  return basename(file).replace(/\.tsx?$/, "");
-}
-
-test("the barrel exports every component and its props type once, and by name what other modules give consumers, one line per module in the order of the module names, and nothing else", () => {
-  for (const { source } of libraries) {
-    const barrel = join(source, "index.ts");
-    const where = relativePath(barrel);
-    const names = components
-      .filter(({ file }) => file.startsWith(source))
-      .map(({ name }) => name)
-      .sort();
-    const lines = readFileSync(barrel, "utf8").trim().split("\n");
-    const files = lines.map((line) => {
-      const specifier = barrelLine.exec(line)?.[1];
-      return specifier === undefined ? undefined : fileNamedBy(barrel, specifier);
-    });
-    const modules = files.map((file) => (file === undefined ? undefined : moduleNameOf(file)));
-    const notModules = files.filter(
-      (file) =>
-        file !== undefined &&
-        (dirname(file) !== source ||
-          (!names.includes(moduleNameOf(file)) && !helperFile.test(basename(file)))),
-    );
-
-    expect(
-      lines.filter((_, index) => files[index] === undefined),
-      `${where}: write each line as export { names } from "<specifier of a module in src>";`,
-    ).toEqual([]);
-    expect(modules, `${where}: order the lines by module name`).toEqual(
-      modules.toSorted(
-        (one, other) => Number((one ?? "") > (other ?? "")) - Number((one ?? "") < (other ?? "")),
-      ),
-    );
-    expect(new Set(modules).size, `${where}: re-export each module on one line`).toBe(
-      modules.length,
-    );
-    expect(
-      notModules.map((file) => (file === undefined ? "" : relativePath(file))),
-      `${where}: re-export only components and kebab-case modules of src`,
-    ).toEqual([]);
-    expect(
-      lines.flatMap((line, index) => {
-        const module = modules[index];
-        return module !== undefined && names.includes(module) ? [[module, line]] : [];
-      }),
-      where,
-    ).toEqual(
-      names.map((name) => [
-        name,
-        expect.stringMatching(
-          new RegExp(`^export \\{ ${name}, type ${name}Props \\} from "[^"]+";$`),
-        ),
-      ]),
-    );
-  }
-});
-
-test("every public token is named --solix-*, is used by a component or the scale of a style prop, a variable or a theme key, and is defined once", () => {
-  const scalesOfStyleProps = [
-    ...[...Object.values(stylePropTable), ...variableRows.map(({ row }) => row)].flatMap((row) =>
-      "scale" in row && row.scale !== undefined ? [row.scale] : [],
-    ),
-    ...Object.values(scaleOfThemeKey),
-  ];
-  for (const { source } of libraries) {
-    const tokensFile = relativePath(join(source, "tokens.stylex.ts"));
-    const defined = Object.keys(tokenValues(tokensFile));
-    const usedByStyleProps = defined.filter((name) =>
-      scalesOfStyleProps.some((scale) => name.startsWith(`--solix-${scale}-`)),
-    );
-    const used = [
-      ...usedByStyleProps,
-      ...components
-        .filter(({ file }) => file.startsWith(source))
-        .flatMap(({ file }) =>
-          [...readFileSync(file, "utf8").matchAll(/tokens\["([^"]+)"\]/g)].map(([, name]) => name),
-        ),
-    ];
-
-    expect(
-      defined.filter((name) => !tokenName.test(name)),
-      `token names in ${tokensFile}`,
-    ).toEqual([]);
-    expect(
-      defined.filter((name) => !used.includes(name)),
-      `tokens in ${tokensFile} that no component uses and no scale of a style prop, a variable or a theme key covers`,
-    ).toEqual([]);
-    expect(
-      used.filter((name) => !defined.includes(name)),
-      `tokens used but not defined in ${tokensFile}`,
-    ).toEqual([]);
-  }
-});
-
-function kebabCase(name: string): string {
-  return name.replace(/(?<=[a-z0-9])(?=[A-Z])/g, "-").toLowerCase();
-}
-
-test("every component is described by a feature file, its own or that of the export that carries it as a static member", () => {
-  const features = readdirSync(featureDirectory);
-  const violations = components.flatMap(({ name }) => {
-    const carrier = carriedComponents[name]?.carrier;
-    const described = [name, ...(carrier === undefined ? [] : [carrier])].map(kebabCase);
-    return features.some((feature) =>
-      described.some((kebab) => feature === `${kebab}.md` || feature.startsWith(`${kebab}-`)),
-    )
-      ? []
-      : [
-          `${relativePath(featureDirectory)}: add ${kebabCase(name)}.md describing ${name} for the verify-playground skill.`,
-        ];
-  });
-
-  expect(existsSync(featureDirectory)).toBe(true);
-  expect(violations).toEqual([]);
-});
-
-function listsOfStylePropsIn(file: string, names: string[]): { line: number; listed: string[] }[] {
-  const source = parse(file);
-  return descendants(source).flatMap((node) => {
-    const items = ts.isArrayLiteralExpression(node)
-      ? node.elements
-      : ts.isCallExpression(node) || ts.isNewExpression(node)
-        ? (node.arguments ?? [])
-        : [];
-    const listed = items.flatMap((item) =>
-      ts.isStringLiteralLikeNode(item) && names.includes(item.text) ? [item.text] : [],
-    );
-    if (listed.length < 2) return [];
-    return [{ line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, listed }];
-  });
-}
-
-test("no array or argument list outside the style-prop table names two or more style props", () => {
-  const names: string[] = stylePropKeys;
-  const violations = componentLibraries.flatMap(({ directory }) =>
-    globSync(libraryCode, { cwd: directory })
-      .map((path) => join(directory, path))
-      .filter((file) => relativePath(file) !== stylePropTableFile)
-      .flatMap((file) =>
-        listsOfStylePropsIn(file, names).map(
-          ({ line, listed }) =>
-            `${relativePath(file)}:${line}: this list names the style props ${listed.join(", ")}. Read them from the table in ${stylePropTableFile} instead of listing them again.`,
-        ),
-      ),
-  );
-
-  expect(names.length).toBeGreaterThan(0);
-  expect(violations).toEqual([]);
-});
-
-function libraryNamespaces(source: ts.SourceFile): string[] {
-  return source.statements.flatMap((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier) ||
-      !libraryEntry.test(statement.moduleSpecifier.text)
-    ) {
-      return [];
-    }
-    const bindings = statement.importClause?.namedBindings;
-    return bindings && ts.isNamespaceImport(bindings) ? [bindings.name.text] : [];
-  });
-}
-
-function keysOfTheLibrary(type: ts.TypeNode, source: ts.SourceFile): boolean {
-  if (
-    ts.isTypeOperatorNode(type) &&
-    type.operator === ts.SyntaxKind.KeyOfKeyword &&
-    ts.isTypeQueryNode(type.type)
-  ) {
-    return libraryNamespaces(source).includes(type.type.exprName.getText());
-  }
-  if (!ts.isTypeReferenceNode(type)) return false;
-  const alias = source.statements.find(
-    (statement): statement is ts.TypeAliasDeclaration =>
-      ts.isTypeAliasDeclaration(statement) && statement.name.text === type.typeName.getText(),
-  );
-  return alias !== undefined && keysOfTheLibrary(alias.type, source);
-}
-
-function mappedOverTheLibrary(literal: ts.ObjectLiteralExpression, source: ts.SourceFile): boolean {
-  const holder = literal.parent;
-  const type =
-    ts.isVariableDeclaration(holder) || ts.isSatisfiesExpression(holder) ? holder.type : undefined;
-  const constraint = type && ts.isMappedTypeNode(type) ? type.typeParameter.constraint : undefined;
-  return constraint !== undefined && keysOfTheLibrary(constraint, source);
-}
-
-function componentListsIn(
-  source: ts.SourceFile,
-  names: string[],
-): { line: number; listed: string[]; kind: string }[] {
-  return descendants(source).flatMap((node) => {
-    const listed = ts.isArrayLiteralExpression(node)
-      ? node.elements.flatMap((item) => (ts.isStringLiteralLikeNode(item) ? [item.text] : []))
-      : ts.isObjectLiteralExpression(node) && !mappedOverTheLibrary(node, source)
-        ? node.properties.flatMap((property) => staticPropertyName(property) ?? [])
-        : [];
-    if (listed.length === 0 || listed.some((text) => !names.includes(text))) return [];
-    return [
-      {
-        line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-        listed,
-        kind: ts.isArrayLiteralExpression(node) ? "array" : "object",
-      },
-    ];
-  });
-}
-
-test("no array or object in a test file lists the components by hand, unless the object is typed as a mapped type over the keys of the library's exports", () => {
-  const names = components.map(({ name }) => name);
-  const testFiles = scriptFiles.filter((file) => file.split("/").includes(testDirectory));
-  const sources = parseAll(testFiles.map((file) => join(repositoryRoot, file)));
-  const violations = testFiles.flatMap((file, index) =>
-    componentListsIn(sources[index], names).map(
-      ({ line, listed, kind }) =>
-        `${file}:${line}: this ${kind} lists the components ${listed.join(", ")} by hand. Read the components from the build with builtComponents in ${builtLibraryFile}, and write a per-component table as a mapped type over the library's exports, as fixtures does in ${fixturesFile}, so a flag in it says what sets the ones a test picks out apart.`,
-    ),
-  );
-
-  expect(names.length).toBeGreaterThan(0);
-  expect(testFiles.length).toBeGreaterThan(0);
-  expect(violations).toEqual([]);
-});
-
-test("each Component.variables.ts sits beside its Component.tsx, imports at run time only the style-prop table, and exports one constant, the variables that defineVariables gives for that component", () => {
-  const variablesFiles = libraries.flatMap(({ source }) =>
-    readdirSync(source)
-      .filter((entry) => VARIABLES_MODULE.test(entry))
-      .map((entry) => join(source, entry)),
-  );
-  const violations = variablesFiles.flatMap((file) => {
-    const name = basename(file, ".variables.ts");
-    const source = typedSource(file);
-    const { functions, types, others } = exportsOf(source);
-    const runTimeImports = source.statements.filter((statement) => {
-      const specifier = moduleSpecifierOf(statement);
-      return (
-        ts.isImportDeclaration(statement) &&
-        !isTypeOnlyImport(statement.importClause) &&
-        (!specifier ||
-          !ts.isStringLiteralLikeNode(specifier) ||
-          fileNamedBy(file, specifier.text) !== join(repositoryRoot, stylePropTableFile))
-      );
-    });
-    const defined = source.statements.flatMap((statement) =>
-      ts.isVariableStatement(statement)
-        ? statement.declarationList.declarations.map(definedVariablesOf)
-        : [],
-    );
-    return [
-      ...(components.some((component) => component.file === join(dirname(file), `${name}.tsx`))
-        ? []
-        : [`name it for a component beside it, as ${name}.tsx is no component`]),
-      ...(defined.length === 1 &&
-      defined[0] === name &&
-      functions.length + types.length + others.length === 1
-        ? []
-        : [
-            `export one constant, \`${variablesDefiner}("${name}", { ... })\` from ${stylePropTableFile}, and nothing else`,
-          ]),
-      ...runTimeImports.map(
-        (statement) =>
-          `import only ${stylePropTableFile} at run time, so build.mjs loads this module in plain Node: ${firstLine(statement)}`,
-      ),
-    ].map((problem) => `${relativePath(file)}: ${problem}.`);
-  });
-
-  expect(variablesFiles.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 });
