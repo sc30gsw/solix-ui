@@ -6,25 +6,58 @@ import {
   primitiveRules,
   type PrimitiveRuleName,
   publicModules,
+  rulesOfKind,
 } from "#/tests/support/primitive-rules/index.ts";
 import { fileNamedBy, namesAPackage } from "#/scripts/subpath.ts";
 import { importsOf, isTypeOnlyImport, parse, ts } from "#/scripts/syntax.ts";
-import { primitivesPackage, repositoryRoot } from "#/tests/support/workspace.ts";
+import {
+  type Home,
+  libraryKindNames,
+  libraryKinds,
+  type LibraryRegistration,
+  libraryPackages,
+  repositoryRoot,
+} from "#/tests/support/workspace.ts";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
+const fixtureRegistration: LibraryRegistration = { kind: "primitives", errorBoundaries: [] };
+const logicRegistration: LibraryRegistration = { kind: "logic", errorBoundaries: [] };
 const viteConfig = "vite.config.ts";
 const preBundledName = "preBundledForBrowserTests";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const servedByVitestOrTheSolidPlugin = ["vite-plus/test", "solid-js", "@solidjs/web"];
 
-const library = loadLibrary(primitivesPackage.directory);
-afterAll(library.dispose);
-
-test("the primitives package has public modules to check", () => {
-  expect(publicModules(library)).not.toEqual([]);
+const checked = libraryPackages
+  .filter(({ kind }) => rulesOfKind(kind).length > 0)
+  .map(({ directory, kind, errorBoundaries }) => ({
+    name: relative(repositoryRoot, directory),
+    kind,
+    library: loadLibrary(directory, { kind, errorBoundaries }),
+  }));
+afterAll(() => {
+  for (const { library } of checked) library.dispose();
 });
 
-test.each(Object.values(primitiveRules))("$description", ({ rule }) => {
+test("these rules skip only a library of a kind libraryKinds gives no rule, the components kind, which the component contract checks instead", () => {
+  expect(libraryKindNames.filter((kind) => rulesOfKind(kind).length === 0)).toEqual(["components"]);
+  expect(libraryKinds.components.rules).toBe("none");
+  expect(
+    libraryPackages.filter(({ kind }) => rulesOfKind(kind).length === 0).map(({ kind }) => kind),
+  ).toEqual(["components"]);
+});
+
+test.each(checked)(
+  "$name, a library of the $kind kind, has public modules to check",
+  ({ library }) => {
+    expect(publicModules(library)).not.toEqual([]);
+  },
+);
+
+test.each(
+  checked.flatMap(({ name, kind, library }) =>
+    rulesOfKind(kind).map((rule) => ({ name, library, ...primitiveRules[rule] })),
+  ),
+)("$name: $description", ({ library, rule }) => {
   expect(rule(library)).toEqual([]);
 });
 
@@ -48,6 +81,8 @@ const forbiddenAt = (file: string, snippet?: string) => located("forbidden", fil
 const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
   sourceFileKinds: [forbiddenAt("src/GetThing.ts"), forbiddenAt("src/notes.md")],
   publicExports: [
+    forbiddenAt("src/constants.ts"),
+    forbiddenAt("src/constants.ts"),
     forbiddenAt("src/get-other.ts"),
     forbiddenAt("src/create-relayed.ts", "export function createRelayed"),
   ],
@@ -229,7 +264,7 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
 };
 
 test("each rule passes a fixture that holds only what it allows", () => {
-  const fixture = loadLibrary(join(fixtureDirectory, "allowed"));
+  const fixture = loadLibrary(join(fixtureDirectory, "allowed"), fixtureRegistration);
   const findings = Object.fromEntries(
     Object.entries(primitiveRules).map(([name, { rule }]) => [name, rule(fixture)]),
   );
@@ -240,8 +275,47 @@ test("each rule passes a fixture that holds only what it allows", () => {
   );
 });
 
+function caughtErrorsWith(errorBoundaries: readonly Required<Home>[]): string[] {
+  const fixture = loadLibrary(join(fixtureDirectory, "forbidden"), {
+    kind: "primitives",
+    errorBoundaries,
+  });
+  const found = primitiveRules.caughtErrors.rule(fixture);
+  fixture.dispose();
+  return locationsOf(found);
+}
+
+test("the caught errors rule passes an error boundary that catches, and flags one that is missing or holds no catch", () => {
+  const catching = { file: "create-misbehaving.ts", fn: "createMisbehaving" };
+
+  expect(caughtErrorsWith([catching])).toEqual([]);
+  expect(
+    caughtErrorsWith([
+      catching,
+      { file: "create-gone.ts", fn: "createGone" },
+      { file: "create-sized.ts", fn: "createSized" },
+    ]),
+  ).toEqual([forbiddenAt("src/create-gone.ts"), forbiddenAt("src/create-sized.ts")]);
+});
+
+test("the rules of the logic kind read a logic fixture with Node's types, so a global Node declares too is no browser-only read", () => {
+  const asLogic = loadLibrary(join(fixtureDirectory, "logic"), logicRegistration);
+  const findings = Object.fromEntries(
+    rulesOfKind("logic").map((name) => [name, primitiveRules[name].rule(asLogic)]),
+  );
+  asLogic.dispose();
+  const asPrimitives = loadLibrary(join(fixtureDirectory, "logic"), fixtureRegistration);
+  const withoutNodeTypes = primitiveRules.browserGlobalReads.rule(asPrimitives);
+  asPrimitives.dispose();
+
+  expect(findings).toEqual(Object.fromEntries(rulesOfKind("logic").map((name) => [name, []])));
+  expect(locationsOf(withoutNodeTypes)).toEqual([
+    located("logic", "src/get-abort-signal.ts", "new AbortController()"),
+  ]);
+});
+
 test("each rule flags every line of a fixture that breaks it, and nothing else", () => {
-  const fixture = loadLibrary(join(fixtureDirectory, "forbidden"));
+  const fixture = loadLibrary(join(fixtureDirectory, "forbidden"), fixtureRegistration);
   const findings = Object.fromEntries(
     Object.entries(primitiveRules).map(([name, { rule }]) => [
       name,

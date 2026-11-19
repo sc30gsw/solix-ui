@@ -5,7 +5,7 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   at,
   browserTestSuffixes,
-  exportedFunction,
+  exportedFunctions,
   forbidOutside,
   type Library,
   type PrimitiveRule,
@@ -23,7 +23,7 @@ const axeAssertion = "expectNoAxeViolations";
 
 export const focusMovesRule = forbidOutside({
   description: `nothing but ${focusMover.name} in ${focusMover.file} refers to the DOM's focus method, by any spelling refersToDomMember resolves`,
-  home: { file: focusMover.file, fn: focusMover.name },
+  homes: () => [{ file: focusMover.file, fn: focusMover.name }],
   find: (library, node) =>
     refersToDomMember(library, node, (declaration) => nameOf(declaration) === focusMethod),
   advice: `move focus with ${focusMover.name} from ${focusMover.file}, which confirms the element took it and which the accessibility rule follows.`,
@@ -48,8 +48,7 @@ function awaitsTheAxeAssertion(library: Library, test: ts.SourceFile): boolean {
 const accessibilityTests: Rule = (library) =>
   publicModules(library)
     .filter((module) => {
-      const fn = exportedFunction(module);
-      return fn !== undefined && reaches(library, fn, focusMover);
+      return reaches(library, exportedFunctions(module).all, focusMover);
     })
     .filter((module) => {
       const browserTest = testNamed(library, module.file, browserTestSuffixes);
