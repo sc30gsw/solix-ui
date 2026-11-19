@@ -5,15 +5,18 @@ import {
   colorProperty,
   colorVariantTable,
   contrastLuminance,
+  luminanceWeights,
+  shadeSource,
+  slotDefaults,
+  tintShades,
   contrastShade,
   customColorClass,
   derivedShades,
-  type OwnPalette,
+  isPalette,
   paletteAliases,
   paletteClass,
   palettes,
   paletteToken,
-  primaryAlias,
   primaryPalette,
   primaryProperty,
   type Shade,
@@ -31,7 +34,8 @@ const solidShade = "6" satisfies Shade;
 const schemeRoots = ":root,[data-color-scheme]";
 
 export function contrastingText(colour: string): string {
-  const channel = `clamp(0, (${contrastLuminance} - (0.2126 * r + 0.7152 * g + 0.0722 * b)) * 1000000, 1)`;
+  const { r, g, b } = luminanceWeights;
+  const channel = `clamp(0, (${contrastLuminance} - (${r} * r + ${g} * g + ${b} * b)) * 1000000, 1)`;
   return `color(from ${colour} srgb-linear ${channel} ${channel} ${channel})`;
 }
 
@@ -62,20 +66,18 @@ function variantRule(selector: string, slots: VariantRow["named"] | VariantRow["
 
 export function colorRules(): string {
   const variants = Object.entries(colorVariantTable);
-  const slots = Object.keys(colorVariantTable.default.named);
   const rules = [
-    ...palettes.map(
+    ...[...palettes, ...Object.keys(paletteAliases).filter(isPalette)].map(
       (palette) =>
-        `.${paletteClass(palette)}{${shadesFrom((shade) => paletteToken(palette, shade))}}`,
+        `.${paletteClass(palette)}{${shadesFrom((shade) => shadeSource(palette, shade))}}`,
     ),
-    `.${paletteClass(primaryAlias)}{${shadesFrom(primaryProperty)}}`,
-    ...Object.entries(paletteAliases)
-      .filter(([alias]) => alias !== primaryAlias)
-      .map(
-        ([alias, palette]: [string, OwnPalette]) =>
-          `.${paletteClass(alias)}{${shadesFrom((shade) => paletteToken(palette, shade))}}`,
-      ),
-    `.${shadeClass}{${declared([[shadeProperty(solidShade), given]])}}`,
+    `.${shadeClass}{${declared([
+      [shadeProperty(solidShade), given],
+      ...Object.entries(tintShades).map(([shade, [percent, toward]]): [string, string] => [
+        shadeProperty(shade),
+        mixed(given, percent, toward),
+      ]),
+    ])}}`,
     `.${customColorClass}{${declared([
       ...Object.entries(derivedShades).map(([shade, [percent, toward]]): [string, string] => [
         shadeProperty(shade),
@@ -84,7 +86,7 @@ export function colorRules(): string {
       [shadeProperty(contrastShade), textWithoutAPalette],
     ])}}`,
     `.${autoContrastClass}{${declared([[shadeProperty(contrastShade), contrastingText(`var(${shadeProperty(solidShade)})`)]])}}`,
-    `.${colorClass}{${declared(slots.map((slot) => [slot, "initial"]))}}`,
+    `.${colorClass}{${declared(Object.entries(slotDefaults))}}`,
     ...variants.map(([variant, row]) =>
       variantRule(`.${colorClass}[${variantAttribute}="${variant}"]`, row.named),
     ),

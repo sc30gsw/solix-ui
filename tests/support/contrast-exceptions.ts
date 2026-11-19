@@ -29,9 +29,10 @@ const rootPart = "root";
 
 export function inScheme(scheme: Scheme, part: string): string {
   const other = bothSchemes.find((each) => each !== scheme);
-  return scheme === defaultColorScheme
-    ? `:root:not([${colorSchemeAttribute}="${other}"]) ${part}`
-    : `[${colorSchemeAttribute}="${scheme}"] ${part}`;
+  const own = `[${colorSchemeAttribute}="${scheme}"]`;
+  const theOther = `[${colorSchemeAttribute}="${other}"]`;
+  const nearest = `${own} ${part}:not(${own} ${theOther} ${part})`;
+  return scheme === defaultColorScheme ? `${part}:not(${theOther} ${part}), ${nearest}` : nearest;
 }
 
 export function variantPart(palette: Palette | undefined, variant: string): string {
