@@ -9,6 +9,7 @@ import {
   type SolixComputedColorScheme,
   SolixProvider,
   type SolixProviderProps,
+  type SolixTheme,
 } from "@solix/core";
 import { createEffect, createSignal, Show } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
@@ -80,6 +81,39 @@ export const ThemedSpacing: Story = {
     const expected = getComputedStyle(probe).paddingTop;
     probe.remove();
     await expect(getComputedStyle(canvas.getByTestId("themed")).paddingTop).toBe(expected);
+  },
+};
+
+const notPalettes = ["bleu", "red.6"];
+
+function themeWithPrimary(primaryColor: string): SolixTheme {
+  const theme = createTheme({});
+  Reflect.set(theme, "primaryColor", primaryColor);
+  return theme;
+}
+
+export const PrimaryColorFallsBack: Story = {
+  render: () => (
+    <>
+      {notPalettes.map((primaryColor) => (
+        <OnItsOwnElement
+          label={`Primary ${primaryColor}`}
+          theme={themeWithPrimary(primaryColor)}
+          cssVariablesSelector=".unused"
+        />
+      ))}
+    </>
+  ),
+  beforeEach: () => {
+    const warnings = spyOn(globalThis.console, "warn").mockImplementation(() => undefined);
+    return () => warnings.mockRestore();
+  },
+  play: async () => {
+    for (const primaryColor of notPalettes) {
+      await expect(globalThis.console.warn).toHaveBeenCalledWith(
+        expect.stringContaining(`"${primaryColor}"`),
+      );
+    }
   },
 };
 
