@@ -1,5 +1,3 @@
-import { join } from "node:path";
-import { afterAll, expect, test } from "vite-plus/test";
 import {
   declarationsOf,
   descendants,
@@ -9,21 +7,16 @@ import {
   isTypedAny,
   memberDeclarations,
   memberRead,
+  type MemberRead,
   nameOf,
-  openProgram,
   type Program,
+  stringsIn,
   ts,
-  virtualFile,
 } from "#/scripts/syntax.ts";
 import { located } from "#/tests/support/primitive-rules/library.ts";
-import {
-  repositoryRoot,
-  scriptFiles,
-  scriptFilesInDotDirectories,
-} from "#/tests/support/workspace.ts";
 
 const playwrightPackages = ["playwright", "playwright-core"];
-const captures = ["screenshot", "screenshots", "screencast", "video", "recordVideo"];
+export const captures = ["screenshot", "screenshots", "screencast", "video", "recordVideo"];
 const readValuesInstead =
   "The checks read values, not pixels: compare a computed style, an attribute or the markup instead.";
 
@@ -42,34 +35,47 @@ function givesAnOption(node: ts.Node): boolean {
   );
 }
 
-function capturesIn(program: Program, file: string): string[] {
+function optionName(program: Program, node: ts.Node): string[] {
+  if (ts.isIdentifier(node) || ts.isStringLiteral(node)) return [node.text];
+  return ts.isComputedPropertyName(node) ? stringsIn(program, node.expression) : [];
+}
+
+function readOfAMember(program: Program, node: ts.Node): MemberRead | undefined {
+  if (ts.isPropertyAccessExpression(node)) {
+    return { owner: node.expression, names: [node.name.text] };
+  }
+  return ts.isElementAccessExpression(node) ||
+    ts.isBindingElement(node) ||
+    (ts.isCallExpression(node) && node.arguments.length > 1)
+    ? memberRead(program, node)
+    : undefined;
+}
+
+export function capturesIn(program: Program, file: string): string[] {
   const source = program.sourceFile(file);
   if (!source) throw new Error(`${file}: TypeScript opened no source for this file.`);
   return descendants(source).flatMap((node) => {
     const found = (how: string) => [`${located(node)}: ${firstLine(node)}: ${how}`];
-    if (givesAnOption(node) && declarationsOf(program, node).some(isACapture)) {
-      return found(`this gives Playwright's ${node.getText()} option. ${readValuesInstead}`);
+    if (givesAnOption(node)) {
+      return optionName(program, node).some((name) => captures.includes(name)) &&
+        declarationsOf(program, node).some(isACapture)
+        ? found(`this gives Playwright's ${node.getText()} option. ${readValuesInstead}`)
+        : [];
     }
+    const read = readOfAMember(program, node);
+    if (!read?.names.some((name) => captures.includes(name))) return [];
     if (memberDeclarations(program, node).some(isACapture)) {
       return found(
         `this reaches a Playwright member that captures an image or a recording. ${readValuesInstead}`,
       );
     }
-    const read = memberRead(program, node);
-    return read &&
-      isTypedAny(program, read.owner) &&
-      read.names.some((name) => captures.includes(name))
+    return isTypedAny(program, read.owner)
       ? found(`this reads a capture by its name from a value typed any. ${readValuesInstead}`)
       : [];
   });
 }
 
-const checkedFiles = [...scriptFiles, ...scriptFilesInDotDirectories].map((file) =>
-  join(repositoryRoot, file),
-);
-const program = openProgram(checkedFiles);
-
-const refusedSpellings: Record<string, [text: string, extension: string]> = {
+export const refusedCaptureSpellings: Record<string, [text: string, extension: string]> = {
   "a page's screenshot": [
     'import type { Page } from "playwright";\nexport const shot = (page: Page) => page.screenshot();\n',
     ".ts",
@@ -107,7 +113,7 @@ const refusedSpellings: Record<string, [text: string, extension: string]> = {
     ".ts",
   ],
 };
-const allowedSpellings: Record<string, [text: string, extension: string]> = {
+export const allowedCaptureSpellings: Record<string, [text: string, extension: string]> = {
   "a page's computed style": [
     'import type { Page } from "playwright";\nexport const read = (page: Page) => page.locator("button").evaluate((node) => getComputedStyle(node).color);\n',
     ".ts",
@@ -117,28 +123,3 @@ const allowedSpellings: Record<string, [text: string, extension: string]> = {
     ".ts",
   ],
 };
-const spelt = (spellings: Record<string, [text: string, extension: string]>): [string, string][] =>
-  Object.entries(spellings).map(([spelling, [text, extension]]) => [
-    spelling,
-    virtualFile(text, extension),
-  ]);
-const refused = spelt(refusedSpellings);
-const allowed = spelt(allowedSpellings);
-const spellings = openProgram([...refused, ...allowed].map(([, file]) => file));
-afterAll(() => {
-  program.dispose();
-  spellings.dispose();
-});
-
-test(`no script file captures an image or a recording through Playwright: it reaches none of ${captures.join(", ")} as a member the type checker resolves, as an option it gives, or by name on a value typed any`, () => {
-  expect(checkedFiles.length).toBeGreaterThan(100);
-  expect(checkedFiles.flatMap((file) => capturesIn(program, file))).toEqual([]);
-});
-
-test.for(refused)("the rule refuses %s", ([, file]) => {
-  expect(capturesIn(spellings, file)).not.toEqual([]);
-});
-
-test.for(allowed)("the rule passes %s", ([, file]) => {
-  expect(capturesIn(spellings, file)).toEqual([]);
-});
