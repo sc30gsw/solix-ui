@@ -61,19 +61,6 @@ export function getPath(path: unknown, values: unknown): unknown {
   );
 }
 
-function put(target: object, key: PropertyKey, value: unknown): void {
-  if (Array.isArray(target) && key === lengthKey) {
-    Reflect.set(target, key, value);
-    return;
-  }
-  Object.defineProperty(target, key, {
-    value,
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
-}
-
 export function tagOf(value: unknown): string {
   return Object.prototype.toString.call(value);
 }
@@ -86,13 +73,22 @@ function emptyCopyOf(target: object): object {
   return Array.isArray(target) ? target.slice() : Object.create(Object.getPrototypeOf(target));
 }
 
-function copyOf(target: object): object {
+function copyWith(target: object, key: string, value: unknown): object {
   const copy = emptyCopyOf(target);
-  for (const key of Reflect.ownKeys(target)) {
-    if (Object.prototype.propertyIsEnumerable.call(target, key) && !Object.hasOwn(copy, key)) {
-      put(copy, key, Reflect.get(target, key));
+  for (const own of Reflect.ownKeys(target)) {
+    const descriptor = Reflect.getOwnPropertyDescriptor(target, own);
+    if (own !== key && descriptor !== undefined && !Object.hasOwn(copy, own)) {
+      Object.defineProperty(copy, own, descriptor);
     }
   }
+  if (Array.isArray(copy) && key === lengthKey) Reflect.set(copy, key, value);
+  else
+    Object.defineProperty(copy, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
   return copy;
 }
 
@@ -103,9 +99,7 @@ function isListLength(value: unknown): boolean {
 function withEntry(target: object, key: string, value: unknown): object {
   if (Array.isArray(target) && key === lengthKey && !isListLength(value)) return target;
   if (Object.hasOwn(target, key) && Object.is(Reflect.get(target, key), value)) return target;
-  const copy = copyOf(target);
-  put(copy, key, value);
-  return copy;
+  return copyWith(target, key, value);
 }
 
 function rewritten(target: object, segments: PathSegments, depth: number, value: unknown): object {

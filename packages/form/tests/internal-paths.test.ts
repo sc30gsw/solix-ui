@@ -275,6 +275,27 @@ test("setPath gives no copy the prototype an own __proto__ key holds, in a list 
   expect(Reflect.get(object.object, "polluted")).toBeUndefined();
 });
 
+test("setPath keeps every own property of an object or list it copies, non-enumerable ones and accessors included, and writes a frozen one's key", () => {
+  const hidden = { value: "kept", writable: false, enumerable: false, configurable: false };
+  const object = Object.defineProperties(
+    { a: 1 },
+    { hidden, computed: { get: () => "got", enumerable: true, configurable: true } },
+  );
+  const list = Object.defineProperty([1], "hidden", hidden);
+  const written = setPath("object.a", 2, { object });
+  const listed = setPath("list.0", 2, { list });
+
+  expect(written.object.a).toBe(2);
+  expect(Object.getOwnPropertyDescriptor(written.object, "hidden")).toStrictEqual(hidden);
+  expect(Object.getOwnPropertyDescriptor(written.object, "computed")).toHaveProperty("get");
+  expect(Reflect.get(written.object, "computed")).toBe("got");
+  expect(Object.getOwnPropertyDescriptor(listed.list, "hidden")).toStrictEqual(hidden);
+  expect(setPath("frozen.a", 2, { frozen: Object.freeze({ a: 1, b: 2 }) }).frozen).toStrictEqual({
+    a: 2,
+    b: 2,
+  });
+});
+
 test("path types name every path into the values, read the value at a path, and leave any other string loose", () => {
   type Values = { name: string; jobs: { title: string; tags: string[] }[]; pair: [number, string] };
 
