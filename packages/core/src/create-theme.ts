@@ -9,7 +9,8 @@ import {
 import { colorSchemeAttribute } from "#/src/color-schemes.ts";
 import { warnInTheBrowserDuringDevelopment } from "#/src/development-warning.ts";
 import { layerOrder, libraryCascadeLayer, type Scale } from "#/src/style-prop-table.ts";
-import { characterThatEndsADeclaration, type ScaleKey, tokenOf } from "#/src/style-props.ts";
+import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
+import { type ScaleKey, tokenOf } from "#/src/style-props.ts";
 
 export const scaleOfThemeKey = {
   spacing: "spacing",

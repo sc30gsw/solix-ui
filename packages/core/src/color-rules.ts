@@ -21,6 +21,7 @@ import {
   type Shade,
   shadeClass,
   shadeProperty,
+  solidShade,
   shades,
   textWithoutAPalette,
   variantAttribute,
@@ -29,7 +30,6 @@ import {
 } from "#/src/color-table.ts";
 
 const theColor = `var(${colorProperty})`;
-const solidShade = "6" satisfies Shade;
 const schemeRoots = ":root,[data-color-scheme]";
 
 export function contrastingText(colour: string): string {
