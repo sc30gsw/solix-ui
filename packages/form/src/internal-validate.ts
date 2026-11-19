@@ -26,10 +26,15 @@ type AnyRule = Rule<unknown, unknown>;
 
 type Validation = { values: unknown; resolve: ResolveValidationError; signal: AbortSignal };
 
+const errorTags: readonly string[] = ["[object Error]", "[object DOMException]"] as const;
+
+function tagOf(value: unknown): string {
+  return Object.prototype.toString.call(value);
+}
+
 export function messageOf(error: unknown): string {
-  return Object.prototype.toString.call(error) === "[object Error]"
-    ? String(Reflect.get(Object(error), "message"))
-    : String(error);
+  if (errorTags.includes(tagOf(error))) return String(Reflect.get(Object(error), "message"));
+  return isContainer(error) || typeof error === "function" ? tagOf(error) : String(error);
 }
 
 export function runRule(rule: AnyRule, path: string, validation: Validation): Outcome {

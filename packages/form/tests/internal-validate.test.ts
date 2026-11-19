@@ -293,6 +293,32 @@ test("a rule that throws or rejects gives the error resolveValidationError makes
   });
 });
 
+test("messageOf gives an Error's or a DOMException's message, a primitive as a string, and any other object its tag without calling it", () => {
+  const unprintable = {
+    toString: () => {
+      throw new Error("not printable");
+    },
+  };
+
+  expect(messageOf(new TypeError("typed"))).toBe("typed");
+  expect(messageOf(new DOMException("aborted", "AbortError"))).toBe("aborted");
+  expect(messageOf("plain")).toBe("plain");
+  expect(messageOf(undefined)).toBe("undefined");
+  expect(messageOf(Symbol("thrown"))).toBe("Symbol(thrown)");
+  expect(messageOf(Object.create(null))).toBe("[object Object]");
+  expect(messageOf(unprintable)).toBe("[object Object]");
+  expect(
+    validateValues(
+      {
+        a: () => {
+          throw Object.create(null);
+        },
+      },
+      { a: 0 },
+    ),
+  ).toStrictEqual({ hasErrors: true, errors: { a: "[object Object]" } });
+});
+
 test("runRule hands the rule the value at its path, the values, the path and the signal", () => {
   const signal = new AbortController().signal;
   const rule = vi.fn(() => null);
