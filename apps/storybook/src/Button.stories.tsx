@@ -1,6 +1,6 @@
 import { Button } from "@solix/core";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn, spyOn, userEvent } from "storybook/test";
 
 const meta = {
   component: Button,
@@ -51,5 +51,20 @@ export const GivenColors: Story = {
     await expect(
       getComputedStyle(canvas.getByRole("button", { name: "Given colour" })).backgroundColor,
     ).toBe(givenColour);
+  },
+};
+
+const notAColour = "red-6";
+
+export const ColorFallsBack: Story = {
+  args: { color: notAColour },
+  beforeEach: () => {
+    const warnings = spyOn(globalThis.console, "warn").mockImplementation(() => undefined);
+    return () => warnings.mockRestore();
+  },
+  play: async () => {
+    await expect(globalThis.console.warn).toHaveBeenCalledWith(
+      expect.stringContaining(`"${notAColour}"`),
+    );
   },
 };
