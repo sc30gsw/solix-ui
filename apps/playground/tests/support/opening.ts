@@ -1,4 +1,5 @@
 import type { Page } from "playwright";
+import { hydratedMark } from "#/src/hydrated-mark.ts";
 
 export type OpenedUntil = "hydrated" | "commit" | "load";
 
@@ -9,16 +10,13 @@ export const hydrationTimeout = 10_000;
 async function hydrated(page: Page, timeout: number): Promise<void> {
   try {
     await page.waitForFunction(
-      () => {
-        const probes = [...document.querySelectorAll("output[data-hydration-probe]")];
-        return probes.length > 0 && probes.every((probe) => probe.hasAttribute("data-hydrated-as"));
-      },
-      undefined,
+      (mark) => document.documentElement.hasAttribute(mark),
+      hydratedMark,
       { timeout },
     );
   } catch (cause) {
     throw new Error(
-      `${pageDidNotBecomeReady}: its client script has not claimed every hydration probe of the server's markup within ${timeout} ms.`,
+      `${pageDidNotBecomeReady}: its client script has not marked <html> with ${hydratedMark} within ${timeout} ms, so it has not hydrated the page.`,
       { cause },
     );
   }
