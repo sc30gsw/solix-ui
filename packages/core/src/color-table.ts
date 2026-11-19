@@ -54,12 +54,15 @@ export const slotDefaults = {
 type ColourToken = `--solix-color-${string}`;
 type PrimaryAlias = Extract<keyof typeof primaryColors, `--${string}`>;
 type VariantSlot = Extract<keyof typeof variantColors, `--${string}`>;
-type Given = "given" | "given-hover" | `given/${number}`;
-type SlotValue = Shade | "transparent" | ColourToken;
+export const writtenColor = "color";
+
+export type SlotValue = Shade | "transparent" | ColourToken;
+export type Mix = readonly [percent: number, toward: SlotValue];
+export type ColorSlotValue = SlotValue | typeof writtenColor | Mix;
 
 export type VariantRow = {
-  readonly named: Readonly<Record<VariantSlot, SlotValue>>;
-  readonly given: Readonly<Record<VariantSlot, SlotValue | Given>>;
+  readonly palette: Readonly<Record<VariantSlot, SlotValue>>;
+  readonly color: Readonly<Record<VariantSlot, ColorSlotValue>>;
 };
 
 const neutral = {
@@ -70,29 +73,29 @@ const neutral = {
 } as const;
 
 export const colorVariantTable = {
-  default: { named: neutral, given: neutral },
+  default: { palette: neutral, color: neutral },
   filled: {
-    named: {
+    palette: {
       "--solixc-variant-background": "6",
       "--solixc-variant-hover": "7",
       "--solixc-variant-color": "contrast",
       "--solixc-variant-border": "transparent",
     },
-    given: {
-      "--solixc-variant-background": "given",
-      "--solixc-variant-hover": "given-hover",
+    color: {
+      "--solixc-variant-background": writtenColor,
+      "--solixc-variant-hover": [90, "contrast"],
       "--solixc-variant-color": "contrast",
       "--solixc-variant-border": "transparent",
     },
   },
   light: {
-    named: {
+    palette: {
       "--solixc-variant-background": "1",
       "--solixc-variant-hover": "2",
       "--solixc-variant-color": "9",
       "--solixc-variant-border": "transparent",
     },
-    given: {
+    color: {
       "--solixc-variant-background": "1",
       "--solixc-variant-hover": "2",
       "--solixc-variant-color": "9",
@@ -100,44 +103,44 @@ export const colorVariantTable = {
     },
   },
   outline: {
-    named: {
+    palette: {
       "--solixc-variant-background": "transparent",
       "--solixc-variant-hover": "0",
       "--solixc-variant-color": "8",
       "--solixc-variant-border": "8",
     },
-    given: {
+    color: {
       "--solixc-variant-background": "transparent",
-      "--solixc-variant-hover": "given/5",
-      "--solixc-variant-color": "given",
-      "--solixc-variant-border": "given",
+      "--solixc-variant-hover": [5, "transparent"],
+      "--solixc-variant-color": writtenColor,
+      "--solixc-variant-border": writtenColor,
     },
   },
   subtle: {
-    named: {
+    palette: {
       "--solixc-variant-background": "transparent",
       "--solixc-variant-hover": "1",
       "--solixc-variant-color": "9",
       "--solixc-variant-border": "transparent",
     },
-    given: {
+    color: {
       "--solixc-variant-background": "transparent",
-      "--solixc-variant-hover": "given/12",
-      "--solixc-variant-color": "given",
+      "--solixc-variant-hover": [12, "transparent"],
+      "--solixc-variant-color": writtenColor,
       "--solixc-variant-border": "transparent",
     },
   },
   transparent: {
-    named: {
+    palette: {
       "--solixc-variant-background": "transparent",
       "--solixc-variant-hover": "transparent",
       "--solixc-variant-color": "9",
       "--solixc-variant-border": "transparent",
     },
-    given: {
+    color: {
       "--solixc-variant-background": "transparent",
       "--solixc-variant-hover": "transparent",
-      "--solixc-variant-color": "given",
+      "--solixc-variant-color": writtenColor,
       "--solixc-variant-border": "transparent",
     },
   },
@@ -148,16 +151,16 @@ export type ColorVariant = keyof typeof colorVariantTable;
 export const tintShades = {
   "1": [15, "transparent"],
   "2": [20, "transparent"],
-} as const satisfies Partial<Record<Shade, readonly [percent: number, toward: string]>>;
+} as const satisfies Partial<Record<Shade, Mix>>;
 
 export const derivedShades = {
   "0": [8, "transparent"],
-  "3": [35, "var(--solix-color-body)"],
-  "4": [50, "var(--solix-color-body)"],
-  "5": [75, "var(--solix-color-body)"],
-  "8": [55, "var(--solix-color-text)"],
-  "9": [70, "var(--solix-color-text)"],
-} as const satisfies Partial<Record<Shade, readonly [percent: number, toward: string]>>;
+  "3": [35, "--solix-color-body"],
+  "4": [50, "--solix-color-body"],
+  "5": [75, "--solix-color-body"],
+  "8": [55, "--solix-color-text"],
+  "9": [70, "--solix-color-text"],
+} as const satisfies Partial<Record<Shade, Mix>>;
 
 export function paletteClass(palette: string): string {
   return `${colorClassPrefix}-${palette}`;
