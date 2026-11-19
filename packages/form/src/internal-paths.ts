@@ -62,7 +62,7 @@ export function getPath(path: unknown, values: unknown): unknown {
 }
 
 function put(target: object, key: PropertyKey, value: unknown): void {
-  if (Array.isArray(target)) {
+  if (Array.isArray(target) && key === lengthKey) {
     Reflect.set(target, key, value);
     return;
   }

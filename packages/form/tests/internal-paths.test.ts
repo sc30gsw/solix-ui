@@ -256,6 +256,25 @@ test("setPath keeps a list's own properties beside its items in the copy it writ
   expect(list[0]).toBe(1);
 });
 
+test("setPath gives no copy the prototype an own __proto__ key holds, in a list or an object", () => {
+  const evil = { polluted: "YES" };
+  const withOwnProto = <Target extends object>(target: Target): Target =>
+    Object.defineProperty(target, "__proto__", {
+      value: evil,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  const written = setPath("list.0", 2, { list: withOwnProto([1]) });
+  const object = setPath("object.a", 2, { object: withOwnProto({ a: 1 }) });
+
+  expect(Object.getPrototypeOf(written.list)).toBe(Array.prototype);
+  expect(Object.getOwnPropertyDescriptor(written.list, "__proto__")?.value).toBe(evil);
+  expect(Object.getPrototypeOf(object.object)).toBe(Object.prototype);
+  expect(Reflect.get(written.list, "polluted")).toBeUndefined();
+  expect(Reflect.get(object.object, "polluted")).toBeUndefined();
+});
+
 test("path types name every path into the values, read the value at a path, and leave any other string loose", () => {
   type Values = { name: string; jobs: { title: string; tags: string[] }[]; pair: [number, string] };
 
