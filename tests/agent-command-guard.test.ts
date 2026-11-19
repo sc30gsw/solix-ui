@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { type Refusal, refusals, refusalsOf } from "#/scripts/agent-command-guard.ts";
@@ -11,7 +11,7 @@ const settingsFile = ".claude/settings.json";
 const guardEvent = "PreToolUse";
 const guardedTool = "Bash";
 const guardFile = "scripts/agent-command-guard.ts";
-const guardCommand = `node "$CLAUDE_PROJECT_DIR/${guardFile}" || { echo "The command guard did not run, so the command is refused." >&2; exit 2; }`;
+const guardCommand = `[ -f "$CLAUDE_PROJECT_DIR/${guardFile}" ] || { echo "This checkout has no command guard, so the command runs unchecked." >&2; exit 0; }; node "$CLAUDE_PROJECT_DIR/${guardFile}" || { echo "The command guard did not run, so the command is refused." >&2; exit 2; }`;
 const blocking = 2;
 const stash = { tool_name: "Bash", tool_input: { command: "git stash" } };
 
@@ -221,6 +221,29 @@ describe("the guard fails closed", () => {
       expect(crashed.stderr).toContain("the command is refused");
       expect(unreadable.status).toBe(blocking);
       expect(unreadable.stderr).toContain("the command is refused");
+    });
+  });
+
+  test("a project directory reached through a symbolic link still runs the guard", async () => {
+    await inTemporaryTree({}, (root) => {
+      const linked = join(root, "linked-checkout");
+      symlinkSync(repositoryRoot, linked);
+      const run = runGuard(JSON.stringify(stash), {}, linked);
+
+      expect(run.status).toBe(0);
+      expect(JSON.parse(run.stdout || "{}")).toMatchObject({
+        hookSpecificOutput: { permissionDecision: "deny" },
+      });
+    });
+  });
+
+  test("a checkout with no guard, such as a commit from before it, lets the command run and says so", async () => {
+    await inTemporaryTree({}, (root) => {
+      const run = runGuard(JSON.stringify(stash), {}, root);
+
+      expect(run.status).toBe(0);
+      expect(run.stdout).toBe("");
+      expect(run.stderr).toContain("has no command guard");
     });
   });
 

@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 type Token = { word: string } | { operator: string } | { input: string };
@@ -472,7 +471,10 @@ function decide(): void {
   );
 }
 
-if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (
+  process.argv[1] !== undefined &&
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+) {
   try {
     decide();
   } catch (error) {
