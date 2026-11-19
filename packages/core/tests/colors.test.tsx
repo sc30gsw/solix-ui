@@ -117,6 +117,7 @@ test("the colours layer is the first layer inside the components layer, and hold
     `.${shadeClass}`,
     `.${customColorClass}`,
     `.${autoContrastClass}`,
+    `.${colorClass}`,
     ...variants.map((variant) => `.${colorClass}[${variantAttribute}="${variant}"]`),
   ]);
   expect(rules.slice(0, named.length).map(({ properties }) => properties)).toEqual(
@@ -231,5 +232,11 @@ test("autoContrast is off unless it is true: only then does the root take the cl
   expect(classesOf(rootOf({ autoContrast: true }))).toContain(autoContrastClass);
   expect(declaredBy(`.${shadeClass}`).map(([property]) => property)).not.toContain(
     shadeProperty("contrast"),
+  );
+});
+
+test("an element with a colour class resets every slot, so a variant the table does not hold inherits no colour of an ancestor", () => {
+  expect(declaredBy(`.${colorClass}`)).toEqual(
+    Object.keys(colorVariantTable.default).map((slot) => [slot, "initial"]),
   );
 });

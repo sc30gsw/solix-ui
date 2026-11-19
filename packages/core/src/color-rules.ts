@@ -77,6 +77,7 @@ export function colorRules(): string {
       [shadeProperty(contrastShade), textWithoutAPalette],
     ])}}`,
     `.${autoContrastClass}{${declared([[shadeProperty(contrastShade), contrastingText(`var(${shadeProperty(solidShade)})`)]])}}`,
+    `.${colorClass}{${declared(Object.keys(colorVariantTable.default).map((slot) => [slot, "initial"]))}}`,
     ...Object.entries(colorVariantTable).map(
       ([variant, slots]) =>
         `.${colorClass}[${variantAttribute}="${variant}"]{${declared(
