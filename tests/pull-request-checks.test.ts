@@ -1,0 +1,124 @@
+import { spawnSync } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, test } from "vite-plus/test";
+import { footer, problemsOf, sectionOrder } from "#/scripts/pull-request-text.ts";
+import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
+import { repositoryRoot } from "#/tests/support/workspace.ts";
+
+const workflowFile = ".github/workflows/pull-request.yml";
+const textCheck = join(repositoryRoot, "scripts/check-pull-request-text.ts");
+const session = "https://claude.ai/code/session_01AbCdEf";
+const title = "ci: check the text of every pull request";
+const fakeTerm = "zorblax";
+
+function bodyWith(sections: readonly string[], ending = `${footer}\n\n${session}\n`): string {
+  return `${sections.map((section) => `## ${section}\n\nText.\n`).join("\n")}\n${ending}`;
+}
+
+describe("the text of a pull request", () => {
+  test("passes with a Conventional title, its sections in order and the footer last, with any section but Scope dropped", () => {
+    expect(problemsOf({ title, body: bodyWith(sectionOrder) })).toEqual([]);
+    expect(problemsOf({ title: "fix(core)!: x", body: bodyWith(["Scope"]) })).toEqual([]);
+    expect(problemsOf({ title, body: bodyWith(sectionOrder).replaceAll("\n", "\r\n") })).toEqual(
+      [],
+    );
+  });
+
+  test.each([
+    [
+      "a title with no type",
+      "Check the text of every pull request",
+      "is not a Conventional Commit",
+    ],
+    [
+      "a title with an unknown type",
+      "feature: check pull requests",
+      "is not a Conventional Commit",
+    ],
+    [
+      "a title with no space after the colon",
+      "ci:check pull requests",
+      "is not a Conventional Commit",
+    ],
+  ])("fails %s", (_, badTitle, said) => {
+    expect(problemsOf({ title: badTitle, body: bodyWith(sectionOrder) }).join("\n")).toContain(
+      said,
+    );
+  });
+
+  test.each([
+    ["no Scope", bodyWith(["Why", "What changed", "Verification"]), 'has no "## Scope"'],
+    ["Scope before Why", bodyWith(["Scope", "Why"]), "in the order Scope, Why"],
+    [
+      "Verification before Tradeoffs",
+      bodyWith(["Scope", "Verification", "Tradeoffs"]),
+      "Put them in the order",
+    ],
+    ["a section of its own", bodyWith(["Scope", "Notes"]), 'the section "## Notes"'],
+    ["a section twice", bodyWith(["Scope", "Scope"]), 'has "## Scope" more than once'],
+    ["no footer", bodyWith(["Scope"], ""), "does not end with the line"],
+    [
+      "the footer without the session URL",
+      bodyWith(["Scope"], `${footer}\n`),
+      "does not end with the line",
+    ],
+    [
+      "the session URL with no footer",
+      bodyWith(["Scope"], `${session}\n`),
+      "does not end with the line",
+    ],
+    [
+      "the footer and then a link that is not a session URL",
+      bodyWith(["Scope"], `${footer}\n\nhttps://claude.ai/code\n`),
+      "does not end with the line",
+    ],
+    [
+      "the session URL before the footer",
+      bodyWith(["Scope"], `${session}\n\n${footer}\n`),
+      "does not end with the line",
+    ],
+    [
+      "text after the footer",
+      bodyWith(["Scope"], `${footer}\n\n${session}\n\nMore.\n`),
+      "does not end with the line",
+    ],
+  ])("fails a body with %s", (_, body, said) => {
+    expect(problemsOf({ title, body }).join("\n")).toContain(said);
+  });
+
+  test("the check reads the pull_request event, and fails on a private term in the title or the body without printing it", async () => {
+    await inTemporaryTree({}, (directory) => {
+      const run = (pullRequest: object) => {
+        const event = join(directory, "event.json");
+        writeFileSync(event, JSON.stringify({ pull_request: pullRequest }));
+        return spawnSync(process.execPath, [textCheck, event], {
+          encoding: "utf8",
+          env: { ...process.env, SOLIX_PRIVATE_TERMS: fakeTerm },
+        });
+      };
+      const clean = run({ title, body: bodyWith(sectionOrder) });
+      const named = run({
+        title,
+        body: bodyWith(sectionOrder).replace("Text.", `Like ${fakeTerm}.`),
+      });
+      const badTitle = run({ title: `ci: like ${fakeTerm}`, body: bodyWith(sectionOrder) });
+
+      expect([clean.status, clean.stderr]).toEqual([0, ""]);
+      for (const failed of [named, badTitle]) {
+        expect(failed.status).toBe(1);
+        expect(failed.stderr).toContain("names a private term");
+        expect(failed.stderr).not.toContain(fakeTerm);
+      }
+    });
+  });
+});
+
+test("the pull request workflow checks the text on every open, edit and push, in a step that only calls the script", () => {
+  const workflow = readFileSync(join(repositoryRoot, workflowFile), "utf8");
+
+  expect(workflow).toContain("  pull_request:\n    types: [opened, edited, synchronize]\n");
+  expect(workflow).toContain(
+    '      - run: node scripts/check-pull-request-text.ts "$GITHUB_EVENT_PATH"\n        env:\n          SOLIX_PRIVATE_TERMS: ${{ secrets.SOLIX_PRIVATE_TERMS }}\n',
+  );
+});
