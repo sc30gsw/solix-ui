@@ -1,4 +1,4 @@
-import { test } from "vite-plus/test";
+import { expect, test } from "vite-plus/test";
 
 const timerInterval = 50;
 const stallAfter = 300;
@@ -75,21 +75,21 @@ export function observeStalls(): void {
         messages: longestGapIn(messageStamps, gap),
         frames: longestGapIn(frameStamps, gap),
       }));
-    await context.annotate(
-      JSON.stringify({
-        agent: navigator.userAgent,
-        cores: navigator.hardwareConcurrency,
-        ran: Math.round(since()),
-        first: state.last,
-        changes,
-        longest: {
-          timer: longestGapOf(timerStamps),
-          message: longestGapOf(messageStamps),
-          workerClock: longestGapOf(workerClock),
-          frame: longestGapOf(frameStamps),
-        },
-        stalls,
-      }),
-    );
+    const observed = JSON.stringify({
+      agent: navigator.userAgent,
+      cores: navigator.hardwareConcurrency,
+      ran: Math.round(since()),
+      first: state.last,
+      changes,
+      longest: {
+        timer: longestGapOf(timerStamps),
+        message: longestGapOf(messageStamps),
+        workerClock: longestGapOf(workerClock),
+        frame: longestGapOf(frameStamps),
+      },
+      stalls,
+    });
+    await context.annotate(observed);
+    expect(stalls, `stall probe: ${observed}`).toEqual([]);
   });
 }
