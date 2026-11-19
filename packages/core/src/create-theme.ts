@@ -1,3 +1,12 @@
+import {
+  isPalette,
+  type Palette,
+  primaryAlias,
+  primaryProperty,
+  shades,
+  shadeSource,
+} from "#/src/color-table.ts";
+import { colorSchemeAttribute } from "#/src/color-schemes.ts";
 import { layerOrder, libraryCascadeLayer, type Scale } from "#/src/style-prop-table.ts";
 import { characterThatEndsADeclaration, type ScaleKey, tokenOf } from "#/src/style-props.ts";
 
@@ -13,7 +22,7 @@ type ThemeKey = keyof typeof scaleOfThemeKey;
 
 export type SolixTheme = {
   [Key in ThemeKey]?: { [Size in ScaleKey<(typeof scaleOfThemeKey)[Key]>]?: string | null };
-};
+} & { primaryColor?: Exclude<Palette, typeof primaryAlias> };
 
 const characterThatLeavesItsPlace = /[<!\\]|\/\*/;
 
@@ -50,6 +59,13 @@ function isThemeKey(key: string): key is ThemeKey {
   return Object.hasOwn(scaleOfThemeKey, key);
 }
 
+function primaryDeclarationsOf(primaryColor: unknown): string[] {
+  if (!isPalette(primaryColor) || primaryColor === primaryAlias) return [];
+  return shades.map(
+    (shade) => `${primaryProperty(shade)}:var(${shadeSource(primaryColor, shade)});`,
+  );
+}
+
 function declarationsOf(theme: SolixTheme): string[] {
   return Object.entries(theme).flatMap(([key, sizes]) => {
     if (!isThemeKey(key) || typeof sizes !== "object" || sizes === null) return [];
@@ -63,9 +79,18 @@ function declarationsOf(theme: SolixTheme): string[] {
 }
 
 export function themeStyleSheet(theme: SolixTheme, selector: string): string | undefined {
-  const declarations = declarationsOf(theme);
-  if (declarations.length === 0 || !isWritable(selector)) return undefined;
-  return `${layerOrder}@layer ${libraryCascadeLayer}{${selector}{${declarations.join("")}}}`;
+  const placed: [on: string, declarations: string[]][] = [
+    [selector, declarationsOf(theme)],
+    [
+      `${selector},:is(${selector}) [${colorSchemeAttribute}]`,
+      primaryDeclarationsOf(theme.primaryColor),
+    ],
+  ];
+  const rules = placed.flatMap(([on, declarations]) =>
+    declarations.length === 0 ? [] : [`${on}{${declarations.join("")}}`],
+  );
+  if (rules.length === 0 || !isWritable(selector)) return undefined;
+  return `${layerOrder}@layer ${libraryCascadeLayer}{${rules.join("")}}`;
 }
 
 export function createTheme(theme: SolixTheme): SolixTheme {

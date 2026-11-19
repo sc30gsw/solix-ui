@@ -1,12 +1,11 @@
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
+import { palettes, paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
 import {
-  palettes,
-  paletteToken,
-  primaryPalette,
-  primaryProperty,
-  shades,
-} from "../../../packages/core/src/color-table";
-import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
+  library,
+  rootPart,
+  stableClass,
+  themeStyleSheet,
+} from "../../../packages/core/tests/built-library";
 import { lookOf } from "../../../scripts/expected-values";
 import {
   computed,
@@ -47,20 +46,19 @@ inEveryEngine((browser) => {
       );
     });
 
-    test("one rule that sets the primary's alias re-themes the Button, its hover and its light variant, the selected tab, the open disclosure, the focused text input and the focus ring", async () => {
+    test("a theme's primaryColor re-themes the Button, its hover and its light variant, the selected tab, the open disclosure, the focused text input and the focus ring", async () => {
       const { page, expected } = opened;
       const other = palettes.find((palette) => palette !== primaryPalette) ?? primaryPalette;
-      const shade = (name: (typeof shades)[number]) => expected(paletteToken(other, name));
-      const rule = `:root,[data-color-scheme]{${shades
-        .map((name) => `${primaryProperty(name)}:var(${paletteToken(other, name)})`)
-        .join(";")}}`;
+      const shade = (name: Parameters<typeof paletteToken>[1]) =>
+        expected(paletteToken(other, name));
+      const rule = themeStyleSheet(library.createTheme({ primaryColor: other }), ":root");
       await page.evaluate((text) => {
         const style = document.createElement("style");
         style.nonce = document.querySelector<HTMLElement>("[nonce]")?.nonce ?? "";
         style.id = "primary-override";
         style.textContent = text;
         document.head.append(style);
-      }, rule);
+      }, rule ?? "");
       const button = page.getByTestId("default");
       const selectedTab = page.getByRole("tab", { selected: true }).first();
       const summary = page.locator("summary", { hasText: "Toggle" });

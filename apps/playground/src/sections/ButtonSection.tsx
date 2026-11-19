@@ -1,5 +1,8 @@
-import { Button } from "@solix/core";
+import { Button, createTheme, SolixProvider } from "@solix/core";
 import { refOf } from "#/src/ref-of.ts";
+import { brandPrimaryColor, brandSubtree } from "#/src/sections/theme-setups.ts";
+
+const brandTheme = createTheme({ primaryColor: brandPrimaryColor });
 
 export function ButtonSection() {
   return (
@@ -13,9 +16,11 @@ export function ButtonSection() {
       <Button data-testid="overridden" class="danger">
         Overridden
       </Button>
-      <div class="brand-green">
-        <Button data-testid="themed">Themed</Button>
-      </div>
+      <SolixProvider theme={brandTheme} cssVariablesSelector={`.${brandSubtree}`}>
+        <div class={brandSubtree}>
+          <Button data-testid="themed">Themed</Button>
+        </div>
+      </SolixProvider>
     </>
   );
 }

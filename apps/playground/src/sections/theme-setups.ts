@@ -1,8 +1,14 @@
+import type { SolixTheme } from "@solix/core";
+
 export const themeSection = "Theme";
 
 export const themedByTheProvider = "data-provider-theme";
 
 export const themedSpacing = { md: "2.25rem" } as const;
+
+export const brandSubtree = "brand-green";
+
+export const brandPrimaryColor = "green" satisfies SolixTheme["primaryColor"];
 
 export const themeNames = {
   themed: "Padding the provider's theme sets",

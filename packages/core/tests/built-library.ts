@@ -56,7 +56,7 @@ export const { resolveColor } = (await import(join(dist, "colors.js"))) as typeo
 
 export const defaultColorClasses: ReadonlySet<string> = new Set(resolveColor("filled", {}).classes);
 
-export const { scaleOfThemeKey } = (await import(
+export const { scaleOfThemeKey, themeStyleSheet } = (await import(
   join(dist, "create-theme.js")
 )) as typeof CreateTheme;
 

@@ -120,7 +120,6 @@ export async function expectedValues(
       sentinelByName ? `var(${name})` : value,
     ]),
     ["danger", "color", playgroundValue(".danger", "background-color")],
-    ["brandGreen", "color", playgroundValue(".brand-green", "--solix-primary-6")],
     ["roomy", "margin-top", playgroundValue(".roomy", "margin-top")],
     ["pinnedMargin", "margin-top", playgroundValue(":root", "--playground-pinned-margin")],
     ["partBackground", "color", playgroundValue(":root", "--playground-part-background")],
