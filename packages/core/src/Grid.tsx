@@ -5,6 +5,7 @@ import { GridCol } from "#/src/GridCol.tsx";
 import { GridContext } from "#/src/grid-context.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { createParts, type ElementProps } from "#/src/parts.ts";
+import { gridVariables } from "#/src/Grid.variables.ts";
 import { type Breakpoint, breakpoints } from "#/src/style-prop-table.ts";
 import {
   type ContainerWidth,
@@ -47,14 +48,18 @@ export type GridProps = ElementProps<
   ) & {
     classes?: { col?: JSX.ClassValue };
     styles?: { col?: JSX.CSSProperties };
-    gap?: VariableProp<"grid-gap">;
-    rowGap?: VariableProp<"grid-row-gap">;
-    columnGap?: VariableProp<"grid-column-gap">;
+    gap?: VariableProp<typeof gridVariables, "grid-gap">;
+    rowGap?: VariableProp<typeof gridVariables, "grid-row-gap">;
+    columnGap?: VariableProp<typeof gridVariables, "grid-column-gap">;
     grow?: boolean;
-    justify?: VariableProp<"grid-justify", JSX.CSSProperties["justify-content"]>;
-    align?: VariableProp<"grid-align", JSX.CSSProperties["align-items"]>;
+    justify?: VariableProp<
+      typeof gridVariables,
+      "grid-justify",
+      JSX.CSSProperties["justify-content"]
+    >;
+    align?: VariableProp<typeof gridVariables, "grid-align", JSX.CSSProperties["align-items"]>;
     columns?: number;
-    overflow?: VariableProp<"grid-overflow", JSX.CSSProperties["overflow"]>;
+    overflow?: VariableProp<typeof gridVariables, "grid-overflow", JSX.CSSProperties["overflow"]>;
   }
 >;
 
@@ -64,7 +69,7 @@ export function Grid(props: GridProps) {
     const widths = props.breakpoints;
     return breakpoints.map((name) => [name, widths?.[name] ?? containerWidthOf(name)]);
   });
-  const { root, part } = createParts("Grid", styles, props, {
+  const { root, part } = createParts(gridVariables, styles, props, {
     variables: {
       "grid-align": "align",
       "grid-column-gap": "columnGap",

@@ -14,6 +14,8 @@ import type {
   StackProps,
 } from "#/src/index.ts";
 import type { createParts, PartsOptions } from "#/src/parts.ts";
+import type { spaceVariables } from "#/src/Space.variables.ts";
+import type { Variables } from "#/src/style-prop-table.ts";
 import { breakpointWidths } from "#/src/style-prop-table.ts";
 import type { ContainerWidth } from "#/src/style-props.ts";
 import { isContainerWidth, library } from "#/tests/built-library.ts";
@@ -836,14 +838,14 @@ test("a container width is a non-negative decimal length with a unit and no spac
 });
 
 type Probe = { class?: string };
-type TakenWithoutOptions<Name extends string> =
-  [Name, Record<"root", CompiledStyles>, Probe] extends Parameters<
-    typeof createParts<Name, Record<"root", CompiledStyles>, Probe, PartsOptions<Name, Probe>>
+type TakenWithoutOptions<Of extends string | Variables> =
+  [Of, Record<"root", CompiledStyles>, Probe] extends Parameters<
+    typeof createParts<Of, Record<"root", CompiledStyles>, Probe, PartsOptions<Of, Probe>>
   >
     ? true
     : false;
 
-test("createParts refuses, by type, a variable group's name called without its options", () => {
+test("createParts refuses, by type, a component's variables called without its options", () => {
   expectTypeOf<TakenWithoutOptions<"Center">>().toEqualTypeOf<true>();
-  expectTypeOf<TakenWithoutOptions<"Space">>().toEqualTypeOf<false>();
+  expectTypeOf<TakenWithoutOptions<typeof spaceVariables>>().toEqualTypeOf<false>();
 });

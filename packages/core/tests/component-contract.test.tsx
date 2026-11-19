@@ -19,10 +19,6 @@ import {
   responsiveKeys,
   stylePropClass,
   variableClass,
-  variableGroups,
-  variableNames,
-  variableRow,
-  variablesOf,
   visibilityClasses,
 } from "#/src/style-prop-table.ts";
 import {
@@ -47,6 +43,8 @@ import {
   stableClass,
   stylesheet,
   defaultColorClasses,
+  variableNames,
+  variableRows,
 } from "#/tests/built-library.ts";
 import {
   classesPropsFrom,
@@ -747,24 +745,25 @@ test.each(builtComponents)(
 test("every variable drops null and a value that holds ;, { or }, and writes each value it keeps as one class and the custom property that class reads", async (context) => {
   await assertProperty(
     context,
-    fc.property(fc.constantFrom(...variableNames), declaredStyleProp, (name, declared) => {
-      const group = variableGroups.find((found) => variablesOf(found).some((own) => own === name));
-      if (group === undefined) throw new Error(`${name}: put it in a group.`);
-      const { classes, properties } = resolveVariables(
-        group,
-        { [name]: declared.written },
-        undefined,
-        () => false,
-      );
-      const kept = responsiveKeys.filter(
-        (key) =>
-          declared.keptKeys.includes(key) && (variableRow(name).responsive || key === baseKey),
-      );
+    fc.property(
+      fc.constantFrom(...variableRows),
+      declaredStyleProp,
+      ({ of, name, row }, declared) => {
+        const { classes, properties } = resolveVariables(
+          of,
+          { [name]: declared.written },
+          undefined,
+          () => false,
+        );
+        const kept = responsiveKeys.filter(
+          (key) => declared.keptKeys.includes(key) && (row.responsive || key === baseKey),
+        );
 
-      expect(Object.values(properties).filter((css) => /[;{}]/.test(css))).toEqual([]);
-      expect(Object.keys(properties).sort()).toEqual(classes.map((found) => `--${found}`).sort());
-      expect(classes.sort()).toEqual(kept.map((key) => variableClass(name, key)).sort());
-    }),
+        expect(Object.values(properties).filter((css) => /[;{}]/.test(css))).toEqual([]);
+        expect(Object.keys(properties).sort()).toEqual(classes.map((found) => `--${found}`).sort());
+        expect(classes.sort()).toEqual(kept.map((key) => variableClass(name, key)).sort());
+      },
+    ),
     { numRuns: generatedRuns },
   );
 });

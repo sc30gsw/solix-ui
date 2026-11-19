@@ -1,6 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { createParts, type ElementProps } from "#/src/parts.ts";
+import { stackVariables } from "#/src/Stack.variables.ts";
 import type { VariableProp } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
@@ -21,14 +22,18 @@ export type StackProps = ElementProps<
   "div",
   typeof styles,
   {
-    gap?: VariableProp<"stack-gap">;
-    align?: VariableProp<"stack-align", JSX.CSSProperties["align-items"]>;
-    justify?: VariableProp<"stack-justify", JSX.CSSProperties["justify-content"]>;
+    gap?: VariableProp<typeof stackVariables, "stack-gap">;
+    align?: VariableProp<typeof stackVariables, "stack-align", JSX.CSSProperties["align-items"]>;
+    justify?: VariableProp<
+      typeof stackVariables,
+      "stack-justify",
+      JSX.CSSProperties["justify-content"]
+    >;
   }
 >;
 
 export function Stack(props: StackProps) {
-  const { root } = createParts("Stack", styles, props, {
+  const { root } = createParts(stackVariables, styles, props, {
     variables: { "stack-align": "align", "stack-gap": "gap", "stack-justify": "justify" },
   });
   return <div {...root} />;

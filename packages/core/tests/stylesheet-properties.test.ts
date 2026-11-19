@@ -12,6 +12,7 @@ import {
   libraryStylesheet,
 } from "#/build-pipeline.mjs";
 import { libraryLayers, stylePropRules } from "#/src/style-prop-table.ts";
+import { builtVariables } from "#/tests/built-library.ts";
 import { layersAroundDeclaration, nestedLayerOrder } from "#/tests/cascade-layers.ts";
 import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
@@ -162,7 +163,7 @@ test(
         const stylesheet = postcss.parse(
           libraryStylesheet(
             rules,
-            stylePropRules(),
+            stylePropRules(builtVariables),
             { colors: colorRules(), primary: primaryRule() },
             sdkRule,
           ),
