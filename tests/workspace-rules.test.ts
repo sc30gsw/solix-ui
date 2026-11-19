@@ -676,6 +676,21 @@ test("every package on the Solid 2 channel is pinned to one release and installe
   expect(violations).toEqual([]);
 });
 
+test("the catalog pins vite to the Vite+ core that the pinned vite-plus depends on", () => {
+  const { catalog } = pnpmSettings();
+  const manifestPath = findPackageJSON("vite-plus", join(repositoryRoot, packageManifest)) ?? "";
+  const vitePlus = JSON.parse(readFileSync(manifestPath, "utf8")) as Manifest & { version: string };
+  const core = vitePlus.dependencies?.vite;
+
+  expect(vitePlus.version, "run `vp install`, so vite-plus is at the catalog's release").toBe(
+    catalog["vite-plus"],
+  );
+  expect(
+    catalog.vite,
+    `${workspaceFile}: pin vite to ${core}, the core vite-plus ${vitePlus.version} depends on. The vite@* override gives every package the catalog's vite, so another core would run under this vite-plus with no warning.`,
+  ).toBe(core);
+});
+
 function prereleasesNamedBy(range: string): string[] {
   return new semver.Range(range).set
     .flat()
