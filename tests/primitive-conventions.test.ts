@@ -277,7 +277,7 @@ test("each rule passes a fixture that holds only what it allows", () => {
   );
 });
 
-function caughtErrorsWith(errorBoundaries: readonly Home[]): string[] {
+function caughtErrorsWith(errorBoundaries: readonly Required<Home>[]): string[] {
   const fixture = loadLibrary(join(fixtureDirectory, "forbidden"), {
     kind: "primitives",
     errorBoundaries,
@@ -291,7 +291,6 @@ test("the caught errors rule passes an error boundary that catches, and flags on
   const catching = { file: "create-misbehaving.ts", fn: "createMisbehaving" };
 
   expect(caughtErrorsWith([catching])).toEqual([]);
-  expect(caughtErrorsWith([{ file: catching.file }])).toEqual([]);
   expect(
     caughtErrorsWith([
       catching,

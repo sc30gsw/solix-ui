@@ -53,7 +53,7 @@ export const stateCommandRole = "StateCommandBody";
 export type Module = { file: string; path: string; source: ts.SourceFile };
 
 export type Library = {
-  errorBoundaries: readonly Home[];
+  errorBoundaries: readonly Required<Home>[];
   source: string;
   testDirectory: string;
   entries: string[];

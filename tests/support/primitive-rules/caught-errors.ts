@@ -28,7 +28,7 @@ function staleBoundaries(library: Library): string[] {
     .filter((home) => !holdsACatch(library, home))
     .map(
       (home) =>
-        `${relative(repositoryRoot, join(library.source, home.file))}: ${boundaryList} names ${home.fn ?? "this file"} here as an error boundary, but no catch is there. Name the function that catches, or remove the entry.`,
+        `${relative(repositoryRoot, join(library.source, home.file))}: ${boundaryList} names ${home.fn} here as an error boundary, but no catch is there. Name the function that catches, or remove the entry.`,
     );
 }
 

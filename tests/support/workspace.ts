@@ -36,7 +36,7 @@ export type Home = { file: string; fn?: string };
 
 export type LibraryRegistration = {
   kind: LibraryKind;
-  errorBoundaries: readonly Home[];
+  errorBoundaries: readonly Required<Home>[];
 };
 
 export const registeredLibraries: Readonly<Record<string, LibraryRegistration>> = {
