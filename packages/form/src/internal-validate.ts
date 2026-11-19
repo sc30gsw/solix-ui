@@ -104,15 +104,15 @@ function ruleAt(
   segments: PathSegments,
   depth: number,
   at: string,
-  walk: { values: unknown; perItem: boolean },
+  walk: { values: unknown; items: number | undefined },
 ): AnyRule | undefined {
   if (!isContainer(rules)) return undefined;
   const segment = segments.at(depth) ?? "";
   const next = at === "" ? segment : `${at}.${segment}`;
   const last = depth === segments.length - 1;
-  if (walk.perItem) {
-    return isIndexSegment(segment) && !last
-      ? ruleAt(rules, segments, depth + 1, next, { values: walk.values, perItem: false })
+  if (walk.items !== undefined) {
+    return isIndexSegment(segment) && Number(segment) < walk.items && !last
+      ? ruleAt(rules, segments, depth + 1, next, { values: walk.values, items: undefined })
       : undefined;
   }
   const child = childOf(rules, segment);
@@ -121,7 +121,7 @@ function ruleAt(
   if (!isContainer(child) || !isContainer(value)) return undefined;
   return ruleAt(child, segments, depth + 1, next, {
     values: walk.values,
-    perItem: Array.isArray(value),
+    items: Array.isArray(value) ? value.length : undefined,
   });
 }
 
@@ -129,7 +129,7 @@ export function ruleForPath(path: string, rules: unknown, values: unknown): AnyR
   const segments = splitPath(path);
   return segments === undefined
     ? undefined
-    : ruleAt(rules, segments, 0, "", { values, perItem: false });
+    : ruleAt(rules, segments, 0, "", { values, items: undefined });
 }
 
 function fieldResultOf(path: string, result: FormValidationResult): FormFieldValidationResult {

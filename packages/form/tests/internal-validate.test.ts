@@ -339,6 +339,17 @@ test("a rule is found only among the rules' own properties, never on their proto
   });
 });
 
+test("validateFieldValue of an item past a list's end runs no rule, as validateValues reaches none", () => {
+  const rules = { jobs: { title: (value: unknown) => (value ? null : "required") } };
+  const values = { jobs: [{ title: "x" }] };
+
+  expect(validateValues(rules, values)).toStrictEqual({ hasErrors: false, errors: {} });
+  expect(validateFieldValue("jobs.3.title", rules, values)).toStrictEqual({
+    hasError: false,
+    error: null,
+  });
+});
+
 test("validateFieldValue of a list item does not run the rule of the whole list on it", () => {
   const rules = { tags: (value: unknown) => (Array.isArray(value) ? null : "not a list") };
   const values = { tags: ["a", "b"] };
@@ -364,18 +375,63 @@ const { rules: generatedRules } = fc.letrec((tie) => ({
   ),
 }));
 
-const { node: generatedValue } = fc.letrec((tie) => ({
-  node: fc.oneof(
-    { depthSize: "small" },
-    fc.integer(),
-    fc.dictionary(ruleKey, tie("node"), { maxKeys: 3 }),
-    fc.array(tie("node"), { maxLength: 3 }),
-  ),
-}));
+type GeneratedRules = { [key: string]: typeof oddRule | GeneratedRules };
 
-const fieldPath = fc
-  .array(fc.oneof(ruleKey, fc.constantFrom("0", "1")), { minLength: 1, maxLength: 4 })
-  .map((segments) => segments.join("."));
+const listIndex = fc.constantFrom("0", "1", "2");
+
+function valuesFor(rules: GeneratedRules): fc.Arbitrary<Record<string, unknown>> {
+  return fc.record(
+    Object.fromEntries(
+      Object.entries(rules).map(([key, rule]): [string, fc.Arbitrary<unknown>] => {
+        const nested: fc.Arbitrary<unknown> =
+          typeof rule === "function" ? fc.integer() : valuesFor(rule);
+        return [
+          key,
+          fc.oneof(fc.integer(), nested, {
+            arbitrary: fc.array(nested, { maxLength: 2 }),
+            weight: 3,
+          }),
+        ];
+      }),
+    ),
+    { requiredKeys: [] },
+  );
+}
+
+function pathThrough(rules: GeneratedRules, values: unknown): fc.Arbitrary<string[]> {
+  const keys = Object.keys(rules);
+  if (keys.length === 0) return fc.constant([]);
+  return fc.constantFrom(...keys).chain((key): fc.Arbitrary<string[]> => {
+    const rule = rules[key];
+    const value: unknown = Object(values)[key];
+    if (typeof rule === "function" || rule === undefined) return fc.constant<string[]>([key]);
+    const below = Array.isArray(value)
+      ? fc
+          .nat(value.length)
+          .chain((index) => pathThrough(rule, value[index]).map((rest) => [String(index), ...rest]))
+      : pathThrough(rule, value);
+    return fc.oneof(fc.constant<string[]>([key]), {
+      arbitrary: below.map((rest) => [key, ...rest]),
+      weight: 3,
+    });
+  });
+}
+
+const anyFieldPath = fc.array(fc.oneof(ruleKey, listIndex), { minLength: 1, maxLength: 4 });
+
+const fieldCase = generatedRules.chain((generated) => {
+  const rules = generated as GeneratedRules;
+  return valuesFor(rules).chain((values) =>
+    fc.record({
+      rules: fc.constant(rules),
+      values: fc.constant(values),
+      path: (Object.keys(rules).length === 0
+        ? anyFieldPath
+        : fc.oneof({ arbitrary: pathThrough(rules, values), weight: 4 }, anyFieldPath)
+      ).map((segments) => segments.join(".")),
+    }),
+  );
+});
 
 function firstErrorAtOrUnder(path: string, errors: Record<string, unknown>) {
   const key = Object.keys(errors).find((each) => each === path || each.startsWith(`${path}.`));
@@ -384,10 +440,10 @@ function firstErrorAtOrUnder(path: string, errors: Record<string, unknown>) {
     : { hasError: true, error: errors[key] };
 }
 
-test("validateFieldValue gives, for generated rules, values and paths, the first error validateValues gives at or under the path", async (context) => {
+test("validateFieldValue gives, for generated rules, values shaped like them with short and empty lists, and paths that may pass a list's end, the first error validateValues gives at or under the path", async (context) => {
   await assertProperty(
     context,
-    fc.property(generatedRules, generatedValue, fieldPath, (generated, values: unknown, path) => {
+    fc.property(fieldCase, ({ rules: generated, values, path }) => {
       const rules = generated as FormValidateInput<unknown>;
       const all = validateValues(rules, values);
       if (isThenable(all)) throw new Error("the generated rules are synchronous");
