@@ -54,3 +54,9 @@ test("isUrl fails with true when no error is given, with options or without", ()
   expect(isUrl({ allowLocalhost: true })("http://localhost")).toBeNull();
   expect(isUrl({ allowLocalhost: true })("not-a-url")).toBe(true);
 });
+
+test("isUrl takes a plain object as its options, an empty one included, and the error after it", () => {
+  expect(isUrl({})("not-a-url")).toBe(true);
+  expect(isUrl({})("https://example.com")).toBeNull();
+  expect(isUrl({}, "Invalid URL")("not-a-url")).toBe("Invalid URL");
+});
