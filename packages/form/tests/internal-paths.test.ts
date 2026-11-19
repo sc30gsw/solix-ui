@@ -311,6 +311,15 @@ test("setPath writes a list's length as an assignment does, so setting it shorte
   expect(target.a).toStrictEqual([1, 2, 3]);
 });
 
+test("setPath changes nothing when it sets a list's length to anything but a whole number from 0 that a list can hold", () => {
+  const target = { a: [1, 2, 3] };
+
+  for (const length of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2 ** 32, "2", "abc", null]) {
+    expect(setPath("a.length", length, target), String(length)).toBe(target);
+  }
+  expect(setPath("a.length", 2 ** 32 - 1, target).a).toHaveLength(2 ** 32 - 1);
+});
+
 test("getPath reads only own properties, so a path never reaches what a prototype holds", () => {
   expect(getPath("toString", {})).toBeUndefined();
   expect(getPath("a.hasOwnProperty", { a: {} })).toBeUndefined();

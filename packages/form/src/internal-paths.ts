@@ -2,6 +2,10 @@ export type PathSegments = readonly [string, ...string[]];
 
 const unsafeSegments: readonly string[] = ["__proto__", "constructor", "prototype"] as const;
 
+const lengthKey = "length";
+
+const longestList = 2 ** 32 - 1;
+
 export function splitPath(path: unknown): PathSegments | undefined {
   if (typeof path !== "string") return undefined;
   const [first = "", ...rest] = path.split(".");
@@ -72,7 +76,12 @@ function copyOf(target: object): object {
   return copy;
 }
 
+function isListLength(value: unknown): boolean {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= longestList;
+}
+
 function withEntry(target: object, key: string, value: unknown): object {
+  if (Array.isArray(target) && key === lengthKey && !isListLength(value)) return target;
   if (Object.hasOwn(target, key) && Object.is(Reflect.get(target, key), value)) return target;
   const copy = copyOf(target);
   put(copy, key, value);
