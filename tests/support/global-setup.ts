@@ -1,10 +1,7 @@
-import { execFileSync } from "node:child_process";
 import { join, relative } from "node:path";
 import type { TestProject } from "vite-plus/test/node";
-import { installedVp, repositoryRoot } from "#/scripts/repository.ts";
-import { gitVariablesIn } from "#/tests/support/git-free-environment.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
 import { localUrl, startServer } from "#/tests/support/server-process.ts";
-import { withoutTestRunnerVariables } from "#/tests/support/test-runner-environment.ts";
 
 const playgroundDirectory = join(repositoryRoot, "apps/playground");
 const playgroundPort = 4319;
@@ -15,6 +12,7 @@ export type RunSettings = {
   testNamePattern: string | null;
   env: Record<string, string>;
   provided: Record<string, unknown>;
+  groupOrder: number;
 };
 
 declare module "vite-plus/test" {
@@ -40,13 +38,10 @@ function runSettingsOfEachProject(project: TestProject): Record<string, RunSetti
           Object.entries(config.env ?? {}).map(([key, value]) => [key, String(value)]),
         ),
         provided: { ...config.provide },
+        groupOrder: config.sequence.groupOrder,
       },
     ]),
   );
-}
-
-function productionEnvironment(): NodeJS.ProcessEnv {
-  return { ...withoutTestRunnerVariables(), NODE_ENV: "production" };
 }
 
 async function testFilesOfEachProject(project: TestProject): Promise<Record<string, string[]>> {
@@ -59,20 +54,9 @@ async function testFilesOfEachProject(project: TestProject): Promise<Record<stri
 }
 
 export async function setup(project: TestProject): Promise<() => void> {
-  const gitVariables = gitVariablesIn(process.env);
-  if (gitVariables.length > 0) {
-    throw new Error(
-      `tests/support/global-setup.ts: ${gitVariables.join(", ")} reach this setup, and every child it spawns would inherit them. List tests/support/git-free-environment.ts before it in globalSetup.`,
-    );
-  }
   project.provide("testFilesOfEachProject", await testFilesOfEachProject(project));
   project.provide("runTestNamePattern", patternOf(project.vitest.config.testNamePattern));
   project.provide("runSettingsOfEachProject", runSettingsOfEachProject(project));
-  execFileSync(installedVp, ["run", "-r", "build"], {
-    cwd: repositoryRoot,
-    env: productionEnvironment(),
-    stdio: "inherit",
-  });
   try {
     const playground = await startServer({
       directory: playgroundDirectory,

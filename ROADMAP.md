@@ -9,7 +9,7 @@ The work comes in this order. Each step has a status: not started, in progress o
 1. **Layout** (merged): Box, Center, Container, Flex, Grid, Group, SimpleGrid, Space, Stack.
 2. **UI SDK seam** (merged): Tabs.
 3. **`#/` subpath imports** (merged).
-   - Merged when: `tests/subpath-imports.test.ts` exists and `vp run verify` lists it.
+   - Merged when: `tests/rules/subpath-imports.test.ts` exists and `vp run verify` lists it.
 4. **Storybook** (merged).
    - Merged when: `apps/storybook/tests/stories-in-verify.test.ts` exists and `vp run verify` lists it.
 5. **Buttons and basic display** (not started): Button, UnstyledButton, CloseButton, IconButton, CopyButton, FileButton, Toggle, Link, Text, Title, Highlight, List, Divider, Paper, VisuallyHidden, Loader, Badge, Avatar, Card, Image, BackgroundImage, Indicator, NumberFormatter, Code.

@@ -1,11 +1,22 @@
 import { globSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { expect, test } from "vite-plus/test";
+import { afterAll, expect, test } from "vite-plus/test";
 import {
   descendants,
   exportsOf,
+  fileOf,
+  findAncestor,
+  isFileOfPackage,
+  isTypedAny,
+  memberDeclarations,
+  memberRead,
+  nameOf,
+  openProgram,
+  propertyDeclarations,
   parse,
   parseAll,
+  type Program,
+  virtualFile,
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
@@ -26,6 +37,14 @@ const letterOrDigit = /[\p{L}\p{N}]/u;
 const whitespace = /\s/;
 const derivingFunctions = ["panelOf", "valueOf"];
 const playgroundTestCode = "apps/playground/tests/**/*.{ts,tsx,mjs}";
+const playgroundVerificationFiles = globSync(
+  [playgroundTestCode, driveScript, "tests/support/served-app.ts", "scripts/expected-values.ts"],
+  { cwd: repositoryRoot },
+).sort();
+const openingModule = "apps/playground/tests/support/opening.ts";
+const opener = "opened";
+const navigation = "goto";
+const playwrightPackages = ["playwright", "playwright-core"];
 const featureSections = [
   "Sub-features",
   "How to get to it (user POV)",
@@ -295,8 +314,7 @@ function heldIn(node: ts.Node, held: HeldName[]): HeldName | undefined {
 
 test("no playground test or drive script writes a name that a setups module holds, a list's name, an item's name in an exported *Names object, or what its panelOf or valueOf gives for an item, as a string, as a word of a string with no whitespace, or as a word of a regular expression: each reads it from that module", async () => {
   const held = await namesTheSetupsHold();
-  const files = [...globSync(playgroundTestCode, { cwd: repositoryRoot }), driveScript];
-  const violations = files.flatMap((file) => {
+  const violations = playgroundVerificationFiles.flatMap((file) => {
     const source = parse(join(repositoryRoot, file));
     return descendants(source).flatMap((node) => {
       const found = heldIn(node, held);
@@ -310,4 +328,125 @@ test("no playground test or drive script writes a name that a setups module hold
 
   expect(held).not.toEqual([]);
   expect(violations).toEqual([]);
+});
+
+function isPlaywrightsNavigation(declaration: ts.Node): boolean {
+  return (
+    isFileOfPackage(fileOf(declaration), playwrightPackages) && nameOf(declaration) === navigation
+  );
+}
+
+function readsAnIndex(node: ts.Node): boolean {
+  return ts.isElementAccessExpression(node) && ts.isNumericLiteral(node.argumentExpression);
+}
+
+type PageRead = { kind: "none" } | { kind: "names"; names: string[] } | { kind: "unknown" };
+
+function readFromAPage(program: Program, node: ts.Node): PageRead {
+  const read = memberRead(program, node);
+  if (!read || readsAnIndex(node)) return { kind: "none" };
+  const aPage =
+    isTypedAny(program, read.owner) ||
+    propertyDeclarations(program, read.owner, [navigation]).some(isPlaywrightsNavigation);
+  if (!aPage) return { kind: "none" };
+  return read.names.length === 0 ? { kind: "unknown" } : { kind: "names", names: read.names };
+}
+
+function insideTheOpener(node: ts.Node): boolean {
+  if (!fileOf(node).endsWith(openingModule)) return false;
+  const owner = findAncestor(node, ts.isFunctionDeclaration);
+  return owner !== undefined && nameOf(owner) === opener && ts.isSourceFile(owner.parent);
+}
+
+type Navigation = { node: ts.Node; how: string };
+
+function navigationsInSource(program: Program, source: ts.SourceFile): Navigation[] {
+  return descendants(source).flatMap((node) => {
+    if (memberDeclarations(program, node).some(isPlaywrightsNavigation)) {
+      return [{ node, how: `reaches Playwright's ${navigation}` }];
+    }
+    const read = readFromAPage(program, node);
+    if (read.kind === "names" && read.names.includes(navigation)) {
+      return [{ node, how: `reads ${navigation} from a value typed any` }];
+    }
+    return read.kind === "unknown"
+      ? [
+          {
+            node,
+            how: "reads a member of a page, or of a value typed any, by a name the type checker does not know",
+          },
+        ]
+      : [];
+  });
+}
+
+function navigationsIn(program: Program, file: string): Navigation[] {
+  const source = program.sourceFile(join(repositoryRoot, file));
+  if (!source) throw new Error(`${file}: TypeScript did not open this file.`);
+  return navigationsInSource(program, source);
+}
+
+function lineOf(node: ts.Node): number {
+  return node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
+}
+
+const opening = openProgram(playgroundVerificationFiles.map((file) => join(repositoryRoot, file)));
+afterAll(() => {
+  opening.dispose();
+});
+
+test(`no playground test, drive script or helper they share reaches Playwright's ${navigation} but through ${opener}, by a member the type checker resolves or by a member of a value typed any, named or not`, () => {
+  const violations = playgroundVerificationFiles.flatMap((file) =>
+    navigationsIn(opening, file)
+      .filter(({ node }) => !insideTheOpener(node))
+      .map(
+        ({ node, how }) =>
+          `${file}:${lineOf(node)}: ${node.getText()} ${how}. Open the page with ${opener} from ${openingModule}.`,
+      ),
+  );
+
+  expect(playgroundVerificationFiles).toEqual(expect.arrayContaining([openingModule, driveScript]));
+  expect(
+    navigationsIn(opening, openingModule).filter(({ node }) => insideTheOpener(node)),
+  ).not.toEqual([]);
+  expect(violations).toEqual([]);
+});
+
+const pageSpellings = (body: string) =>
+  virtualFile(
+    `import type { Page } from "playwright";\nexport async function read(page: Page, member: string): Promise<unknown> {\n  ${body}\n}\n`,
+    ".ts",
+  );
+const refusedPageReads = {
+  "an element access by a name the type checker does not know": "return page[member];",
+  "Reflect.get by a name the type checker does not know": "return Reflect.get(page, member);",
+  "goto by its literal name": 'return page["goto"];',
+};
+const allowedPageReads = {
+  "a member read by its name": "return page.url();",
+  "a member read by a literal name": 'return page["title"]();',
+};
+const pageReadFiles = Object.fromEntries(
+  Object.entries({ ...refusedPageReads, ...allowedPageReads }).map(([spelling, body]) => [
+    spelling,
+    pageSpellings(body),
+  ]),
+);
+const pageReads = openProgram(Object.values(pageReadFiles));
+afterAll(() => {
+  pageReads.dispose();
+});
+
+function navigationsInFixture(spelling: string): Navigation[] {
+  const source = pageReads.sourceFile(pageReadFiles[spelling]);
+  if (!source) throw new Error(`${spelling}: TypeScript did not open its fixture.`);
+  return navigationsInSource(pageReads, source);
+}
+
+test.for(Object.keys(refusedPageReads))("on a typed page, the check refuses %s", (spelling) => {
+  expect(navigationsInFixture(spelling)).not.toEqual([]);
+});
+
+test.for(Object.keys(allowedPageReads))("on a typed page, the check passes %s", (spelling) => {
+  expect(navigationsInFixture(spelling)).toEqual([]);
 });
