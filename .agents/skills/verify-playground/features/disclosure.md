@@ -1,6 +1,6 @@
 # Disclosure
 
-A summary that reads `Toggle` opens and closes a block of content. While it is open, the summary takes the primary token as its background and the on-primary token as its text colour, and the content shows an edge in the primary token at its start. A second disclosure, `Inner`, sits inside the content.
+A summary that reads `Toggle` opens and closes a block of content. While it is open, the summary takes the primary token as its background and the primary contrast token as its text colour, and the content shows an edge in the primary token at its start. A second disclosure, `Inner`, sits inside the content.
 
 ## Sub-features
 
@@ -21,7 +21,7 @@ Preconditions:
 - `doctor.sh` exits 0.
 
 - **Closed.** Open the page. Run `.agents/skills/verify-playground/scripts/drive.mjs disclosure`. The observations `closed: the details element's open property` (`false`), `closed: summary background` (the surface token) and `closed: content is visible` (`false`) pass.
-- **Click.** Click `Toggle`, then click it again. The same run observes `open: the details element's open property` (`true`), `open: summary background` (the primary token), `open: summary text colour` (the on-primary token), `open: content is visible` (`true`), `open: content left border` (the primary token), and then the three `closed again` observations.
+- **Click.** Click `Toggle`, then click it again. The same run observes `open: the details element's open property` (`true`), `open: summary background` (the primary token), `open: summary text colour` (the primary contrast token), `open: content is visible` (`true`), `open: content left border` (the primary token), and then the three `closed again` observations.
 - **Nested.** Click `Toggle` to open it and look at `Inner`. The same run observes `inner disclosure inside the open one: summary background` (the surface token) and `summary text colour` (the text token).
 - **Keyboard.** Focus the summary, press Enter, then press Space. The same run observes the three `Enter on the focused summary` observations (open) and the three `Space on the focused summary` observations (closed).
 - **Proof.** The evidence directory holds `01-closed.png`, `02-open.png`, `03-closed-again.png`, `04-inner-stays-closed.png`, `05-opened-with-enter.png`, `06-closed-with-space.png`, `recording.webm` and `observations.json`.

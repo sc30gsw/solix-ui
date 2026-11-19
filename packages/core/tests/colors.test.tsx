@@ -21,6 +21,10 @@ import {
   primaryProperty,
   shadeClass,
   shades,
+  slotDefaults,
+  tintShades,
+  contrastLuminance,
+  luminanceWeights,
   variantAttribute,
 } from "#/src/color-table.ts";
 import { colorSchemeLayer, componentLayer } from "#/src/style-prop-table.ts";
@@ -134,10 +138,13 @@ test("the primary's alias is written once, on :root and on every element with a 
   );
 });
 
-test("an element with a colour class resets every slot, so a variant the table does not hold inherits no colour of an ancestor", () => {
-  expect(ruleFor(`.${colorClass}`)).toEqual(
-    Object.fromEntries(slots.map((slot) => [slot, "initial"])),
-  );
+test("an element with a colour class resets every slot to a default, so a variant the table does not hold falls back to the default variant and a custom variant that sets only its background and colour hovers on its background with no border", () => {
+  const reset = ruleFor(`.${colorClass}`);
+
+  expect(Object.keys(reset)).toEqual(slots);
+  expect(reset).toEqual(slotDefaults);
+  expect(reset["--sx-variant-hover"]).toBe("var(--sx-variant-background)");
+  expect(valuesOf(rootOf({ variant: "nonsense" }), variantAttribute)).toEqual(["filled"]);
 });
 
 test.each(variants)(
@@ -201,36 +208,65 @@ test("autoContrast is off unless it is true: only then does the root take the cl
   expect(Object.keys(ruleFor(`.${shadeClass}`))).not.toContain("--sxc-shade-contrast");
 });
 
-test("any other colour writes one custom property, itself, with the shade and custom classes, and one that holds ;, { or } falls back to the primary palette", async (context) => {
-  const spelled = new Set([
-    ...named,
-    ...named.flatMap((palette) => shades.map((shade) => `${palette}.${shade}`)),
-  ]);
+test("any other CSS colour writes one custom property, itself, with the shade and custom classes, and a value that is no colour, such as red-6, blue.12 or one that holds ;, { or }, falls back to the primary palette and writes nothing", async (context) => {
   await assertProperty(
     context,
     fc.property(
-      fc
-        .string({
-          unit: fc.constantFrom(..."abcdefor0123456789#(),.% ;{}".split("")),
-          minLength: 1,
-        })
-        .filter((color) => color.trim() === color && !spelled.has(color)),
+      fc.oneof(
+        fc.stringMatching(/^#[0-9a-f]{6}$/).map((color) => ({ color, valid: true })),
+        fc
+          .constantFrom("oklch(0.5 0.1 20)", "rgb(10 20 30)", "transparent", "rebeccapurple")
+          .map((color) => ({ color, valid: true })),
+        fc
+          .constantFrom("red-6", "blue.12", "#f00;", "red}", "a{b")
+          .map((color) => ({ color, valid: false })),
+      ),
       fc.constantFrom(...variants),
-      (color, variant) => {
+      ({ color, valid }, variant) => {
         const props = { color, variant };
         const classes = classesOf(rootOf(props));
 
         expect(valuesOf(rootOf(props), variantAttribute)).toEqual([variant]);
-        if (/[;{}]/.test(color)) {
-          expect(classes).toEqual(expect.arrayContaining([colorClass, paletteClass(primaryAlias)]));
-          expect(styleOf(props)).toEqual({});
-        } else {
+        if (valid) {
           expect(classes).toEqual(
             expect.arrayContaining([colorClass, shadeClass, customColorClass]),
           );
-          expect(Object.keys(styleOf(props))).toEqual([colorProperty]);
+          expect(styleOf(props)).toEqual({ [colorProperty]: color });
+        } else {
+          expect(classes).toEqual(expect.arrayContaining([colorClass, paletteClass(primaryAlias)]));
+          expect(styleOf(props)).toEqual({});
         }
       },
     ),
   );
+});
+
+test("a given shade or colour tints the light variant from shades 1 and 2, which the shade class mixes from it, and never paints it solid", () => {
+  const light = ruleFor(`.${shadeClass}[${variantAttribute}="light"]`);
+  const shade = ruleFor(`.${shadeClass}`);
+
+  expect(light["--sx-variant-background"]).toBe("var(--sxc-shade-1)");
+  expect(light["--sx-variant-hover"]).toBe("var(--sxc-shade-2)");
+  expect(Object.keys(tintShades).map((name) => shade[`--sxc-shade-${name}`])).toEqual(
+    Object.values(tintShades).map(
+      ([percent, toward]) => `color-mix(in oklab, var(${colorProperty}) ${percent}%, ${toward})`,
+    ),
+  );
+});
+
+test("the autoContrast threshold is the WCAG crossover, where black and white text contrast alike, and its weights are WCAG's", () => {
+  const withWhite = 1.05 / (contrastLuminance + 0.05);
+  const withBlack = (contrastLuminance + 0.05) / 0.05;
+
+  expect(withWhite).toBeCloseTo(withBlack, 12);
+  expect(Object.values(luminanceWeights)).toEqual([0.2126, 0.7152, 0.0722]);
+});
+
+test("the colour style props resolve a palette, its shade and the primary the way color does", () => {
+  const styleOfBox = (props: Record<string, unknown>) =>
+    Object.fromEntries(declarationsIn(valuesOf(rootElementOf(render("Box", props)), "style")[0]));
+
+  expect(styleOfBox({ c: "primary" })).toEqual({ "--sx-c": `var(${primaryProperty("6")})` });
+  expect(styleOfBox({ bg: "red.3" })).toEqual({ "--sx-bg": `var(${paletteToken("red", "3")})` });
+  expect(styleOfBox({ c: "red-6" })).toEqual({ "--sx-c": `var(${paletteToken("red", "6")})` });
 });
