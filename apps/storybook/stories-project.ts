@@ -12,7 +12,11 @@ const schemeOfEachStory = join(import.meta.dirname, "story-color-scheme.setup.ts
 const preBundledForStories = ["@stylexjs/stylex"];
 const storyTimeout = 30_000;
 
-export function storiesProject({ project, port, colorScheme }: StoriesServer, configDir: string) {
+export function storiesProject(
+  { project, port, colorScheme }: StoriesServer,
+  configDir: string,
+  groupOrder = 0,
+) {
   return defineConfig({
     root: dirname(configDir),
     plugins: [solid(), storybookTest({ configDir })],
@@ -27,6 +31,7 @@ export function storiesProject({ project, port, colorScheme }: StoriesServer, co
       testTimeout: storyTimeout,
       hookTimeout: storyTimeout,
       api: { port, strictPort: true },
+      sequence: { groupOrder },
       browser: browserInEveryEngine(),
     },
   });

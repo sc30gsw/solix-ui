@@ -11,6 +11,7 @@ const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
+const browserEnginesGroup = 1;
 const storybookConfigDirectory = join(import.meta.dirname, "apps/storybook/.storybook");
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 const propertyRunner = "tests/support/properties.ts";
@@ -127,13 +128,14 @@ export default defineConfig({
         test: {
           name: "browser",
           include: [browserTests],
+          sequence: { groupOrder: browserEnginesGroup },
           api: { port: browserTestServerPort, strictPort: true },
           browser: browserInEveryEngine(),
         },
       },
       ...storiesServers.map((server) => ({
         extends: false as const,
-        ...storiesProject(server, storybookConfigDirectory),
+        ...storiesProject(server, storybookConfigDirectory, browserEnginesGroup),
       })),
     ],
   },

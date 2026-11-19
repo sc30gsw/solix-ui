@@ -15,6 +15,8 @@ export type RunSettings = {
   testNamePattern: string | null;
   env: Record<string, string>;
   provided: Record<string, unknown>;
+  inABrowser: boolean;
+  groupOrder: number;
 };
 
 declare module "vite-plus/test" {
@@ -40,6 +42,8 @@ function runSettingsOfEachProject(project: TestProject): Record<string, RunSetti
           Object.entries(config.env ?? {}).map(([key, value]) => [key, String(value)]),
         ),
         provided: { ...config.provide },
+        inABrowser: config.browser.enabled,
+        groupOrder: config.sequence.groupOrder,
       },
     ]),
   );
