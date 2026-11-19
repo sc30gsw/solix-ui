@@ -13,9 +13,8 @@ function isNow<Value>(value: Value | PromiseLike<Value>): value is Value {
 export function thenOrNow<Value, Result>(
   value: Value | PromiseLike<Value>,
   next: (value: Value) => Result,
-  failed?: (reason: unknown) => Result,
 ): Result | Promise<Result> {
-  return isThenable(value) ? Promise.resolve(value).then(next, failed) : next(value);
+  return isThenable(value) ? Promise.resolve(value).then(next) : next(value);
 }
 
 export function allOrNow<Value, Result>(

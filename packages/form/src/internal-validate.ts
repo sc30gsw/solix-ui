@@ -11,7 +11,7 @@ import {
   tagOf,
   withIndexesAs,
 } from "#/src/internal-paths.ts";
-import { allOrNow, thenOrNow } from "#/src/internal-outcome.ts";
+import { allOrNow, isThenable, thenOrNow } from "#/src/internal-outcome.ts";
 import { filterErrors, isError } from "#/src/internal-status.ts";
 import {
   type FormFieldValidationResult,
@@ -48,11 +48,15 @@ export function messageOf(error: unknown): string {
 
 export function runRule(rule: AnyRule, path: string, validation: Validation): Outcome {
   try {
-    return thenOrNow(
-      rule(getPath(path, validation.values), validation.values, path, validation.signal),
-      (result) => result,
-      validation.resolve,
+    const result = rule(
+      getPath(path, validation.values),
+      validation.values,
+      path,
+      validation.signal,
     );
+    return isThenable(result)
+      ? Promise.resolve(result).then(undefined, validation.resolve)
+      : result;
   } catch (error) {
     return validation.resolve(error);
   }
