@@ -16,16 +16,24 @@ import {
 } from "#/tests/support/playground.ts";
 import { opened } from "#/tests/support/opening.ts";
 import {
+  namesTheLibraryLayer,
+  outsideTheSdkLayer,
   pageStyleRules,
-  type PageStyleRule,
   stylesAddedToThePage,
 } from "#/tests/support/page-styles.ts";
 import {
+  runTimeWrites,
+  writesOfTheLibraryAndTheAppAlone,
+} from "#/tests/support/run-time-writes.ts";
+import {
+  account,
   controlled,
   elementsNamedBy,
   generated,
   inAShadowRoot,
+  optional,
   panelOf,
+  startAt,
   stateOf,
   tabList,
   tabNamed,
@@ -36,6 +44,8 @@ import { assertProperty } from "../../../tests/support/properties.ts";
 const url = inject("playgroundUrl");
 const { inbox, drafts, locked } = tabNames.controlled;
 const { near, far } = tabNames.inAShadowRoot;
+const { overview } = tabNames.account;
+const { notes } = tabNames.optional;
 const generatedRuns = 25;
 const sdkHiddenRule = behaviourSdkHiddenRule(join(import.meta.dirname, "../../../packages/core"));
 const tabValues = fc.uniqueArray(
@@ -101,12 +111,6 @@ inEveryEngine((browser) => {
             !addedAtRunTime && !fromTheLibrary && layers.length > 0,
         )
         .map(({ layers: [outermost] }) => outermost);
-      const outsideTheSdkLayer = (rule: PageStyleRule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
-      const namesTheLibraryLayer = (rule: PageStyleRule) =>
-        rule.layers.some(
-          (layer) =>
-            layer === LIBRARY_CASCADE_LAYER || layer.startsWith(`${LIBRARY_CASCADE_LAYER}.`),
-        );
 
       expect(
         rules
@@ -128,6 +132,27 @@ inEveryEngine((browser) => {
       expect(javaScriptEnabled ? [] : added).toEqual([]);
       expect([...new Set(linkedLayerOrder)]).toEqual([BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER]);
     });
+  });
+
+  test("after hydration, and again after clicks and keys on the tabs, the page holds no rule, style, class or inert element but what the library, the SDK in its own layer and the app give", async () => {
+    const plain = await browser().newContext();
+    const page = await plain.newPage();
+    await opened(page, url, "hydrated");
+
+    expect(await runTimeWrites(page), "after hydration").toEqual(writesOfTheLibraryAndTheAppAlone);
+
+    await startAt(page, account, overview);
+    for (const key of ["ArrowRight", "End", "Home"]) await page.keyboard.press(key);
+    await tabNamed(page, optional, notes).click();
+    await tabNamed(page, optional, notes).click();
+    await expect.poll(() => stateOf(page, account)).toMatchObject({ selected: overview });
+    await expect.poll(() => stateOf(page, optional)).toMatchObject({ selected: null });
+
+    expect(await runTimeWrites(page), "after clicks and keys").toEqual(
+      writesOfTheLibraryAndTheAppAlone,
+    );
+
+    await plain.close();
   });
 
   describe("a behaviour component in the hydrated page", () => {

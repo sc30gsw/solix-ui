@@ -11,13 +11,12 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
-const { baseKey, breakpointWidths, libraryStyleMark, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
-const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
-const { BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
+const { breakpointWidths, libraryStyleMark } = await repositoryModule("packages/core/src/style-prop-table.ts");
+const { stableClass } = await repositoryModule("packages/core/src/stable-class.ts");
 const { themedByTheProvider, themedSpacing, themeNames, themeSection } = await repositoryModule("apps/playground/src/sections/theme-setups.ts");
-const { pageStyleRules, stylesAddedToThePage } = await repositoryModule("apps/playground/tests/support/page-styles.ts");
+const { runTimeWrites, writesOfTheLibraryAndTheAppAlone } = await repositoryModule("apps/playground/tests/support/run-time-writes.ts");
 const { opened } = await repositoryModule("apps/playground/tests/support/opening.ts");
-const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabNames, tabsRegion, valueOf } =
+const { account, controlled, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabNames, tabsRegion, valueOf } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
 const { overview, billing, members, security } = tabNames.account;
 const { two, three } = tabNames.manual;
@@ -31,21 +30,6 @@ const style = (locator, property) =>
   locator.evaluate((node, name) => getComputedStyle(node).getPropertyValue(name), property);
 const widthOf = (locator) => locator.evaluate((node) => node.getBoundingClientRect().width);
 const elementAfter = (page, text) => page.getByText(text, { exact: true }).locator("xpath=following-sibling::*[1]");
-
-const writtenAtRunTime = (page, region, classOfTheLibrary) =>
-  page.evaluate(
-    ([selector, pattern]) => {
-      const parts = [...document.querySelectorAll(`${selector} [data-slot]`)];
-      const ours = new RegExp(pattern);
-      return {
-        partStyles: [...new Set(parts.map((part) => part.getAttribute("style") ?? ""))].sort().join(" | "),
-        htmlStyle: document.documentElement.getAttribute("style") ?? "",
-        inert: document.querySelectorAll("[inert]").length,
-        partsWithAForeignClass: parts.filter((part) => [...part.classList].some((name) => !ours.test(name))).length,
-      };
-    },
-    [region, classOfTheLibrary],
-  );
 
 const journeys = {
   "button-default": async ({ page, observe, shot, expected }) => {
@@ -576,21 +560,11 @@ const journeys = {
   },
   "tabs-run-time-writes": async ({ page, observe, shot }) => {
     const region = page.locator(tabsRegion);
-    const classOfTheLibraryOrTheApp = `^(?:${LIBRARY_CLASS_PREFIX}|${stableClassPrefix}|${displayedByTheApp.class}$)`;
-    const styleOfTheOneStyleProp = `--${stylePropClass("display", baseKey)}:flex`;
-    const sdkHiddenRule = behaviourSdkHiddenRule(join(root, "packages/core"));
+    const wanted = new Map(Object.entries(writesOfTheLibraryAndTheAppAlone));
     const observeWrites = async (when) => {
-      const rules = await pageStyleRules(page);
-      const outsideTheSdkLayer = (rule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
-      const written = await writtenAtRunTime(page, tabsRegion, classOfTheLibraryOrTheApp);
-      observe(`${when}: rules the SDK added outside its layer`, rules.filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
-      observe(`${when}: rules of the library's marked styles that name no solix layer`, rules.filter((rule) => rule.fromTheLibrary && !rule.layers.some((layer) => layer === LIBRARY_CASCADE_LAYER || layer.startsWith(`${LIBRARY_CASCADE_LAYER}.`))).map(({ text }) => text).join(" | "), "");
-      observe(`${when}: important declarations outside the SDK's layer`, rules.filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule)).map(({ text }) => text).join(" | "), "");
-      observe(`${when}: the SDK added the hidden rule the build reads from it`, (await stylesAddedToThePage(page)).includes(sdkHiddenRule), true);
-      observe(`${when}: style attributes on the parts`, written.partStyles, ["", styleOfTheOneStyleProp, displayedByTheApp.style].sort().join(" | "));
-      observe(`${when}: style attribute on the html element`, written.htmlStyle, "");
-      observe(`${when}: inert elements`, written.inert, 0);
-      observe(`${when}: parts that carry a class neither the library nor the app gave`, written.partsWithAForeignClass, 0);
+      for (const [what, written] of Object.entries(await runTimeWrites(page))) {
+        observe(`${when}: ${what}`, JSON.stringify(written), JSON.stringify(wanted.get(what)));
+      }
     };
     await region.scrollIntoViewIfNeeded();
     await shot("tabs", "Open the page and scroll to the section named Tabs.", region);
