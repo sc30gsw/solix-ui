@@ -20,6 +20,15 @@ function bodyWith(sections: readonly string[], ending = `${footer}\n\n${session}
 }
 
 describe("the text of a pull request", () => {
+  test("reads no heading inside fenced code", () => {
+    const body = bodyWith(sectionOrder).replace(
+      "## Verification\n\nText.\n",
+      "## Verification\n\n```md\n## Notes\n## Why\n```\n\n~~~\n## Scope\n~~~\n",
+    );
+
+    expect(problemsOf({ title, body })).toEqual([]);
+  });
+
   test("passes with a Conventional title, its sections in order and the footer last, with any section but Scope dropped", () => {
     expect(problemsOf({ title, body: bodyWith(sectionOrder) })).toEqual([]);
     expect(problemsOf({ title: "fix(core)!: x", body: bodyWith(["Scope"]) })).toEqual([]);
@@ -113,6 +122,51 @@ describe("the text of a pull request", () => {
         expect(failed.stderr).toContain("names a private term");
         expect(failed.stderr).not.toContain(fakeTerm);
       }
+    });
+  });
+});
+
+describe("the text check where the private terms are not given", () => {
+  const sameRepository = {
+    head: { repo: { full_name: "owner/solix-ui" } },
+    base: { repo: { full_name: "owner/solix-ui" } },
+  };
+  const fork = {
+    head: { repo: { full_name: "someone/solix-ui" } },
+    base: { repo: { full_name: "owner/solix-ui" } },
+  };
+
+  test.each([
+    [
+      "from this repository fails, since CI gives it the terms",
+      sameRepository,
+      1,
+      "stderr",
+      "is not set",
+    ],
+    [
+      "from a fork passes and says the terms were not checked",
+      fork,
+      0,
+      "stdout",
+      "were not checked",
+    ],
+  ] as const)("a pull request %s", async (_, repositories, status, stream, said) => {
+    await inTemporaryTree({}, (directory) => {
+      const event = join(directory, "event.json");
+      writeFileSync(
+        event,
+        JSON.stringify({ pull_request: { title, body: bodyWith(sectionOrder), ...repositories } }),
+      );
+      const environment = { ...process.env };
+      delete environment.SOLIX_PRIVATE_TERMS;
+      const run = spawnSync(process.execPath, [textCheck, event], {
+        encoding: "utf8",
+        env: environment,
+      });
+
+      expect(run.status).toBe(status);
+      expect(run[stream]).toContain(said);
     });
   });
 });

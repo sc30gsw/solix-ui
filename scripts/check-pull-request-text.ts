@@ -5,9 +5,21 @@ import { join } from "node:path";
 import { type PullRequestText, problemsOf } from "#/scripts/pull-request-text.ts";
 
 const privateTermsCheck = join(import.meta.dirname, "check-private-terms.mjs");
+const privateTermsVariable = "SOLIX_PRIVATE_TERMS";
 const usage = "usage: check-pull-request-text.ts <pull_request event JSON file>";
 
-function pullRequestIn(eventFile: string): PullRequestText {
+type Event = PullRequestText & { fromFork: boolean };
+
+function repositoryOf(pullRequest: object, side: "head" | "base"): unknown {
+  const branch: unknown = Reflect.get(pullRequest, side);
+  const repository: unknown =
+    typeof branch === "object" && branch !== null ? Reflect.get(branch, "repo") : undefined;
+  return typeof repository === "object" && repository !== null
+    ? Reflect.get(repository, "full_name")
+    : undefined;
+}
+
+function pullRequestIn(eventFile: string): Event {
   const event: unknown = JSON.parse(readFileSync(eventFile, "utf8"));
   const pullRequest: unknown =
     typeof event === "object" && event !== null ? Reflect.get(event, "pull_request") : undefined;
@@ -21,10 +33,22 @@ function pullRequestIn(eventFile: string): PullRequestText {
   return {
     title: typeof title === "string" ? title : "",
     body: typeof body === "string" ? body : "",
+    fromFork: repositoryOf(pullRequest, "head") !== repositoryOf(pullRequest, "base"),
   };
 }
 
-function privateTermProblems({ title, body }: PullRequestText): string[] {
+function privateTermProblems({ title, body, fromFork }: Event): string[] {
+  if ((process.env[privateTermsVariable] ?? "").trim() === "") {
+    if (fromFork) {
+      console.log(
+        `The private terms were not checked: GitHub gives ${privateTermsVariable} to no pull request from a fork. Check the title and the body before merging.`,
+      );
+      return [];
+    }
+    return [
+      `${privateTermsVariable} is not set, so the private terms were not checked. CI gives it to every pull request from this repository; run the check where it is set.`,
+    ];
+  }
   const directory = mkdtempSync(join(tmpdir(), "pull-request-text-"));
   const file = join(directory, "pull-request.md");
   try {

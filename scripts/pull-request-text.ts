@@ -15,6 +15,7 @@ const conventionalTitle =
   /^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^()\s][^()]*\))?!?: \S/;
 const sessionUrl = /^https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+$/;
 const secondLevelHeading = /^## (.*?)\s*$/gm;
+const fence = /^\s*(```|~~~)/;
 
 function knownSection(heading: string): heading is (typeof sectionOrder)[number] {
   return sectionOrder.some((section) => section === heading);
@@ -28,8 +29,21 @@ function titleProblems(title: string): string[] {
       ];
 }
 
+function outsideFencedCode(body: string): string {
+  let fenced = false;
+  return body
+    .split("\n")
+    .filter((line) => {
+      if (fence.test(line)) fenced = !fenced;
+      return !fenced && !fence.test(line);
+    })
+    .join("\n");
+}
+
 function sectionProblems(body: string): string[] {
-  const headings = [...body.matchAll(secondLevelHeading)].map(([, heading]) => heading);
+  const headings = [...outsideFencedCode(body).matchAll(secondLevelHeading)].map(
+    ([, heading]) => heading,
+  );
   const unknown = headings
     .filter((heading) => !knownSection(heading))
     .map(
