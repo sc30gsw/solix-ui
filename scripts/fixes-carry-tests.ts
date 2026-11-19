@@ -1,19 +1,29 @@
+import { matchesGlob } from "node:path";
+
 export type Commit = { sha: string; subject: string; files: string[] };
 
-const fixType = /^fix(\([^()]*\))?!?:/;
-const testFile = /\.(test|stories)\.[cm]?[jt]sx?$/;
-const underTests = /(^|\/)tests\//;
-const verificationScript = /^\.agents\/skills\/verify-[^/]+\/scripts\//;
+export const verificationFiles = [
+  "**/*.test.{ts,tsx,mjs}",
+  "**/*.stories.tsx",
+  "**/tests/**",
+  "apps/storybook/fixtures/**",
+  "packages/*/fixtures/**",
+  "scripts/expected-values.ts",
+  ".agents/skills/verify-*/scripts/**",
+  ".agents/skills/verify-*/features/**",
+] as const;
 
-export function isTestFile(path: string): boolean {
-  return testFile.test(path) || underTests.test(path) || verificationScript.test(path);
+const fixType = /^fix(\([^()]*\))?!?:/;
+
+export function isVerificationFile(path: string): boolean {
+  return verificationFiles.some((pattern) => matchesGlob(path, pattern));
 }
 
 export function fixesWithoutATest(commits: readonly Commit[]): string[] {
   return commits
-    .filter(({ subject, files }) => fixType.test(subject) && !files.some(isTestFile))
+    .filter(({ subject, files }) => fixType.test(subject) && !files.some(isVerificationFile))
     .map(
       ({ sha, subject }) =>
-        `${sha.slice(0, 7)} "${subject}" is a fix that changes no test file. Add the test that fails before the fix to the same commit.`,
+        `${sha.slice(0, 7)} "${subject}" is a fix that changes no file of verificationFiles in scripts/fixes-carry-tests.ts. Add the test that fails before the fix to the same commit.`,
     );
 }

@@ -1,8 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, matchesGlob } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { fixesWithoutATest } from "#/scripts/fixes-carry-tests.ts";
+import { fixesWithoutATest, verificationFiles } from "#/scripts/fixes-carry-tests.ts";
 import { footer, problemsOf, sectionOrder } from "#/scripts/pull-request-text.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
@@ -129,8 +129,23 @@ describe("a fix carries its test", () => {
     ["feat: a", ["src/a.ts"], false],
     ["docs: fix a typo", ["README.md"], false],
     ['Revert "fix: a"', ["src/a.ts"], false],
+    ["fix(tests): a", ["scripts/expected-values.ts"], false],
+    [
+      "fix(tabs): a",
+      ["packages/core/src/TabsTab.tsx", ".agents/skills/verify-playground/features/tabs-focus.md"],
+      false,
+    ],
   ])("%j changing %j is flagged: %s", (subject, files, flagged) => {
     expect(fixesWithoutATest([{ sha: "0123456789", subject, files }]).length > 0).toBe(flagged);
+  });
+
+  test("every pattern of verificationFiles matches a tracked file, so the list cannot hold a pattern that no longer means anything", () => {
+    const tracked = gitInScratchRepository(repositoryRoot, ["ls-files", "-z"]).split("\0");
+    const unmatched = verificationFiles.filter(
+      (pattern) => !tracked.some((file) => matchesGlob(file, pattern)),
+    );
+
+    expect(unmatched).toEqual([]);
   });
 
   test("the check reads the commits a pull request adds, and passes over merge commits whatever their message", async () => {
@@ -158,7 +173,9 @@ describe("a fix carries its test", () => {
       expect([run(carried).status, run(carried).stderr]).toEqual([0, ""]);
       const flagged = run("HEAD");
       expect(flagged.status).toBe(1);
-      expect(flagged.stderr).toContain('"fix: a, with no test" is a fix that changes no test file');
+      expect(flagged.stderr).toContain(
+        '"fix: a, with no test" is a fix that changes no file of verificationFiles',
+      );
       expect(flagged.stderr).not.toContain("merge the side branch");
     });
   });
