@@ -11,9 +11,12 @@ export {
   isBrowserOnlyGlobal,
   isDefaultLibraryFile,
   isDomLibraryFile,
+  isFileOfPackage,
   isGlobalObject,
+  isTypedAny,
   isPackageFile,
   memberDeclarations,
+  memberRead,
   parameterAliases,
   propertyDeclarations,
   reachedFrom,
@@ -23,6 +26,7 @@ export {
   type Alias,
   type AssertedType,
   type ClassRef,
+  type MemberRead,
   type Reach,
 } from "#/scripts/syntax/checker.ts";
 export {

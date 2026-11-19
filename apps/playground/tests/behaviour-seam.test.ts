@@ -14,6 +14,7 @@ import {
   type OpenPage,
   scriptModes,
 } from "#/tests/support/playground.ts";
+import { opened } from "#/tests/support/opening.ts";
 import {
   pageStyleRules,
   type PageStyleRule,
@@ -68,18 +69,18 @@ inEveryEngine((browser) => {
   });
 
   describe.each(scriptModes)("with scripts %s", (_, javaScriptEnabled) => {
-    let opened: OpenPage;
+    let onPage: OpenPage;
 
     beforeAll(async () => {
-      opened = await openPage(browser(), url, { javaScriptEnabled });
+      onPage = await openPage(browser(), url, { javaScriptEnabled });
     });
 
     afterAll(async () => {
-      await opened.close();
+      await onPage.close();
     });
 
     test("a hidden element that a style prop gives a display stays hidden, and one hidden until found is left to the browser", async () => {
-      const { page } = opened;
+      const { page } = onPage;
 
       expect(await computed(page.getByText("Hidden with a display"), "display")).toBe("none");
       expect(await computed(page.getByText("Hidden until found with a display"), "display")).toBe(
@@ -90,7 +91,7 @@ inEveryEngine((browser) => {
     test("before a script runs the page adds no style but the library's own, which it marks, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, every rule of a style the library marks names the library's layer, and every important declaration on the page sits in the SDK's layer", async () => {
       const plain = await browser().newContext({ javaScriptEnabled });
       const page = await plain.newPage();
-      await page.goto(url, { waitUntil: javaScriptEnabled ? "networkidle" : "load" });
+      await opened(page, url, javaScriptEnabled ? "hydrated" : "load");
       const rules = await pageStyleRules(page);
       const added = await stylesAddedToThePage(page);
       await plain.close();
@@ -130,18 +131,18 @@ inEveryEngine((browser) => {
   });
 
   describe("a behaviour component in the hydrated page", () => {
-    let opened: OpenPage;
+    let onPage: OpenPage;
 
     beforeAll(async () => {
-      opened = await openPage(browser(), url);
+      onPage = await openPage(browser(), url);
     });
 
     afterAll(async () => {
-      await opened.close();
+      await onPage.close();
     });
 
     test("a handler the app gives a tab after the first render, of an event neither the component nor the SDK handles, reaches the tab", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const hovers = page.getByRole("status", { name: "Drafts hovers" });
       const draftsTab = tabNamed(page, controlled, drafts);
 
@@ -156,7 +157,7 @@ inEveryEngine((browser) => {
     });
 
     test("every tab stays the element it was, and an element passed as a section is created once, across a click on another tab, an arrow key, and a handler given to the list after the first render", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const list = tabList(page, controlled);
       const created = page.getByRole("status", { name: "Section elements created" });
       const hovers = page.getByRole("status", { name: "List hovers" });
@@ -193,7 +194,7 @@ inEveryEngine((browser) => {
     });
 
     test("tabs rendered in a shadow root keep focus and their arrow keys across a selection that steps over a disabled tab", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       await page.getByRole("button", { name: "Render tabs in a shadow root" }).click();
       await tabNamed(page, inAShadowRoot, near).click();
 
@@ -211,7 +212,7 @@ inEveryEngine((browser) => {
     });
 
     test("typing tab values while the generated list wraps over several rows moves neither the page nor the field", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const field = page.getByRole("textbox", { name: "Tab values" });
       const list = tabList(page, generated);
       const wrapping = Array.from(
@@ -243,7 +244,7 @@ inEveryEngine((browser) => {
     });
 
     test("for generated tab values under a root id, every tab's aria-controls names exactly one element, its panel, and every panel's aria-labelledby names exactly one element, its tab", async (context) => {
-      const { page } = opened;
+      const { page } = onPage;
       const values = page.getByRole("textbox", { name: "Tab values" });
 
       await assertProperty(
@@ -260,7 +261,7 @@ inEveryEngine((browser) => {
     });
 
     test("hydration and every interaction above report no console error or warning", () => {
-      expect(opened.consoleProblems).toEqual([]);
+      expect(onPage.consoleProblems).toEqual([]);
     });
   });
 });

@@ -11,6 +11,13 @@ const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
+const checkerRules = "tests/rules/**/*.test.ts";
+const programOpeners = [
+  "tests/rules/**",
+  "tests/support/**",
+  "scripts/**",
+  "packages/core/tests/built-library.ts",
+];
 const storybookConfigDirectory = join(import.meta.dirname, "apps/storybook/.storybook");
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 const propertyRunner = "tests/support/properties.ts";
@@ -22,7 +29,24 @@ const fastCheckRunners = [
   "sample",
   "statistics",
 ];
+const programModules = [
+  "**/scripts/syntax.ts",
+  "**/scripts/syntax/program.ts",
+  "#/scripts/syntax.ts",
+  "#/scripts/syntax/program.ts",
+];
+const openProgramsInTheRules = `Open a TypeScript program only in a test under tests/rules, which the rules project runs before every browser engine, or in a module under ${programOpeners.slice(1).join(", ")}.`;
 const runPropertiesThroughTheWrapper = `Run a property with assertProperty from ${propertyRunner}, which gives it the time limit of the test that runs it and makes a failure report its seed, path and counterexample.`;
+
+const fastCheckRunnersOnlyThroughTheWrapper = {
+  name: "fast-check",
+  importNames: fastCheckRunners,
+  message: runPropertiesThroughTheWrapper,
+};
+
+function afterTheRules<P extends { test?: object }>(project: P) {
+  return { ...project, test: { ...project.test, sequence: { groupOrder: 1 } } };
+}
 
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
@@ -59,11 +83,12 @@ export default defineConfig({
       "no-restricted-imports": [
         "error",
         {
-          paths: [
+          paths: [fastCheckRunnersOnlyThroughTheWrapper],
+          patterns: [
             {
-              name: "fast-check",
-              importNames: fastCheckRunners,
-              message: runPropertiesThroughTheWrapper,
+              group: programModules,
+              importNames: ["openProgram"],
+              message: openProgramsInTheRules,
             },
           ],
         },
@@ -81,6 +106,12 @@ export default defineConfig({
       {
         files: [propertyRunner],
         rules: { "no-restricted-imports": "off", "no-restricted-properties": "off" },
+      },
+      {
+        files: programOpeners,
+        rules: {
+          "no-restricted-imports": ["error", { paths: [fastCheckRunnersOnlyThroughTheWrapper] }],
+        },
       },
       {
         files: ["scripts/**", "packages/*/build.mjs"],
@@ -114,31 +145,46 @@ export default defineConfig({
       {
         extends: true,
         test: {
-          name: "node",
+          name: "rules",
           environment: "node",
-          include: [
-            "tests/**/*.test.ts",
-            "packages/*/tests/**/*.test.{ts,tsx}",
-            "apps/*/tests/**/*.test.{ts,tsx}",
-          ],
-          exclude: ["**/node_modules/**", browserTests, ...ruleFixtures],
-          globalSetup: ["tests/support/git-free-environment.ts", "tests/support/global-setup.ts"],
+          include: [checkerRules],
+          globalSetup: ["tests/support/git-free-environment.ts", "tests/support/build-packages.ts"],
         },
       },
-      {
-        extends: true,
-        optimizeDeps: { include: preBundledForBrowserTests },
-        test: {
-          name: "browser",
-          include: [browserTests],
-          api: { port: browserTestServerPort, strictPort: true },
-          browser: browserInEveryEngine(),
+      ...[
+        {
+          extends: true,
+          test: {
+            name: "node",
+            environment: "node",
+            include: [
+              "tests/**/*.test.ts",
+              "packages/*/tests/**/*.test.{ts,tsx}",
+              "apps/*/tests/**/*.test.{ts,tsx}",
+            ],
+            exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules],
+            globalSetup: [
+              "tests/support/git-free-environment.ts",
+              "tests/support/build-packages.ts",
+              "tests/support/global-setup.ts",
+            ],
+          },
         },
-      },
-      ...storiesServers.map((server) => ({
-        extends: false as const,
-        ...storiesProject(server, storybookConfigDirectory),
-      })),
+        {
+          extends: true,
+          optimizeDeps: { include: preBundledForBrowserTests },
+          test: {
+            name: "browser",
+            include: [browserTests],
+            api: { port: browserTestServerPort, strictPort: true },
+            browser: browserInEveryEngine(),
+          },
+        },
+        ...storiesServers.map((server) => ({
+          extends: false as const,
+          ...storiesProject(server, storybookConfigDirectory),
+        })),
+      ].map(afterTheRules),
     ],
   },
 });

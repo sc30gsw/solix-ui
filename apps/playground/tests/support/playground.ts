@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { Browser, BrowserContextOptions, Page } from "playwright";
 import { expectedValues } from "../../../../scripts/expected-values";
+import { opened } from "#/tests/support/opening.ts";
 
 export { computed, inEveryEngine } from "../../../../tests/support/served-app";
 
@@ -10,31 +11,6 @@ export const scriptModes: [label: string, javaScriptEnabled: boolean][] = [
   ["on", true],
   ["off", false],
 ];
-
-export const pageDidNotBecomeReady = "the page did not become ready";
-
-export async function hydrated(page: Page, options: { timeout?: number } = {}): Promise<void> {
-  try {
-    await page.waitForFunction(
-      () => {
-        const probes = [...document.querySelectorAll("output[data-hydration-probe]")];
-        return probes.length > 0 && probes.every((probe) => probe.hasAttribute("data-hydrated-as"));
-      },
-      undefined,
-      options,
-    );
-  } catch (cause) {
-    throw new Error(
-      `${pageDidNotBecomeReady}: its client script has not claimed every hydration probe of the server's markup.`,
-      { cause },
-    );
-  }
-}
-
-export async function openedAndHydrated(page: Page, url: string): Promise<void> {
-  await page.goto(url, { waitUntil: "networkidle" });
-  await hydrated(page);
-}
 
 export type Expected = Awaited<ReturnType<typeof expectedValues>>;
 
@@ -59,9 +35,7 @@ export async function openPage(
     }
   });
   page.on("pageerror", (error) => consoleProblems.push(String(error)));
-  await page.goto(url, {
-    waitUntil: options.javaScriptEnabled === false ? "load" : "networkidle",
-  });
+  await opened(page, url, options.javaScriptEnabled === false ? "load" : "hydrated");
   const expected = await expectedValues(page, { sentinels: true });
   return { page, expected, consoleProblems, close: () => context.close() };
 }

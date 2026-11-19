@@ -23,7 +23,7 @@ Follow the pstack `correct` skill over this branch's work. Find each mistake tha
 
 ## 3. No comments
 
-Follow the pstack `no-comments` skill over the diff against the base branch. It starts the `comment-sicko` agent. `tests/workspace-rules.test.ts` fails on a comment in a script file, but it does not see files under a directory whose name starts with a dot, such as `.agents`. Neither check sees a constraint that a comment used to carry and that no name, type or test carries yet.
+Follow the pstack `no-comments` skill over the diff against the base branch. It starts the `comment-sicko` agent. `tests/rules/workspace-rules.test.ts` fails on a comment in a script file, but it does not see files under a directory whose name starts with a dot, such as `.agents`. Neither check sees a constraint that a comment used to carry and that no name, type or test carries yet.
 
 ## 4. Thermos
 

@@ -7,7 +7,7 @@ import {
   descendants,
   fileOf,
   firstLine,
-  isPackageFile,
+  isFileOfPackage,
   isValueReference,
   memberDeclarations,
   moduleSpecifierOf,
@@ -62,8 +62,7 @@ const exempt = exemptFiles();
 const checkedFiles = [...scriptFiles, ...scriptFilesInDotDirectories];
 
 function isInThePackage(declaration: ts.Node): boolean {
-  const file = fileOf(declaration);
-  return isPackageFile(file) && file.split(/[\\/]/).includes(runners.name);
+  return isFileOfPackage(fileOf(declaration), [runners.name]);
 }
 
 function isARunner(declaration: ts.Node): boolean {
