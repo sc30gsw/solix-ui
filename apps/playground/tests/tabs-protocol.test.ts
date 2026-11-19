@@ -210,7 +210,9 @@ inEveryEngine((browser) => {
   test("at an address that refuses the connection, opening fails with the navigation's own error and not as a page that did not become ready", async () => {
     const page = await browser().newPage();
 
-    const failure = opened(page, refusingAddress, "hydrated");
+    const failure = opened(page, refusingAddress, "hydrated", {
+      reportsToTheConsole: `error: Not allowed to use restricted network port 9: ${refusingAddress}`,
+    });
     await expect(failure).rejects.toThrow(/page\.goto/);
     await expect(failure).rejects.not.toThrow(pageDidNotBecomeReady);
 

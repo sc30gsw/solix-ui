@@ -95,7 +95,8 @@ async function open(
   return { page, problems, close: () => context.close() };
 }
 
-const theBlockedClientScript = /^error: Failed to load resource\b/;
+const theBlockedClientScript =
+  /^error: Failed to load resource\b|^warning: \[JavaScript Warning: "Loading failed for the module with source “[^”]*\/assets\/[^”]*\.js”/;
 
 function attributeOf(page: Page): Promise<string | null> {
   return page.evaluate((name) => document.documentElement.getAttribute(name), ownerAttribute);
