@@ -41,7 +41,7 @@ const values = {
   ],
 };
 
-const unsafeSegments = ["__proto__", "constructor", "prototype"];
+const unsafeSegments = ["__proto__"];
 
 test("splitPath splits a path at its dots", () => {
   expect(splitPath("a.b.0.c")).toStrictEqual(["a", "b", "0", "c"]);
@@ -271,15 +271,31 @@ test("path types name every path into the values, read the value at a path, and 
   expectTypeOf<"anything.at.all">().toExtend<LooseKeys<Values>>();
 });
 
-const segmentKey = fc.constantFrom("a", "b", "c", "list");
+const segmentKey = fc.constantFrom("a", "b", "constructor", "list");
 
-const leaf = fc.oneof(fc.integer(), fc.string({ maxLength: 3 }), fc.boolean(), fc.constant(null));
+const leaf = fc.oneof(
+  fc.integer(),
+  fc.string({ maxLength: 3 }),
+  fc.boolean(),
+  fc.constant(null),
+  fc.date({ noInvalidDate: true }),
+  fc.constant(new Map([["a", 1]])),
+);
+
+function isPlainContainer(value: unknown): boolean {
+  return (
+    Array.isArray(value) ||
+    (typeof value === "object" &&
+      value !== null &&
+      [Object.prototype, null].includes(Object.getPrototypeOf(value)))
+  );
+}
 
 const { root } = fc.letrec((tie) => ({
   root: fc.dictionary(segmentKey, tie("node"), { maxKeys: 4 }),
   node: fc.oneof({ depthSize: "small" }, leaf, tie("object"), tie("list")),
   object: fc.dictionary(segmentKey, tie("node"), { maxKeys: 3 }),
-  list: fc.array(tie("node"), { maxLength: 3 }),
+  list: fc.sparseArray(tie("node"), { maxLength: 3 }),
 }));
 
 type Entry = { path: string; value: unknown };
@@ -314,7 +330,7 @@ test("setPath on a path whose parent exists gives a copy that holds the value th
     const containers = [
       "",
       ...entriesOf(generated)
-        .filter(({ value }) => typeof value === "object" && value !== null)
+        .filter(({ value }) => isPlainContainer(value))
         .map(({ path }) => path),
     ];
     return fc.record({
@@ -344,12 +360,14 @@ test("setPath on a path whose parent exists gives a copy that holds the value th
 test("setPath returns its input itself for a path through a missing or scalar parent, or with a segment that reaches a prototype", async (context) => {
   const target = root.chain((generated) => {
     const leaves = entriesOf(generated)
-      .filter(({ value }) => typeof value !== "object" || value === null)
+      .filter(({ value }) => !isPlainContainer(value))
       .map(({ path }) => path);
     return fc.record({
       generated: fc.constant(generated),
       path: fc.oneof(
-        fc.constantFrom(...leaves, "missing").map((path) => `${path}.x.y`),
+        fc
+          .tuple(fc.constantFrom(...leaves, "missing"), fc.constantFrom("x", "x.y", "a"))
+          .map(([path, below]) => `${path}.${below}`),
         fc
           .tuple(fc.constantFrom(...unsafeSegments), fc.constantFrom("", "a.", "a.b."))
           .map(([unsafe, prefix]) => `${prefix}${unsafe}.polluted`),
