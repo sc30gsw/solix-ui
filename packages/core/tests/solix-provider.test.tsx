@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { createComponent, renderToString } from "@solidjs/web";
 import fc from "fast-check";
 import postcss from "postcss";
-import { expect, test } from "vite-plus/test";
+import { expect, test, vi } from "vite-plus/test";
 import { tokenValues } from "../../../scripts/tokens";
 import {
   isPalette,
@@ -262,4 +262,18 @@ test("a theme's primaryColor writes every shade of the primary's alias from that
     ),
     { numRuns: generatedRuns },
   );
+});
+
+test("on the server a theme's primaryColor that names no palette writes nothing without a warning, which only the browser's development build gives", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  try {
+    const theme: CreateTheme.SolixTheme = {};
+    Reflect.set(theme, "primaryColor", "bleu");
+    expect(
+      styleOf(renderToString(() => createComponent(library.SolixProvider, { theme }))),
+    ).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  } finally {
+    warn.mockRestore();
+  }
 });

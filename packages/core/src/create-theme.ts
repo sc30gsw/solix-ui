@@ -7,6 +7,7 @@ import {
   shadeSource,
 } from "#/src/color-table.ts";
 import { colorSchemeAttribute } from "#/src/color-schemes.ts";
+import { warnInTheBrowserDuringDevelopment } from "#/src/development-warning.ts";
 import { layerOrder, libraryCascadeLayer, type Scale } from "#/src/style-prop-table.ts";
 import { characterThatEndsADeclaration, type ScaleKey, tokenOf } from "#/src/style-props.ts";
 
@@ -60,7 +61,14 @@ function isThemeKey(key: string): key is ThemeKey {
 }
 
 function primaryDeclarationsOf(primaryColor: unknown): string[] {
-  if (!isPalette(primaryColor) || primaryColor === primaryAlias) return [];
+  if (primaryColor === undefined) return [];
+  if (!isPalette(primaryColor) || primaryColor === primaryAlias) {
+    warnInTheBrowserDuringDevelopment(
+      () =>
+        `theme.primaryColor=${JSON.stringify(primaryColor)} is not a palette other than the ${primaryAlias}, so the theme leaves the ${primaryAlias} as it was.`,
+    );
+    return [];
+  }
   return shades.map(
     (shade) => `${primaryProperty(shade)}:var(${shadeSource(primaryColor, shade)});`,
   );
