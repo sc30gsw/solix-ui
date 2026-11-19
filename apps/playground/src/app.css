@@ -14,10 +14,6 @@ body {
   background-color: var(--playground-danger);
 }
 
-.brand-green {
-  --solix-primary-6: oklch(0.54 0.12 155);
-}
-
 .shown-as-grid {
   display: grid;
 }

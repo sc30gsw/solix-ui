@@ -1,5 +1,5 @@
 import * as stylex from "@stylexjs/stylex";
-import { Button, Disclosure } from "@solix/core";
+import { Button, createTheme, Disclosure, SolixProvider } from "@solix/core";
 import "@solix/core/styles.css";
 
 const styles = stylex.create({
@@ -9,13 +9,13 @@ const styles = stylex.create({
   summary: {
     backgroundColor: "oklch(0.45 0.15 300)",
   },
-  brand: {
-    "--solix-primary-6": "oklch(0.54 0.12 155)",
-  },
   primary: {
     backgroundColor: "var(--solix-primary-6)",
   },
 });
+
+const brandSubtree = "data-brand";
+const brandTheme = createTheme({ primaryColor: "green" });
 
 export function App() {
   return (
@@ -27,10 +27,12 @@ export function App() {
       <Disclosure label="StyleX summary" classes={{ summary: stylex.attrs(styles.summary).class }}>
         Content
       </Disclosure>
-      <div {...stylex.attrs(styles.brand)}>
-        <Button>StyleX theme</Button>
-        <div data-testid="theme reference" {...stylex.attrs(styles.primary)} />
-      </div>
+      <SolixProvider theme={brandTheme} cssVariablesSelector={`[${brandSubtree}]`}>
+        <div {...{ [brandSubtree]: "" }}>
+          <Button>Themed by primaryColor</Button>
+          <div data-testid="theme reference" {...stylex.attrs(styles.primary)} />
+        </div>
+      </SolixProvider>
       <div data-testid="class reference" {...stylex.attrs(styles.danger)} />
       <div data-testid="summary reference" {...stylex.attrs(styles.summary)} />
     </main>

@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
+import { ownPaletteOf, paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
+import { brandPrimaryColor } from "#/src/sections/theme-setups.ts";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
@@ -127,9 +128,9 @@ inEveryEngine((browser) => {
       }
     });
 
-    test("a consumer rethemes a subtree by overriding a public token", async () => {
+    test("a consumer rethemes a subtree by a provider whose theme's primaryColor names another palette, scoped by cssVariablesSelector", async () => {
       expect(await computed(opened.page.getByTestId("themed"), "background-color")).toBe(
-        opened.expected("brandGreen"),
+        opened.expected(paletteToken(ownPaletteOf(brandPrimaryColor), "6")),
       );
     });
   });
