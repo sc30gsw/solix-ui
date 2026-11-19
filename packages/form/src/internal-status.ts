@@ -21,3 +21,7 @@ export function filterErrors(
   if (typeof errors !== "object" || errors === null) return {};
   return Object.fromEntries(Object.entries(errors).filter(isErrorEntry));
 }
+
+export function failureOf(error: RuleResult): FormError {
+  return isError(error) ? error : true;
+}

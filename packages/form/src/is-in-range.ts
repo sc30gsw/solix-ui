@@ -1,4 +1,4 @@
-import { failureOf } from "#/src/internal-failure.ts";
+import { failureOf } from "#/src/internal-status.ts";
 import { type FormError, type Bounds } from "#/src/types.ts";
 
 /** Fails a value that is not a number, or a number below `bounds.min` or above `bounds.max`, with `error`, or `true` when no error is given. */

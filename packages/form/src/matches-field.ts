@@ -1,4 +1,4 @@
-import { failureOf } from "#/src/internal-failure.ts";
+import { failureOf } from "#/src/internal-status.ts";
 import { type FormError } from "#/src/types.ts";
 
 /** Fails a value that is not identical to the value of `field` in the form's values, or when the values have no `field`, with `error`, or `true` when no error is given. */

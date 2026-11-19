@@ -1,4 +1,4 @@
-import { failureOf } from "#/src/internal-failure.ts";
+import { failureOf } from "#/src/internal-status.ts";
 import { type FormError, type UrlOptions } from "#/src/types.ts";
 
 function isUrlOptions(value: unknown): value is UrlOptions {

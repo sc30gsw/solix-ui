@@ -14,3 +14,9 @@ test("isNotEmpty passes any other value", () => {
     expect(isNotEmpty(error)(value)).toBeNull();
   }
 });
+
+test("isNotEmpty fails with an error of an empty string or 0 as given, as these are errors", () => {
+  expect(isNotEmpty("")("")).toBe("");
+  expect(isNotEmpty(0)(null)).toBe(0);
+  expect(isNotEmpty(false)(null)).toBe(true);
+});
