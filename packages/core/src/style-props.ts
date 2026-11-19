@@ -50,10 +50,9 @@ type Absent = null | undefined;
 type TokenKey<Name, Of extends Scale> = Name extends `--solix-${Of}-${infer Key}` ? Key : never;
 export type ScaleKey<Of extends Scale> = TokenKey<Extract<keyof typeof tokens, string>, Of>;
 type ValueOf<Row> = Row extends PropertyRow
-  ?
-      | NonNullable<JSX.CSSProperties[Row["property"]]>
-      | (Row["kind"] extends "length" ? number : never)
-      | (Row extends { scale: infer Of extends Scale } ? ScaleKey<Of> : never)
+  ? | NonNullable<JSX.CSSProperties[Row["property"]]>
+    | (Row["kind"] extends "length" ? number : never)
+    | (Row extends { scale: infer Of extends Scale } ? ScaleKey<Of> : never)
   : never;
 
 export type StyleProp<V> = V | Absent | { [Key in ResponsiveKey]?: V | Absent };
