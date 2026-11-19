@@ -39,9 +39,9 @@ export const colorClass = colorClassPrefix;
 export const colorProperty = `--${colorClassPrefix}-color`;
 export const shadeClass = `${colorClassPrefix}-shade`;
 export const customColorClass = `${colorClassPrefix}-custom`;
-export const fixedContrastClass = `${colorClassPrefix}-fixed`;
+export const autoContrastClass = `${colorClassPrefix}-auto`;
 export const contrastShade = "contrast" satisfies Shade;
-export const textWithoutContrast = "white";
+export const textWithoutAPalette = "white";
 export const contrastLuminance = Math.sqrt(1.05 * 0.05) - 0.05;
 
 type ColourToken = `--solix-color-${string}`;

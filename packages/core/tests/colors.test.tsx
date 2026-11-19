@@ -3,12 +3,12 @@ import postcss from "postcss";
 import { expect, test } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "#/build-pipeline.mjs";
 import {
+  autoContrastClass,
   colorClass,
   colorLayer,
   colorProperty,
   colorVariantTable,
   customColorClass,
-  fixedContrastClass,
   ownPaletteOf,
   type Palette,
   paletteAliases,
@@ -116,7 +116,7 @@ test("the colours layer is the first layer inside the components layer, and hold
     ...named.map((palette) => `.${paletteClass(palette)}`),
     `.${shadeClass}`,
     `.${customColorClass}`,
-    `.${fixedContrastClass}`,
+    `.${autoContrastClass}`,
     ...variants.map((variant) => `.${colorClass}[${variantAttribute}="${variant}"]`),
   ]);
   expect(rules.slice(0, named.length).map(({ properties }) => properties)).toEqual(
@@ -159,7 +159,7 @@ test("a shade of a palette gives the palette's class and the shade class, and wr
   }
 });
 
-test("any other colour writes one custom property, itself, with the shade and custom classes; one that holds ;, { or } is dropped for the primary palette; a variant and autoContrast={false} reach the root", async (context) => {
+test("any other colour writes one custom property, itself, with the shade and custom classes; one that holds ;, { or } is dropped for the primary palette; a variant and autoContrast reach the root", async (context) => {
   const known = new Set<string>([
     ...named,
     ...named.flatMap((palette) => shades.map((shade) => `${palette}.${shade}`)),
@@ -181,7 +181,7 @@ test("any other colour writes one custom property, itself, with the shade and cu
         const dropped = /[;{}]/.test(color);
 
         expect(variantOf(props)).toBe(variant);
-        expect(classes.includes(fixedContrastClass)).toBe(!autoContrast);
+        expect(classes.includes(autoContrastClass)).toBe(autoContrast);
         if (dropped) {
           expect(classes).toEqual(expect.arrayContaining([colorClass, paletteClass(primaryAlias)]));
           expect(styleOf(props)).toEqual({});
@@ -222,5 +222,14 @@ test("the primary's alias is written once, on :root and on every element with a 
   expect(aliases.map(({ selector }) => selector)).toEqual([":root,[data-color-scheme]"]);
   expect(aliases[0]?.declarations).toEqual(
     shades.map((shade) => [primaryProperty(shade), `var(${paletteToken(primaryPalette, shade)})`]),
+  );
+});
+
+test("autoContrast is off unless it is true: only then does the root take the class that computes the text from the solid shade", () => {
+  expect(classesOf(rootOf({}))).not.toContain(autoContrastClass);
+  expect(classesOf(rootOf({ autoContrast: false }))).not.toContain(autoContrastClass);
+  expect(classesOf(rootOf({ autoContrast: true }))).toContain(autoContrastClass);
+  expect(declaredBy(`.${shadeClass}`).map(([property]) => property)).not.toContain(
+    shadeProperty("contrast"),
   );
 });

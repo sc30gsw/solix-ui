@@ -1,4 +1,5 @@
 import {
+  autoContrastClass,
   colorClass,
   colorLayer,
   colorProperty,
@@ -7,7 +8,6 @@ import {
   contrastShade,
   customColorClass,
   derivedShades,
-  fixedContrastClass,
   type OwnPalette,
   paletteAliases,
   paletteClass,
@@ -20,7 +20,7 @@ import {
   shadeClass,
   shadeProperty,
   shades,
-  textWithoutContrast,
+  textWithoutAPalette,
   variantAttribute,
 } from "#/src/color-table.ts";
 
@@ -68,15 +68,15 @@ export function colorRules(): string {
     `.${shadeClass}{${declared([
       [shadeProperty(solidShade), given],
       [shadeProperty(hoverShade), mixed(given, 90, contrast)],
-      [shadeProperty(contrastShade), contrastingText(given)],
     ])}}`,
-    `.${customColorClass}{${declared(
-      Object.entries(derivedShades).map(([shade, [percent, toward]]): [string, string] => [
+    `.${customColorClass}{${declared([
+      ...Object.entries(derivedShades).map(([shade, [percent, toward]]): [string, string] => [
         shadeProperty(shade),
         mixed(given, percent, toward),
       ]),
-    )}}`,
-    `.${fixedContrastClass}{${declared([[shadeProperty(contrastShade), textWithoutContrast]])}}`,
+      [shadeProperty(contrastShade), textWithoutAPalette],
+    ])}}`,
+    `.${autoContrastClass}{${declared([[shadeProperty(contrastShade), contrastingText(`var(${shadeProperty(solidShade)})`)]])}}`,
     ...Object.entries(colorVariantTable).map(
       ([variant, slots]) =>
         `.${colorClass}[${variantAttribute}="${variant}"]{${declared(

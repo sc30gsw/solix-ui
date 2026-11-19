@@ -1,9 +1,9 @@
 import {
+  autoContrastClass,
   colorClass,
   colorProperty,
   type ColorVariant,
   customColorClass,
-  fixedContrastClass,
   isPalette,
   isShade,
   ownPaletteOf,
@@ -73,7 +73,7 @@ function given(color: unknown): ResolvedStyleProps {
 
 export function resolveColor(color: unknown, autoContrast: unknown): ResolvedStyleProps {
   const resolved = given(color);
-  return autoContrast === false
-    ? { ...resolved, classes: [...resolved.classes, fixedContrastClass] }
+  return autoContrast === true
+    ? { ...resolved, classes: [...resolved.classes, autoContrastClass] }
     : resolved;
 }
