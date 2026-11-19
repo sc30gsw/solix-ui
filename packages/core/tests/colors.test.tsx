@@ -21,7 +21,6 @@ import {
   shadeProperty,
   shades,
   shadeSource,
-  slotDefaults,
   contrastLuminance,
   luminanceWeights,
   namedPalettes,
@@ -49,6 +48,7 @@ import { schemeValues, tokenKind, tokenValues } from "../../../scripts/tokens";
 
 const primaryColorsFile = "packages/core/src/primary-colors.stylex.ts";
 const primaryRoots = ":root,[data-color-scheme]";
+const variantColorsFile = "packages/core/src/variant-colors.stylex.ts";
 const named = namedPalettes;
 const variants = Object.keys(colorVariantTable);
 const slots = Object.keys(colorVariantTable.default.palette);
@@ -152,12 +152,14 @@ test("the primary's tokens point at the primary palette's in the colours layer, 
   expect(colourRules.filter(({ selector }) => selector === primaryRoots)).toHaveLength(1);
 });
 
-test("an element with a colour class resets every slot to a default, so a variant the table does not hold falls back to the default variant and a custom variant that sets only its background and colour hovers on its background with no border", () => {
+test("an element with a colour class resets every slot to the default variant-colors.stylex.ts writes for it, so a variant the table does not hold falls back to the default variant and a custom variant that sets only its background and colour hovers on its background with no border", () => {
   const reset = ruleFor(`.${colorClass}`);
 
+  const written = tokenValues(variantColorsFile);
+
   expect(Object.keys(reset)).toEqual(slots);
-  expect(reset).toEqual(slotDefaults);
-  expect(reset["--solixc-variant-hover"]).toBe("var(--solixc-variant-background)");
+  expect(reset).toEqual(written);
+  expect(written["--solixc-variant-hover"]).toBe("var(--solixc-variant-background)");
   expect(valuesOf(rootOf({ variant: "nonsense" }), variantAttribute)).toEqual(["filled"]);
 });
 

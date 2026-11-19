@@ -50,7 +50,7 @@ export const slotDefaults = {
   "--solixc-variant-hover": "var(--solixc-variant-background)",
   "--solixc-variant-color": "currentColor",
   "--solixc-variant-border": "transparent",
-} as const;
+} as const satisfies Readonly<Record<VariantSlot, string>>;
 
 type ColourToken = `--solix-color-${string}`;
 type VariantSlot = Extract<keyof typeof variantColors, `--${string}`>;
