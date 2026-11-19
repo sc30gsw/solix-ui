@@ -3,21 +3,25 @@ import { join, relative, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { parse as parseYaml } from "yaml";
 import { staticStorybookDirectory } from "#/apps/storybook/tests/support/test-servers.ts";
-import { repositoryRoot } from "#/tests/support/workspace.ts";
+import { repositoryRoot, workflowFiles } from "#/tests/support/workspace.ts";
 
 const ciWorkflow = ".github/workflows/ci.yml";
 const verifyCommand = "vp run verify";
 const uploadAction = "actions/upload-artifact";
 const pullRequestEvent = "pull_request";
+const secretsTheWorkflowsRead = ["SOLIX_PRIVATE_TERMS"];
+const expression = /\$\{\{([\s\S]*?)\}\}/g;
+const secretsContext = /(?<![\w.])secrets(?:\s*\.\s*(\w+))?/g;
 
 type Step = { run?: string; uses?: string; with?: Record<string, unknown> } & Record<
   string,
   unknown
 >;
-type Workflow = { on?: unknown; jobs?: Record<string, { steps?: Step[] }> };
+type Job = { permissions?: unknown; steps?: Step[] };
+type Workflow = { on?: unknown; permissions?: unknown; jobs?: Record<string, Job> };
 
-function ci(): Workflow {
-  return parseYaml(readFileSync(join(repositoryRoot, ciWorkflow), "utf8")) as Workflow;
+function workflowAt(file: string): Workflow {
+  return parseYaml(readFileSync(join(repositoryRoot, file), "utf8")) as Workflow;
 }
 
 function events(on: unknown): string[] {
@@ -31,7 +35,7 @@ function actionOf(step: Step): string | undefined {
 }
 
 test("on a pull request, the job that runs verify then uploads the Storybook static build that verify made, and fails the step when there is none", () => {
-  const { on, jobs = {} } = ci();
+  const { on, jobs = {} } = workflowAt(ciWorkflow);
   const verifying = Object.entries(jobs).filter(([, { steps = [] }]) =>
     steps.some((step) => step.run?.trim() === verifyCommand),
   );
@@ -65,4 +69,54 @@ test("on a pull request, the job that runs verify then uploads the Storybook sta
       continuesOnError: false,
     },
   ]);
+});
+
+function writeScopes(permissions: unknown): string[] {
+  if (permissions === "read-all") return [];
+  if (typeof permissions === "string") return [permissions];
+  if (typeof permissions !== "object" || permissions === null || Array.isArray(permissions)) {
+    return [String(permissions)];
+  }
+  return Object.entries(permissions).flatMap(([scope, access]) =>
+    access === "read" || access === "none" ? [] : [`${scope}: ${String(access)}`],
+  );
+}
+
+test("no job of any workflow can push to the repository or write to its pull requests or issues: each job's permissions, its own or its workflow's, are written out and grant nothing but read", () => {
+  const violations = workflowFiles.flatMap((file) => {
+    const { permissions, jobs = {} } = workflowAt(file);
+    return Object.entries(jobs).flatMap(([name, job]) => {
+      const given = job.permissions ?? permissions;
+      if (given === undefined) {
+        return [
+          `${file}: the ${name} job takes the repository's default token permissions, which may write. Give the workflow or the job permissions that only read.`,
+        ];
+      }
+      return writeScopes(given).map(
+        (scope) =>
+          `${file}: the ${name} job is given ${scope}. A check reads; it does not push, comment or label.`,
+      );
+    });
+  });
+
+  expect(workflowFiles.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
+function stringsOf(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (typeof value !== "object" || value === null) return [];
+  return [...Object.keys(value), ...Object.values(value).flatMap(stringsOf)];
+}
+
+test(`no workflow reads a secret but ${secretsTheWorkflowsRead.join(", ")}, by name, so no token that could write reaches a job`, () => {
+  const violations = workflowFiles.flatMap((file) =>
+    stringsOf(workflowAt(file))
+      .flatMap((text) => [...text.matchAll(expression)].map(([, inside]) => inside))
+      .flatMap((inside) => [...inside.matchAll(secretsContext)])
+      .filter(([, name]) => name === undefined || !secretsTheWorkflowsRead.includes(name))
+      .map(([read]) => `${file}: it reads ${read}. Give a job no secret that could write.`),
+  );
+
+  expect(violations).toEqual([]);
 });
