@@ -15,12 +15,12 @@ import {
   nameOf,
   openProgram,
   type Program,
-  type TypeCheckedProject,
   reachedFrom,
   ts,
 } from "#/scripts/syntax.ts";
 import {
   type LibraryKind,
+  libraryKinds,
   type LibraryRegistration,
   repositoryRoot,
 } from "#/tests/support/workspace.ts";
@@ -77,12 +77,6 @@ function entriesOf(directory: string): string[] {
   return existsSync(directory) ? readdirSync(directory).sort() : [];
 }
 
-const projectOfKind: Readonly<Record<LibraryKind, TypeCheckedProject>> = {
-  primitives: "scripts",
-  components: "scripts",
-  logic: "withNodeTypes",
-};
-
 export function loadLibrary(directory: string, registration: LibraryRegistration): Library {
   const source = join(directory, "src");
   const testDirectory = join(directory, "tests");
@@ -90,7 +84,7 @@ export function loadLibrary(directory: string, registration: LibraryRegistration
   const paths = entries
     .filter((entry) => entry.endsWith(".ts"))
     .map((entry) => join(source, entry));
-  const compiled = openProgram(paths, projectOfKind[registration.kind]);
+  const compiled = openProgram(paths, libraryKinds[registration.kind].project);
   const testFiles = entriesOf(testDirectory).filter((entry) => /\.tsx?$/.test(entry));
   const compiledTests = openProgram(testFiles.map((entry) => join(testDirectory, entry)));
   const tests = new Map(

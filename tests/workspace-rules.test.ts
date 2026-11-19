@@ -30,15 +30,15 @@ import {
   type Installed,
   type Manifest,
   installedVersions,
-  type LibraryKind,
   libraryHome,
+  libraryKindNames,
+  libraryKinds,
   libraryNames,
   libraryPackages,
   listed,
   listedButAbsent,
   outsideGeneratedOrInstalled,
   packages,
-  primitivesPackage,
   unlistedLibraries,
   repositoryRoot,
   rootManifest,
@@ -62,12 +62,6 @@ const vitePlusCommandFor: Record<string, string> = {
 };
 
 const projectLicence = "MIT";
-const frameworkPeers = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
-const allowedByKind: Record<LibraryKind, [what: string, allowed: string[]]> = {
-  primitives: ["the primitives package", ["solid-js"]],
-  components: ["a component library", [...frameworkPeers, primitivesPackage.manifest.name ?? ""]],
-  logic: ["a logic library", ["solid-js"]],
-};
 const libraryList = "registeredLibraries in tests/support/workspace.ts";
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
@@ -376,7 +370,7 @@ test(`every package in ${libraryHome} is a library that ${libraryList} lists wit
   expect([
     ...unlistedLibraries.map(
       (directory) =>
-        `${directory}: list it in ${libraryList} as a library of the primitives, components or logic kind.`,
+        `${directory}: list it in ${libraryList} as a library of the ${new Intl.ListFormat("en", { type: "disjunction" }).format(libraryKindNames)} kind.`,
     ),
     ...listedButAbsent.map(
       (directory) =>
@@ -387,7 +381,7 @@ test(`every package in ${libraryHome} is a library that ${libraryList} lists wit
 
 test("a library names as a peer, or as a library of this repository in any dependency list, only what its kind allows", () => {
   const violations = libraryPackages.flatMap(({ path, kind: libraryKind, manifest }) => {
-    const [kind, allowed] = allowedByKind[libraryKind];
+    const { what: kind, allowedNames: allowed } = libraryKinds[libraryKind];
     const named = [
       ...Object.keys(manifest.peerDependencies ?? {}),
       ...installedDependencies(manifest)

@@ -7,6 +7,7 @@ import {
   scriptFilesIn,
   scriptFilesInDotDirectoriesIn,
 } from "#/scripts/repository.ts";
+import { type TypeCheckedProject } from "#/scripts/syntax.ts";
 
 export { workspaceFile } from "#/scripts/pnpm-settings.ts";
 export {
@@ -24,7 +25,11 @@ export {
   whyInstalled,
 } from "#/scripts/repository.ts";
 
-export type LibraryKind = "primitives" | "components" | "logic";
+export const libraryKindNames = ["primitives", "components", "logic"] as const;
+
+export type LibraryKind = (typeof libraryKindNames)[number];
+
+export type RuleSet = "every" | "shared" | "none";
 
 export type ErrorBoundary = { file: string; fn: string };
 
@@ -92,6 +97,40 @@ function thePrimitivesPackage(): (typeof libraryPackages)[number] {
 export const primitivesPackage = thePrimitivesPackage();
 
 export const componentLibraries = librariesOfKind("components");
+
+const frameworkPeers = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
+
+export type LibraryKindTraits = {
+  what: string;
+  project: TypeCheckedProject;
+  allowedNames: readonly string[];
+  rules: RuleSet;
+};
+
+export const libraryKinds: Readonly<Record<LibraryKind, LibraryKindTraits>> = {
+  primitives: {
+    what: "the primitives package",
+    project: "scripts",
+    allowedNames: ["solid-js"],
+    rules: "every",
+  },
+  components: {
+    what: "a component library",
+    project: "scripts",
+    allowedNames: [...frameworkPeers, primitivesPackage.manifest.name ?? ""],
+    rules: "none",
+  },
+  logic: {
+    what: "a logic library",
+    project: "withNodeTypes",
+    allowedNames: ["solid-js"],
+    rules: "shared",
+  },
+};
+
+export function kindsWithRules(sets: readonly RuleSet[]): LibraryKind[] {
+  return libraryKindNames.filter((kind) => sets.includes(libraryKinds[kind].rules));
+}
 
 export const libraryNames = libraryPackages.flatMap(({ manifest }) =>
   manifest.name === undefined ? [] : [manifest.name],

@@ -33,42 +33,42 @@ import { sourceFileKindsRule } from "#/tests/support/primitive-rules/source-file
 import { styleAndClassWritesRule } from "#/tests/support/primitive-rules/style-and-class-writes.ts";
 import { testsNamedForModulesRule } from "#/tests/support/primitive-rules/tests-named-for-modules.ts";
 
-import { type LibraryKind } from "#/tests/support/workspace.ts";
+import { kindsWithRules, type LibraryKind } from "#/tests/support/workspace.ts";
 
 export { loadLibrary, publicModules } from "#/tests/support/primitive-rules/library.ts";
 
-const primitivesOnly: readonly LibraryKind[] = ["primitives"];
-const primitivesAndLogic: readonly LibraryKind[] = ["primitives", "logic"];
+const kindsWithEveryRule = kindsWithRules(["every"]);
+const kindsWithSharedRules = kindsWithRules(["every", "shared"]);
 
 export const primitiveRules = {
-  sourceFileKinds: { ...sourceFileKindsRule, kinds: primitivesAndLogic },
-  publicExports: { ...publicExportsRule, kinds: primitivesAndLogic },
-  barrelOrder: { ...barrelOrderRule, kinds: primitivesAndLogic },
-  serverEffects: { ...serverEffectsRule, kinds: primitivesOnly },
-  serverBranches: { ...serverBranchesRule, kinds: primitivesAndLogic },
-  moduleState: { ...moduleStateRule, kinds: primitivesAndLogic },
-  readOnceArguments: { ...readOnceArgumentsRule, kinds: primitivesAndLogic },
-  argumentReads: { ...argumentReadsRule, kinds: primitivesAndLogic },
-  styleAndClassWrites: { ...styleAndClassWritesRule, kinds: primitivesOnly },
-  elementAttachments: { ...elementAttachmentsRule, kinds: primitivesOnly },
-  browserValues: { ...browserValuesRule, kinds: primitivesOnly },
-  browserValueAssertions: { ...browserValueAssertionsRule, kinds: primitivesOnly },
-  hydrationPolicy: { ...hydrationPolicyRule, kinds: primitivesOnly },
-  browserGlobalReads: { ...browserGlobalReadsRule, kinds: primitivesAndLogic },
-  commandKinds: { ...commandKindsRule, kinds: primitivesOnly },
-  liveOptions: { ...liveOptionsRule, kinds: primitivesOnly },
-  listenerRoles: { ...listenerRolesRule, kinds: primitivesOnly },
-  eventHandlerProperties: { ...eventHandlerPropertiesRule, kinds: primitivesOnly },
-  observerConstruction: { ...observerConstructionRule, kinds: primitivesOnly },
-  caughtErrors: { ...caughtErrorsRule, kinds: primitivesAndLogic },
-  instanceofChecks: { ...instanceofChecksRule, kinds: primitivesAndLogic },
-  focusMoves: { ...focusMovesRule, kinds: primitivesOnly },
-  testsNamedForModules: { ...testsNamedForModulesRule, kinds: primitivesOnly },
-  modelTests: { ...modelTestsRule, kinds: primitivesOnly },
-  accessibilityTests: { ...accessibilityTestsRule, kinds: primitivesOnly },
-  browserTestsUseTheHarness: { ...browserTestsUseTheHarnessRule, kinds: primitivesOnly },
-  browserTestWaits: { ...browserTestWaitsRule, kinds: primitivesOnly },
-  serverRenderTest: { ...serverRenderTestRule, kinds: primitivesOnly },
+  sourceFileKinds: { ...sourceFileKindsRule, kinds: kindsWithSharedRules },
+  publicExports: { ...publicExportsRule, kinds: kindsWithSharedRules },
+  barrelOrder: { ...barrelOrderRule, kinds: kindsWithSharedRules },
+  serverEffects: { ...serverEffectsRule, kinds: kindsWithEveryRule },
+  serverBranches: { ...serverBranchesRule, kinds: kindsWithSharedRules },
+  moduleState: { ...moduleStateRule, kinds: kindsWithSharedRules },
+  readOnceArguments: { ...readOnceArgumentsRule, kinds: kindsWithSharedRules },
+  argumentReads: { ...argumentReadsRule, kinds: kindsWithSharedRules },
+  styleAndClassWrites: { ...styleAndClassWritesRule, kinds: kindsWithEveryRule },
+  elementAttachments: { ...elementAttachmentsRule, kinds: kindsWithEveryRule },
+  browserValues: { ...browserValuesRule, kinds: kindsWithEveryRule },
+  browserValueAssertions: { ...browserValueAssertionsRule, kinds: kindsWithEveryRule },
+  hydrationPolicy: { ...hydrationPolicyRule, kinds: kindsWithEveryRule },
+  browserGlobalReads: { ...browserGlobalReadsRule, kinds: kindsWithSharedRules },
+  commandKinds: { ...commandKindsRule, kinds: kindsWithEveryRule },
+  liveOptions: { ...liveOptionsRule, kinds: kindsWithEveryRule },
+  listenerRoles: { ...listenerRolesRule, kinds: kindsWithEveryRule },
+  eventHandlerProperties: { ...eventHandlerPropertiesRule, kinds: kindsWithEveryRule },
+  observerConstruction: { ...observerConstructionRule, kinds: kindsWithEveryRule },
+  caughtErrors: { ...caughtErrorsRule, kinds: kindsWithSharedRules },
+  instanceofChecks: { ...instanceofChecksRule, kinds: kindsWithSharedRules },
+  focusMoves: { ...focusMovesRule, kinds: kindsWithEveryRule },
+  testsNamedForModules: { ...testsNamedForModulesRule, kinds: kindsWithEveryRule },
+  modelTests: { ...modelTestsRule, kinds: kindsWithEveryRule },
+  accessibilityTests: { ...accessibilityTestsRule, kinds: kindsWithEveryRule },
+  browserTestsUseTheHarness: { ...browserTestsUseTheHarnessRule, kinds: kindsWithEveryRule },
+  browserTestWaits: { ...browserTestWaitsRule, kinds: kindsWithEveryRule },
+  serverRenderTest: { ...serverRenderTestRule, kinds: kindsWithEveryRule },
 } satisfies Record<string, KindRule>;
 
 export type PrimitiveRuleName = keyof typeof primitiveRules;
