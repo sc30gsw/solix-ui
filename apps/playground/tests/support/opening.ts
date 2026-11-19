@@ -29,28 +29,33 @@ function notReady(timeout: number, said: string[], cause: unknown): Error {
   );
 }
 
+function withWhatThePageSaid(said: string[], cause: unknown): Error {
+  return new Error(`${String(cause)} The page said: ${said.join(" | ") || "nothing"}`, { cause });
+}
+
 export async function opened(
   page: Page,
   url: string,
   until: OpenedUntil,
   { timeout = hydrationTimeout }: { timeout?: number } = {},
 ): Promise<void> {
-  const hydrates = until === "hydrated";
+  if (until !== "hydrated") {
+    await page.goto(url, { waitUntil: until });
+    return;
+  }
   const deadline = Date.now() + timeout;
   const heard = heardFrom(page);
   try {
-    await page.goto(url, hydrates ? { waitUntil: "commit", timeout } : { waitUntil: until });
-    if (hydrates) {
-      await page.waitForFunction(
-        (mark) => document.documentElement.hasAttribute(mark),
-        hydratedMark,
-        {
-          timeout: Math.max(1, deadline - Date.now()),
-        },
-      );
-    }
-  } catch (cause) {
-    throw hydrates ? notReady(timeout, heard.said, cause) : cause;
+    await page.goto(url, { waitUntil: "commit", timeout }).catch((cause: unknown) => {
+      throw withWhatThePageSaid(heard.said, cause);
+    });
+    await page
+      .waitForFunction((mark) => document.documentElement.hasAttribute(mark), hydratedMark, {
+        timeout: Math.max(1, deadline - Date.now()),
+      })
+      .catch((cause: unknown) => {
+        throw notReady(timeout, heard.said, cause);
+      });
   } finally {
     heard.stop();
   }

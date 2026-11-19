@@ -139,6 +139,7 @@ const lateClientScripts: Record<string, string> = {
 };
 const neverHydrates = "await new Promise(() => {});";
 const thrownBeforeHydrating = "the client script threw before it hydrated the page";
+const refusingAddress = "http://127.0.0.1:9/";
 const throwsBeforeHydrating = `throw new Error(${JSON.stringify(thrownBeforeHydrating)});`;
 const waitForAPageThatNeverHydrates = 1_000;
 
@@ -199,6 +200,16 @@ inEveryEngine((browser) => {
     const failure = opened(page, url, "hydrated", { timeout: waitForAPageThatNeverHydrates });
     await expect(failure).rejects.toThrow(pageDidNotBecomeReady);
     await expect(failure).rejects.toThrow(thrownBeforeHydrating);
+
+    await page.close();
+  });
+
+  test("at an address that refuses the connection, opening fails with the navigation's own error and not as a page that did not become ready", async () => {
+    const page = await browser().newPage();
+
+    const failure = opened(page, refusingAddress, "hydrated");
+    await expect(failure).rejects.toThrow(/page\.goto/);
+    await expect(failure).rejects.not.toThrow(pageDidNotBecomeReady);
 
     await page.close();
   });

@@ -16,6 +16,7 @@ import {
   parse,
   parseAll,
   type Program,
+  virtualFile,
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
@@ -339,13 +340,16 @@ function readsAnIndex(node: ts.Node): boolean {
   return ts.isElementAccessExpression(node) && ts.isNumericLiteral(node.argumentExpression);
 }
 
-function namesReadFromAPage(program: Program, node: ts.Node): string[] | undefined {
+type PageRead = { kind: "none" } | { kind: "names"; names: string[] } | { kind: "unknown" };
+
+function readFromAPage(program: Program, node: ts.Node): PageRead {
   const read = memberRead(program, node);
-  if (!read || readsAnIndex(node)) return undefined;
+  if (!read || readsAnIndex(node)) return { kind: "none" };
   const aPage =
     isTypedAny(program, read.owner) ||
     propertyDeclarations(program, read.owner, [navigation]).some(isPlaywrightsNavigation);
-  return aPage ? read.names : undefined;
+  if (!aPage) return { kind: "none" };
+  return read.names.length === 0 ? { kind: "unknown" } : { kind: "names", names: read.names };
 }
 
 function insideTheOpener(node: ts.Node): boolean {
@@ -356,18 +360,16 @@ function insideTheOpener(node: ts.Node): boolean {
 
 type Navigation = { node: ts.Node; how: string };
 
-function navigationsIn(program: Program, file: string): Navigation[] {
-  const source = program.sourceFile(join(repositoryRoot, file));
-  if (!source) throw new Error(`${file}: TypeScript did not open this file.`);
+function navigationsInSource(program: Program, source: ts.SourceFile): Navigation[] {
   return descendants(source).flatMap((node) => {
     if (memberDeclarations(program, node).some(isPlaywrightsNavigation)) {
       return [{ node, how: `reaches Playwright's ${navigation}` }];
     }
-    const names = namesReadFromAPage(program, node);
-    if (names?.includes(navigation)) {
+    const read = readFromAPage(program, node);
+    if (read.kind === "names" && read.names.includes(navigation)) {
       return [{ node, how: `reads ${navigation} from a value typed any` }];
     }
-    return names?.length === 0
+    return read.kind === "unknown"
       ? [
           {
             node,
@@ -376,6 +378,12 @@ function navigationsIn(program: Program, file: string): Navigation[] {
         ]
       : [];
   });
+}
+
+function navigationsIn(program: Program, file: string): Navigation[] {
+  const source = program.sourceFile(join(repositoryRoot, file));
+  if (!source) throw new Error(`${file}: TypeScript did not open this file.`);
+  return navigationsInSource(program, source);
 }
 
 function lineOf(node: ts.Node): number {
@@ -400,6 +408,45 @@ test(`no playground test, drive script or helper they share reaches Playwright's
   expect(playgroundVerificationFiles).toEqual(expect.arrayContaining([openingModule, driveScript]));
   expect(
     navigationsIn(opening, openingModule).filter(({ node }) => insideTheOpener(node)),
-  ).toHaveLength(1);
+  ).not.toEqual([]);
   expect(violations).toEqual([]);
+});
+
+const pageSpellings = (body: string) =>
+  virtualFile(
+    `import type { Page } from "playwright";\nexport async function read(page: Page, member: string): Promise<unknown> {\n  ${body}\n}\n`,
+    ".ts",
+  );
+const refusedPageReads = {
+  "an element access by a name the type checker does not know": "return page[member];",
+  "Reflect.get by a name the type checker does not know": "return Reflect.get(page, member);",
+  "goto by its literal name": 'return page["goto"];',
+};
+const allowedPageReads = {
+  "a member read by its name": "return page.url();",
+  "a member read by a literal name": 'return page["title"]();',
+};
+const pageReadFiles = Object.fromEntries(
+  Object.entries({ ...refusedPageReads, ...allowedPageReads }).map(([spelling, body]) => [
+    spelling,
+    pageSpellings(body),
+  ]),
+);
+const pageReads = openProgram(Object.values(pageReadFiles));
+afterAll(() => {
+  pageReads.dispose();
+});
+
+function navigationsInFixture(spelling: string): Navigation[] {
+  const source = pageReads.sourceFile(pageReadFiles[spelling]);
+  if (!source) throw new Error(`${spelling}: TypeScript did not open its fixture.`);
+  return navigationsInSource(pageReads, source);
+}
+
+test.for(Object.keys(refusedPageReads))("on a typed page, the check refuses %s", (spelling) => {
+  expect(navigationsInFixture(spelling)).not.toEqual([]);
+});
+
+test.for(Object.keys(allowedPageReads))("on a typed page, the check passes %s", (spelling) => {
+  expect(navigationsInFixture(spelling)).toEqual([]);
 });
