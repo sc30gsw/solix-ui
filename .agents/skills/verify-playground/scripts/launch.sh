@@ -12,6 +12,7 @@ fi
 
 (cd "$root" && NODE_ENV=production node_modules/.bin/vp run -r build)
 
+rm -f "$state/server.log" "$state/server.port"
 cd "$root/apps/playground"
 PORT=0 HOST=127.0.0.1 nohup node dist/server/node.js >"$state/server.log" 2>&1 &
 echo $! >"$state/server.pid"
