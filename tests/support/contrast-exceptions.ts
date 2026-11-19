@@ -47,6 +47,10 @@ export function componentPart(component: string, part: string, condition: string
     : `.${stableClass(component, rootPart)}${condition} ${own}`;
 }
 
+function rootOf(component: string): string {
+  return componentPart(component, rootPart, "default");
+}
+
 function excused(
   kind: ContrastKind,
   foreground: string,
@@ -80,6 +84,8 @@ function inVariant(
   );
 }
 
+const border = "--solix-color-border";
+
 export const contrastExceptions: readonly ContrastException[] = [
   ...(["primary", "blue"] as const).flatMap((palette) => [
     ...inVariant(palette, "filled", [
@@ -104,6 +110,17 @@ export const contrastExceptions: readonly ContrastException[] = [
     bothSchemes,
     componentPart("Disclosure", "summary", "[open]"),
   ),
+  ...excused(
+    "edge",
+    border,
+    "--solix-color-surface",
+    bothSchemes,
+    variantPart(undefined, "default"),
+  ),
+  ...excused("edge", border, "--solix-color-body", bothSchemes, variantPart(undefined, "default")),
+  ...excused("edge", border, "--solix-color-body", bothSchemes, rootOf("Modal")),
+  ...excused("edge", border, "--solix-color-body", bothSchemes, rootOf("TabsList")),
+  ...excused("edge", border, "--solix-color-body", bothSchemes, rootOf("TextInput")),
 ];
 
 export const colorContrastRule = {
