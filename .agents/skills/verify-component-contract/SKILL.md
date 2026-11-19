@@ -44,7 +44,7 @@ It does if it edits any of these:
 | `vite.config.ts` | It sets the test include globs, the global setup, and the Solid plugin. |
 | `solid-js`, `@solidjs/web`, `@solidjs/compiler` and `@solidjs/vite-plugin` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins, they decide how a `class` value becomes a class attribute. |
 
-Last confirmed against commit `efee648`. Run `git diff efee648 -- packages/core scripts/dist-specifiers.ts scripts/subpath.ts apps/playground tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs scripts/expected-values.ts tests/rules/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `b2ab141`. Run `git diff b2ab141 -- packages/core scripts/dist-specifiers.ts scripts/subpath.ts apps/playground tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs scripts/expected-values.ts tests/rules/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 
