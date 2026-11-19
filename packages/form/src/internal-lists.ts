@@ -1,4 +1,4 @@
-import { getPath, isNestedUnder, setPath } from "#/src/internal-paths.ts";
+import { getPath, isIndexSegment, isNestedUnder, setPath } from "#/src/internal-paths.ts";
 import { type ReorderPayload } from "#/src/types.ts";
 
 export type ListOperation =
@@ -8,17 +8,34 @@ export type ListOperation =
   | { kind: "replace"; index: number; item: unknown };
 
 function listIndexOf(segment: string): number | undefined {
-  const index = Number(segment);
-  return Number.isSafeInteger(index) && index >= 0 && String(index) === segment ? index : undefined;
+  return isIndexSegment(segment) ? Number(segment) : undefined;
 }
 
-function hasListIndexes(operation: ListOperation): boolean {
-  const indexes = operation.kind === "reorder" ? [operation.from, operation.to] : [operation.index];
-  return indexes.every((index) => index === undefined || listIndexOf(String(index)) !== undefined);
+function isListIndex(index: number): boolean {
+  return Number.isSafeInteger(index) && index >= 0;
+}
+
+function inRange(operation: ListOperation, length: number): ListOperation | undefined {
+  switch (operation.kind) {
+    case "insert":
+      return isListIndex(operation.index ?? length)
+        ? {
+            kind: "insert",
+            item: operation.item,
+            index: Math.min(operation.index ?? length, length),
+          }
+        : undefined;
+    case "remove":
+    case "replace":
+      return isListIndex(operation.index) && operation.index < length ? operation : undefined;
+    case "reorder":
+      return isListIndex(operation.from) && operation.from < length && isListIndex(operation.to)
+        ? { kind: "reorder", from: operation.from, to: Math.min(operation.to, length - 1) }
+        : undefined;
+  }
 }
 
 function changed(list: readonly unknown[], operation: ListOperation): readonly unknown[] {
-  if (!hasListIndexes(operation)) return list;
   const copy = list.slice();
   switch (operation.kind) {
     case "insert":
@@ -30,7 +47,6 @@ function changed(list: readonly unknown[], operation: ListOperation): readonly u
       copy.splice(operation.to, 0, ...copy.splice(operation.from, 1));
       return copy;
     case "replace":
-      if (operation.index >= list.length) return list;
       copy[operation.index] = operation.item;
       return copy;
   }
@@ -42,7 +58,9 @@ export function changeListAt<Values>(
   values: Values,
 ): Values {
   const list = getPath(path, values);
-  return Array.isArray(list) ? setPath(path, changed(list, operation), values) : values;
+  if (!Array.isArray(list)) return values;
+  const resolved = inRange(operation, list.length);
+  return resolved === undefined ? values : setPath(path, changed(list, resolved), values);
 }
 
 function movedIndex(index: number, operation: ListOperation): number | undefined {
@@ -75,11 +93,12 @@ export function moveListKeys<Value>(
   path: string,
   operation: ListOperation,
   record: Readonly<Record<string, Value>>,
+  length: number,
 ): Record<string, Value> {
-  const valid = hasListIndexes(operation);
+  const resolved = inRange(operation, length);
   return Object.fromEntries(
     Object.entries(record).flatMap(([key, value]) => {
-      const moved = valid ? movedKey(key, path, operation) : key;
+      const moved = resolved === undefined ? key : movedKey(key, path, resolved);
       return moved === undefined ? [] : [[moved, value]];
     }),
   );

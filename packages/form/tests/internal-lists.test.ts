@@ -88,7 +88,7 @@ test("an operation with an index that is not a whole number from 0 changes neith
 
   for (const operation of [removeAt(-1), replaceAt(-1, 9), reorder(0, -1), insertAt(1.5)]) {
     expect(changeListAt("list", operation, values)).toBe(values);
-    expect(moveListKeys("list", operation, keyed)).toStrictEqual(keyed);
+    expect(moveListKeys("list", operation, keyed, 50)).toStrictEqual(keyed);
   }
 });
 
@@ -100,7 +100,7 @@ test("an insert moves every key of an item at or after its index one index up", 
     ...kept
   } = errors;
 
-  expect(moveListKeys("fruits", insertAt(4), errors)).toStrictEqual({
+  expect(moveListKeys("fruits", insertAt(4), errors, 50)).toStrictEqual({
     ...kept,
     "fruits.5.available": available,
     "fruits.16.inner.name": name,
@@ -116,7 +116,7 @@ test("a remove drops every key of the removed item and moves every later one an 
     ...kept
   } = errors;
 
-  expect(moveListKeys("fruits", removeAt(4), errors)).toStrictEqual({
+  expect(moveListKeys("fruits", removeAt(4), errors, 50)).toStrictEqual({
     ...kept,
     "fruits.14.inner.name": name,
     "fruits.14.inner.0.name": nestedName,
@@ -131,13 +131,13 @@ test("keys of a list nested in a list item move with an insert and a remove at t
     ...kept
   } = errors;
 
-  expect(moveListKeys("nested.0.inner", insertAt(2), errors)).toStrictEqual({
+  expect(moveListKeys("nested.0.inner", insertAt(2), errors, 50)).toStrictEqual({
     ...kept,
     "nested.0.inner.3.name": name,
     "nested.0.inner.3.check": check,
     "nested.0.inner.6.check": later,
   });
-  expect(moveListKeys("nested.0.inner", removeAt(2), errors)).toStrictEqual({
+  expect(moveListKeys("nested.0.inner", removeAt(2), errors, 50)).toStrictEqual({
     ...kept,
     "nested.0.inner.4.check": later,
   });
@@ -151,12 +151,12 @@ test("a remove from a list of plain values drops the removed item's key and move
     "fruits.2": "fruit-error-3",
   };
 
-  expect(moveListKeys("fruits", removeAt(0), listErrors)).toStrictEqual({
+  expect(moveListKeys("fruits", removeAt(0), listErrors, 50)).toStrictEqual({
     name: "name-error",
     "fruits.0": "fruit-error-2",
     "fruits.1": "fruit-error-3",
   });
-  expect(moveListKeys("fruits", removeAt(1), listErrors)).toStrictEqual({
+  expect(moveListKeys("fruits", removeAt(1), listErrors, 50)).toStrictEqual({
     name: "name-error",
     "fruits.0": "fruit-error-1",
     "fruits.1": "fruit-error-3",
@@ -164,24 +164,29 @@ test("a remove from a list of plain values drops the removed item's key and move
 });
 
 test("moving keys changes nothing for an insert with no index, a path no key names, or an index past every key", () => {
-  expect(moveListKeys("fruits", insertAt(), errors)).toStrictEqual(errors);
-  expect(moveListKeys("does-not-exist", insertAt(1), errors)).toStrictEqual(errors);
-  expect(moveListKeys("fruits", insertAt(100), errors)).toStrictEqual(errors);
+  expect(moveListKeys("fruits", insertAt(), errors, 50)).toStrictEqual(errors);
+  expect(moveListKeys("does-not-exist", insertAt(1), errors, 50)).toStrictEqual(errors);
+  expect(moveListKeys("fruits", insertAt(100), errors, 50)).toStrictEqual(errors);
 });
 
 test("a reorder moves the keys of the moved item to its new index and shifts the items between", () => {
-  expect(moveListKeys("a", reorder(2, 0), { "a.0": true })).toStrictEqual({ "a.1": true });
-  expect(moveListKeys("a", reorder(2, 0), { "a.0": true, "a.2": "Error" })).toStrictEqual({
+  expect(moveListKeys("a", reorder(2, 0), { "a.0": true }, 50)).toStrictEqual({ "a.1": true });
+  expect(moveListKeys("a", reorder(2, 0), { "a.0": true, "a.2": "Error" }, 50)).toStrictEqual({
     "a.0": "Error",
     "a.1": true,
   });
   expect(
-    moveListKeys("sortable", reorder(0, 1), {
-      "sortable.0.value1": "Error 1",
-      "sortable.0.value2": "Error 2",
-      "sortable.1.value1": "Error 3",
-      "sortable.1.value2": "Error 4",
-    }),
+    moveListKeys(
+      "sortable",
+      reorder(0, 1),
+      {
+        "sortable.0.value1": "Error 1",
+        "sortable.0.value2": "Error 2",
+        "sortable.1.value1": "Error 3",
+        "sortable.1.value2": "Error 4",
+      },
+      50,
+    ),
   ).toStrictEqual({
     "sortable.0.value1": "Error 3",
     "sortable.0.value2": "Error 4",
@@ -189,11 +194,16 @@ test("a reorder moves the keys of the moved item to its new index and shifts the
     "sortable.1.value2": "Error 2",
   });
   expect(
-    moveListKeys("items", reorder(0, 2), {
-      "items.0.name": "Name error",
-      "items.0.nested.field": "Nested error",
-      "items.2.name": "Name error 2",
-    }),
+    moveListKeys(
+      "items",
+      reorder(0, 2),
+      {
+        "items.0.name": "Name error",
+        "items.0.nested.field": "Nested error",
+        "items.2.name": "Name error 2",
+      },
+      50,
+    ),
   ).toStrictEqual({
     "items.1.name": "Name error 2",
     "items.2.name": "Name error",
@@ -203,12 +213,17 @@ test("a reorder moves the keys of the moved item to its new index and shifts the
 
 test("a reorder leaves an item whose index starts with the same digits, and leaves its input as it was", () => {
   expect(
-    moveListKeys("items", reorder(1, 0), {
-      "items.0.name": "Error 0",
-      "items.1.name": "Error 1",
-      "items.10.name": "Error 10",
-      "items.12": "Error 12",
-    }),
+    moveListKeys(
+      "items",
+      reorder(1, 0),
+      {
+        "items.0.name": "Error 0",
+        "items.1.name": "Error 1",
+        "items.10.name": "Error 10",
+        "items.12": "Error 12",
+      },
+      50,
+    ),
   ).toStrictEqual({
     "items.0.name": "Error 1",
     "items.1.name": "Error 0",
@@ -221,7 +236,7 @@ test("a reorder leaves an item whose index starts with the same digits, and leav
   ] as const) {
     const keyed = { "items.0": "A", "items.1": "B", "items.2": "C", "items.3": "D" };
 
-    expect(moveListKeys("items", reorder(from, to), keyed)).toStrictEqual({
+    expect(moveListKeys("items", reorder(from, to), keyed, 50)).toStrictEqual({
       ...moved,
       "items.3": "D",
     });
@@ -231,16 +246,21 @@ test("a reorder leaves an item whose index starts with the same digits, and leav
 
 test("a reorder keeps path boundaries and keys whose segment after the list is not an index", () => {
   expect(
-    moveListKeys("group.items", reorder(0, 2), {
-      "group.items.1.nested.0.name": "B",
-      "group.items.10.name": "Outside interval",
-      "group.items.01.name": "Non-index property",
-      "group.items.1a.name": "Non-index property",
-      "group.items.name": "List property",
-      "group.items": "List error",
-      "group.itemsExtra.1.name": "Sibling list",
-      "other.group.items.1.name": "Unrelated path",
-    }),
+    moveListKeys(
+      "group.items",
+      reorder(0, 2),
+      {
+        "group.items.1.nested.0.name": "B",
+        "group.items.10.name": "Outside interval",
+        "group.items.01.name": "Non-index property",
+        "group.items.1a.name": "Non-index property",
+        "group.items.name": "List property",
+        "group.items": "List error",
+        "group.itemsExtra.1.name": "Sibling list",
+        "other.group.items.1.name": "Unrelated path",
+      },
+      50,
+    ),
   ).toStrictEqual({
     "group.items.0.nested.0.name": "B",
     "group.items.10.name": "Outside interval",
@@ -256,12 +276,12 @@ test("a reorder keeps path boundaries and keys whose segment after the list is n
 test("a reorder to the same index, or at a path no key names, changes no key", () => {
   const keyed = { "items.0": "A", "items.1.name": "B", "items.2": "C" };
 
-  expect(moveListKeys("items", reorder(1, 1), keyed)).toStrictEqual(keyed);
-  expect(moveListKeys("c", reorder(1, 2), { "a.0": true })).toStrictEqual({ "a.0": true });
+  expect(moveListKeys("items", reorder(1, 1), keyed, 50)).toStrictEqual(keyed);
+  expect(moveListKeys("c", reorder(1, 2), { "a.0": true }, 50)).toStrictEqual({ "a.0": true });
 });
 
 test("a replace changes no key", () => {
-  expect(moveListKeys("fruits", replaceAt(4, null), errors)).toStrictEqual(errors);
+  expect(moveListKeys("fruits", replaceAt(4, null), errors, 50)).toStrictEqual(errors);
 });
 
 test("clearing a list's keys drops every key under it and keeps the list's own key and those of lists with a longer name", () => {
@@ -398,13 +418,50 @@ test("each list operation in range changes the list at its path as a plain list 
   );
 });
 
+function anyOperationFor(length: number): fc.Arbitrary<ListOperation> {
+  const anyIndex = fc.integer({ min: -1, max: length + 2 });
+  return fc.oneof(
+    fc.record({
+      kind: fc.constant("insert" as const),
+      item: fc.constant([]),
+      index: fc.option(anyIndex, { nil: undefined }),
+    }),
+    fc.record({ kind: fc.constant("remove" as const), index: anyIndex }),
+    fc.record({ kind: fc.constant("reorder" as const), from: anyIndex, to: anyIndex }),
+    fc.record({ kind: fc.constant("replace" as const), index: anyIndex, item: fc.constant([]) }),
+  );
+}
+
+const anyListCase = listCase.chain((generated) =>
+  fc.record({
+    path: fc.constant(generated.path),
+    bags: fc.constant(generated.bags),
+    operation: anyOperationFor(generated.bags.length),
+  }),
+);
+
+test("for any index, in range or not, the keys of each item move where the same operation moves the item in the list", async (context) => {
+  await assertProperty(
+    context,
+    fc.property(anyListCase, ({ path, bags, operation }) => {
+      const listed = getPath(path, changeListAt(path, operation, valuesWith(path, bags)));
+      const moved = operation.kind === "replace" ? bags : listed;
+
+      expect(Array.isArray(moved)).toBe(true);
+      expect(moveListKeys(path, operation, keyedBy(path, bags), bags.length)).toStrictEqual(
+        keyedBy(path, Array.isArray(moved) ? moved : []),
+      );
+    }),
+  );
+});
+
 test("each list operation in range moves the keys of each item where the operation moves the item, drops those of a removed item, and keeps every key beside the list", async (context) => {
   await assertProperty(
     context,
     fc.property(listCase, ({ path, bags, operation }) => {
       const moved = operation.kind === "replace" ? bags : modelled(bags, operation, []);
 
-      expect(moveListKeys(path, operation, keyedBy(path, bags))).toStrictEqual(
+      expect(moveListKeys(path, operation, keyedBy(path, bags), bags.length)).toStrictEqual(
         keyedBy(path, moved),
       );
     }),
