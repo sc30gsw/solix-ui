@@ -10,7 +10,6 @@ import {
   colorProperty,
   colorVariantTable,
   customColorClass,
-  ownPaletteOf,
   type Palette,
   paletteAliases,
   paletteClass,
@@ -21,6 +20,7 @@ import {
   primaryProperty,
   shadeClass,
   shades,
+  shadeSource,
   slotDefaults,
   tintShades,
   contrastLuminance,
@@ -35,6 +35,7 @@ import { classesOf, declarationsIn, rootElementOf, valuesOf } from "#/tests/mark
 import { assertProperty } from "../../../tests/support/properties.ts";
 import { tokenKind, tokenValues } from "../../../scripts/tokens";
 
+const primaryColorsFile = "packages/core/src/primary-colors.stylex.ts";
 const named: Palette[] = [
   ...palettes,
   ...Object.keys(paletteAliases).filter((name): name is keyof typeof paletteAliases =>
@@ -108,15 +109,18 @@ test("every rule of the colours layer, the first layer inside components, select
   ).toEqual([]);
 });
 
+test("the primary's alias declares exactly the shades shadeSource names for the primary, in the order of the shades", () => {
+  expect(Object.keys(tokenValues(primaryColorsFile))).toEqual(
+    shades.map((shade) => shadeSource(primaryAlias, shade)),
+  );
+});
+
 test.each(named)(
   "the class of %s sets every shade from its own palette's tokens, or for the primary from the primary's alias",
   (palette) => {
-    const source = (shade: (typeof shades)[number]) =>
-      palette === primaryAlias
-        ? `var(${primaryProperty(shade)})`
-        : `var(${paletteToken(ownPaletteOf(palette), shade)})`;
-
-    expect(Object.values(ruleFor(`.${paletteClass(palette)}`))).toEqual(shades.map(source));
+    expect(Object.values(ruleFor(`.${paletteClass(palette)}`))).toEqual(
+      shades.map((shade) => `var(${shadeSource(palette, shade)})`),
+    );
   },
 );
 
@@ -192,10 +196,7 @@ test("a shade of a palette gives the palette's class and the shade class and wri
         expect.arrayContaining([colorClass, paletteClass(palette), shadeClass]),
       );
       expect(styleOf({ color })).toEqual({
-        [colorProperty]:
-          palette === primaryAlias
-            ? `var(${primaryProperty(shade)})`
-            : `var(${paletteToken(ownPaletteOf(palette), shade)})`,
+        [colorProperty]: `var(${shadeSource(palette, shade)})`,
       });
     }
   }
