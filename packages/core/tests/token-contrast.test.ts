@@ -309,11 +309,11 @@ function inEachPaletteAndVariant(pairing: Pairing): Pairing[] {
   const { foreground, background } = pairing;
   if (foreground.slot === undefined && background.slot === undefined) return [pairing];
   return palettes.flatMap((palette) =>
-    variants.flatMap(([variant, { named }]): Pairing[] => {
+    variants.flatMap(([variant, { palette: slots }]): Pairing[] => {
       let fromAShade = false;
       const resolve = (given: Side): Side | undefined => {
         if (given.slot === undefined) return given;
-        const found = slotToken(given.slot, palette, named);
+        const found = slotToken(given.slot, palette, slots);
         if (found === undefined) return undefined;
         fromAShade ||= found.fromAShade;
         return {
