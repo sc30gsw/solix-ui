@@ -217,7 +217,7 @@ test("a provider given no getStyleNonce gives its theme style the nonce of the p
   ).toEqual([["outer"]]);
 });
 
-test("a theme's primaryColor writes every shade of the primary's alias from that palette, under the selector and in every element with a colour scheme inside it, and nothing for a value that names no palette or names the primary itself", async (context) => {
+test("a theme's primaryColor writes every shade of the primary's alias from that palette, at no specificity in a scope rooted at the selector, on the root and on every element with a colour scheme inside it, so the nearest provider wins, and nothing for a value that names no palette or names the primary itself", async (context) => {
   const named = [...palettes, ...Object.keys(paletteAliases)];
   await assertProperty(
     context,
@@ -239,9 +239,10 @@ test("a theme's primaryColor writes every shade of the primary's alias from that
           expect(css).toBeUndefined();
           return;
         }
-        const rules: [selector: string, declarations: string[]][] = [];
+        const rules: [scope: string, selector: string, declarations: string[]][] = [];
         postcss.parse(css ?? "").walkRules((rule) => {
           rules.push([
+            rule.parent?.type === "atrule" ? `@${rule.parent.name} ${rule.parent.params}` : "",
             rule.selector,
             rule.nodes.map((node) => (node.type === "decl" ? `${node.prop}:${node.value}` : "")),
           ]);
@@ -249,7 +250,8 @@ test("a theme's primaryColor writes every shade of the primary's alias from that
 
         expect(rules).toEqual([
           [
-            `${selector},:is(${selector}) [${colorSchemeAttribute}]`,
+            `@scope (${selector})`,
+            `:where(:scope,[${colorSchemeAttribute}])`,
             shades.map(
               (shade) =>
                 `${primaryProperty(shade)}:var(${paletteToken(ownPaletteOf(primaryColor), shade)})`,

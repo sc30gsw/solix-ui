@@ -79,15 +79,15 @@ function declarationsOf(theme: SolixTheme): string[] {
 }
 
 export function themeStyleSheet(theme: SolixTheme, selector: string): string | undefined {
-  const placed: [on: string, declarations: string[]][] = [
-    [selector, declarationsOf(theme)],
+  const placed: [rule: (block: string) => string, declarations: string[]][] = [
+    [(block) => `${selector}${block}`, declarationsOf(theme)],
     [
-      `${selector},:is(${selector}) [${colorSchemeAttribute}]`,
+      (block) => `@scope (${selector}){:where(:scope,[${colorSchemeAttribute}])${block}}`,
       primaryDeclarationsOf(theme.primaryColor),
     ],
   ];
-  const rules = placed.flatMap(([on, declarations]) =>
-    declarations.length === 0 ? [] : [`${on}{${declarations.join("")}}`],
+  const rules = placed.flatMap(([rule, declarations]) =>
+    declarations.length === 0 ? [] : [rule(`{${declarations.join("")}}`)],
   );
   if (rules.length === 0 || !isWritable(selector)) return undefined;
   return `${layerOrder}@layer ${libraryCascadeLayer}{${rules.join("")}}`;
