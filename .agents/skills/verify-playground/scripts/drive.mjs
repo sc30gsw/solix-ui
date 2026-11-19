@@ -10,14 +10,14 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 }).trim();
 const repositoryModule = (path) => import(pathToFileURL(join(root, path)).href);
 const { browserType, engineNames, enginesToVerify } = await repositoryModule("scripts/browser-engines.mjs");
-const { paletteToken, primaryPalette } = await repositoryModule("packages/core/src/color-table.ts");
+const { ownPaletteOf, paletteToken, primaryPalette } = await repositoryModule("packages/core/src/color-table.ts");
 const primarySolid = paletteToken(primaryPalette, "6");
 const primaryContrast = paletteToken(primaryPalette, "contrast");
 const { expectedValues, lookOf } = await repositoryModule("scripts/expected-values.ts");
 const { baseKey, breakpointWidths, libraryStyleMark, stylePropClass } = await repositoryModule("packages/core/src/style-prop-table.ts");
 const { stableClass, stableClassPrefix } = await repositoryModule("packages/core/src/stable-class.ts");
 const { BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
-const { themedByTheProvider, themedSpacing, themeNames, themeSection } = await repositoryModule("apps/playground/src/sections/theme-setups.ts");
+const { brandPrimaryColor, themedByTheProvider, themedSpacing, themeNames, themeSection } = await repositoryModule("apps/playground/src/sections/theme-setups.ts");
 const { pageStyleRules, stylesAddedToThePage } = await repositoryModule("apps/playground/tests/support/page-styles.ts");
 const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabNames, tabsRegion, valueOf } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
@@ -69,8 +69,8 @@ const journeys = {
   "token-theme": async ({ page, observe, shot, expected }) => {
     const themed = page.getByRole("button", { name: "Themed" });
     await shot("page", "Open the page.");
-    await shot("themed-button", "Look at the button named Themed, which sits in a subtree where the app overrides a token.", themed);
-    observe("background follows the consumer's token value", await style(themed, "background-color"), expected("brandGreen"));
+    await shot("themed-button", "Look at the button named Themed, which sits in a subtree whose provider's theme names another primaryColor.", themed);
+    observe("background follows the theme's primaryColor", await style(themed, "background-color"), expected(paletteToken(ownPaletteOf(brandPrimaryColor), "6")));
     observe("a button outside the themed subtree keeps the default", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected(primarySolid));
   },
   "provider-theme": async ({ page, observe, shot, expected }) => {

@@ -1,6 +1,6 @@
 # Token theme
 
-The library's public tokens are custom properties that start with `--solix-`, written in `packages/core/src/tokens.stylex.ts`. The app overrides only `--solix-primary-6`, the primary palette's solid shade, for part of the page. A library button inside that part takes the new colour, and a button outside it does not. The journey observes only the button.
+The library's public tokens are custom properties that start with `--solix-`, written in `packages/core/src/tokens.stylex.ts`. The primary's alias, `--solix-primary-*`, names one palette's shades. For part of the page, the app wraps a nested `SolixProvider` whose theme's `primaryColor` names `brandPrimaryColor` from `apps/playground/src/sections/theme-setups.ts`, scoped by its `cssVariablesSelector` to the element with the class `brandSubtree`. A library button inside that part takes that palette's solid shade, and a button outside it does not. The journey observes only the button.
 
 ## Sub-features
 
@@ -17,9 +17,9 @@ Preconditions:
 
 - `doctor.sh` exits 0.
 
-- **Themed subtree.** Open the page and look at the button named `Themed`. Run `.agents/skills/verify-playground/scripts/drive.mjs token-theme`. The observation `background follows the consumer's token value` (the `--solix-primary-6` value in the `.brand-green` rule of `apps/playground/src/app.css`) passes, and `a button outside the themed subtree keeps the default` (the primary token) passes.
+- **Themed subtree.** Open the page and look at the button named `Themed`. Run `.agents/skills/verify-playground/scripts/drive.mjs token-theme`. The observation `background follows the theme's primaryColor` (shade 6 of the palette `brandPrimaryColor` names) passes, and `a button outside the themed subtree keeps the default` (the primary token) passes.
 - **Proof.** The evidence directory holds `01-page.png`, `02-themed-button.png`, `recording.webm` and `observations.json`.
 
 ## Gotchas
 
-- The override is a plain CSS rule in the app that sets `--solix-primary-6`. Nothing in JavaScript takes part, so this journey also passes with scripts off.
+- The provider writes its theme into a `<style>` in the server's markup, so this journey also passes with scripts off.
