@@ -197,7 +197,10 @@ inEveryEngine((browser) => {
     const page = await browser().newPage();
     await withItsClientScriptAfter(page, throwsBeforeHydrating);
 
-    const failure = opened(page, url, "hydrated", { timeout: waitForAPageThatNeverHydrates });
+    const failure = opened(page, url, "hydrated", {
+      timeout: waitForAPageThatNeverHydrates,
+      reportsToTheConsole: `pageerror: Error: ${thrownBeforeHydrating}`,
+    });
     await expect(failure).rejects.toThrow(pageDidNotBecomeReady);
     await expect(failure).rejects.toThrow(thrownBeforeHydrating);
 

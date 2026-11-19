@@ -164,6 +164,7 @@ export default defineConfig({
               "tests/support/build-packages.ts",
               "tests/support/global-setup.ts",
             ],
+            setupFiles: ["apps/playground/tests/support/console-check.ts"],
           },
         },
         {
