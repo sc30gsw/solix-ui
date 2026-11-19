@@ -398,3 +398,20 @@ test("validateFieldValue gives, for generated rules, values and paths, the first
     }),
   );
 });
+
+test("an empty string and 0 are errors on every path, as filterErrors keeps them", () => {
+  const rules = { a: () => "", b: () => 0 };
+
+  expect(validateValues(rules, { a: 1, b: 1 })).toStrictEqual({
+    hasErrors: true,
+    errors: { a: "", b: 0 },
+  });
+  expect(validateFieldValue("a", rules, { a: 1, b: 1 })).toStrictEqual({
+    hasError: true,
+    error: "",
+  });
+  expect(validateFieldValue("b", rules, { a: 1, b: 1 })).toStrictEqual({
+    hasError: true,
+    error: 0,
+  });
+});

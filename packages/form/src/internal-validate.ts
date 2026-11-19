@@ -6,7 +6,7 @@ import {
   type PathSegments,
   splitPath,
 } from "#/src/internal-paths.ts";
-import { filterErrors } from "#/src/internal-status.ts";
+import { filterErrors, isError } from "#/src/internal-status.ts";
 import {
   type FormError,
   type FormFieldValidationResult,
@@ -165,7 +165,7 @@ function fieldResultOf(path: string, result: FormValidationResult): FormFieldVal
 }
 
 function fieldOutcomeOf(result: RuleResult): FormFieldValidationResult {
-  return result ? { hasError: true, error: result } : { hasError: false, error: null };
+  return isError(result) ? { hasError: true, error: result } : { hasError: false, error: null };
 }
 
 export function validateFieldValue<Values>(
