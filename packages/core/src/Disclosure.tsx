@@ -32,7 +32,7 @@ const styles = stylex.create({
 export type DisclosureProps = ElementProps<"details", typeof styles, { label: string }>;
 
 export function Disclosure(props: DisclosureProps) {
-  const { root, part } = createParts("Disclosure", styles, props, "label", "children");
+  const { root, part } = createParts("Disclosure", styles, props, { keep: ["label", "children"] });
   return (
     <details {...root}>
       <summary {...part("summary")}>{props.label}</summary>

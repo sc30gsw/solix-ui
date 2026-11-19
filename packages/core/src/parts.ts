@@ -99,121 +99,91 @@ export type CarriedStyling = {
   readonly style: () => JSX.CSSProperties | undefined;
 };
 
-export type ColorOptions = { readonly color: string };
+type VariablesOption<Name extends string, Props> = Name extends VariableGroup
+  ? { readonly variables: { readonly [Variable in VariablesOf<Name>]: Given<Props> } }
+  : { readonly variables?: never };
 
-export type PartsOptions<Group extends VariableGroup, Props> = {
-  readonly variables: { readonly [Name in VariablesOf<Group>]: Given<Props> };
+export type PartsOptions<Name extends string, Props> = VariablesOption<Name, Props> & {
+  readonly keep?: readonly (keyof Props & string)[];
+  readonly color?: string;
   readonly queries?: QueryContainer;
   readonly carried?: CarriedStyling;
-  readonly color?: string;
 };
 
-type GivenProps<Options> =
+type KeptBy<Options> =
+  | (Options extends { keep: readonly (infer Kept)[] } ? Kept : never)
   | (Options extends { variables: infer Given } ? Extract<Given[keyof Given], string> : never)
-  | (Options extends ColorOptions ? ColorPropKey : never);
+  | (Options extends { color: string } ? ColorPropKey : never);
 
 type Parts<Styles, Props, KeptOffRoot extends keyof Props> = {
   root: RootProps<Props, KeptOffRoot>;
   part: (name: OtherPart<Styles>) => Part;
 };
 
-type PartsInput = StylesApiProps<Compiled> & StyleProps & Styling & { component?: unknown };
+type PartsInput = StylesApiProps<Compiled> &
+  StyleProps &
+  Styling & { component?: unknown } & Record<string, unknown>;
 
 const noVariables: ResolvedVariables = { classes: [], properties: {}, used: [] };
 
 type GivenOptions = {
   readonly variables?: Readonly<Record<string, Given<Record<string, unknown>>>>;
+  readonly keep?: readonly string[];
+  readonly color?: string;
   readonly queries?: QueryContainer;
   readonly carried?: CarriedStyling;
-  readonly color?: string;
 };
 
-function isOptions(given: unknown): given is GivenOptions {
-  return typeof given === "object" && given !== null;
-}
-
 export function createParts<
   Name extends string,
   Styles extends Compiled,
   Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
-  KeptOffRoot extends keyof Props = never,
+  const Options extends PartsOptions<Name, Props>,
 >(
-  component: Name extends VariableGroup ? never : Name,
+  component: Name,
   compiled: Styles,
   props: Props,
-  ...keptOffRoot: KeptOffRoot[]
-): Parts<Styles, Props, KeptOffRoot>;
-export function createParts<
-  Name extends string,
-  Styles extends Compiled,
-  Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
-  KeptOffRoot extends keyof Props = never,
->(
-  component: Name extends VariableGroup ? never : Name,
-  compiled: Styles,
-  props: Props,
-  options: ColorOptions,
-  ...keptOffRoot: KeptOffRoot[]
-): Parts<Styles, Props, KeptOffRoot | (ColorPropKey & keyof Props)>;
-export function createParts<
-  Group extends VariableGroup,
-  Styles extends Compiled,
-  Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
-  const Options extends PartsOptions<Group, Props>,
-  KeptOffRoot extends keyof Props = never,
->(
-  component: Group,
-  compiled: Styles,
-  props: Props,
-  options: Options,
-  ...keptOffRoot: KeptOffRoot[]
-): Parts<Styles, Props, KeptOffRoot | (GivenProps<Options> & keyof Props)>;
-export function createParts(
-  component: string,
-  compiled: Compiled,
-  props: PartsInput & Record<string, unknown>,
-  ...given: unknown[]
-): Parts<Compiled, PartsInput, never> {
-  const [first] = given;
-  const options = isOptions(first) ? first : undefined;
-  const ownProps = Object.values(options?.variables ?? {}).filter(
+  ...[given]: Name extends VariableGroup ? [options: Options] : [options?: Options]
+): Parts<Styles, Props, KeptBy<Options> & keyof Props> {
+  const options: GivenOptions = given ?? {};
+  const input: PartsInput = props;
+  const ownProps = Object.values(options.variables ?? {}).filter(
     (prop): prop is string => typeof prop === "string",
   );
-  const keptOffRoot = given.filter((key): key is string => typeof key === "string");
-  const defaultVariant = options?.color;
+  const defaultVariant = options.color;
   const colorProps = defaultVariant === undefined ? [] : colorPropKeys;
-  const rest = omit(props, ...keptOffRoot, ...ownProps, ...colorProps);
+  const rest = omit(input, ...(options.keep ?? []), ...ownProps, ...colorProps);
   const colored = createMemo(() =>
     defaultVariant === undefined
       ? noVariables
-      : { ...resolveColor(props.color, props.autoContrast), used: [] },
+      : { ...resolveColor(input.color, input.autoContrast), used: [] },
   );
   const resolved = createMemo(() => resolveStyleProps(rest));
   const variables = createMemo(() => {
-    if (options?.variables === undefined || !isVariableGroup(component)) return noVariables;
+    if (options.variables === undefined || !isVariableGroup(component)) return noVariables;
     const values = Object.fromEntries(
       Object.entries(options.variables).map(([name, from]) => [
         name,
-        typeof from === "string" ? props[from] : from(props),
+        typeof from === "string" ? input[from] : from(input),
       ]),
     );
     return resolveVariables(
       component,
       values,
       options.queries?.queries(),
-      (name) => props.unstyled === true && hasChildRules(name),
+      (name) => input.unstyled === true && hasChildRules(name),
     );
   });
-  options?.queries?.report(() => variables().used);
-  const wrapsAComponent = () => typeof props.component === "function";
+  options.queries?.report(() => variables().used);
+  const wrapsAComponent = () => typeof input.component === "function";
   const stylesApi = omit(rest, (key) => !isStylesApiPropKey(key));
   const partClass = (name: string): JSX.ClassValue => [
-    props.unstyled ? undefined : stylex.attrs(compiled[name]).class,
+    input.unstyled ? undefined : stylex.attrs(compiled[name]).class,
     stableClass(component, name),
-    name === rootPart ? options?.carried?.class() : undefined,
-    props.classes?.[name],
+    name === rootPart ? options.carried?.class() : undefined,
+    input.classes?.[name],
   ];
-  const ownStyle = (name: string): JSX.CSSProperties => presentStyle(props.styles?.[name]);
+  const ownStyle = (name: string): JSX.CSSProperties => presentStyle(input.styles?.[name]);
   const root = merge(
     omit<Record<string, unknown>, typeof handledKeys>(rest, ...handledKeys),
     () => (wrapsAComponent() ? stylesApi : {}),
@@ -221,7 +191,7 @@ export function createParts(
       ? {}
       : {
           get [variantAttribute]() {
-            return typeof props.variant === "string" ? props.variant : defaultVariant;
+            return typeof input.variant === "string" ? input.variant : defaultVariant;
           },
         },
     {
@@ -231,7 +201,7 @@ export function createParts(
           colored().classes,
           variables().classes,
           resolved().classes,
-          props.class,
+          input.class,
         ];
       },
       get style() {
@@ -240,14 +210,14 @@ export function createParts(
             ...colored().properties,
             ...variables().properties,
             ...resolved().properties,
-            ...presentStyle(options?.carried?.style()),
+            ...presentStyle(options.carried?.style()),
             ...ownStyle(rootPart),
           },
-          props.style,
+          input.style,
         );
       },
     },
-  ) as RootProps<PartsInput, never>;
+  ) as RootProps<Props, KeptBy<Options> & keyof Props>;
   const part = (name: string): Part => ({
     get class() {
       return partClass(name);

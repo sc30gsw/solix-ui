@@ -99,7 +99,9 @@ export function TabsTab(props: TabsTabProps) {
   const tabs = useTabs("Tabs.Tab");
   let pressLandedInside = false;
   const { root, part } = tabs.behaviour.bind(
-    createParts("TabsTab", styles, props, "value", "leftSection", "rightSection", "children"),
+    createParts("TabsTab", styles, props, {
+      keep: ["value", "leftSection", "rightSection", "children"],
+    }),
     {
       root: {
         slot: "tab",

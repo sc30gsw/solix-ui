@@ -61,20 +61,19 @@ export function Tabs(props: TabsProps) {
     },
   });
   const { root } = behaviour.bind(
-    createParts(
-      "Tabs",
-      styles,
-      props,
-      "value",
-      "defaultValue",
-      "onChange",
-      "orientation",
-      "loop",
-      "activateTabWithKeyboard",
-      "allowTabDeactivation",
-      "keepMounted",
-      "children",
-    ),
+    createParts("Tabs", styles, props, {
+      keep: [
+        "value",
+        "defaultValue",
+        "onChange",
+        "orientation",
+        "loop",
+        "activateTabWithKeyboard",
+        "allowTabDeactivation",
+        "keepMounted",
+        "children",
+      ],
+    }),
     { root: { slot: "root" } },
   );
   return (

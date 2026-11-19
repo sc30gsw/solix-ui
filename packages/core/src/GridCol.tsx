@@ -58,38 +58,32 @@ export function GridCol(props: GridColProps) {
     if (!given) return undefined;
     return `calc((100% + ${gap}) * ${share(given, grid.columns())} - ${gap})`;
   };
-  const { root } = createParts(
-    "GridCol",
-    styles,
-    props,
-    {
-      variables: {
-        "col-align-self": "align",
-        "col-flex-basis": (given) => eachValue<Span>(span(given), basis),
-        "col-flex-grow": (given) =>
-          eachValue<Span>(span(given), (each) => {
-            if (!each) return undefined;
-            return each === "auto" || grid.grow() ? "1" : "0";
-          }),
-        "col-max-width": (given) =>
-          eachValue<Span>(span(given), (each) => {
-            if (each === "auto" || grid.grow()) return "100%";
-            return each === "content" ? "unset" : basis(each);
-          }),
-        "col-offset": (given) =>
-          eachValue<number>(given.offset, (each) =>
-            each === 0 ? "0" : `calc((100% + ${gap}) * ${share(each, grid.columns())})`,
-          ),
-        "col-order": "order",
-        "col-width": (given) =>
-          eachValue<Span>(span(given), (each) => (each === "content" ? "auto" : undefined)),
-      },
-      queries: own,
-      carried: grid.col,
+  const { root } = createParts("GridCol", styles, props, {
+    variables: {
+      "col-align-self": "align",
+      "col-flex-basis": (given) => eachValue<Span>(span(given), basis),
+      "col-flex-grow": (given) =>
+        eachValue<Span>(span(given), (each) => {
+          if (!each) return undefined;
+          return each === "auto" || grid.grow() ? "1" : "0";
+        }),
+      "col-max-width": (given) =>
+        eachValue<Span>(span(given), (each) => {
+          if (each === "auto" || grid.grow()) return "100%";
+          return each === "content" ? "unset" : basis(each);
+        }),
+      "col-offset": (given) =>
+        eachValue<number>(given.offset, (each) =>
+          each === 0 ? "0" : `calc((100% + ${gap}) * ${share(each, grid.columns())})`,
+        ),
+      "col-order": "order",
+      "col-width": (given) =>
+        eachValue<Span>(span(given), (each) => (each === "content" ? "auto" : undefined)),
     },
-    "offset",
-    "span",
-  );
+    queries: own,
+    carried: grid.col,
+    keep: ["offset", "span"],
+  });
   return (
     <>
       <Show when={own.rules()}>{(rules) => <LibraryStyle of="grid-col" css={rules()} />}</Show>

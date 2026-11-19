@@ -31,6 +31,6 @@ const styles = stylex.create({
 export type TextInputProps = ElementProps<"input", typeof styles, { children?: never }>;
 
 export function TextInput(props: TextInputProps) {
-  const { root } = createParts("TextInput", styles, props, "children");
+  const { root } = createParts("TextInput", styles, props, { keep: ["children"] });
   return <input type="text" {...root} />;
 }
