@@ -174,7 +174,7 @@ export function libraryStylesheet(rules, rulesByLayer, behaviourSdkRules) {
   const written = {
     ...rulesByLayer,
     [componentLayer]: css,
-    [colorSchemeLayer]: [colorSchemeRules(tokens), rulesByLayer[colorSchemeLayer] ?? ""].join("\n"),
+    [colorSchemeLayer]: colorSchemeRules(tokens),
     [HIDDEN_LAYER]: `${HIDDEN_PART_SELECTOR}{display:none}`,
   };
   return [

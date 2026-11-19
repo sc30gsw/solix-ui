@@ -20,10 +20,10 @@ await buildSources(layout, async (filename, source) => {
   return compiled.code;
 });
 
-const { colorLayer, colorSchemeLayer, stylePropLayer, stylePropRules } = await import(
+const { colorLayer, stylePropLayer, stylePropRules } = await import(
   pathToFileURL(join(layout.outputDirectory, "style-prop-table.js")).href
 );
-const { colorRules, primaryRule } = await import(
+const { colorRules } = await import(
   pathToFileURL(join(layout.outputDirectory, "color-rules.js")).href
 );
 await writeFile(
@@ -33,7 +33,6 @@ await writeFile(
     {
       [colorLayer]: colorRules(),
       [stylePropLayer]: stylePropRules(await definedVariables(layout.outputDirectory)),
-      [colorSchemeLayer]: primaryRule(),
     },
     behaviourSdkHiddenRule(packageRoot),
   ),
