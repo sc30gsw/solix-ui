@@ -8,7 +8,7 @@ import { elementsOf, valuesOf } from "../../../packages/core/tests/markup";
 import { policyHeader } from "#/src/middleware.ts";
 import { themedByTheProvider, themedSpacing, themeNames } from "#/src/sections/theme-setups.ts";
 import { opened } from "#/tests/support/opening.ts";
-import { inEveryEngine } from "#/tests/support/playground.ts";
+import { computed, inEveryEngine } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
 const policyNonce = /'nonce-([^']+)'/;
@@ -106,23 +106,6 @@ function spacingOf(page: Page, text: string): Promise<string> {
     .evaluate((node, name) => getComputedStyle(node).getPropertyValue(name).trim(), spacingToken);
 }
 
-function paddingOf(page: Page, text: string): Promise<string> {
-  return page
-    .getByText(text, { exact: true })
-    .evaluate((node) => getComputedStyle(node).paddingTop);
-}
-
-function paddingFor(page: Page, length: string): Promise<string> {
-  return page.evaluate((written) => {
-    const probe = document.createElement("div");
-    probe.style.paddingTop = written;
-    document.body.append(probe);
-    const padding = getComputedStyle(probe).paddingTop;
-    probe.remove();
-    return padding;
-  }, length);
-}
-
 inEveryEngine((browser) => {
   describe.each(howItIsServed)("a page %s", (_, served) => {
     test("every <style> on it carries the page's nonce, the policy refuses none, and the theme stays under its selector, where it sets a Box's padding", async () => {
@@ -131,10 +114,12 @@ inEveryEngine((browser) => {
       const themed = await spacingOf(page, themeNames.themed);
       const untouched = await spacingOf(page, themeNames.untouched);
       const padding = {
-        themed: await paddingOf(page, themeNames.themed),
-        untouched: await paddingOf(page, themeNames.untouched),
+        themed: await computed(page.getByText(themeNames.themed, { exact: true }), "padding-top"),
+        untouched: await computed(
+          page.getByText(themeNames.untouched, { exact: true }),
+          "padding-top",
+        ),
       };
-      const fromTheTheme = await paddingFor(page, themedSpacing.md);
       const expected = await expectedValues(page);
       await close();
 
@@ -147,7 +132,7 @@ inEveryEngine((browser) => {
       expect(themed).toBe(themedSpacing.md);
       expect(untouched).not.toBe(themed);
       expect(padding.themed, "p=md under the provider's selector reads the theme's spacing").toBe(
-        fromTheTheme,
+        expected("themedSpacingMd"),
       );
       expect(padding.untouched, "p=md outside it keeps the library's spacing").toBe(
         expected("--solix-spacing-md"),
