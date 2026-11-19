@@ -387,7 +387,9 @@ test("every check in the repository runs through vp run verify, before a commit,
     "vp run check:private-terms",
     "vp test",
   ]);
-  expect(read(".vite-hooks/pre-commit").trim()).toBe("vp staged && vp run verify");
+  expect(read(".vite-hooks/pre-commit").trim()).toBe(
+    "node scripts/check-working-tree.ts && vp staged --no-stash && node scripts/check-working-tree.ts && vp run verify",
+  );
   expect(read(".vite-hooks/pre-merge-commit").trim()).toBe("vp run verify");
   const everyEngine = `playwright install --with-deps ${engineNames.join(" ")}`;
   for (const file of workflowFiles) {
