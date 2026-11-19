@@ -2,6 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
 import type { ColorProps } from "#/src/colors.ts";
 import { createParts, type PolymorphicProps } from "#/src/parts.ts";
+import { buttonVariables } from "#/src/Button.variables.ts";
 import type { ScaleValue, VariableProp } from "#/src/style-props.ts";
 import { targetSize } from "#/src/target-size.stylex.ts";
 import { primaryColors } from "#/src/primary-colors.stylex.ts";
@@ -44,15 +45,15 @@ export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<
   T,
   typeof styles,
   ColorProps & {
-    size?: VariableProp<"button-height", ScaleValue<"control-height">>;
-    radius?: VariableProp<"button-radius">;
+    size?: VariableProp<typeof buttonVariables, "button-height", ScaleValue<"control-height">>;
+    radius?: VariableProp<typeof buttonVariables, "button-radius">;
   }
 >;
 
 export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>): JSX.Element;
 export function Button(props: ButtonProps): JSX.Element;
 export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>) {
-  const { root } = createParts("Button", styles, props, {
+  const { root } = createParts(buttonVariables, styles, props, {
     variables: {
       "button-fz": "size",
       "button-height": "size",

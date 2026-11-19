@@ -1,5 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { createParts, type ElementProps } from "#/src/parts.ts";
+import { spaceVariables } from "#/src/Space.variables.ts";
 
 const styles = stylex.create({
   root: {
@@ -13,7 +14,7 @@ const styles = stylex.create({
 export type SpaceProps = ElementProps<"div", typeof styles>;
 
 export function Space(props: SpaceProps) {
-  const { root } = createParts("Space", styles, props, {
+  const { root } = createParts(spaceVariables, styles, props, {
     variables: {
       "space-min-height": (given) => given.mih ?? given.h,
       "space-min-width": (given) => given.miw ?? given.w,

@@ -4,13 +4,7 @@ import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
 import type { ColorVariant } from "#/src/color-table.ts";
 import { type ColorPropKey, colorResolver, type ResolvedColor } from "#/src/colors.ts";
 import { stableClass } from "#/src/stable-class.ts";
-import {
-  hasChildRules,
-  isVariableGroup,
-  stylePropKeys,
-  type VariableGroup,
-  type VariablesOf,
-} from "#/src/style-prop-table.ts";
+import { stylePropKeys, type Variables } from "#/src/style-prop-table.ts";
 import {
   presentStyle,
   type QueryContainer,
@@ -99,11 +93,11 @@ export type CarriedStyling = {
   readonly style: () => JSX.CSSProperties | undefined;
 };
 
-type VariablesOption<Name extends string, Props> = Name extends VariableGroup
-  ? { readonly variables: { readonly [Variable in VariablesOf<Name>]: Given<Props> } }
+type VariablesOption<Of, Props> = [Of] extends [Variables<infer Rows>]
+  ? { readonly variables: { readonly [Variable in keyof Rows & string]: Given<Props> } }
   : { readonly variables?: never };
 
-export type PartsOptions<Name extends string, Props> = VariablesOption<Name, Props> & {
+export type PartsOptions<Of, Props> = VariablesOption<Of, Props> & {
   readonly keep?: readonly (keyof Props & string)[];
   readonly color?: ColorVariant;
   readonly queries?: QueryContainer;
@@ -127,8 +121,8 @@ type PartsInput = StylesApiProps<Compiled> &
 const noVariables: ResolvedVariables = { classes: [], properties: {}, used: [] };
 const noColor: ResolvedColor = { classes: [], properties: {}, attributes: {} };
 
-type GivenOptions = {
-  readonly variables?: Readonly<Record<string, Given<Record<string, unknown>>>>;
+type GivenOptions<Props> = {
+  readonly variables?: Readonly<Record<string, Given<Props>>>;
   readonly keep?: readonly string[];
   readonly color?: ColorVariant;
   readonly queries?: QueryContainer;
@@ -136,20 +130,21 @@ type GivenOptions = {
 };
 
 export function createParts<
-  Name extends string,
+  Of extends string | Variables,
   Styles extends Compiled,
   Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
-  const Options extends PartsOptions<Name, Props>,
+  const Options extends PartsOptions<Of, Props>,
 >(
-  component: Name,
+  of: Of,
   compiled: Styles,
   props: Props,
-  ...[given]: Name extends VariableGroup ? [options: Options] : [options?: Options]
+  ...[given]: [Of] extends [Variables] ? [options: Options] : [options?: Options]
 ): Parts<Styles, Props, KeptBy<Options> & keyof Props> {
-  const options: GivenOptions = given ?? {};
+  const options: GivenOptions<Props> = given ?? {};
+  const component = typeof of === "string" ? of : of.component;
   const input: PartsInput = props;
   const ownProps = Object.values(options.variables ?? {}).filter(
-    (prop): prop is string => typeof prop === "string",
+    (prop): prop is keyof Props & string => typeof prop === "string",
   );
   const color =
     options.color === undefined
@@ -159,18 +154,18 @@ export function createParts<
   const colored = createMemo(color.resolved);
   const resolved = createMemo(() => resolveStyleProps(rest));
   const variables = createMemo(() => {
-    if (options.variables === undefined || !isVariableGroup(component)) return noVariables;
+    if (options.variables === undefined || typeof of === "string") return noVariables;
     const values = Object.fromEntries(
       Object.entries(options.variables).map(([name, from]) => [
         name,
-        typeof from === "string" ? input[from] : from(input),
+        typeof from === "string" ? input[from] : from(props),
       ]),
     );
     return resolveVariables(
-      component,
+      of,
       values,
       options.queries?.queries(),
-      (name) => input.unstyled === true && hasChildRules(name),
+      (row) => input.unstyled === true && row.children !== undefined,
     );
   });
   options.queries?.report(() => variables().used);

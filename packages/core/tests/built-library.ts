@@ -2,12 +2,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createComponent, renderToString } from "@solidjs/web";
 import type { Component } from "solid-js";
+import { definedVariables } from "#/build-pipeline.mjs";
 import type * as Colors from "#/src/colors.ts";
 import type * as CreateTheme from "#/src/create-theme.ts";
 import type * as Library from "#/src/index.ts";
 import type * as Parts from "#/src/parts.ts";
 import type * as StableClass from "#/src/stable-class.ts";
 import type * as StyleProps from "#/src/style-props.ts";
+import type { VariableRow, Variables } from "#/src/style-prop-table.ts";
 import {
   aliasDeclarationsOfTypeAt,
   aliasDeclarationsReturnedBy,
@@ -65,6 +67,13 @@ export const { isContainerWidth, resolveVariables } = (await import(
 )) as typeof StyleProps;
 
 export const stylesheet = readFileSync(join(dist, "styles.css"), "utf8");
+
+export const builtVariables = await definedVariables(dist);
+
+export const variableRows: readonly { of: Variables; name: string; row: VariableRow }[] =
+  builtVariables.flatMap((of) => Object.entries(of.rows).map(([name, row]) => ({ of, name, row })));
+
+export const variableNames = variableRows.map(({ name }) => name);
 
 export function builtSource(name: string): string {
   return readFileSync(join(dist, `${name}.jsx`), "utf8");

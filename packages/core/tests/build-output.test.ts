@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import postcss from "postcss";
@@ -11,6 +11,7 @@ import {
   LIBRARY_CLASS_PREFIX,
   sdkHiddenRuleSource,
   STYLE_PROP_LAYER,
+  VARIABLES_MODULE,
 } from "#/build-pipeline.mjs";
 import {
   breakpoints,
@@ -25,10 +26,6 @@ import {
   responsiveKeys,
   stylePropNames,
   variableClass,
-  variableGroups,
-  variableNames,
-  variableRow,
-  variablesOf,
   visibilityClasses,
 } from "#/src/style-prop-table.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
@@ -37,6 +34,8 @@ import {
   builtSource,
   dist,
   stylesheet as builtStylesheet,
+  variableNames,
+  variableRows,
 } from "#/tests/built-library.ts";
 import { parse, ts } from "../../../scripts/syntax";
 import { schemeValues, tokenKind, tokenValues } from "../../../scripts/tokens";
@@ -479,8 +478,7 @@ test("every rule of a shorthand style prop, at every breakpoint, comes before ev
   expect(violations).toEqual([]);
 });
 
-test("the built style-prop table imports nothing, so build.mjs can load it in plain Node", () => {
-  const file = join(dist, builtStylePropTable);
+function runTimeImportsOf(file: string): string[] {
   const source = parse(file);
   const imports: string[] = [];
   const visit = (node: ts.Node): void => {
@@ -494,11 +492,23 @@ test("the built style-prop table imports nothing, so build.mjs can load it in pl
     node.forEachChild(visit);
   };
   visit(source);
+  return imports;
+}
+
+test("the built style-prop table imports nothing, and each built Component.variables.js imports only it, so build.mjs can load them in plain Node", () => {
+  const variablesModules = readdirSync(dist).filter((entry) => VARIABLES_MODULE.test(entry));
 
   expect(
-    imports,
+    runTimeImportsOf(join(dist, builtStylePropTable)),
     "packages/core/src/style-prop-table.ts: remove each import that stays at run time. build.mjs loads this module in plain Node, before the rest of the library is bundled.",
   ).toEqual([]);
+  expect(variablesModules.length).toBeGreaterThan(0);
+  for (const entry of variablesModules) {
+    expect(
+      runTimeImportsOf(join(dist, entry)),
+      `packages/core/src/${entry.replace(/\.js$/, ".ts")}: import only defineVariables from the style-prop table at run time. build.mjs loads this module in plain Node, before the rest of the library is bundled.`,
+    ).toEqual([`import { defineVariables } from "./${builtStylePropTable}";`]);
+  }
 });
 
 test("each style prop reads its own custom property, at its base and then at each breakpoint in ascending order", () => {
@@ -711,15 +721,15 @@ test("every variable is named apart from every other variable and every style-pr
   );
 
   expect(variableNames.length).toBeGreaterThan(0);
-  expect(variableGroups.flatMap(variablesOf)).toHaveLength(variableNames.length);
+  expect(new Set(variableNames).size).toBe(variableNames.length);
   expect(variableClasses.filter((found) => stylePropClasses.includes(found))).toEqual([]);
 });
 
 test("each variable sets the custom property named for it from its own --sx- custom property, at its base and, when it is responsive, then at each breakpoint in ascending order", () => {
   const { inside } = stylePropLayerRules();
-  const violations = variableNames.flatMap((name) => {
+  const violations = variableRows.flatMap(({ name, row }) => {
     const property = `--${name}`;
-    const keys = variableRow(name).responsive ? ownerBreakpoints : [];
+    const keys = row.responsive ? ownerBreakpoints : [];
     const expected = [
       { selector: `.${variableClass(name, "base")}`, media: undefined },
       ...keys.map(([breakpoint, width]) => ({

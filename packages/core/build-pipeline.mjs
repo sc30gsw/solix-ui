@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { parseSync, transformAsync } from "@babel/core";
 import syntaxJsx from "@babel/plugin-syntax-jsx";
@@ -11,6 +11,7 @@ import { colorSchemeRules, defaultColorScheme } from "#/src/color-schemes.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 
 import {
+  isVariables,
   behaviourSdkLayer,
   colorSchemeLayer,
   componentLayer,
@@ -35,6 +36,16 @@ export const sdkHiddenRuleSource = {
   module: "dist/foundation/platform/style.js",
   writer: "enforceHidden",
 };
+
+export const VARIABLES_MODULE = /^[A-Z][A-Za-z0-9]*\.variables\.[jt]s$/;
+
+export async function definedVariables(directory) {
+  const files = readdirSync(directory)
+    .filter((entry) => VARIABLES_MODULE.test(entry))
+    .sort();
+  const modules = await Promise.all(files.map((file) => import(join(directory, file))));
+  return modules.flatMap((module) => Object.values(module).filter(isVariables));
+}
 
 export function componentLibraryLayout(packageRoot) {
   return libraryLayout(packageRoot, { ".ts": ".js", ".tsx": ".jsx" });
