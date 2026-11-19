@@ -1,6 +1,6 @@
 export type PathSegments = readonly [string, ...string[]];
 
-const unsafeSegments: readonly string[] = ["__proto__", "constructor", "prototype"] as const;
+const unsafeSegments: readonly string[] = ["__proto__"] as const;
 
 const lengthKey = "length";
 

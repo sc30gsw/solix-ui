@@ -54,17 +54,47 @@ test("splitPath gives no segments for a path that is not a string", () => {
   expect(splitPath(Symbol("test"))).toBeUndefined();
 });
 
-test("splitPath gives no segments for a path with a segment that reaches a prototype", () => {
-  for (const path of [
-    "__proto__",
-    "__proto__.polluted",
-    "a.__proto__.polluted",
-    "constructor.prototype.polluted",
-    "a.constructor.prototype.polluted",
-    "prototype.polluted",
-  ]) {
+test("splitPath gives no segments for a path with a __proto__ segment", () => {
+  for (const path of ["__proto__", "__proto__.polluted", "a.__proto__.polluted"]) {
     expect(splitPath(path), path).toBeUndefined();
   }
+});
+
+test("a field named constructor or prototype is read and written as its own property", () => {
+  const target = { constructor: "made", prototype: { shape: "round" }, list: [1] };
+
+  expect(splitPath("constructor.prototype")).toStrictEqual(["constructor", "prototype"]);
+  expect(getPath("constructor", target)).toBe("made");
+  expect(getPath("prototype.shape", target)).toBe("round");
+  expect(setPath("constructor", "changed", target)).toStrictEqual({
+    ...target,
+    constructor: "changed",
+  });
+  expect(setPath("prototype.shape", "flat", target).prototype).toStrictEqual({ shape: "flat" });
+  expect(getPath("constructor", {})).toBeUndefined();
+  expect(getPath("list.constructor", target)).toBeUndefined();
+});
+
+test("a path through constructor or prototype writes nothing outside the copy it gives", () => {
+  const owned = { constructor: { prototype: { kept: true } }, list: [1] };
+
+  for (const path of [
+    "constructor.prototype.polluted",
+    "prototype.polluted",
+    "a.constructor.polluted",
+  ]) {
+    expect(setPath(path, "YES", { name: "" }), path).toStrictEqual({ name: "" });
+  }
+  const written = setPath("constructor.prototype.polluted", "YES", owned);
+  const listed = setPath("list.constructor", "YES", owned);
+
+  expect(written.constructor.prototype).toStrictEqual({ kept: true, polluted: "YES" });
+  expect(owned.constructor.prototype).toStrictEqual({ kept: true });
+  expect(Object.hasOwn(listed.list, "constructor")).toBe(true);
+  expect(Array.isArray(listed.list) && listed.list.length).toBe(1);
+  expect(Reflect.get({}, "polluted")).toBeUndefined();
+  expect(Reflect.get(Object.prototype, "polluted")).toBeUndefined();
+  expect([].constructor).toBe(Array);
 });
 
 test("splitPath keeps a segment that holds an unsafe word inside it", () => {
@@ -160,7 +190,7 @@ test("setPath sets a property deep in lists and objects, and keeps every branch 
 });
 
 test("setPath writes nothing to Object.prototype through a path that reaches it", () => {
-  for (const path of ["__proto__.polluted", "constructor.prototype.polluted"]) {
+  for (const path of ["__proto__.polluted", "constructor.prototype.polluted", "a.__proto__.x"]) {
     const target = { name: "" };
 
     expect(setPath(path, "YES", target)).toBe(target);

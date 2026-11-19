@@ -365,6 +365,23 @@ test("a rule is found only among the rules' own properties, never on their proto
   });
 });
 
+test("a rule for a field named constructor or prototype runs on that field's value", () => {
+  const rules = {
+    constructor: (value: unknown) => (value === "made" ? "constructor seen" : "constructor missed"),
+    prototype: { shape: (value: unknown) => (value === "round" ? "shape seen" : "shape missed") },
+  };
+  const values = { constructor: "made", prototype: { shape: "round" } };
+
+  expect(validateValues(rules, values)).toStrictEqual({
+    hasErrors: true,
+    errors: { constructor: "constructor seen", "prototype.shape": "shape seen" },
+  });
+  expect(validateFieldValue("prototype.shape", rules, values)).toStrictEqual({
+    hasError: true,
+    error: "shape seen",
+  });
+});
+
 test("validateFieldValue of an item past a list's end runs no rule, as validateValues reaches none", () => {
   const rules = { jobs: { title: (value: unknown) => (value ? null : "required") } };
   const values = { jobs: [{ title: "x" }] };
