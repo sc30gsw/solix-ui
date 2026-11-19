@@ -9,16 +9,14 @@ import {
   type OpenPage,
   scriptModes,
 } from "#/tests/support/playground.ts";
-import { expectTheBoxCascade } from "#/tests/support/box-cascade.ts";
+import {
+  expectTheBoxCascade,
+  mdBreakpointInPixels,
+  viewportHeight,
+  viewports,
+} from "#/tests/support/box-cascade.ts";
 
 const url = inject("playgroundUrl");
-const pixelsPerMediaQueryEm = 16;
-const mdBreakpointInPixels = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
-const viewportHeight = 800;
-const viewports: [label: string, width: number, fromMd: boolean][] = [
-  ["one pixel below the md breakpoint", mdBreakpointInPixels - 1, false],
-  ["at the md breakpoint", mdBreakpointInPixels, true],
-];
 
 type Opened = { page: Page; expected: Expected; fromMd: boolean };
 

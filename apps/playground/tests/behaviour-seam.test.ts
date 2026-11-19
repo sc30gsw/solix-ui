@@ -73,7 +73,7 @@ inEveryEngine((browser) => {
     let onPage: OpenPage;
 
     beforeAll(async () => {
-      onPage = await openPage(browser(), url, { javaScriptEnabled });
+      onPage = await openPage(browser(), url, { javaScriptEnabled }, { sentinels: false });
     });
 
     afterAll(async () => {
@@ -90,34 +90,22 @@ inEveryEngine((browser) => {
     });
 
     test("before a script runs the page adds no style but the library's own, which it marks, and after it the page holds no rule, style, class or inert element but what the library, the SDK in its own layer, among them the hidden rule as the build reads it from the SDK, and the app give, and the linked stylesheet orders the SDK's layer before the library's", async () => {
-      const { page, close } = await openPage(
-        browser(),
-        url,
-        { javaScriptEnabled },
-        { sentinels: false },
-      );
-      try {
-        const rules = await pageStyleRules(page);
-        const linkedLayerOrder = rules
-          .filter(
-            ({ addedAtRunTime, fromTheLibrary, layers }) =>
-              !addedAtRunTime && !fromTheLibrary && layers.length > 0,
-          )
-          .map(({ layers: [outermost] }) => outermost);
+      const { page } = onPage;
+      const rules = await pageStyleRules(page);
+      const linkedLayerOrder = rules
+        .filter(
+          ({ addedAtRunTime, fromTheLibrary, layers }) =>
+            !addedAtRunTime && !fromTheLibrary && layers.length > 0,
+        )
+        .map(({ layers: [outermost] }) => outermost);
 
-        expect(await runTimeWrites(page)).toEqual({
-          ...writesOfTheLibraryAndTheAppAlone,
-          theSdkAddedTheHiddenRuleTheBuildReadsFromIt: javaScriptEnabled,
-        });
-        expect(rules.filter(({ fromTheLibrary }) => fromTheLibrary)).not.toEqual([]);
-        expect(javaScriptEnabled ? [] : await stylesAddedToThePage(page)).toEqual([]);
-        expect([...new Set(linkedLayerOrder)]).toEqual([
-          BEHAVIOUR_SDK_LAYER,
-          LIBRARY_CASCADE_LAYER,
-        ]);
-      } finally {
-        await close();
-      }
+      expect(await runTimeWrites(page)).toEqual({
+        ...writesOfTheLibraryAndTheAppAlone,
+        theSdkAddedTheHiddenRuleTheBuildReadsFromIt: javaScriptEnabled,
+      });
+      expect(rules.filter(({ fromTheLibrary }) => fromTheLibrary)).not.toEqual([]);
+      expect(javaScriptEnabled ? [] : await stylesAddedToThePage(page)).toEqual([]);
+      expect([...new Set(linkedLayerOrder)]).toEqual([BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER]);
     });
   });
 

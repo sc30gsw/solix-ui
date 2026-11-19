@@ -1,6 +1,18 @@
 import type { Page } from "playwright";
 import { expect } from "vite-plus/test";
+import { breakpointWidths } from "../../../../packages/core/src/style-prop-table";
 import { computed, type Expected } from "#/tests/support/playground.ts";
+
+const pixelsPerMediaQueryEm = 16;
+
+export const mdBreakpointInPixels = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
+
+export const viewportHeight = 800;
+
+export const viewports: [label: string, width: number, fromMd: boolean][] = [
+  ["one pixel below the md breakpoint", mdBreakpointInPixels - 1, false],
+  ["at the md breakpoint", mdBreakpointInPixels, true],
+];
 
 export async function expectTheBoxCascade({
   page,
