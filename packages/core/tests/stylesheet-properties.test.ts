@@ -9,9 +9,16 @@ import {
   behaviourSdkHiddenRule,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
+  LIBRARY_CLASS_PREFIXES,
   libraryStylesheet,
 } from "#/build-pipeline.mjs";
-import { libraryLayers, stylePropRules } from "#/src/style-prop-table.ts";
+import {
+  colorLayer,
+  colorSchemeLayer,
+  libraryLayers,
+  stylePropLayer,
+  stylePropRules,
+} from "#/src/style-prop-table.ts";
 import { builtVariables } from "#/tests/built-library.ts";
 import { layersAroundDeclaration, nestedLayerOrder } from "#/tests/cascade-layers.ts";
 import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
@@ -163,8 +170,11 @@ test(
         const stylesheet = postcss.parse(
           libraryStylesheet(
             rules,
-            stylePropRules(builtVariables),
-            { colors: colorRules(), primary: primaryRule() },
+            {
+              [colorLayer]: colorRules(),
+              [stylePropLayer]: stylePropRules(builtVariables),
+              [colorSchemeLayer]: primaryRule(),
+            },
             sdkRule,
           ),
         );
@@ -186,9 +196,11 @@ test(
 
         stylesheet.walkRules((rule) => {
           const classNames = rule.selector.match(/\.[A-Za-z_][\w-]*/g) ?? [];
-          expect(classNames.filter((name) => !name.startsWith(`.${LIBRARY_CLASS_PREFIX}`))).toEqual(
-            [],
-          );
+          expect(
+            classNames.filter(
+              (name) => !LIBRARY_CLASS_PREFIXES.some((prefix) => name.startsWith(`.${prefix}`)),
+            ),
+          ).toEqual([]);
         });
         const registered: string[] = [];
         stylesheet.walkAtRules("property", (registration) => {

@@ -32,8 +32,7 @@ export const paletteAliases = {
 
 export type Palette = OwnPalette | keyof typeof paletteAliases;
 
-export const colorClassPrefix = "sxc";
-export const colorLayer = "colors";
+export const colorClassPrefix = "solixc";
 export const variantAttribute = "data-variant";
 export const colorClass = colorClassPrefix;
 export const colorProperty = `--${colorClassPrefix}-color`;
@@ -46,10 +45,10 @@ export const contrastLuminance = Math.sqrt(1.05 * 0.05) - 0.05;
 export const luminanceWeights = { r: 0.2126, g: 0.7152, b: 0.0722 } as const;
 
 export const slotDefaults = {
-  "--sx-variant-background": "transparent",
-  "--sx-variant-hover": "var(--sx-variant-background)",
-  "--sx-variant-color": "currentColor",
-  "--sx-variant-border": "transparent",
+  "--solixc-variant-background": "transparent",
+  "--solixc-variant-hover": "var(--solixc-variant-background)",
+  "--solixc-variant-color": "currentColor",
+  "--solixc-variant-border": "transparent",
 } as const;
 
 type ColourToken = `--solix-color-${string}`;
@@ -64,82 +63,82 @@ export type VariantRow = {
 };
 
 const neutral = {
-  "--sx-variant-background": "--solix-color-surface",
-  "--sx-variant-hover": "--solix-color-body",
-  "--sx-variant-color": "--solix-color-text",
-  "--sx-variant-border": "--solix-color-border",
+  "--solixc-variant-background": "--solix-color-surface",
+  "--solixc-variant-hover": "--solix-color-body",
+  "--solixc-variant-color": "--solix-color-text",
+  "--solixc-variant-border": "--solix-color-border",
 } as const;
 
 export const colorVariantTable = {
   default: { named: neutral, given: neutral },
   filled: {
     named: {
-      "--sx-variant-background": "6",
-      "--sx-variant-hover": "7",
-      "--sx-variant-color": "contrast",
-      "--sx-variant-border": "transparent",
+      "--solixc-variant-background": "6",
+      "--solixc-variant-hover": "7",
+      "--solixc-variant-color": "contrast",
+      "--solixc-variant-border": "transparent",
     },
     given: {
-      "--sx-variant-background": "given",
-      "--sx-variant-hover": "given-hover",
-      "--sx-variant-color": "contrast",
-      "--sx-variant-border": "transparent",
+      "--solixc-variant-background": "given",
+      "--solixc-variant-hover": "given-hover",
+      "--solixc-variant-color": "contrast",
+      "--solixc-variant-border": "transparent",
     },
   },
   light: {
     named: {
-      "--sx-variant-background": "1",
-      "--sx-variant-hover": "2",
-      "--sx-variant-color": "9",
-      "--sx-variant-border": "transparent",
+      "--solixc-variant-background": "1",
+      "--solixc-variant-hover": "2",
+      "--solixc-variant-color": "9",
+      "--solixc-variant-border": "transparent",
     },
     given: {
-      "--sx-variant-background": "1",
-      "--sx-variant-hover": "2",
-      "--sx-variant-color": "9",
-      "--sx-variant-border": "transparent",
+      "--solixc-variant-background": "1",
+      "--solixc-variant-hover": "2",
+      "--solixc-variant-color": "9",
+      "--solixc-variant-border": "transparent",
     },
   },
   outline: {
     named: {
-      "--sx-variant-background": "transparent",
-      "--sx-variant-hover": "0",
-      "--sx-variant-color": "8",
-      "--sx-variant-border": "8",
+      "--solixc-variant-background": "transparent",
+      "--solixc-variant-hover": "0",
+      "--solixc-variant-color": "8",
+      "--solixc-variant-border": "8",
     },
     given: {
-      "--sx-variant-background": "transparent",
-      "--sx-variant-hover": "given/5",
-      "--sx-variant-color": "given",
-      "--sx-variant-border": "given",
+      "--solixc-variant-background": "transparent",
+      "--solixc-variant-hover": "given/5",
+      "--solixc-variant-color": "given",
+      "--solixc-variant-border": "given",
     },
   },
   subtle: {
     named: {
-      "--sx-variant-background": "transparent",
-      "--sx-variant-hover": "1",
-      "--sx-variant-color": "9",
-      "--sx-variant-border": "transparent",
+      "--solixc-variant-background": "transparent",
+      "--solixc-variant-hover": "1",
+      "--solixc-variant-color": "9",
+      "--solixc-variant-border": "transparent",
     },
     given: {
-      "--sx-variant-background": "transparent",
-      "--sx-variant-hover": "given/12",
-      "--sx-variant-color": "given",
-      "--sx-variant-border": "transparent",
+      "--solixc-variant-background": "transparent",
+      "--solixc-variant-hover": "given/12",
+      "--solixc-variant-color": "given",
+      "--solixc-variant-border": "transparent",
     },
   },
   transparent: {
     named: {
-      "--sx-variant-background": "transparent",
-      "--sx-variant-hover": "transparent",
-      "--sx-variant-color": "9",
-      "--sx-variant-border": "transparent",
+      "--solixc-variant-background": "transparent",
+      "--solixc-variant-hover": "transparent",
+      "--solixc-variant-color": "9",
+      "--solixc-variant-border": "transparent",
     },
     given: {
-      "--sx-variant-background": "transparent",
-      "--sx-variant-hover": "transparent",
-      "--sx-variant-color": "given",
-      "--sx-variant-border": "transparent",
+      "--solixc-variant-background": "transparent",
+      "--solixc-variant-hover": "transparent",
+      "--solixc-variant-color": "given",
+      "--solixc-variant-border": "transparent",
     },
   },
 } as const satisfies Record<string, VariantRow>;

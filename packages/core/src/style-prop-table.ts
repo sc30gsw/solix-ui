@@ -42,6 +42,7 @@ export type Variables<Rows extends VariableRows = VariableRows> = {
 };
 
 export const stylePropClassPrefix = "sx";
+export const colorLayer = "colors";
 export const libraryCascadeLayer = "solix";
 export const componentLayer = "components";
 export const stylePropLayer = "style-props";
@@ -326,6 +327,7 @@ function childRules(variables: readonly Variables[]): string[] {
 
 const outerLayers = [behaviourSdkLayer, libraryCascadeLayer] as const;
 export const libraryLayers = [
+  colorLayer,
   componentLayer,
   stylePropLayer,
   colorSchemeLayer,

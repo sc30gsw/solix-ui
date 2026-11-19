@@ -6,7 +6,6 @@ import {
   autoContrastClass,
   colorClass,
   colorClassPrefix,
-  colorLayer,
   colorProperty,
   colorVariantTable,
   customColorClass,
@@ -19,6 +18,7 @@ import {
   primaryPalette,
   primaryProperty,
   shadeClass,
+  shadeProperty,
   shades,
   shadeSource,
   slotDefaults,
@@ -27,7 +27,12 @@ import {
   luminanceWeights,
   variantAttribute,
 } from "#/src/color-table.ts";
-import { colorSchemeLayer, componentLayer } from "#/src/style-prop-table.ts";
+import {
+  colorLayer,
+  colorSchemeLayer,
+  libraryLayers,
+  stylePropClassPrefix,
+} from "#/src/style-prop-table.ts";
 import { stylesheet } from "#/tests/built-library.ts";
 import { layersAround } from "#/tests/cascade-layers.ts";
 import { render } from "#/tests/fixtures.ts";
@@ -88,23 +93,17 @@ test("the colour tokens hold exactly one token for each shade of each palette of
   );
 });
 
-test("every rule of the colours layer, the first layer inside components, selects a class with the colours' own prefix and sets custom properties only", () => {
-  const [first] =
-    postcss
-      .parse(stylesheet)
-      .nodes.flatMap((node) => (node.type === "atrule" ? (node.nodes ?? []) : []))
-      .flatMap((node) =>
-        node.type === "atrule" && node.params === componentLayer ? (node.nodes ?? []) : [],
-      ) ?? [];
-
-  expect(first?.type === "atrule" && first.params).toBe(colorLayer);
+test("every rule of the colours layer, the first sub-layer of the library's, selects a class with the colours' own prefix, which neither starts nor is started by the prefix of StyleX and the style props, and sets custom properties only", () => {
+  expect(libraryLayers[0]).toBe(colorLayer);
+  expect(colorClassPrefix.startsWith(stylePropClassPrefix)).toBe(false);
+  expect(stylePropClassPrefix.startsWith(colorClassPrefix)).toBe(false);
   expect(colourRules.length).toBeGreaterThan(0);
   expect(
     colourRules.filter(
       ({ selector, declarations, layers }) =>
         !selector.startsWith(`.${colorClassPrefix}`) ||
         Object.keys(declarations).some((property) => !property.startsWith("--")) ||
-        layers.join(" ") !== [colorLayer, componentLayer, LIBRARY_CASCADE_LAYER].join(" "),
+        layers.join(" ") !== [colorLayer, LIBRARY_CASCADE_LAYER].join(" "),
     ),
   ).toEqual([]);
 });
@@ -147,7 +146,7 @@ test("an element with a colour class resets every slot to a default, so a varian
 
   expect(Object.keys(reset)).toEqual(slots);
   expect(reset).toEqual(slotDefaults);
-  expect(reset["--sx-variant-hover"]).toBe("var(--sx-variant-background)");
+  expect(reset["--solixc-variant-hover"]).toBe("var(--solixc-variant-background)");
   expect(valuesOf(rootOf({ variant: "nonsense" }), variantAttribute)).toEqual(["filled"]);
 });
 
@@ -206,7 +205,7 @@ test("autoContrast is off unless it is true: only then does the root take the cl
   expect(classesOf(rootOf({}))).not.toContain(autoContrastClass);
   expect(classesOf(rootOf({ autoContrast: false }))).not.toContain(autoContrastClass);
   expect(classesOf(rootOf({ autoContrast: true }))).toContain(autoContrastClass);
-  expect(Object.keys(ruleFor(`.${shadeClass}`))).not.toContain("--sxc-shade-contrast");
+  expect(Object.keys(ruleFor(`.${shadeClass}`))).not.toContain(shadeProperty("contrast"));
 });
 
 test("any other CSS colour writes one custom property, itself, with the shade and custom classes, and a value that is no colour, such as red-6, blue.12 or one that holds ;, { or }, falls back to the primary palette and writes nothing", async (context) => {
@@ -246,9 +245,9 @@ test("a given shade or colour tints the light variant from shades 1 and 2, which
   const light = ruleFor(`.${shadeClass}[${variantAttribute}="light"]`);
   const shade = ruleFor(`.${shadeClass}`);
 
-  expect(light["--sx-variant-background"]).toBe("var(--sxc-shade-1)");
-  expect(light["--sx-variant-hover"]).toBe("var(--sxc-shade-2)");
-  expect(Object.keys(tintShades).map((name) => shade[`--sxc-shade-${name}`])).toEqual(
+  expect(light["--solixc-variant-background"]).toBe(`var(${shadeProperty("1")})`);
+  expect(light["--solixc-variant-hover"]).toBe(`var(${shadeProperty("2")})`);
+  expect(Object.keys(tintShades).map((name) => shade[shadeProperty(name)])).toEqual(
     Object.values(tintShades).map(
       ([percent, toward]) => `color-mix(in oklab, var(${colorProperty}) ${percent}%, ${toward})`,
     ),

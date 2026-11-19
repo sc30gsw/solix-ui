@@ -1,7 +1,6 @@
 import {
   autoContrastClass,
   colorClass,
-  colorLayer,
   colorProperty,
   colorVariantTable,
   contrastLuminance,
@@ -94,7 +93,7 @@ export function colorRules(): string {
       variantRule(`.${shadeClass}[${variantAttribute}="${variant}"]`, row.given),
     ),
   ];
-  return `@layer ${colorLayer}{\n${rules.join("\n")}\n}`;
+  return rules.join("\n");
 }
 
 export function primaryRule(): string {
