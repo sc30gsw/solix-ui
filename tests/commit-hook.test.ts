@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
-const hookFile = ".vite-hooks/pre-commit";
+const hookFiles = [".vite-hooks/pre-commit", ".vite-hooks/pre-merge-commit"];
 const checkerFile = "scripts/check-working-tree.ts";
 const runsHooksAsTheDispatcherDoes = "#!/bin/sh -e\n";
 const stagedRun = "staged --no-stash";
@@ -21,11 +21,17 @@ type Commit = {
   arrange: (git: (...args: string[]) => string, root: string) => void;
   commitArgs?: string[];
   stagedDoes?: string;
+  merges?: boolean;
 };
 
 type Outcome = { committed: boolean; vpCalls: string[]; said: string };
 
-function attempt({ arrange, commitArgs = [], stagedDoes = "" }: Commit): Promise<Outcome> {
+function attempt({
+  arrange,
+  commitArgs = [],
+  stagedDoes = "",
+  merges = false,
+}: Commit): Promise<Outcome> {
   return inTemporaryTree(
     {
       [checkerFile]: readFileSync(join(repositoryRoot, checkerFile), "utf8"),
@@ -38,17 +44,26 @@ function attempt({ arrange, commitArgs = [], stagedDoes = "" }: Commit): Promise
       git("init", "--quiet", "--initial-branch=main");
       git("add", ".");
       git("commit", "--quiet", "--message=base");
+      if (merges) {
+        git("switch", "--quiet", "--create", "side");
+        changed(root, "file.txt");
+        git("commit", "--quiet", "--all", "--message=side");
+        git("switch", "--quiet", "main");
+      }
       const base = git("rev-parse", "HEAD");
       const hooks = join(root, ".git/test-hooks");
       const bin = join(root, ".git/test-bin");
       mkdirSync(hooks);
       mkdirSync(bin);
-      writeFileSync(
-        join(hooks, "pre-commit"),
-        runsHooksAsTheDispatcherDoes + readFileSync(join(repositoryRoot, hookFile), "utf8"),
-      );
+      for (const hookFile of hookFiles) {
+        const hook = join(hooks, basename(hookFile));
+        writeFileSync(
+          hook,
+          runsHooksAsTheDispatcherDoes + readFileSync(join(repositoryRoot, hookFile), "utf8"),
+        );
+        chmodSync(hook, 0o755);
+      }
       writeFileSync(join(bin, "vp"), recordingVp);
-      chmodSync(join(hooks, "pre-commit"), 0o755);
       chmodSync(join(bin, "vp"), 0o755);
       const calls = join(root, ".git/vp-calls");
       arrange(git, root);
@@ -63,9 +78,9 @@ function attempt({ arrange, commitArgs = [], stagedDoes = "" }: Commit): Promise
           `core.hooksPath=${hooks}`,
           "-c",
           "commit.gpgsign=false",
-          "commit",
-          "--message=change",
-          ...commitArgs,
+          ...(merges
+            ? ["merge", "--no-ff", "--message=merge side", "side"]
+            : ["commit", "--message=change", ...commitArgs]),
         ],
         {
           cwd: root,
@@ -213,5 +228,23 @@ describe("the pre-commit hook verifies exactly what the commit holds", () => {
     });
 
     expect(outcome).toMatchObject({ committed: true, vpCalls: [stagedRun, verifyRun] });
+  });
+});
+
+describe("the pre-merge-commit hook verifies exactly what the merge commit holds", () => {
+  test("a merge whose working tree is its index runs verify", async () => {
+    const outcome = await attempt({ arrange: () => undefined, merges: true });
+
+    expect(outcome).toMatchObject({ committed: true, vpCalls: [verifyRun] });
+  });
+
+  test.each<[string, (root: string) => void, string]>([
+    ["an unstaged change", (root) => changed(root, "other.txt"), "unstaged change: other.txt"],
+    ["an untracked file", (root) => changed(root, "new.txt"), "untracked file: new.txt"],
+  ])("a merge beside %s stops before verify runs", async (_, arrange, said) => {
+    const outcome = await attempt({ arrange: (__, root) => arrange(root), merges: true });
+
+    expect(outcome).toMatchObject({ committed: false, vpCalls: [] });
+    expect(outcome.said).toContain(said);
   });
 });
