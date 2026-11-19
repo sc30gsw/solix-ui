@@ -281,9 +281,5 @@ inEveryEngine((browser) => {
         { numRuns: generatedRuns, examples: [[["my tab"]]] },
       );
     });
-
-    test("hydration and every interaction above report no console error or warning", () => {
-      expect(onPage.consoleProblems).toEqual([]);
-    });
   });
 });

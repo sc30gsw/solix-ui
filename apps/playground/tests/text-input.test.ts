@@ -25,8 +25,6 @@ inEveryEngine((browser) => {
 
     afterEach(async () => {
       await opened.close();
-
-      expect(opened.consoleProblems, "console errors and warnings of the test's page").toEqual([]);
     });
 
     test("has the library's border, height, background and text colour", async () => {

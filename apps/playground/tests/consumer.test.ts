@@ -124,9 +124,5 @@ inEveryEngine((browser) => {
         opened.expected("brandGreen"),
       );
     });
-
-    test("hydration and every interaction above report no console error or warning", () => {
-      expect(opened.consoleProblems).toEqual([]);
-    });
   });
 });

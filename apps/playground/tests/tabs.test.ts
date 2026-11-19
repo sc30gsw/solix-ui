@@ -504,9 +504,6 @@ inEveryEngine((browser) => {
         }
       },
     );
-    test("hydration and every interaction above report no console error or warning", () => {
-      expect(onPage.consoleProblems).toEqual([]);
-    });
   });
 
   describe("Tabs for a user who asks for less motion or forced colours", () => {

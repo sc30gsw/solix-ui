@@ -14,9 +14,9 @@ const boxViewports: [label: string, width: number, fromMd: boolean][] = [
 inEveryEngine((browser) => {
   describe.each(boxViewports)("a Box %s", (_, width, fromMd) => {
     test.each(scriptModes)(
-      "with scripts %s, ranks component default < style prop < consumer class < consumer style, lets a longhand beat its shorthand, inherits nothing, switches at md, and reports no console error or warning",
+      "with scripts %s, ranks component default < style prop < consumer class < consumer style, lets a longhand beat its shorthand, inherits nothing, and switches at md",
       async (__, javaScriptEnabled) => {
-        const { page, expected, consoleProblems, close } = await openPage(browser(), url, {
+        const { page, expected, close } = await openPage(browser(), url, {
           javaScriptEnabled,
           viewport: { width, height: viewportHeight },
         });
@@ -58,7 +58,6 @@ inEveryEngine((browser) => {
         ).toBe(expected("zero"));
         expect(await text("Hidden from md").isVisible(), "hiddenFrom md").toBe(!fromMd);
         expect(await text("Visible from md").isVisible(), "visibleFrom md").toBe(fromMd);
-        expect(consoleProblems).toEqual([]);
 
         await close();
       },

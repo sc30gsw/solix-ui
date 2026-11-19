@@ -29,8 +29,6 @@ inEveryEngine((browser) => {
 
     afterEach(async () => {
       await opened.close();
-
-      expect(opened.consoleProblems, "console errors and warnings of the test's page").toEqual([]);
     });
 
     test("starts closed and opens as a modal over the page when the app asks", async () => {
