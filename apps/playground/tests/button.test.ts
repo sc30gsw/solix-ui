@@ -23,13 +23,19 @@ inEveryEngine((browser) => {
       await opened.close();
     });
 
+    test("a button named Default is on the page and has the library's background, text colour and height", async () => {
+      const { page, expected } = opened;
+      const button = page.getByRole("button", { name: "Default" });
+
+      expect(await computed(button, "background-color")).toBe(expected("--solix-color-primary"));
+      expect(await computed(button, "color")).toBe(expected("--solix-color-on-primary"));
+      expect(await computed(button, "height")).toBe(expected("--solix-control-height-md"));
+    });
+
     test("a consumer's plain class beats the library default it targets, and nothing else", async () => {
       const { page, expected } = opened;
       const overridden = page.getByTestId("overridden");
 
-      expect(await computed(page.getByTestId("default"), "background-color")).toBe(
-        expected("--solix-color-primary"),
-      );
       expect(await computed(overridden, "background-color")).toBe(expected("danger"));
       expect(await computed(overridden, "color")).toBe(expected("--solix-color-on-primary"));
       expect(await computed(overridden, "height")).toBe(expected("--solix-control-height-md"));
