@@ -2,7 +2,7 @@ import { createComponent, renderToString } from "@solidjs/web";
 import type { Browser } from "playwright";
 import { describe, expect, test } from "vite-plus/test";
 import { library, stylesheet } from "../../../packages/core/tests/built-library";
-import { openedBeforeHydration } from "#/tests/support/opening.ts";
+import { opened } from "#/tests/support/opening.ts";
 import { inEveryEngine } from "#/tests/support/playground.ts";
 
 const origin = "http://layer-order.test";
@@ -42,7 +42,7 @@ async function columnShare(browser: Browser, html: string): Promise<number> {
       ? route.fulfill({ contentType: "text/css", body: stylesheet })
       : route.fulfill({ contentType: "text/html", body: html }),
   );
-  await openedBeforeHydration(page, `${origin}/`, "load");
+  await opened(page, origin, "load");
   const share = await page
     .getByText("Half", { exact: true })
     .evaluate(

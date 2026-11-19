@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { Browser, BrowserContextOptions, Page } from "playwright";
 import { expectedValues } from "../../../../scripts/expected-values";
-import { openedAndHydrated, openedBeforeHydration } from "#/tests/support/opening.ts";
+import { opened } from "#/tests/support/opening.ts";
 
 export { computed, inEveryEngine } from "../../../../tests/support/served-app";
 
@@ -35,9 +35,7 @@ export async function openPage(
     }
   });
   page.on("pageerror", (error) => consoleProblems.push(String(error)));
-  await (options.javaScriptEnabled === false
-    ? openedBeforeHydration(page, url, "load")
-    : openedAndHydrated(page, url));
+  await opened(page, url, options.javaScriptEnabled === false ? "load" : "hydrated");
   const expected = await expectedValues(page, { sentinels: true });
   return { page, expected, consoleProblems, close: () => context.close() };
 }

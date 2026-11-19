@@ -1,7 +1,7 @@
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import type { BrowserValuePrimitive } from "../../../packages/primitives/fixtures/primitive-kinds";
-import { openedAndHydrated, openedBeforeHydration } from "#/tests/support/opening.ts";
+import { opened } from "#/tests/support/opening.ts";
 import { inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
@@ -162,14 +162,14 @@ async function hydratedWhileScrolled(browser: Browser, y: number): Promise<strin
   try {
     const page = await context.newPage();
     const gate: { open: () => void } = { open: () => undefined };
-    const opened = new Promise<void>((resolve) => {
+    const released = new Promise<void>((resolve) => {
       gate.open = resolve;
     });
     await page.route("**/*.js", async (route) => {
-      await opened;
+      await released;
       await route.continue();
     });
-    await openedBeforeHydration(page, url, "commit");
+    await opened(page, url, "commit");
     await page.locator(headroomCalls).waitFor({ state: "attached" });
     await scrolledTo(page, y);
     gate.open();
@@ -199,7 +199,7 @@ async function scrollCommandsWhileLoading(browser: Browser): Promise<string[]> {
       };
     });
     const page = await context.newPage();
-    await openedAndHydrated(page, url);
+    await opened(page, url, "hydrated");
     return await page.evaluate((): string[] => Reflect.get(window, "scrollCommands"));
   } finally {
     await context.close();
@@ -217,18 +217,18 @@ test("the server renders the regions and lines the page shows, and probes the cl
 
 inEveryEngine((browser) => {
   describe("in the hydrated page", () => {
-    let opened: OpenPage;
+    let onPage: OpenPage;
 
     beforeAll(async () => {
-      opened = await openPage(browser(), url);
+      onPage = await openPage(browser(), url);
     });
 
     afterAll(async () => {
-      await opened.close();
+      await onPage.close();
     });
 
     test("after each primitive, the client claims the probe the server sent, with the server's id", async () => {
-      const probes = await opened.page.locator(probe).evaluateAll((elements) =>
+      const probes = await onPage.page.locator(probe).evaluateAll((elements) =>
         elements.map((element) => ({
           after: element.getAttribute("data-after"),
           server: element.getAttribute("data-hydration-probe"),
@@ -251,7 +251,7 @@ inEveryEngine((browser) => {
 
       expect(shown.size).toBeGreaterThan(0);
       for (const [name, text] of shown) {
-        const hydrating = await opened.page
+        const hydrating = await onPage.page
           .locator(`${probe}[data-after="${name}"]`)
           .getAttribute("data-read-while-hydrating");
         expect(hydrating, `${name}: what it read while the page hydrated`).toBe(text);
@@ -259,7 +259,7 @@ inEveryEngine((browser) => {
     });
 
     test("each BrowserValue then reads the browser's value", async () => {
-      const { page } = opened;
+      const { page } = onPage;
 
       for (const [name, revealed] of Object.entries<(page: Page) => Promise<Revealed>>(reveal)) {
         const { expected, restore } = await revealed(page);
@@ -274,7 +274,7 @@ inEveryEngine((browser) => {
     });
 
     test("the primitives attached after hydration: a press inside the click-outside region does nothing and one outside counts, and a click on the listening region counts", async () => {
-      const { page } = opened;
+      const { page } = onPage;
 
       await page.getByText("A region that counts presses outside it").click();
       expect(await line(page, "Presses outside the region")).toBe("Presses outside the region: 0");

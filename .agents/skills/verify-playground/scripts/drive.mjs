@@ -16,7 +16,7 @@ const { stableClass, stableClassPrefix } = await repositoryModule("packages/core
 const { BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER, LIBRARY_CLASS_PREFIX, behaviourSdkHiddenRule } = await repositoryModule("packages/core/build-pipeline.mjs");
 const { themedByTheProvider, themedSpacing, themeNames, themeSection } = await repositoryModule("apps/playground/src/sections/theme-setups.ts");
 const { pageStyleRules, stylesAddedToThePage } = await repositoryModule("apps/playground/tests/support/page-styles.ts");
-const { openedAndHydrated, openedBeforeHydration } = await repositoryModule("apps/playground/tests/support/opening.ts");
+const { opened } = await repositoryModule("apps/playground/tests/support/opening.ts");
 const { account, controlled, displayedByTheApp, keyboardTable, manual, optional, panelOf, startAt, stateOf, tabList, tabNamed, tabNames, tabsRegion, valueOf } =
   await repositoryModule("apps/playground/tests/support/tabs.ts");
 const { overview, billing, members, security } = tabNames.account;
@@ -277,9 +277,9 @@ const journeys = {
     observe("styles.summary: background comes from styles, not from the class classes.summary names or the library", await style(summary, "background-color"), expected("partBackground"));
     observe("styles.summary: text colour comes from styles, not from the library", await style(summary, "color"), expected("partText"));
     observe("classes.summary: the consumer's class still sets the outline", await style(summary, "outline-style"), "solid");
-    const plainLook = await lookOf(plain);
+    const plainLook = new Map(Object.entries(await lookOf(plain)));
     for (const [property, value] of Object.entries(await lookOf(unstyled))) {
-      observe(`unstyled: ${property} is the Plain button's`, value, plainLook[property]);
+      observe(`unstyled: ${property} is the Plain button's`, value, plainLook.get(property));
     }
     observe("unstyled: the button keeps its stable class", (await unstyled.getAttribute("class")).split(/\s+/).includes(stableClass("Button", "root")), true);
 
@@ -610,7 +610,7 @@ const journeys = {
 
     const scriptless = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 640, height: 360 } });
     const page = await scriptless.newPage();
-    await openedBeforeHydration(page, url, "load");
+    await opened(page, url, "load");
     await shot("javascript-off", "Request the page with JavaScript turned off in the browser.", page);
     observe("with JavaScript off the Default button is styled", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected("--solix-color-primary"));
 
@@ -665,7 +665,7 @@ page.on("console", (message) => {
   if (message.type() === "error" || message.type() === "warning") consoleProblems.push(message.text());
 });
 page.on("pageerror", (error) => consoleProblems.push(String(error)));
-await openedAndHydrated(page, url);
+await opened(page, url, "hydrated");
 
 const steps = [];
 const shot = async (name, description, target = page) => {

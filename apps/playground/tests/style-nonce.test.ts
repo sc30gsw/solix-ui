@@ -6,7 +6,7 @@ import { libraryStyleMark } from "../../../packages/core/src/style-prop-table";
 import { elementsOf, valuesOf } from "../../../packages/core/tests/markup";
 import { policyHeader } from "#/src/middleware.ts";
 import { themedByTheProvider, themedSpacing, themeNames } from "#/src/sections/theme-setups.ts";
-import { openedAndHydrated, openedBeforeHydration } from "#/tests/support/opening.ts";
+import { opened } from "#/tests/support/opening.ts";
 import { inEveryEngine } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
@@ -83,9 +83,7 @@ async function openServed(
       body: withoutTheNonceMeta ? body.replaceAll(metaWithANonce, "") : body,
     });
   });
-  await (javaScriptEnabled
-    ? openedAndHydrated(page, url)
-    : openedBeforeHydration(page, url, "load"));
+  await opened(page, url, javaScriptEnabled ? "hydrated" : "load");
   return { page, nonce, refused, close: () => context.close() };
 }
 

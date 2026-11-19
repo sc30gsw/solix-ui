@@ -5,7 +5,7 @@ import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import { installedVp } from "../../../scripts/repository";
-import { openedAndHydrated } from "#/tests/support/opening.ts";
+import { opened } from "#/tests/support/opening.ts";
 import { account, optional, panelOf, tabNamed, tabNames } from "#/tests/support/tabs.ts";
 
 const { overview, security } = tabNames.account;
@@ -82,7 +82,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     });
     page.on("pageerror", (error) => diagnostics.push(String(error)));
 
-    await openedAndHydrated(page, url);
+    await opened(page, url, "hydrated");
     const summary = page.locator("summary").filter({ hasText: "Toggle" });
     const content = page.getByText("Hidden content");
     await summary.click();

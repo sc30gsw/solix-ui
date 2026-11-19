@@ -1,10 +1,12 @@
 import type { Page } from "playwright";
 
-type LoadState = NonNullable<NonNullable<Parameters<Page["goto"]>[1]>["waitUntil"]>;
+export type OpenedUntil = "hydrated" | "commit" | "load";
 
 export const pageDidNotBecomeReady = "the page did not become ready";
 
-export async function hydrated(page: Page, options: { timeout?: number } = {}): Promise<void> {
+export const hydrationTimeout = 10_000;
+
+async function hydrated(page: Page, timeout: number): Promise<void> {
   try {
     await page.waitForFunction(
       () => {
@@ -12,25 +14,22 @@ export async function hydrated(page: Page, options: { timeout?: number } = {}): 
         return probes.length > 0 && probes.every((probe) => probe.hasAttribute("data-hydrated-as"));
       },
       undefined,
-      options,
+      { timeout },
     );
   } catch (cause) {
     throw new Error(
-      `${pageDidNotBecomeReady}: its client script has not claimed every hydration probe of the server's markup.`,
+      `${pageDidNotBecomeReady}: its client script has not claimed every hydration probe of the server's markup within ${timeout} ms.`,
       { cause },
     );
   }
 }
 
-export async function openedAndHydrated(page: Page, url: string): Promise<void> {
-  await page.goto(url, { waitUntil: "networkidle" });
-  await hydrated(page);
-}
-
-export async function openedBeforeHydration(
+export async function opened(
   page: Page,
   url: string,
-  waitUntil: LoadState,
+  until: OpenedUntil,
+  { timeout = hydrationTimeout }: { timeout?: number } = {},
 ): Promise<void> {
-  await page.goto(url, { waitUntil });
+  await page.goto(url, { waitUntil: until === "hydrated" ? "networkidle" : until });
+  if (until === "hydrated") await hydrated(page, timeout);
 }

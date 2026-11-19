@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/t
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
 import { wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
-import { openedAndHydrated } from "#/tests/support/opening.ts";
+import { opened } from "#/tests/support/opening.ts";
 import { computed, inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 import {
   account,
@@ -38,18 +38,18 @@ const axeSource = join(import.meta.dirname, "../../../node_modules/axe-core/axe.
 
 inEveryEngine((browser) => {
   describe("Tabs before any script runs", () => {
-    let opened: OpenPage;
+    let onPage: OpenPage;
 
     beforeAll(async () => {
-      opened = await openPage(browser(), url, { javaScriptEnabled: false });
+      onPage = await openPage(browser(), url, { javaScriptEnabled: false });
     });
 
     afterAll(async () => {
-      await opened.close();
+      await onPage.close();
     });
 
     test("arrive with the default tab selected, its panel shown and every other panel hidden, by the library's own stylesheet, a panel that a style prop, the consumer's style or the consumer's class gives a display included", async () => {
-      const { page } = opened;
+      const { page } = onPage;
 
       expect(await stateOf(page, account)).toEqual({
         selected: overview,
@@ -76,18 +76,18 @@ inEveryEngine((browser) => {
   });
 
   describe("Tabs in the hydrated page", () => {
-    let opened: OpenPage;
+    let onPage: OpenPage;
 
     beforeAll(async () => {
-      opened = await openPage(browser(), url);
+      onPage = await openPage(browser(), url);
     });
 
     afterAll(async () => {
-      await opened.close();
+      await onPage.close();
     });
 
     test("a click selects a tab, shows its panel alone and points the tab at it by the ids the root's id starts", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const membersTab = tabNamed(page, account, members);
 
       await membersTab.click();
@@ -112,7 +112,7 @@ inEveryEngine((browser) => {
     });
 
     test("the colour of a tab runs its transition when the selection moves to it", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const transitions = () =>
         page.evaluate(
           () => (window as Window & { transitionsRun?: string[] }).transitionsRun ?? [],
@@ -133,7 +133,7 @@ inEveryEngine((browser) => {
     });
 
     test("a disabled tab is disabled, and a click on it selects nothing", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const billingTab = tabNamed(page, account, billing);
       const { selected, shown } = await stateOf(page, account);
 
@@ -146,7 +146,7 @@ inEveryEngine((browser) => {
     });
 
     test("every tab with a panel names it, and a tab with none names no panel", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const controls = (list: string) =>
         tabList(page, list).evaluate((node) =>
           [...node.querySelectorAll('[role="tab"]')].map((tab) => {
@@ -174,7 +174,7 @@ inEveryEngine((browser) => {
     });
 
     test("a list, its tabs and its panels carry the orientation, and only a vertical list says so to assistive technology", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const orientations = (list: string) =>
         tabList(page, list).evaluate((node) => ({
           aria: node.getAttribute("aria-orientation"),
@@ -194,7 +194,7 @@ inEveryEngine((browser) => {
     });
 
     test("a horizontal list and its selected tab draw their edge under the tabs, and a vertical list and its selected tab draw it at their inline end", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const edges = (element: Locator) =>
         element.evaluate((node) => {
           const style = getComputedStyle(node);
@@ -216,7 +216,7 @@ inEveryEngine((browser) => {
 
     test("a list wider than its container wraps, so every tab of every list outside a shadow root lies inside a narrow container, in either direction", async () => {
       const narrow = await browser().newPage();
-      await openedAndHydrated(narrow, url);
+      await opened(narrow, url, "hydrated");
       const outside = await narrow.locator(tabsRegion).evaluate((region) => {
         if (!(region instanceof HTMLElement)) return ["the region is no HTML element"];
         region.style.width = "12rem";
@@ -235,7 +235,7 @@ inEveryEngine((browser) => {
     });
 
     test("the Tab key enters a tab list at its selected tab and leaves it for the panel, which is focusable", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       await tabNamed(page, manual, two).click();
       await tabNamed(page, account, security).click();
       await page.keyboard.press("Tab");
@@ -250,7 +250,7 @@ inEveryEngine((browser) => {
     });
 
     test("Shift+Tab leaves a tab list from the selected tab that a click focused, whether or not it had focus before the click, Tab comes back to that tab, and the click shows no focus ring", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const securityTab = tabNamed(page, account, security);
       const pressAndFind = async (key: string) => {
         await page.keyboard.press(key);
@@ -295,7 +295,7 @@ inEveryEngine((browser) => {
     });
 
     test("a click on the tab that has focus fires no blur, focusout, focus or focusin", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const securityTab = tabNamed(page, account, security);
       await securityTab.click();
       await tabList(page, account).evaluate((node) => {
@@ -317,7 +317,7 @@ inEveryEngine((browser) => {
     });
 
     test("with allowTabDeactivation a click on the selected tab selects none, and with keepMounted false a panel keeps its content only while it shows, unless the panel itself keeps it", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const notesTab = tabNamed(page, optional, notes);
       const panels = () =>
         tabList(page, optional).evaluate((node) =>
@@ -345,7 +345,7 @@ inEveryEngine((browser) => {
     });
 
     test("a controlled Tabs shows the value the app holds, tells the app each selection, and a tab whose own click handler prevents the default is never selected", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const value = page.getByRole("status", { name: "Controlled value" });
       const refused = page.getByRole("status", { name: "Refused presses" });
 
@@ -369,7 +369,7 @@ inEveryEngine((browser) => {
     });
 
     test("a controlled Tabs whose app changes nothing keeps showing the app's value, and tells the app each request", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const requests = page.getByRole("status", { name: "Held requests" });
 
       await tabNamed(page, held, asked).click();
@@ -392,7 +392,7 @@ inEveryEngine((browser) => {
     });
 
     test("a tab names its panel only while the panel is in the page: with the panels unmounted no tab has aria-controls, and mounted again each tab names its own", async () => {
-      const { page } = opened;
+      const { page } = onPage;
       const mounted = await elementsNamedBy(page, generated);
 
       expect(mounted).not.toEqual([]);
@@ -412,7 +412,7 @@ inEveryEngine((browser) => {
     test("axe-core finds no WCAG 2.2 A or AA violation in the Tabs region", async () => {
       const context = await browser().newContext();
       const page = await context.newPage();
-      await openedAndHydrated(page, url);
+      await opened(page, url, "hydrated");
       await tabNamed(page, account, members).click();
       await tabNamed(page, optional, notes).click();
       await page.addScriptTag({ path: axeSource });
@@ -452,19 +452,19 @@ inEveryEngine((browser) => {
       "in $list.name, with $from.selected selected and focus on $from.focused, after $key $to.selected is selected and focus is on $to.focused",
       async ({ list: rovingList, from, key, to }) => {
         const list = rovingList.name;
-        const { selected, focused } = await stateOf(opened.page, list);
+        const { selected, focused } = await stateOf(onPage.page, list);
         for (const action of pathBetween(rovingList, { selected, focused }, from)) {
-          if ("click" in action) await tabNamed(opened.page, list, action.click).click();
-          else await opened.page.keyboard.press(action.key);
+          if ("click" in action) await tabNamed(onPage.page, list, action.click).click();
+          else await onPage.page.keyboard.press(action.key);
         }
-        await expect.poll(() => stateOf(opened.page, list)).toMatchObject(from);
+        await expect.poll(() => stateOf(onPage.page, list)).toMatchObject(from);
 
-        await opened.page.keyboard.press(key);
+        await onPage.page.keyboard.press(key);
 
         await expect
-          .poll(() => stateOf(opened.page, list))
+          .poll(() => stateOf(onPage.page, list))
           .toMatchObject({ ...to, shown: to.selected === null ? [] : [panelOf(to.selected)] });
-        const { tabStops } = await stateOf(opened.page, list);
+        const { tabStops } = await stateOf(onPage.page, list);
         expect(tabStops, "the list has one tab stop").toHaveLength(1);
         if (to.selected !== null) {
           expect(tabStops, "the tab stop is the selected tab").toEqual([to.selected]);
@@ -472,7 +472,7 @@ inEveryEngine((browser) => {
       },
     );
     test("hydration and every interaction above report no console error or warning", () => {
-      expect(opened.consoleProblems).toEqual([]);
+      expect(onPage.consoleProblems).toEqual([]);
     });
   });
 
@@ -495,7 +495,7 @@ inEveryEngine((browser) => {
     test("with forced colours the selected tab still differs from the others by a border, which forced colours keep", async () => {
       const forced = await browser().newContext({ forcedColors: "active" });
       const page = await forced.newPage();
-      await openedAndHydrated(page, url);
+      await opened(page, url, "hydrated");
 
       expect(await computed(tabNamed(page, account, overview), "border-bottom-style")).toBe(
         "solid",

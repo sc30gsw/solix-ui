@@ -13,7 +13,7 @@ import {
   schemeButtons,
   schemeTexts,
 } from "#/src/sections/color-scheme-setups.ts";
-import { openedAndHydrated, openedBeforeHydration } from "#/tests/support/opening.ts";
+import { opened } from "#/tests/support/opening.ts";
 import { computed, inEveryEngine } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
@@ -88,9 +88,8 @@ async function open(
   const page = await context.newPage();
   const problems: string[] = [];
   page.on("pageerror", (error) => problems.push(String(error)));
-  await (contextOptions.javaScriptEnabled === false || blockClient
-    ? openedBeforeHydration(page, url, "load")
-    : openedAndHydrated(page, url));
+  const hydrates = contextOptions.javaScriptEnabled !== false && !blockClient;
+  await opened(page, url, hydrates ? "hydrated" : "load");
   return { page, problems, close: () => context.close() };
 }
 
@@ -233,7 +232,7 @@ inEveryEngine((browser) => {
     test("a scheme set, cleared, or cleared with the whole storage on another page of the same origin reaches this one through the storage event, and a change of another key does not", async () => {
       const first = await open(browser(), system);
       const second = await first.page.context().newPage();
-      await openedAndHydrated(second, url);
+      await opened(second, url, "hydrated");
       await settledOn(second, system);
 
       await press(first.page, schemeButtons[other]);
@@ -299,7 +298,7 @@ inEveryEngine((browser) => {
         const page = await context.newPage();
         const problems: string[] = [];
         page.on("pageerror", (error) => problems.push(String(error)));
-        await openedAndHydrated(page, url);
+        await opened(page, url, "hydrated");
         await settledOn(page, system);
 
         await press(page, schemeButtons[other]);
@@ -396,7 +395,7 @@ inEveryEngine((browser) => {
           );
         }
         const page = await context.newPage();
-        await openedAndHydrated(page, url);
+        await opened(page, url, "hydrated");
         const scheme = stored ?? system;
 
         await expect

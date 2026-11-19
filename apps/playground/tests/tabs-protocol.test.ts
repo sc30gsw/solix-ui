@@ -1,12 +1,7 @@
 import fc from "fast-check";
 import type { Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
-import {
-  hydrated,
-  openedAndHydrated,
-  openedBeforeHydration,
-  pageDidNotBecomeReady,
-} from "#/tests/support/opening.ts";
+import { hydrationTimeout, opened, pageDidNotBecomeReady } from "#/tests/support/opening.ts";
 import { inEveryEngine } from "#/tests/support/playground.ts";
 import {
   activeAndSelected,
@@ -128,7 +123,7 @@ function everySequenceAgreesOn(page: Page) {
     fc.constantFrom(...tabLists),
     fc.commands(steps, { maxCommands: longestSequence }),
     async (list, sequence) => {
-      await openedAndHydrated(page, url);
+      await opened(page, url, "hydrated");
       const model = atTheStartOf(list);
 
       await expectAgreement(model, { page });
@@ -183,21 +178,21 @@ inEveryEngine((browser) => {
     });
   }
 
-  test("on a page whose client script never hydrates it, the drive fails by saying that the page did not become ready", async () => {
+  test("on a page whose client script never hydrates it, the drive fails by saying that the page did not become ready, and by default it says so before the test's own timeout", async (context) => {
     const page = await browser().newPage();
     await withItsClientScriptAfter(page, neverHydrates);
-    await openedBeforeHydration(page, url, "networkidle");
 
-    await expect(hydrated(page, { timeout: waitForAPageThatNeverHydrates })).rejects.toThrow(
-      pageDidNotBecomeReady,
-    );
+    await expect(
+      opened(page, url, "hydrated", { timeout: waitForAPageThatNeverHydrates }),
+    ).rejects.toThrow(pageDidNotBecomeReady);
+    expect(hydrationTimeout).toBeLessThan(context.task.timeout);
 
     await page.close();
   });
 
   test("a click that does not reach its tab, because the page moves under the pointer, fails by saying so and not as a disagreement with the model", async () => {
     const page = await browser().newPage();
-    await openedAndHydrated(page, url);
+    await opened(page, url, "hydrated");
     const list = theOptionalList();
     const model = atTheStartOf(list);
     await clickOn(list, files).run(model, { page });

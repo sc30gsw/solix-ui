@@ -6,16 +6,16 @@ import {
   exportsOf,
   fileOf,
   findAncestor,
-  isPackageFile,
+  isFileOfPackage,
   isTypedAny,
   memberDeclarations,
+  memberRead,
   nameOf,
   openProgram,
   parse,
   parseAll,
   type Program,
   staticPropertyName,
-  stringsIn,
   ts,
 } from "#/scripts/syntax.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
@@ -25,7 +25,6 @@ const skillFile = `${skill}/SKILL.md`;
 const featureDirectory = `${skill}/features`;
 const featureIndex = `${featureDirectory}/README.md`;
 const driveScript = `${skill}/scripts/drive.mjs`;
-const driveScripts = `${skill}/scripts/*.mjs`;
 const evidenceScript = `${skill}/scripts/evidence.mjs`;
 const launchScript = `${skill}/scripts/launch.sh`;
 const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
@@ -36,8 +35,12 @@ const letterOrDigit = /[\p{L}\p{N}]/u;
 const whitespace = /\s/;
 const derivingFunctions = ["panelOf", "valueOf"];
 const playgroundTestCode = "apps/playground/tests/**/*.{ts,tsx,mjs}";
+const playgroundVerificationFiles = globSync(
+  [playgroundTestCode, driveScript, "tests/support/served-app.ts", "scripts/expected-values.ts"],
+  { cwd: repositoryRoot },
+).sort();
 const openingModule = "apps/playground/tests/support/opening.ts";
-const openers = ["openedAndHydrated", "openedBeforeHydration"];
+const opener = "opened";
 const navigation = "goto";
 const playwrightPackages = ["playwright", "playwright-core"];
 const featureSections = [
@@ -309,8 +312,7 @@ function heldIn(node: ts.Node, held: HeldName[]): HeldName | undefined {
 
 test("no playground test or drive script writes a name that a setups module holds, a list's name, an item's name in an exported *Names object, or what its panelOf or valueOf gives for an item, as a string, as a word of a string with no whitespace, or as a word of a regular expression: each reads it from that module", async () => {
   const held = await namesTheSetupsHold();
-  const files = [...globSync(playgroundTestCode, { cwd: repositoryRoot }), driveScript];
-  const violations = files.flatMap((file) => {
+  const violations = playgroundVerificationFiles.flatMap((file) => {
     const source = parse(join(repositoryRoot, file));
     return descendants(source).flatMap((node) => {
       const found = heldIn(node, held);
@@ -327,72 +329,72 @@ test("no playground test or drive script writes a name that a setups module hold
 });
 
 function isPlaywrightsNavigation(declaration: ts.Node): boolean {
-  const file = fileOf(declaration);
   return (
-    isPackageFile(file) &&
-    file.split(/[\\/]/).some((part) => playwrightPackages.includes(part)) &&
-    nameOf(declaration) === navigation
+    isFileOfPackage(fileOf(declaration), playwrightPackages) && nameOf(declaration) === navigation
   );
 }
 
-function boundName(program: Program, element: ts.Node): string[] {
-  if (!ts.isBindingElement(element)) return [];
-  const name = element.propertyName ?? element.name;
-  if (!name) return [];
-  if (ts.isIdentifier(name) || ts.isStringLiteral(name)) return [name.text];
-  return ts.isComputedPropertyName(name) ? stringsIn(program, name.expression) : [];
+function readsAnIndex(node: ts.Node): boolean {
+  return ts.isElementAccessExpression(node) && ts.isNumericLiteral(node.argumentExpression);
 }
 
-function namesOfMembersReadFromAny(program: Program, node: ts.Node): string[] {
-  if (ts.isPropertyAccessExpression(node)) {
-    return isTypedAny(program, node.expression) ? [node.name.text] : [];
-  }
-  if (ts.isElementAccessExpression(node)) {
-    return isTypedAny(program, node.expression) ? stringsIn(program, node.argumentExpression) : [];
-  }
-  if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
-    return isTypedAny(program, node.parent) ? boundName(program, node) : [];
-  }
-  return [];
+function readFromAny(program: Program, node: ts.Node): string[] | undefined {
+  const read = memberRead(program, node);
+  return read && isTypedAny(program, read.owner) && !readsAnIndex(node) ? read.names : undefined;
 }
 
-function insideAnOpener(node: ts.Node): boolean {
+function insideTheOpener(node: ts.Node): boolean {
   if (!fileOf(node).endsWith(openingModule)) return false;
   const owner = findAncestor(node, ts.isFunctionDeclaration);
-  return owner !== undefined && openers.includes(nameOf(owner)) && ts.isSourceFile(owner.parent);
+  return owner !== undefined && nameOf(owner) === opener && ts.isSourceFile(owner.parent);
 }
 
-function navigationsIn(program: Program, file: string): ts.Node[] {
+type Navigation = { node: ts.Node; how: string };
+
+function navigationsIn(program: Program, file: string): Navigation[] {
   const source = program.sourceFile(join(repositoryRoot, file));
   if (!source) throw new Error(`${file}: TypeScript did not open this file.`);
-  return descendants(source).filter(
-    (node) =>
-      memberDeclarations(program, node).some(isPlaywrightsNavigation) ||
-      namesOfMembersReadFromAny(program, node).includes(navigation),
-  );
+  return descendants(source).flatMap((node) => {
+    if (memberDeclarations(program, node).some(isPlaywrightsNavigation)) {
+      return [{ node, how: `reaches Playwright's ${navigation}` }];
+    }
+    const names = readFromAny(program, node);
+    if (names?.includes(navigation)) {
+      return [{ node, how: `reads ${navigation} from a value typed any` }];
+    }
+    return names?.length === 0
+      ? [
+          {
+            node,
+            how: "reads a member of a value typed any by a name the type checker does not know",
+          },
+        ]
+      : [];
+  });
 }
 
 function lineOf(node: ts.Node): number {
   return node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
 }
 
-const openedFiles = globSync([playgroundTestCode, driveScripts], { cwd: repositoryRoot }).sort();
-const opening = openProgram(openedFiles.map((file) => join(repositoryRoot, file)));
+const opening = openProgram(playgroundVerificationFiles.map((file) => join(repositoryRoot, file)));
 afterAll(() => {
   opening.dispose();
 });
 
-test(`no playground test or drive script reaches Playwright's ${navigation} but through ${openers.join(" or ")}, by a member the type checker resolves or by a member of a value typed any`, () => {
-  const violations = openedFiles.flatMap((file) =>
+test(`no playground test, drive script or helper they share reaches Playwright's ${navigation} but through ${opener}, by a member the type checker resolves or by a member of a value typed any, named or not`, () => {
+  const violations = playgroundVerificationFiles.flatMap((file) =>
     navigationsIn(opening, file)
-      .filter((node) => !insideAnOpener(node))
+      .filter(({ node }) => !insideTheOpener(node))
       .map(
-        (node) =>
-          `${file}:${lineOf(node)}: ${node.getText()} reaches Playwright's ${navigation}. Open the page with ${openers[0]} from ${openingModule}, or with ${openers[1]} where the test acts before hydration or with scripts off.`,
+        ({ node, how }) =>
+          `${file}:${lineOf(node)}: ${node.getText()} ${how}. Open the page with ${opener} from ${openingModule}.`,
       ),
   );
 
-  expect(openedFiles).toEqual(expect.arrayContaining([openingModule, driveScript]));
-  expect(navigationsIn(opening, openingModule).filter(insideAnOpener)).toHaveLength(openers.length);
+  expect(playgroundVerificationFiles).toEqual(expect.arrayContaining([openingModule, driveScript]));
+  expect(
+    navigationsIn(opening, openingModule).filter(({ node }) => insideTheOpener(node)),
+  ).toHaveLength(1);
   expect(violations).toEqual([]);
 });
