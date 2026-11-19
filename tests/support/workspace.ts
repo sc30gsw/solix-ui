@@ -1,6 +1,7 @@
 import { globSync } from "node:fs";
 import { dirname, join } from "node:path";
 import {
+  type Manifest,
   manifestAt,
   manifestPaths,
   repositoryRoot,
@@ -54,6 +55,16 @@ export const registeredLibraries: Readonly<Record<string, LibraryRegistration>> 
 };
 
 export const libraryHome = "packages/*";
+
+export const ownLibraryPeerRange = "workspace:^";
+
+export function runtimeVersions(manifest: Manifest): Record<string, string> {
+  return { ...manifest.optionalDependencies, ...manifest.dependencies };
+}
+
+export function installedDependencies(manifest: Manifest): [string, string][] {
+  return Object.entries({ ...runtimeVersions(manifest), ...manifest.devDependencies });
+}
 
 const inTheLibraryHome = /^packages\/[^/]+$/;
 
