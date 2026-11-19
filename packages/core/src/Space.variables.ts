@@ -1,4 +1,4 @@
-import { defineVariables } from "#/src/style-prop-table.ts";
+import { defineVariables } from "#/src/variables.ts";
 
 export const spaceVariables = defineVariables("Space", {
   "space-min-height": { kind: "length", scale: "spacing", responsive: true },

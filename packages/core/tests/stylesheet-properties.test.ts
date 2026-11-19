@@ -12,12 +12,8 @@ import {
   LIBRARY_CLASS_PREFIXES,
   libraryStylesheet,
 } from "#/build-pipeline.mjs";
-import {
-  colorLayer,
-  libraryLayers,
-  stylePropLayer,
-  stylePropRules,
-} from "#/src/style-prop-table.ts";
+import { stylePropRules } from "#/src/style-prop-table.ts";
+import { colorLayer, libraryLayers, stylePropLayer } from "#/src/layers.ts";
 import { builtVariables } from "#/tests/built-library.ts";
 import { layersAroundDeclaration, nestedLayerOrder } from "#/tests/cascade-layers.ts";
 import { rulesThatStyleThePage } from "#/tests/page-rules.ts";

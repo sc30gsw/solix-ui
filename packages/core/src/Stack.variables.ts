@@ -1,4 +1,4 @@
-import { defineVariables } from "#/src/style-prop-table.ts";
+import { defineVariables } from "#/src/variables.ts";
 
 export const stackVariables = defineVariables("Stack", {
   "stack-align": { kind: "raw", responsive: false },

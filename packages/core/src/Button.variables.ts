@@ -1,4 +1,4 @@
-import { defineVariables } from "#/src/style-prop-table.ts";
+import { defineVariables } from "#/src/variables.ts";
 
 export const buttonVariables = defineVariables("Button", {
   "button-fz": { kind: "length", scale: "font-size", responsive: false },

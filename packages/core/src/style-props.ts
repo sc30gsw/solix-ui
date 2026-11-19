@@ -8,8 +8,6 @@ import {
   canonicalOf,
   containerVariableClass,
   isBreakpoint,
-  layerOrder,
-  libraryCascadeLayer,
   type PropertyRow,
   readerRule,
   registrationRule,
@@ -18,19 +16,18 @@ import {
   type Scale,
   stylePropClass,
   stylePropKeys,
-  containerQueryLayer,
   type StylePropName,
   stylePropNames,
   stylePropTable,
   variableClass,
   variableProperty,
-  type VariableRow,
-  type Variables,
   visibilityClass,
   type VisibilityPropName,
   type VisibilityValue,
   visibilityPropNames,
 } from "#/src/style-prop-table.ts";
+import { layerOrder, libraryCascadeLayer, containerQueryLayer } from "#/src/layers.ts";
+import { type VariableRow, type Variables } from "#/src/variables.ts";
 import { colorValueOf } from "#/src/color-table.ts";
 import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
 import { tokens } from "#/src/tokens.stylex.ts";

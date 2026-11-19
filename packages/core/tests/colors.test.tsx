@@ -29,7 +29,8 @@ import {
   variantAttribute,
   writtenColor,
 } from "#/src/color-table.ts";
-import { colorLayer, libraryLayers, stylePropClassPrefix } from "#/src/style-prop-table.ts";
+import { stylePropClassPrefix } from "#/src/style-prop-table.ts";
+import { colorLayer, libraryLayers } from "#/src/layers.ts";
 import { type ColorProps, resolveColor, type SolixColor } from "#/src/colors.ts";
 import type { createParts, PartsOptions } from "#/src/parts.ts";
 import { stylesheet } from "#/tests/built-library.ts";

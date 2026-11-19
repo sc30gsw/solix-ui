@@ -11,6 +11,7 @@ export const partsHelperFile = "packages/core/src/parts.ts";
 export const variablesDefiner = "defineVariables";
 export const partsModule = "parts.ts";
 export const stylePropTableFile = "packages/core/src/style-prop-table.ts";
+export const variablesFile = "packages/core/src/variables.ts";
 
 export const libraries = componentLibraries.map(({ directory, manifest }) => ({
   name: manifest.name ?? directory,
@@ -69,7 +70,7 @@ export function definedVariablesOf(declaration: ts.Node | undefined): string | u
   return called &&
     ts.isFunctionDeclaration(called) &&
     called.name?.text === variablesDefiner &&
-    relativePath(fileOf(called)) === stylePropTableFile &&
+    relativePath(fileOf(called)) === variablesFile &&
     component &&
     ts.isStringLiteral(component) &&
     others.length === 1
