@@ -11,6 +11,9 @@ function isError(entry: [string, RuleResult]): entry is [string, NonNullable<Rul
   return entry[1] !== undefined && entry[1] !== null && entry[1] !== false;
 }
 
-export function filterErrors(errors: Readonly<Record<string, RuleResult>>): FormErrors {
+export function filterErrors(
+  errors: Readonly<Record<string, RuleResult>> | null | undefined,
+): FormErrors {
+  if (typeof errors !== "object" || errors === null) return {};
   return Object.fromEntries(Object.entries(errors).filter(isError));
 }

@@ -310,3 +310,13 @@ test("ruleForPath walks the rules by the path's segments, skipping list indexes"
   expect(ruleForPath("c.d", rules)).toBeUndefined();
   expect(ruleForPath("x.y", undefined)).toBeUndefined();
 });
+
+test("validateValues gives no errors for a validate function that returns null or undefined", async () => {
+  const none = () => null as unknown as Record<string, string>;
+
+  expect(validateValues(none, { a: 0 })).toStrictEqual({ hasErrors: false, errors: {} });
+  expect(await validateValues(async () => none(), { a: 0 })).toStrictEqual({
+    hasErrors: false,
+    errors: {},
+  });
+});
