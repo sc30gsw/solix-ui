@@ -2,7 +2,7 @@ import { commentsIn, exportsOf, type ts } from "#/scripts/syntax.ts";
 import {
   at,
   constantsModule,
-  exportedFunction,
+  exportedFunctions,
   functionNameFor,
   isNamedFor,
   type Module,
@@ -35,7 +35,7 @@ const publicExports: Rule = (library) => [
         ];
   }),
   ...publicModules(library).flatMap((module) => {
-    const fn = exportedFunction(module);
+    const [fn] = exportedFunctions(module);
     return !fn || hasADocComment(module, fn)
       ? []
       : [

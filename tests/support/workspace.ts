@@ -59,7 +59,7 @@ export const libraryPackages = packages.flatMap((found) => {
   return kind === undefined ? [] : [{ ...found, kind }];
 });
 
-export function librariesOfKind(kind: LibraryKind): typeof libraryPackages {
+function librariesOfKind(kind: LibraryKind): typeof libraryPackages {
   return libraryPackages.filter((library) => library.kind === kind);
 }
 
@@ -74,8 +74,6 @@ function thePrimitivesPackage(): (typeof libraryPackages)[number] {
 }
 
 export const primitivesPackage = thePrimitivesPackage();
-
-export const primitivesDirectory = primitivesPackage.directory;
 
 export const componentLibraries = librariesOfKind("components");
 

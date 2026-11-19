@@ -5,7 +5,7 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   at,
   browserTestSuffixes,
-  exportedFunction,
+  exportedFunctions,
   forbidOutside,
   type Library,
   type PrimitiveRule,
@@ -48,8 +48,7 @@ function awaitsTheAxeAssertion(library: Library, test: ts.SourceFile): boolean {
 const accessibilityTests: Rule = (library) =>
   publicModules(library)
     .filter((module) => {
-      const fn = exportedFunction(module);
-      return fn !== undefined && reaches(library, fn, focusMover);
+      return reaches(library, exportedFunctions(module), focusMover);
     })
     .filter((module) => {
       const browserTest = testNamed(library, module.file, browserTestSuffixes);

@@ -1,7 +1,7 @@
 import { assertedType, returnsAlias } from "#/scripts/syntax.ts";
 import {
   at,
-  exportedFunction,
+  exportedFunctions,
   forbidOutside,
   functionNameFor,
   type PrimitiveRule,
@@ -15,8 +15,11 @@ const brandHome = { file: "internal-browser-value.ts", fn: "branded" };
 
 const browserValues: Rule = (library) =>
   publicModules(library).flatMap((module) => {
-    const fn = exportedFunction(module);
-    if (!fn || !reaches(library, fn, { file: brandHome.file, name: brandHome.fn })) return [];
+    const declarations = exportedFunctions(module);
+    const [fn] = declarations;
+    if (!fn || !reaches(library, declarations, { file: brandHome.file, name: brandHome.fn })) {
+      return [];
+    }
     return returnsAlias(library.compiled, fn, browserValueType)
       ? []
       : [

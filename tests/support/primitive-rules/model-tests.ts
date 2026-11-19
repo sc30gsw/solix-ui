@@ -3,7 +3,7 @@ import {
   at,
   browserTestSuffixes,
   type Declared,
-  exportedFunction,
+  exportedFunctions,
   type Library,
   type Module,
   type PrimitiveRule,
@@ -19,8 +19,7 @@ const modelRun = "modelRun";
 const asyncModelRun = "asyncModelRun";
 
 function reachesHelper(library: Library, module: Module, helper: Declared): boolean {
-  const fn = exportedFunction(module);
-  return fn !== undefined && reaches(library, fn, helper);
+  return reaches(library, exportedFunctions(module), helper);
 }
 
 function runsAModel(library: Library, module: Module, runner: string): boolean {

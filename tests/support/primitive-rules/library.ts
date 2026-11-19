@@ -188,10 +188,6 @@ export function exportedFunctions(module: Module): ts.FunctionDeclaration[] {
   );
 }
 
-export function exportedFunction(module: Module): ts.FunctionDeclaration | undefined {
-  return exportedFunctions(module)[0];
-}
-
 export function isDeclared(declaration: ts.Node, declared: Declared): boolean {
   return (
     basename(fileOf(declaration)) === declared.file &&
@@ -227,8 +223,12 @@ export function calleeName(expression: ts.Expression): ts.Node {
   return ts.isPropertyAccessExpression(expression) ? expression.name : expression;
 }
 
-export function reaches(library: Library, root: ts.Node, declared: Declared): boolean {
-  return [...reachedFrom(library.compiled, [root]).functions].some((fn) =>
+export function reaches(
+  library: Library,
+  declarations: readonly ts.FunctionDeclaration[],
+  declared: Declared,
+): boolean {
+  return [...reachedFrom(library.compiled, declarations).functions].some((fn) =>
     isDeclared(fn, declared),
   );
 }
