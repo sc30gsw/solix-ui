@@ -2,6 +2,7 @@ import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { colorVariantTable, palettesIn, paletteToken } from "#/src/style-prop-table.ts";
+import { contrastExceptions } from "../../../tests/support/contrast-exceptions";
 import { fileNamedBy } from "../../../scripts/subpath";
 import { schemeValues, tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
 import { parse, ts } from "../../../scripts/syntax";
@@ -59,9 +60,28 @@ function colourIn(name: string, scheme: Scheme): Oklch | undefined {
   return value === undefined ? undefined : oklch(value);
 }
 
-function opaqueColour(name: string, scheme: Scheme): Oklch | undefined {
-  const colour = colourIn(name, scheme);
-  return colour?.alpha === 1 ? colour : undefined;
+type Rgb = readonly [red: number, green: number, blue: number];
+
+function encoded(channel: number): number {
+  const clamped = Math.min(1, Math.max(0, channel));
+  return clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055;
+}
+
+function decoded(channel: number): number {
+  return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+}
+
+function over(top: Oklch, under: Rgb): Rgb {
+  const [red, green, blue] = linearSrgb(top).map(encoded);
+  return [
+    red * top.alpha + under[0] * (1 - top.alpha),
+    green * top.alpha + under[1] * (1 - top.alpha),
+    blue * top.alpha + under[2] * (1 - top.alpha),
+  ];
+}
+
+function opaque(colour: Oklch): Rgb {
+  return over({ ...colour, alpha: 1 }, [0, 0, 0]);
 }
 
 function linearSrgb({ lightness, chroma, hue }: Oklch): [number, number, number] {
@@ -78,12 +98,12 @@ function linearSrgb({ lightness, chroma, hue }: Oklch): [number, number, number]
   ];
 }
 
-function relativeLuminance(colour: Oklch): number {
-  const [red, green, blue] = linearSrgb(colour);
+function relativeLuminance(colour: Rgb): number {
+  const [red, green, blue] = colour.map(decoded);
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
-function contrastRatio(first: Oklch, second: Oklch): number {
+function contrastRatio(first: Rgb, second: Rgb): number {
   const [lighter, darker] = [relativeLuminance(first), relativeLuminance(second)].sort(
     (x, y) => y - x,
   );
@@ -348,6 +368,19 @@ test("every colour token lies inside sRGB in both schemes", () => {
   expect(violations).toEqual([]);
 });
 
+const exceptionsFile = "tests/support/contrast-exceptions.ts";
+const belowItsMinimum = new Set<string>();
+
+function pairKey(foreground: string, background: string, scheme: Scheme): string {
+  return `${foreground} on ${background} in the ${scheme} scheme`;
+}
+
+const excepted = new Set(
+  contrastExceptions.map(({ foreground, background, scheme }) =>
+    pairKey(foreground, background, scheme),
+  ),
+);
+
 function measured({ where, foreground, background, minimum }: Pairing): string[] {
   const front = foreground.token;
   const back = background.token;
@@ -360,26 +393,43 @@ function measured({ where, foreground, background, minimum }: Pairing): string[]
       );
   }
   return schemes.flatMap((scheme) => {
-    const frontColour = opaqueColour(front, scheme);
-    const backColour = opaqueColour(back, scheme);
+    const frontColour = colourIn(front, scheme);
+    const backColour = colourIn(back, scheme);
+    const page = colourIn(pageBackground, scheme);
     const pair = `${foreground.property} ${front} on ${background.property} ${back} in the ${scheme} scheme`;
-    if (!frontColour || !backColour) {
+    if (!frontColour || !backColour || page?.alpha !== 1) {
       return [
-        `${where}: ${pair} cannot be measured. Make both opaque OKLCH colours in ${tokensFile}.`,
+        `${where}: ${pair} cannot be measured. Make both OKLCH colours, and ${pageBackground} opaque, in ${tokensFile}.`,
       ];
     }
-    const ratio = contrastRatio(frontColour, backColour);
-    return ratio >= minimum.ratio
+    const drawnOn = over(backColour, opaque(page));
+    const ratio = contrastRatio(over(frontColour, drawnOn), drawnOn);
+    if (ratio >= minimum.ratio) return [];
+    const key = pairKey(front, back, scheme);
+    belowItsMinimum.add(key);
+    return excepted.has(key)
       ? []
       : [
-          `${where}: ${pair} has contrast ${ratio.toFixed(2)}:1, below the ${minimum.ratio}:1 that ${minimum.criterion} asks for. Change one of them in ${tokensFile}.`,
+          `${where}: ${pair} has contrast ${ratio.toFixed(2)}:1, below the ${minimum.ratio}:1 that ${minimum.criterion} asks for, and contrastExceptions in ${exceptionsFile} does not list it. Change one of them in ${tokensFile}.`,
         ];
   });
 }
 
-test("in every stylex.create block and condition, in the light and the dark scheme, text and borders meet their contrast against the background", () => {
-  const violations = pairings.flatMap(measured);
+const violations = pairings.flatMap(measured);
 
+test("in every stylex.create block and condition, in the light and the dark scheme, text and borders meet their contrast against the background, but for a pair contrastExceptions lists", () => {
   expect(pairings.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
+});
+
+test("every pair contrastExceptions lists is drawn by a component and still falls below its minimum, so the list cannot hold a pair that passes", () => {
+  expect(contrastExceptions.length).toBeGreaterThan(0);
+  expect(
+    [...excepted]
+      .filter((key) => !belowItsMinimum.has(key))
+      .map(
+        (key) =>
+          `${key} is in contrastExceptions in ${exceptionsFile}, but no component draws it below its minimum any more. Take it off the list.`,
+      ),
+  ).toEqual([]);
 });

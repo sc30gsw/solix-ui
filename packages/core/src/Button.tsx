@@ -12,7 +12,7 @@ const styles = stylex.create({
     "--button-fz": tokens["--solix-font-size-sm"],
     "--button-height": tokens["--solix-control-height-sm"],
     "--button-padding-x": tokens["--solix-control-padding-sm"],
-    "--button-radius": tokens["--solix-radius-md"],
+    "--button-radius": `calc(${tokens["--solix-radius-lg"]} * 3)`,
     backgroundColor: {
       default: variantColors["--sx-variant-background"],
       ":hover": variantColors["--sx-variant-hover"],
@@ -24,10 +24,11 @@ const styles = stylex.create({
     color: variantColors["--sx-variant-color"],
     cursor: "pointer",
     fontSize: "var(--button-fz)",
+    fontWeight: 500,
     height: "var(--button-height)",
     minHeight: targetSize.minimum,
     minWidth: targetSize.minimum,
-    outlineColor: tokens["--solix-color-primary"],
+    outlineColor: tokens["--solix-color-focus"],
     outlineOffset: "0.125rem",
     outlineStyle: {
       default: "none",

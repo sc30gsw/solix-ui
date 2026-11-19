@@ -33,7 +33,7 @@ const styles = stylex.create({
     borderInlineStartWidth: 0,
     color: {
       default: tokens["--solix-color-text"],
-      "[data-selected]": tokens["--solix-color-primary"],
+      "[data-selected]": tokens["--solix-color-primary-9"],
     },
     cursor: {
       default: "pointer",

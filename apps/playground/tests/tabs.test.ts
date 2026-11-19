@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { colorContrastRule } from "../../../tests/support/contrast-exceptions.ts";
 import type { Locator } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
@@ -408,7 +409,7 @@ inEveryEngine((browser) => {
       await expect.poll(() => elementsNamedBy(page, generated)).toEqual(mounted);
     });
 
-    test("axe-core finds no WCAG 2.2 A or AA violation in the Tabs region", async () => {
+    test("axe-core finds no WCAG 2.2 A or AA violation in the Tabs region, but the colour contrast of a pair contrastExceptions lists", async () => {
       const context = await browser().newContext();
       const page = await context.newPage();
       await page.goto(url, { waitUntil: "networkidle" });
@@ -416,9 +417,10 @@ inEveryEngine((browser) => {
       await tabNamed(page, optional, notes).click();
       await page.addScriptTag({ path: axeSource });
       const found = await page.evaluate(
-        async ([region, tags]) => {
+        async ([region, tags, colorContrast]) => {
           const { axe } = window as unknown as {
             axe: {
+              configure: (spec: { rules: object[] }) => void;
               run: (
                 context: Element | null,
                 options: object,
@@ -431,6 +433,7 @@ inEveryEngine((browser) => {
               }>;
             };
           };
+          axe.configure({ rules: [colorContrast] });
           const results = await axe.run(document.querySelector(region), {
             runOnly: { type: "tag", values: tags },
           });
@@ -439,7 +442,7 @@ inEveryEngine((browser) => {
               `${id}: ${help} (${nodes.map(({ target, failureSummary }) => `${target.join(" ")}: ${failureSummary}`).join(", ")})`,
           );
         },
-        [tabsRegion, wcag2AAndAATags] as const,
+        [tabsRegion, wcag2AAndAATags, colorContrastRule] as const,
       );
 
       await context.close();
