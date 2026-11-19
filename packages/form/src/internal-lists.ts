@@ -35,6 +35,15 @@ function inRange(operation: ListOperation, length: number): ListOperation | unde
   }
 }
 
+function reordered(list: readonly unknown[], from: number, to: number): unknown[] {
+  const copy = list.slice();
+  if (from < to) copy.copyWithin(from, from + 1, to + 1);
+  else copy.copyWithin(to + 1, to, from);
+  if (Object.hasOwn(list, from)) copy[to] = list[from];
+  else Reflect.deleteProperty(copy, to);
+  return copy;
+}
+
 function changed(list: readonly unknown[], operation: ListOperation): readonly unknown[] {
   const copy = list.slice();
   switch (operation.kind) {
@@ -42,10 +51,10 @@ function changed(list: readonly unknown[], operation: ListOperation): readonly u
       copy.splice(operation.index ?? copy.length, 0, operation.item);
       return copy;
     case "remove":
-      return list.filter((_item, index) => index !== operation.index);
-    case "reorder":
-      copy.splice(operation.to, 0, ...copy.splice(operation.from, 1));
+      copy.splice(operation.index, 1);
       return copy;
+    case "reorder":
+      return reordered(list, operation.from, operation.to);
     case "replace":
       copy[operation.index] = operation.item;
       return copy;

@@ -55,6 +55,23 @@ test("a remove takes the item at its index out of a list at the root or nested, 
   ).toStrictEqual({ a: [{ b: [1, 3] }, { b: [1, 2, 3] }] });
 });
 
+test("a remove and a reorder keep each hole of a list a hole, so each moved key still names its item", () => {
+  const jobs: unknown[] = [{ title: "a" }, { title: "b" }, { title: "c" }];
+  Reflect.deleteProperty(jobs, 1);
+  const keys = { "jobs.0.title": "a", "jobs.2.title": "c" };
+  const removed = getPath("jobs", changeListAt("jobs", removeAt(0), { jobs }));
+  const reordered = getPath("jobs", changeListAt("jobs", reorder(1, 0), { jobs }));
+
+  expect(Array.isArray(removed) && Object.keys(removed)).toStrictEqual(["1"]);
+  expect(moveListKeys("jobs", removeAt(0), keys, 3)).toStrictEqual({ "jobs.1.title": "c" });
+  expect(getPath("1.title", removed)).toBe("c");
+  expect(Array.isArray(reordered) && Object.keys(reordered)).toStrictEqual(["1", "2"]);
+  expect(moveListKeys("jobs", reorder(1, 0), keys, 3)).toStrictEqual({
+    "jobs.1.title": "a",
+    "jobs.2.title": "c",
+  });
+});
+
 test("a reorder moves the item from one index to another, at the root or nested, and changes nothing where the path holds no list", () => {
   expect(changeListAt("a", reorder(2, 0), { a: [1, 2, 3] })).toStrictEqual({ a: [3, 1, 2] });
   expect(changeListAt("a", reorder(1, 2), { a: [1, 2, 3] })).toStrictEqual({ a: [1, 3, 2] });
@@ -432,10 +449,23 @@ function anyOperationFor(length: number): fc.Arbitrary<ListOperation> {
   );
 }
 
+function withHoles(bags: readonly Bag[], holes: readonly boolean[]): Bag[] {
+  const holed = bags.slice();
+  for (const [index, hole] of holes.entries()) {
+    if (hole) Reflect.deleteProperty(holed, index);
+  }
+  return holed;
+}
+
 const anyListCase = listCase.chain((generated) =>
   fc.record({
     path: fc.constant(generated.path),
-    bags: fc.constant(generated.bags),
+    bags: fc
+      .array(fc.boolean(), {
+        minLength: generated.bags.length,
+        maxLength: generated.bags.length,
+      })
+      .map((holes) => withHoles(generated.bags, holes)),
     operation: anyOperationFor(generated.bags.length),
   }),
 );
