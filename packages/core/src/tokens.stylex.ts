@@ -10,7 +10,7 @@ export const tokens = stylex.defineVars({
     "light-dark(oklch(0.9373 0.0013 286.37), oklch(0.2721 0.0024 247.91))",
   "--solix-color-overlay": "light-dark(oklch(1 0 0), oklch(0.2103 0.0059 285.89))",
   "--solix-color-muted": "light-dark(oklch(0.5517 0.0138 285.94), oklch(0.705 0.015 286.07))",
-  "--solix-color-border": "light-dark(oklch(0.6446 0.0027 285.89), oklch(0.5226 0.0035 285.89))",
+  "--solix-color-border": "light-dark(oklch(0.9 0.004 286.32), oklch(0.28 0.006 286.03))",
   "--solix-color-separator": "light-dark(oklch(0.92 0.004 286.32), oklch(0.25 0.006 286.03))",
   "--solix-color-error": "light-dark(oklch(0.6532 0.2328 25.74), oklch(0.594 0.1967 24.63))",
   "--solix-color-backdrop": "light-dark(oklch(0 0 0 / 0.5), oklch(0 0 0 / 0.6))",
