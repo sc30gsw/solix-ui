@@ -15,7 +15,6 @@ export type RunSettings = {
   testNamePattern: string | null;
   env: Record<string, string>;
   provided: Record<string, unknown>;
-  inABrowser: boolean;
   groupOrder: number;
 };
 
@@ -42,7 +41,6 @@ function runSettingsOfEachProject(project: TestProject): Record<string, RunSetti
           Object.entries(config.env ?? {}).map(([key, value]) => [key, String(value)]),
         ),
         provided: { ...config.provide },
-        inABrowser: config.browser.enabled,
         groupOrder: config.sequence.groupOrder,
       },
     ]),
@@ -62,21 +60,25 @@ async function testFilesOfEachProject(project: TestProject): Promise<Record<stri
   return listed;
 }
 
-export async function setup(project: TestProject): Promise<() => void> {
+export function buildEveryPackage(setupFile: string): void {
   const gitVariables = gitVariablesIn(process.env);
   if (gitVariables.length > 0) {
     throw new Error(
-      `tests/support/global-setup.ts: ${gitVariables.join(", ")} reach this setup, and every child it spawns would inherit them. List tests/support/git-free-environment.ts before it in globalSetup.`,
+      `${setupFile}: ${gitVariables.join(", ")} reach this setup, and every child it spawns would inherit them. List tests/support/git-free-environment.ts before it in globalSetup.`,
     );
   }
-  project.provide("testFilesOfEachProject", await testFilesOfEachProject(project));
-  project.provide("runTestNamePattern", patternOf(project.vitest.config.testNamePattern));
-  project.provide("runSettingsOfEachProject", runSettingsOfEachProject(project));
   execFileSync(installedVp, ["run", "-r", "build"], {
     cwd: repositoryRoot,
     env: productionEnvironment(),
     stdio: "inherit",
   });
+}
+
+export async function setup(project: TestProject): Promise<() => void> {
+  buildEveryPackage("tests/support/global-setup.ts");
+  project.provide("testFilesOfEachProject", await testFilesOfEachProject(project));
+  project.provide("runTestNamePattern", patternOf(project.vitest.config.testNamePattern));
+  project.provide("runSettingsOfEachProject", runSettingsOfEachProject(project));
   try {
     const playground = await startServer({
       directory: playgroundDirectory,

@@ -11,7 +11,16 @@ const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const browserTestServerPort = 4322;
-const browserEnginesGroup = 1;
+const checkerRulesGroup = 0;
+const everyOtherGroup = 1;
+const checkerRules = [
+  "tests/library-conventions.test.ts",
+  "tests/primitive-conventions.test.ts",
+  "tests/property-reports.test.ts",
+  "tests/playground-verification-conventions.test.ts",
+  "tests/subpath-imports.test.ts",
+  "tests/workspace-rules.test.ts",
+];
 const storybookConfigDirectory = join(import.meta.dirname, "apps/storybook/.storybook");
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
 const propertyRunner = "tests/support/properties.ts";
@@ -111,6 +120,16 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "rules",
+          environment: "node",
+          include: checkerRules,
+          sequence: { groupOrder: checkerRulesGroup },
+          globalSetup: ["tests/support/git-free-environment.ts", "tests/support/build-setup.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "node",
           environment: "node",
           include: [
@@ -118,7 +137,8 @@ export default defineConfig({
             "packages/*/tests/**/*.test.{ts,tsx}",
             "apps/*/tests/**/*.test.{ts,tsx}",
           ],
-          exclude: ["**/node_modules/**", browserTests, ...ruleFixtures],
+          exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, ...checkerRules],
+          sequence: { groupOrder: everyOtherGroup },
           globalSetup: ["tests/support/git-free-environment.ts", "tests/support/global-setup.ts"],
         },
       },
@@ -128,15 +148,19 @@ export default defineConfig({
         test: {
           name: "browser",
           include: [browserTests],
-          sequence: { groupOrder: browserEnginesGroup },
+          sequence: { groupOrder: everyOtherGroup },
           api: { port: browserTestServerPort, strictPort: true },
           browser: browserInEveryEngine(),
         },
       },
-      ...storiesServers.map((server) => ({
-        extends: false as const,
-        ...storiesProject(server, storybookConfigDirectory, browserEnginesGroup),
-      })),
+      ...storiesServers.map((server) => {
+        const stories = storiesProject(server, storybookConfigDirectory);
+        return {
+          extends: false as const,
+          ...stories,
+          test: { ...stories.test, sequence: { groupOrder: everyOtherGroup } },
+        };
+      }),
     ],
   },
 });

@@ -138,6 +138,8 @@ const lateClientScripts: Record<string, string> = {
   "keeps the page busy before it hydrates it": `for (const end = Date.now() + ${lateBy}; Date.now() < end; );`,
 };
 const neverHydrates = "await new Promise(() => {});";
+const thrownBeforeHydrating = "the client script threw before it hydrated the page";
+const throwsBeforeHydrating = `throw new Error(${JSON.stringify(thrownBeforeHydrating)});`;
 const waitForAPageThatNeverHydrates = 1_000;
 
 async function withItsClientScriptAfter(page: Page, delay: string): Promise<void> {
@@ -186,6 +188,17 @@ inEveryEngine((browser) => {
       opened(page, url, "hydrated", { timeout: waitForAPageThatNeverHydrates }),
     ).rejects.toThrow(pageDidNotBecomeReady);
     expect(hydrationTimeout).toBeLessThan(context.task.timeout);
+
+    await page.close();
+  });
+
+  test("on a page whose client script throws before it hydrates it, the drive fails by saying that the page did not become ready, with the error the page raised", async () => {
+    const page = await browser().newPage();
+    await withItsClientScriptAfter(page, throwsBeforeHydrating);
+
+    const failure = opened(page, url, "hydrated", { timeout: waitForAPageThatNeverHydrates });
+    await expect(failure).rejects.toThrow(pageDidNotBecomeReady);
+    await expect(failure).rejects.toThrow(thrownBeforeHydrating);
 
     await page.close();
   });

@@ -12,6 +12,7 @@ import {
   memberRead,
   nameOf,
   openProgram,
+  propertyDeclarations,
   parse,
   parseAll,
   type Program,
@@ -338,9 +339,13 @@ function readsAnIndex(node: ts.Node): boolean {
   return ts.isElementAccessExpression(node) && ts.isNumericLiteral(node.argumentExpression);
 }
 
-function readFromAny(program: Program, node: ts.Node): string[] | undefined {
+function namesReadFromAPage(program: Program, node: ts.Node): string[] | undefined {
   const read = memberRead(program, node);
-  return read && isTypedAny(program, read.owner) && !readsAnIndex(node) ? read.names : undefined;
+  if (!read || readsAnIndex(node)) return undefined;
+  const aPage =
+    isTypedAny(program, read.owner) ||
+    propertyDeclarations(program, read.owner, [navigation]).some(isPlaywrightsNavigation);
+  return aPage ? read.names : undefined;
 }
 
 function insideTheOpener(node: ts.Node): boolean {
@@ -358,7 +363,7 @@ function navigationsIn(program: Program, file: string): Navigation[] {
     if (memberDeclarations(program, node).some(isPlaywrightsNavigation)) {
       return [{ node, how: `reaches Playwright's ${navigation}` }];
     }
-    const names = readFromAny(program, node);
+    const names = namesReadFromAPage(program, node);
     if (names?.includes(navigation)) {
       return [{ node, how: `reads ${navigation} from a value typed any` }];
     }
@@ -366,7 +371,7 @@ function navigationsIn(program: Program, file: string): Navigation[] {
       ? [
           {
             node,
-            how: "reads a member of a value typed any by a name the type checker does not know",
+            how: "reads a member of a page, or of a value typed any, by a name the type checker does not know",
           },
         ]
       : [];
