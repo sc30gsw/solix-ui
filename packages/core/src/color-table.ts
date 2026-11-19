@@ -47,46 +47,94 @@ export const contrastLuminance = Math.sqrt(1.05 * 0.05) - 0.05;
 type ColourToken = `--solix-color-${string}`;
 type PrimaryAlias = Extract<keyof typeof primaryColors, `--${string}`>;
 type VariantSlot = Extract<keyof typeof variantColors, `--${string}`>;
+type Given = "given" | "given-hover" | `given/${number}`;
 type SlotValue = Shade | "transparent" | ColourToken;
 
+export type VariantRow = {
+  readonly named: Readonly<Record<VariantSlot, SlotValue>>;
+  readonly given: Readonly<Record<VariantSlot, SlotValue | Given>>;
+};
+
+const neutral = {
+  "--sx-variant-background": "--solix-color-surface",
+  "--sx-variant-hover": "--solix-color-body",
+  "--sx-variant-color": "--solix-color-text",
+  "--sx-variant-border": "--solix-color-border",
+} as const;
+
 export const colorVariantTable = {
-  default: {
-    "--sx-variant-background": "--solix-color-surface",
-    "--sx-variant-hover": "--solix-color-body",
-    "--sx-variant-color": "--solix-color-text",
-    "--sx-variant-border": "--solix-color-border",
-  },
+  default: { named: neutral, given: neutral },
   filled: {
-    "--sx-variant-background": "6",
-    "--sx-variant-hover": "7",
-    "--sx-variant-color": "contrast",
-    "--sx-variant-border": "transparent",
+    named: {
+      "--sx-variant-background": "6",
+      "--sx-variant-hover": "7",
+      "--sx-variant-color": "contrast",
+      "--sx-variant-border": "transparent",
+    },
+    given: {
+      "--sx-variant-background": "given",
+      "--sx-variant-hover": "given-hover",
+      "--sx-variant-color": "contrast",
+      "--sx-variant-border": "transparent",
+    },
   },
   light: {
-    "--sx-variant-background": "1",
-    "--sx-variant-hover": "2",
-    "--sx-variant-color": "9",
-    "--sx-variant-border": "transparent",
+    named: {
+      "--sx-variant-background": "1",
+      "--sx-variant-hover": "2",
+      "--sx-variant-color": "9",
+      "--sx-variant-border": "transparent",
+    },
+    given: {
+      "--sx-variant-background": "given",
+      "--sx-variant-hover": "given-hover",
+      "--sx-variant-color": "9",
+      "--sx-variant-border": "transparent",
+    },
   },
   outline: {
-    "--sx-variant-background": "transparent",
-    "--sx-variant-hover": "0",
-    "--sx-variant-color": "8",
-    "--sx-variant-border": "8",
+    named: {
+      "--sx-variant-background": "transparent",
+      "--sx-variant-hover": "0",
+      "--sx-variant-color": "8",
+      "--sx-variant-border": "8",
+    },
+    given: {
+      "--sx-variant-background": "transparent",
+      "--sx-variant-hover": "given/5",
+      "--sx-variant-color": "given",
+      "--sx-variant-border": "given",
+    },
   },
   subtle: {
-    "--sx-variant-background": "transparent",
-    "--sx-variant-hover": "1",
-    "--sx-variant-color": "9",
-    "--sx-variant-border": "transparent",
+    named: {
+      "--sx-variant-background": "transparent",
+      "--sx-variant-hover": "1",
+      "--sx-variant-color": "9",
+      "--sx-variant-border": "transparent",
+    },
+    given: {
+      "--sx-variant-background": "transparent",
+      "--sx-variant-hover": "given/12",
+      "--sx-variant-color": "given",
+      "--sx-variant-border": "transparent",
+    },
   },
   transparent: {
-    "--sx-variant-background": "transparent",
-    "--sx-variant-hover": "transparent",
-    "--sx-variant-color": "9",
-    "--sx-variant-border": "transparent",
+    named: {
+      "--sx-variant-background": "transparent",
+      "--sx-variant-hover": "transparent",
+      "--sx-variant-color": "9",
+      "--sx-variant-border": "transparent",
+    },
+    given: {
+      "--sx-variant-background": "transparent",
+      "--sx-variant-hover": "transparent",
+      "--sx-variant-color": "given",
+      "--sx-variant-border": "transparent",
+    },
   },
-} as const satisfies Record<string, Record<VariantSlot, SlotValue>>;
+} as const satisfies Record<string, VariantRow>;
 
 export type ColorVariant = keyof typeof colorVariantTable;
 
