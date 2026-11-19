@@ -4,6 +4,8 @@ const unsafeSegments: readonly string[] = ["__proto__"] as const;
 
 const lengthKey = "length";
 
+const plainTag = "[object Object]";
+
 const longestList = 2 ** 32 - 1;
 
 export function splitPath(path: unknown): PathSegments | undefined {
@@ -65,11 +67,22 @@ function put(target: object, key: PropertyKey, value: unknown): void {
   });
 }
 
+export function tagOf(value: unknown): string {
+  return Object.prototype.toString.call(value);
+}
+
+function isCopyable(value: unknown): value is object {
+  return Array.isArray(value) || (isContainer(value) && tagOf(value) === plainTag);
+}
+
+function emptyCopyOf(target: object): object {
+  return Array.isArray(target) ? target.slice() : Object.create(Object.getPrototypeOf(target));
+}
+
 function copyOf(target: object): object {
-  if (Array.isArray(target)) return target.slice();
-  const copy: object = Object.create(Object.getPrototypeOf(target));
+  const copy = emptyCopyOf(target);
   for (const key of Reflect.ownKeys(target)) {
-    if (Object.prototype.propertyIsEnumerable.call(target, key)) {
+    if (Object.prototype.propertyIsEnumerable.call(target, key) && !Object.hasOwn(copy, key)) {
       put(copy, key, Reflect.get(target, key));
     }
   }
@@ -92,13 +105,13 @@ function rewritten(target: object, segments: PathSegments, depth: number, value:
   const key = segments.at(depth) ?? "";
   if (depth === segments.length - 1) return withEntry(target, key, value);
   const child = childOf(target, key);
-  if (!isContainer(child)) return target;
+  if (!isCopyable(child)) return target;
   const updated = rewritten(child, segments, depth + 1, value);
   return updated === child ? target : withEntry(target, key, updated);
 }
 
 export function setPath<Values>(path: unknown, value: unknown, values: Values): Values {
   const segments = splitPath(path);
-  if (segments === undefined || !isContainer(values)) return values;
+  if (segments === undefined || !isCopyable(values)) return values;
   return rewritten(values, segments, 0, value) as Values;
 }

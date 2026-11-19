@@ -7,6 +7,7 @@ import {
   isIndexSegment,
   type PathSegments,
   splitPath,
+  tagOf,
   withIndexesAs,
 } from "#/src/internal-paths.ts";
 import { allOrNow, isThenable, thenOrNow } from "#/src/internal-outcome.ts";
@@ -27,10 +28,6 @@ type AnyRule = Rule<unknown, unknown>;
 type Validation = { values: unknown; resolve: ResolveValidationError; signal: AbortSignal };
 
 const errorTags: readonly string[] = ["[object Error]", "[object DOMException]"] as const;
-
-function tagOf(value: unknown): string {
-  return Object.prototype.toString.call(value);
-}
 
 export function messageOf(error: unknown): string {
   if (errorTags.includes(tagOf(error))) return String(Reflect.get(Object(error), "message"));

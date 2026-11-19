@@ -224,6 +224,38 @@ test("setPath keeps the prototype of each object it copies", () => {
   expect(target.point.x).toBe(1);
 });
 
+test("setPath writes through no Date, Map, Set, RegExp, typed array or Error, since a copy of one would lose what it holds", () => {
+  const target = {
+    when: new Date(0),
+    map: new Map([["k", 1]]),
+    set: new Set([1]),
+    pattern: /a/g,
+    bytes: new Uint8Array(2),
+    error: new Error("kept"),
+  };
+
+  for (const path of [
+    "when.x",
+    "map.k",
+    "set.0",
+    "pattern.lastIndex",
+    "bytes.0",
+    "error.message",
+  ]) {
+    expect(setPath(path, 1, target), path).toBe(target);
+  }
+  expect(setPath("when", new Date(1), target).when.getTime()).toBe(1);
+});
+
+test("setPath keeps a list's own properties beside its items in the copy it writes", () => {
+  const list = Object.assign([1, 2], { extra: "kept" });
+  const written = setPath("list.0", 3, { list });
+
+  expect([...written.list]).toStrictEqual([3, 2]);
+  expect(written.list.extra).toBe("kept");
+  expect(list[0]).toBe(1);
+});
+
 test("path types name every path into the values, read the value at a path, and leave any other string loose", () => {
   type Values = { name: string; jobs: { title: string; tags: string[] }[]; pair: [number, string] };
 
