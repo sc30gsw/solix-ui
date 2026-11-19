@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 type Token = { word: string } | { operator: string };
 
 type Lexed = { tokens: Token[]; end: number };
@@ -345,4 +349,43 @@ export function refusalsOf(line: string, inCi: boolean): Refusal[] {
     ...commands.flatMap(shellScriptsIn).flatMap((script) => refusalsOf(script, inCi)),
   ];
   return [...new Set(found)];
+}
+
+const standardInput = 0;
+const blocking = 2;
+
+function commandOf(input: string): string | undefined {
+  const event: unknown = JSON.parse(input);
+  if (typeof event !== "object" || event === null) {
+    throw new Error("the hook's input is not an event object.");
+  }
+  const toolInput: unknown = Reflect.get(event, "tool_input");
+  if (Reflect.get(event, "tool_name") !== "Bash" || typeof toolInput !== "object" || !toolInput)
+    return undefined;
+  const command: unknown = Reflect.get(toolInput, "command");
+  return typeof command === "string" ? command : undefined;
+}
+
+function decide(): void {
+  const command = commandOf(readFileSync(standardInput, "utf8"));
+  const found = command === undefined ? [] : refusalsOf(command, Boolean(process.env.CI));
+  if (found.length === 0) return;
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: found.map((refusal) => refusals[refusal]).join(" "),
+      },
+    }),
+  );
+}
+
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    decide();
+  } catch (error) {
+    process.stderr.write(`The command guard failed, so the command is refused: ${String(error)}\n`);
+    process.exitCode = blocking;
+  }
 }

@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/check-agent-command.ts\""
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/agent-command-guard.ts\" || { echo \"The command guard did not run, so the command is refused.\" >&2; exit 2; }"
           }
         ]
       }

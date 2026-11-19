@@ -1,14 +1,19 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { type Refusal, refusals, refusalsOf } from "#/scripts/agent-command-guard.ts";
+import { parse, ts } from "#/scripts/syntax.ts";
+import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const settingsFile = ".claude/settings.json";
 const guardEvent = "PreToolUse";
 const guardedTool = "Bash";
-const guardCommand = 'node "$CLAUDE_PROJECT_DIR/scripts/check-agent-command.ts"';
+const guardFile = "scripts/agent-command-guard.ts";
+const guardCommand = `node "$CLAUDE_PROJECT_DIR/${guardFile}" || { echo "The command guard did not run, so the command is refused." >&2; exit 2; }`;
+const blocking = 2;
+const stash = { tool_name: "Bash", tool_input: { command: "git stash" } };
 
 const refused: [Refusal, string[]][] = [
   [
@@ -113,31 +118,44 @@ describe("the agent command guard", () => {
 
 type HookEntry = { matcher?: string; hooks?: { type?: string; command?: string }[] };
 
-function guardOutput(event: unknown): string {
-  const run = spawnSync("sh", ["-c", guardCommand], {
-    input: JSON.stringify(event),
+type GuardRun = { status: number | null; stdout: string; stderr: string };
+
+function guardEntries(): HookEntry[] {
+  const settings = JSON.parse(readFileSync(join(repositoryRoot, settingsFile), "utf8")) as {
+    hooks?: Record<string, HookEntry[]>;
+  };
+  return (settings.hooks?.[guardEvent] ?? []).filter(({ matcher }) => matcher === guardedTool);
+}
+
+function wiredCommand(): string {
+  return guardEntries().flatMap(({ hooks }) => hooks ?? [])[0]?.command ?? "";
+}
+
+function runGuard(
+  input: string,
+  environment: Record<string, string> = {},
+  projectDirectory = repositoryRoot,
+): GuardRun {
+  const run = spawnSync("sh", ["-c", wiredCommand()], {
+    input,
     encoding: "utf8",
-    env: { ...process.env, CLAUDE_PROJECT_DIR: repositoryRoot, CI: "" },
+    env: { ...process.env, CLAUDE_PROJECT_DIR: projectDirectory, CI: "", ...environment },
   });
+  return { status: run.status, stdout: run.stdout, stderr: run.stderr };
+}
+
+function guardOutput(event: unknown): string {
+  const run = runGuard(JSON.stringify(event));
   expect(run.stderr).toBe("");
   expect(run.status).toBe(0);
   return run.stdout;
 }
 
 test("settings.json runs the guard before every Bash command, in an entry of its own, and the guard denies with its reason and says nothing otherwise", () => {
-  const settings = JSON.parse(readFileSync(join(repositoryRoot, settingsFile), "utf8")) as {
-    hooks?: Record<string, HookEntry[]>;
-  };
-  const entries = (settings.hooks?.[guardEvent] ?? []).filter((entry) =>
-    entry.hooks?.some((hook) => hook.command === guardCommand),
-  );
-
-  expect(entries).toEqual([
+  expect(guardEntries()).toEqual([
     { matcher: guardedTool, hooks: [{ type: "command", command: guardCommand }] },
   ]);
-  expect(
-    JSON.parse(guardOutput({ tool_name: guardedTool, tool_input: { command: "git stash" } })),
-  ).toEqual({
+  expect(JSON.parse(guardOutput(stash))).toEqual({
     hookSpecificOutput: {
       hookEventName: guardEvent,
       permissionDecision: "deny",
@@ -146,4 +164,44 @@ test("settings.json runs the guard before every Bash command, in an entry of its
   });
   expect(guardOutput({ tool_name: guardedTool, tool_input: { command: "git status" } })).toBe("");
   expect(guardOutput({ tool_name: "Read", tool_input: { file_path: "git stash" } })).toBe("");
+});
+
+describe("the guard fails closed", () => {
+  test("a node on PATH that cannot run the guard blocks the command", async () => {
+    await inTemporaryTree(
+      { "bin/node": "#!/bin/sh\necho 'SyntaxError: an older Node' >&2\nexit 1\n" },
+      (root) => {
+        chmodSync(join(root, "bin/node"), 0o755);
+        const run = runGuard(JSON.stringify(stash), { PATH: `${join(root, "bin")}:/usr/bin:/bin` });
+
+        expect(run.status).toBe(blocking);
+        expect(run.stderr).toContain("the command is refused");
+      },
+    );
+  });
+
+  test("a guard that throws blocks the command and says why", async () => {
+    await inTemporaryTree({}, (root) => {
+      mkdirSync(join(root, "scripts"));
+      writeFileSync(join(root, guardFile), 'throw new Error("the guard broke");\n');
+      const crashed = runGuard(JSON.stringify(stash), {}, root);
+      const unreadable = runGuard("not an event");
+
+      expect(crashed.status).toBe(blocking);
+      expect(crashed.stderr).toContain("the command is refused");
+      expect(unreadable.status).toBe(blocking);
+      expect(unreadable.stderr).toContain("the command is refused");
+    });
+  });
+
+  test("the guard imports only Node's own modules, so any Node that strips types runs it, whatever it makes of subpath imports", () => {
+    const imported = parse(join(repositoryRoot, guardFile))
+      .statements.filter(ts.isImportDeclaration)
+      .map(({ moduleSpecifier }) =>
+        ts.isStringLiteral(moduleSpecifier) ? moduleSpecifier.text : "",
+      )
+      .filter((specifier) => !specifier.startsWith("node:"));
+
+    expect(imported).toEqual([]);
+  });
 });
