@@ -14,16 +14,21 @@ import {
   memberDeclarations,
   nameOf,
   openProgram,
-  openProgramWithNodeTypes,
   type Program,
+  type TypeCheckedProject,
   reachedFrom,
   ts,
 } from "#/scripts/syntax.ts";
-import { type LibraryKind, repositoryRoot } from "#/tests/support/workspace.ts";
+import {
+  type LibraryKind,
+  type LibraryRegistration,
+  repositoryRoot,
+} from "#/tests/support/workspace.ts";
 
 export const kebabCaseModule = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\.ts$/;
 export const typesModule = "types.ts";
 export const constantsModule = "constants.ts";
+export const sharedModules: readonly string[] = [constantsModule, typesModule];
 export const barrelModule = "index.ts";
 export const browserTestSuffixes = [".browser.test.ts", ".browser.test.tsx"];
 export const nodeTestSuffixes = [".test.ts", ".test.tsx"];
@@ -47,7 +52,7 @@ export const stateCommandRole = "StateCommandBody";
 export type Module = { file: string; path: string; source: ts.SourceFile };
 
 export type Library = {
-  directory: string;
+  errorBoundaries: readonly Home[];
   source: string;
   testDirectory: string;
   entries: string[];
@@ -62,6 +67,8 @@ export type Rule = (library: Library) => string[];
 
 export type PrimitiveRule = { description: string; rule: Rule };
 
+export type KindRule = PrimitiveRule & { kinds: readonly LibraryKind[] };
+
 export type Home = { file: string; fn?: string };
 
 export type Declared = { file: string; name: string };
@@ -70,14 +77,20 @@ function entriesOf(directory: string): string[] {
   return existsSync(directory) ? readdirSync(directory).sort() : [];
 }
 
-export function loadLibrary(directory: string, kind: LibraryKind = "primitives"): Library {
+const projectOfKind: Readonly<Record<LibraryKind, TypeCheckedProject>> = {
+  primitives: "scripts",
+  components: "scripts",
+  logic: "withNodeTypes",
+};
+
+export function loadLibrary(directory: string, registration: LibraryRegistration): Library {
   const source = join(directory, "src");
   const testDirectory = join(directory, "tests");
   const entries = entriesOf(source);
   const paths = entries
     .filter((entry) => entry.endsWith(".ts"))
     .map((entry) => join(source, entry));
-  const compiled = kind === "logic" ? openProgramWithNodeTypes(paths) : openProgram(paths);
+  const compiled = openProgram(paths, projectOfKind[registration.kind]);
   const testFiles = entriesOf(testDirectory).filter((entry) => /\.tsx?$/.test(entry));
   const compiledTests = openProgram(testFiles.map((entry) => join(testDirectory, entry)));
   const tests = new Map(
@@ -91,7 +104,7 @@ export function loadLibrary(directory: string, kind: LibraryKind = "primitives")
     return parsed ? [{ file: basename(path), path, source: parsed }] : [];
   });
   return {
-    directory,
+    errorBoundaries: registration.errorBoundaries,
     source,
     testDirectory,
     entries,
@@ -133,18 +146,13 @@ export function isPublic(file: string): boolean {
   return (
     kebabCaseModule.test(file) &&
     !isInternal(file) &&
-    ![typesModule, constantsModule, barrelModule].includes(file)
+    !sharedModules.includes(file) &&
+    file !== barrelModule
   );
 }
 
 export function isPrimitive(file: string): boolean {
   return isPublic(file) && file.startsWith(primitivePrefix);
-}
-
-export function functionNameFor(file: string): string {
-  return basename(file, ".ts").replace(/-([a-z0-9])/g, (_match, letter: string) =>
-    letter.toUpperCase(),
-  );
 }
 
 export function isNamedFor(file: string, name: string): boolean {
@@ -179,13 +187,19 @@ export function importsFrom(module: Module, specifier: string): boolean {
   return importsOf(module.source).some((found) => found.specifier === specifier);
 }
 
-export function exportedFunctions(module: Module): ts.FunctionDeclaration[] {
-  return module.source.statements.filter(
+export type ExportedFunction = {
+  first: ts.FunctionDeclaration | undefined;
+  all: ts.FunctionDeclaration[];
+};
+
+export function exportedFunctions(module: Module): ExportedFunction {
+  const all = module.source.statements.filter(
     (statement): statement is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(statement) &&
       statement.name !== undefined &&
       isNamedFor(module.file, statement.name.text),
   );
+  return { first: all[0], all };
 }
 
 export function isDeclared(declaration: ts.Node, declared: Declared): boolean {
@@ -257,15 +271,15 @@ export function hasRole(library: Library, node: ts.Node, roles: readonly string[
   );
 }
 
-export function isInHome(node: ts.Node, home: Home | undefined): boolean {
-  if (!home || basename(fileOf(node)) !== home.file) return false;
+export function isInHome(node: ts.Node, home: Home): boolean {
+  if (basename(fileOf(node)) !== home.file) return false;
   return home.fn === undefined || enclosingFunctionName(node) === home.fn;
 }
 
 export type Forbidden = {
   description: string;
   find: (library: Library, node: ts.Node) => boolean;
-  home?: Home;
+  homes?: (library: Library) => readonly Home[];
   advice: string;
   modules?: (library: Library) => Module[];
 };
@@ -276,7 +290,11 @@ export function forbidOutside(forbidden: Forbidden): PrimitiveRule {
     rule: (library) =>
       (forbidden.modules?.(library) ?? library.modules).flatMap((module) =>
         descendants(module.source)
-          .filter((node) => !isInHome(node, forbidden.home) && forbidden.find(library, node))
+          .filter(
+            (node) =>
+              !(forbidden.homes?.(library) ?? []).some((home) => isInHome(node, home)) &&
+              forbidden.find(library, node),
+          )
           .map((node) => `${at(module, node)}: ${firstLine(node)}: ${forbidden.advice}`),
       ),
   };

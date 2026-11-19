@@ -19,7 +19,7 @@ const modelRun = "modelRun";
 const asyncModelRun = "asyncModelRun";
 
 function reachesHelper(library: Library, module: Module, helper: Declared): boolean {
-  return reaches(library, exportedFunctions(module), helper);
+  return reaches(library, exportedFunctions(module).all, helper);
 }
 
 function runsAModel(library: Library, module: Module, runner: string): boolean {

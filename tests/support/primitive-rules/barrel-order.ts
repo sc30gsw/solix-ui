@@ -5,6 +5,7 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   barrelModule,
   constantsModule,
+  sharedModules,
   isPublic,
   type Module,
   type PrimitiveRule,
@@ -44,7 +45,7 @@ function barrelLinesIn(barrel: ts.SourceFile): string[] {
 
 const barrelOrder: Rule = (library) => {
   const exported = library.modules.filter(
-    ({ file }) => isPublic(file) || file === constantsModule || file === typesModule,
+    ({ file }) => isPublic(file) || sharedModules.includes(file),
   );
   const barrel = library.modules.find(({ file }) => file === barrelModule);
   const actual = barrel ? barrelLinesIn(barrel.source) : [];

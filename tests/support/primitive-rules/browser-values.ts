@@ -3,7 +3,6 @@ import {
   at,
   exportedFunctions,
   forbidOutside,
-  functionNameFor,
   type PrimitiveRule,
   publicModules,
   reaches,
@@ -15,15 +14,14 @@ const brandHome = { file: "internal-browser-value.ts", fn: "branded" };
 
 const browserValues: Rule = (library) =>
   publicModules(library).flatMap((module) => {
-    const declarations = exportedFunctions(module);
-    const [fn] = declarations;
-    if (!fn || !reaches(library, declarations, { file: brandHome.file, name: brandHome.fn })) {
+    const { first: fn, all } = exportedFunctions(module);
+    if (!fn || !reaches(library, all, { file: brandHome.file, name: brandHome.fn })) {
       return [];
     }
     return returnsAlias(library.compiled, fn, browserValueType)
       ? []
       : [
-          `${at(module, fn.name ?? fn)}: ${functionNameFor(module.file)} reaches ${brandHome.fn}, the one place a value becomes a ${browserValueType}, so it returns its value as ${browserValueType}, alone or in a tuple or object.`,
+          `${at(module, fn.name ?? fn)}: ${fn.name?.text ?? "it"} reaches ${brandHome.fn}, the one place a value becomes a ${browserValueType}, so it returns its value as ${browserValueType}, alone or in a tuple or object.`,
         ];
   });
 
@@ -34,7 +32,7 @@ export const browserValuesRule: PrimitiveRule = {
 
 export const browserValueAssertionsRule = forbidOutside({
   description: `no source asserts a type to ${browserValueType}, never or any, but ${brandHome.fn} in ${brandHome.file}`,
-  home: brandHome,
+  homes: () => [brandHome],
   find: (library, node) => {
     const asserted = assertedType(library.compiled, node);
     return (

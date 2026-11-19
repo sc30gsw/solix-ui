@@ -24,7 +24,7 @@ export function browserGlobalsReached(
 }
 
 const browserGlobalReads: Rule = (library) => {
-  const roots = publicModules(library).flatMap(exportedFunctions);
+  const roots = publicModules(library).flatMap((module) => exportedFunctions(module).all);
   const reads = browserGlobalsReached(
     library,
     roots,

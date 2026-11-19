@@ -10,20 +10,25 @@ import {
 } from "#/tests/support/primitive-rules/index.ts";
 import { fileNamedBy, namesAPackage } from "#/scripts/subpath.ts";
 import { importsOf, isTypeOnlyImport, parse, ts } from "#/scripts/syntax.ts";
-import { libraryPackages, repositoryRoot } from "#/tests/support/workspace.ts";
+import {
+  type LibraryRegistration,
+  libraryPackages,
+  repositoryRoot,
+} from "#/tests/support/workspace.ts";
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
+const fixtureRegistration: LibraryRegistration = { kind: "primitives", errorBoundaries: [] };
 const viteConfig = "vite.config.ts";
 const preBundledName = "preBundledForBrowserTests";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const servedByVitestOrTheSolidPlugin = ["vite-plus/test", "solid-js", "@solidjs/web"];
 
 const checked = libraryPackages
-  .filter(({ kind }) => rulesOfKind[kind].length > 0)
-  .map(({ directory, kind }) => ({
+  .filter(({ kind }) => rulesOfKind(kind).length > 0)
+  .map(({ directory, kind, errorBoundaries }) => ({
     name: relative(repositoryRoot, directory),
     kind,
-    library: loadLibrary(directory, kind),
+    library: loadLibrary(directory, { kind, errorBoundaries }),
   }));
 afterAll(() => {
   for (const { library } of checked) library.dispose();
@@ -38,7 +43,7 @@ test.each(checked)(
 
 test.each(
   checked.flatMap(({ name, kind, library }) =>
-    rulesOfKind[kind].map((rule) => ({ name, library, ...primitiveRules[rule] })),
+    rulesOfKind(kind).map((rule) => ({ name, library, ...primitiveRules[rule] })),
   ),
 )("$name: $description", ({ library, rule }) => {
   expect(rule(library)).toEqual([]);
@@ -247,7 +252,7 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
 };
 
 test("each rule passes a fixture that holds only what it allows", () => {
-  const fixture = loadLibrary(join(fixtureDirectory, "allowed"));
+  const fixture = loadLibrary(join(fixtureDirectory, "allowed"), fixtureRegistration);
   const findings = Object.fromEntries(
     Object.entries(primitiveRules).map(([name, { rule }]) => [name, rule(fixture)]),
   );
@@ -259,7 +264,7 @@ test("each rule passes a fixture that holds only what it allows", () => {
 });
 
 test("each rule flags every line of a fixture that breaks it, and nothing else", () => {
-  const fixture = loadLibrary(join(fixtureDirectory, "forbidden"));
+  const fixture = loadLibrary(join(fixtureDirectory, "forbidden"), fixtureRegistration);
   const findings = Object.fromEntries(
     Object.entries(primitiveRules).map(([name, { rule }]) => [
       name,

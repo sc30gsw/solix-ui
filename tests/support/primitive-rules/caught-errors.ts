@@ -1,52 +1,10 @@
-import { relative } from "node:path";
-import { descendants, firstLine, ts } from "#/scripts/syntax.ts";
-import { repositoryRoot } from "#/tests/support/workspace.ts";
-import {
-  at,
-  type Home,
-  isInHome,
-  type PrimitiveRule,
-  type Rule,
-} from "#/tests/support/primitive-rules/library.ts";
+import { ts } from "#/scripts/syntax.ts";
+import { forbidOutside } from "#/tests/support/primitive-rules/library.ts";
 
-type ErrorBoundaries = { homes: readonly Home[]; advice: string };
-
-const errorBoundaries: Readonly<Record<string, ErrorBoundaries>> = {
-  "packages/primitives": {
-    homes: [{ file: "internal-browser-value.ts", fn: "whereAllowed" }],
-    advice:
-      "Find a missing browser API with lookUp or browserMethod, and let any other error reach the caller.",
-  },
-  "packages/form": {
-    homes: [
-      { file: "internal-validate.ts", fn: "runRule" },
-      { file: "is-json-string.ts", fn: "isJSONString" },
-    ],
-    advice:
-      "A rule's error is resolved where the rule runs, so let any other error reach the caller.",
-  },
-};
-
-const noBoundary: ErrorBoundaries = { homes: [], advice: "Let the error reach the caller." };
-
-function named(homes: readonly Home[]): string {
-  return homes.map(({ file, fn }) => `${fn} in ${file}`).join(" and ") || "no function";
-}
-
-const caughtErrors: Rule = (library) => {
-  const { homes, advice } =
-    errorBoundaries[relative(repositoryRoot, library.directory)] ?? noBoundary;
-  return library.modules.flatMap((module) =>
-    descendants(module.source)
-      .filter((node) => ts.isCatchClause(node) && !homes.some((home) => isInHome(node, home)))
-      .map(
-        (node) =>
-          `${at(module, node)}: ${firstLine(node)}: nothing in this library catches an error but ${named(homes)}. ${advice}`,
-      ),
-  );
-};
-
-export const caughtErrorsRule: PrimitiveRule = {
+export const caughtErrorsRule = forbidOutside({
   description: "nothing catches an error but the functions its library names as error boundaries",
-  rule: caughtErrors,
-};
+  homes: (library) => library.errorBoundaries,
+  find: (_library, node) => ts.isCatchClause(node),
+  advice:
+    "nothing in this library catches an error but the error boundaries registeredLibraries in tests/support/workspace.ts names for it. Let the error reach the caller.",
+});

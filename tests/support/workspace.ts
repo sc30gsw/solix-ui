@@ -26,10 +26,26 @@ export {
 
 export type LibraryKind = "primitives" | "components" | "logic";
 
-export const libraryKinds: Readonly<Record<string, LibraryKind>> = {
-  "packages/primitives": "primitives",
-  "packages/core": "components",
-  "packages/form": "logic",
+export type ErrorBoundary = { file: string; fn: string };
+
+export type LibraryRegistration = {
+  kind: LibraryKind;
+  errorBoundaries: readonly ErrorBoundary[];
+};
+
+export const registeredLibraries: Readonly<Record<string, LibraryRegistration>> = {
+  "packages/primitives": {
+    kind: "primitives",
+    errorBoundaries: [{ file: "internal-browser-value.ts", fn: "whereAllowed" }],
+  },
+  "packages/core": { kind: "components", errorBoundaries: [] },
+  "packages/form": {
+    kind: "logic",
+    errorBoundaries: [
+      { file: "internal-validate.ts", fn: "runRule" },
+      { file: "is-json-string.ts", fn: "isJSONString" },
+    ],
+  },
 };
 
 export const libraryHome = "packages/*";
@@ -48,15 +64,15 @@ export const packages = manifestPaths().map((path) => ({
 
 export const unlistedLibraries = packages
   .map(({ path }) => dirname(path))
-  .filter((directory) => inTheLibraryHome.test(directory) && !(directory in libraryKinds));
+  .filter((directory) => inTheLibraryHome.test(directory) && !(directory in registeredLibraries));
 
-export const listedButAbsent = Object.keys(libraryKinds).filter(
+export const listedButAbsent = Object.keys(registeredLibraries).filter(
   (directory) => !packages.some(({ path }) => dirname(path) === directory),
 );
 
 export const libraryPackages = packages.flatMap((found) => {
-  const kind = libraryKinds[dirname(found.path)];
-  return kind === undefined ? [] : [{ ...found, kind }];
+  const registration = registeredLibraries[dirname(found.path)];
+  return registration === undefined ? [] : [{ ...found, ...registration }];
 });
 
 function librariesOfKind(kind: LibraryKind): typeof libraryPackages {
@@ -67,7 +83,7 @@ function thePrimitivesPackage(): (typeof libraryPackages)[number] {
   const [found, ...others] = librariesOfKind("primitives");
   if (!found?.manifest.name || others.length > 0) {
     throw new Error(
-      `tests/support/workspace.ts: list exactly one library of the primitives kind, with a name, in libraryKinds.`,
+      `tests/support/workspace.ts: list exactly one library of the primitives kind, with a name, in registeredLibraries.`,
     );
   }
   return found;

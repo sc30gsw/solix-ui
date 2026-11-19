@@ -13,8 +13,7 @@ import {
   parseText,
   parseWithoutLibrariesOrImports,
   sharedSettings,
-  typeCheckedWithScripts,
-  typeCheckedWithNodeTypes,
+  typeCheckedProjects,
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
@@ -69,7 +68,7 @@ const allowedByKind: Record<LibraryKind, [what: string, allowed: string[]]> = {
   components: ["a component library", [...frameworkPeers, primitivesPackage.manifest.name ?? ""]],
   logic: ["a logic library", ["solid-js"]],
 };
-const libraryList = "libraryKinds in tests/support/workspace.ts";
+const libraryList = "registeredLibraries in tests/support/workspace.ts";
 const ownLibraryPeerRange = "workspace:^";
 const ownLibraryLink = "workspace:*";
 const catalogReference = "catalog:";
@@ -253,17 +252,18 @@ test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFil
   expect(withoutTheSharedSettings.map((settings) => settings.getText())).toEqual([]);
   expect(optionsOfEachProject).toEqual([
     "parseWithoutLibrariesOrImports",
-    "typeCheckedWithScripts",
-    "typeCheckedWithNodeTypes",
+    "typeCheckedProjects[project]",
   ]);
   expect(Object.keys(parseWithoutLibrariesOrImports)).toEqual(optionsOfTheParseOnlyProject);
-  expect(Object.keys(typeCheckedWithScripts)).toEqual(optionsOfTheTypeCheckedProject);
-  expect(Object.keys(typeCheckedWithNodeTypes)).toEqual(optionsOfTheProjectWithNodeTypes);
-  expect(typeCheckedWithNodeTypes.types).toEqual(["node"]);
+  expect(Object.keys(typeCheckedProjects)).toEqual(["scripts", "withNodeTypes"]);
+  expect(Object.keys(typeCheckedProjects.scripts)).toEqual(optionsOfTheTypeCheckedProject);
+  expect(Object.keys(typeCheckedProjects.withNodeTypes)).toEqual(optionsOfTheProjectWithNodeTypes);
+  expect(typeCheckedProjects.withNodeTypes.types).toEqual(["node"]);
   expect([
     ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, parseWithoutLibrariesOrImports),
-    ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, typeCheckedWithScripts),
-    ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, typeCheckedWithNodeTypes),
+    ...Object.values(typeCheckedProjects).flatMap((settings) =>
+      optionsTheSharedSettingsOwn(typeScriptProjectOpener, settings),
+    ),
   ]).toEqual([]);
 });
 

@@ -14,13 +14,11 @@ export const parseWithoutLibrariesOrImports: CompilerOptions = {
   noLib: true,
   noResolve: true,
 };
-export const typeCheckedWithScripts: CompilerOptions = {
-  allowJs: true,
-};
-export const typeCheckedWithNodeTypes: CompilerOptions = {
-  allowJs: true,
-  types: ["node"],
-};
+export const typeCheckedProjects = {
+  scripts: { allowJs: true },
+  withNodeTypes: { allowJs: true, types: ["node"] },
+} as const satisfies Record<string, CompilerOptions>;
+export type TypeCheckedProject = keyof typeof typeCheckedProjects;
 const virtualFiles = new Map<string, string>();
 const parsed = new Map<string, SourceFile>();
 let compiler: API | undefined;
@@ -104,12 +102,11 @@ export function rereadFiles(files: readonly string[]): void {
     .dispose();
 }
 
-export function openProgram(rootFiles: readonly string[]): Program {
-  return openProject(rootFiles.map(normalised), typeCheckedWithScripts);
-}
-
-export function openProgramWithNodeTypes(rootFiles: readonly string[]): Program {
-  return openProject(rootFiles.map(normalised), typeCheckedWithNodeTypes);
+export function openProgram(
+  rootFiles: readonly string[],
+  project: TypeCheckedProject = "scripts",
+): Program {
+  return openProject(rootFiles.map(normalised), typeCheckedProjects[project]);
 }
 
 export function stringLiteralTypesOf(checker: Checker, node: Node): string[] {

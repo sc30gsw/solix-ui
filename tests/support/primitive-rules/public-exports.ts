@@ -1,9 +1,9 @@
+import { basename } from "node:path";
 import { commentsIn, exportsOf, type ts } from "#/scripts/syntax.ts";
 import {
   at,
   constantsModule,
   exportedFunctions,
-  functionNameFor,
   isNamedFor,
   type Module,
   type PrimitiveRule,
@@ -24,22 +24,21 @@ function hasADocComment(module: Module, fn: ts.Node): boolean {
 
 const publicExports: Rule = (library) => [
   ...publicModules(library).flatMap((module) => {
-    const expected = functionNameFor(module.file);
     const { functions, others } = exportsOf(module.source);
     return functions.length === 1 &&
       functions.every((name) => isNamedFor(module.file, name)) &&
       others.length === 0
       ? []
       : [
-          `${at(module)}: export exactly one function, ${expected}, named for the file, with an acronym as one word of it, and types (found: ${[...functions, ...others].join(", ") || "nothing"}). Give a second function its own file, or name the file internal-<topic>.ts if no consumer should import it.`,
+          `${at(module)}: export exactly one function named for the file, whose name in kebab-case, with an acronym as one word, is ${basename(module.file, ".ts")}, and types (found: ${[...functions, ...others].join(", ") || "nothing"}). Give a second function its own file, or name the file internal-<topic>.ts if no consumer should import it.`,
         ];
   }),
   ...publicModules(library).flatMap((module) => {
-    const [fn] = exportedFunctions(module);
+    const fn = exportedFunctions(module).first;
     return !fn || hasADocComment(module, fn)
       ? []
       : [
-          `${at(module, fn)}: write a doc comment directly above ${functionNameFor(module.file)}, above its first overload if it has any, since a consumer reads it where they call the function.`,
+          `${at(module, fn)}: write a doc comment directly above ${fn?.name?.text ?? "it"}, above its first overload if it has any, since a consumer reads it where they call the function.`,
         ];
   }),
   ...library.modules

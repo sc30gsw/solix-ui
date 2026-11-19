@@ -27,15 +27,14 @@ export {
 } from "#/scripts/syntax/checker.ts";
 export {
   openProgram,
-  openProgramWithNodeTypes,
   parse,
   parseAll,
   parseText,
   parseWithoutLibrariesOrImports,
   rereadFiles,
   sharedSettings,
-  typeCheckedWithScripts,
-  typeCheckedWithNodeTypes,
+  typeCheckedProjects,
+  type TypeCheckedProject,
   stringLiteralTypesOf,
   virtualFile,
   type Program,

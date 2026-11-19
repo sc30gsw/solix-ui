@@ -21,11 +21,10 @@ const reactiveNodesTheHelperOwns = ["createEffect", "createMemo", "createSignal"
 
 const elementAttachments: Rule = (library) =>
   publicModules(library).flatMap((module) => {
-    const declarations = exportedFunctions(module);
-    const [fn] = declarations;
+    const { first: fn, all } = exportedFunctions(module);
     if (!fn || !returnsAlias(library.compiled, fn, refSetterType)) return [];
     const helper = `${attachmentHelper.name} in ${attachmentHelper.file}`;
-    const missing = reaches(library, declarations, attachmentHelper)
+    const missing = reaches(library, all, attachmentHelper)
       ? []
       : [
           `${at(module, fn.name ?? fn)}: ${fn.name?.text ?? "it"} returns a ${refSetterType}, alone or in a tuple or object, so build it on ${helper}, directly or through another primitive.`,
