@@ -1,18 +1,18 @@
 import * as stylex from "@stylexjs/stylex";
-import { createMemo, merge, omit } from "solid-js";
+import { merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
 import type { ColorVariant } from "#/src/color-table.ts";
-import { type ColorPropKey, colorResolver, type ResolvedColor } from "#/src/colors.ts";
+import { type ColorPropKey, colorResolver } from "#/src/colors.ts";
 import { stableClass } from "#/src/stable-class.ts";
 import { stylePropKeys, type Variables } from "#/src/style-prop-table.ts";
 import {
+  type Given,
   presentStyle,
   type QueryContainer,
-  type ResolvedVariables,
-  resolveStyleProps,
-  resolveVariables,
+  type Resolver,
   type StyleProps,
-  type VariableValue,
+  stylePropResolver,
+  variablesResolver,
   withConsumerStyle,
 } from "#/src/style-props.ts";
 
@@ -86,8 +86,6 @@ type RootProps<Props, KeptOffRoot extends keyof Props> = Omit<Props, HandledKey 
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
-type Given<Props> = (keyof Props & string) | ((props: Props) => VariableValue);
-
 export type CarriedStyling = {
   readonly class: () => JSX.ClassValue;
   readonly style: () => JSX.CSSProperties | undefined;
@@ -118,16 +116,9 @@ type PartsInput = StylesApiProps<Compiled> &
   StyleProps &
   Styling & { component?: unknown } & Record<string, unknown>;
 
-const noVariables: ResolvedVariables = { classes: [], properties: {}, used: [] };
-const noColor: ResolvedColor = { classes: [], properties: {}, attributes: {} };
-
-type GivenOptions<Props> = {
-  readonly variables?: Readonly<Record<string, Given<Props>>>;
-  readonly keep?: readonly string[];
-  readonly color?: ColorVariant;
-  readonly queries?: QueryContainer;
-  readonly carried?: CarriedStyling;
-};
+function isResolver(resolver: Resolver | undefined): resolver is Resolver {
+  return resolver !== undefined;
+}
 
 export function createParts<
   Of extends string | Variables,
@@ -138,74 +129,57 @@ export function createParts<
   of: Of,
   compiled: Styles,
   props: Props,
-  ...[given]: [Of] extends [Variables] ? [options: Options] : [options?: Options]
-): Parts<Styles, Props, KeptBy<Options> & keyof Props> {
-  const options: GivenOptions<Props> = given ?? {};
+  ...[options]: [Of] extends [Variables] ? [options: Options] : [options?: Options]
+): Parts<Styles, Props, KeptBy<Options> & keyof Props>;
+export function createParts(
+  of: string | Variables,
+  compiled: Compiled,
+  props: PartsInput,
+  options?: Partial<PartsOptions<Variables, PartsInput>>,
+): Parts<Compiled, PartsInput, never> {
   const component = typeof of === "string" ? of : of.component;
-  const input: PartsInput = props;
-  const ownProps = Object.values(options.variables ?? {}).filter(
-    (prop): prop is keyof Props & string => typeof prop === "string",
-  );
-  const color =
-    options.color === undefined
-      ? { keys: [], resolved: () => noColor }
-      : colorResolver(options.color, input);
-  const rest = omit(input, ...(options.keep ?? []), ...ownProps, ...color.keys);
-  const colored = createMemo(color.resolved);
-  const resolved = createMemo(() => resolveStyleProps(rest));
-  const variables = createMemo(() => {
-    if (options.variables === undefined || typeof of === "string") return noVariables;
-    const values = Object.fromEntries(
-      Object.entries(options.variables).map(([name, from]) => [
-        name,
-        typeof from === "string" ? input[from] : from(props),
-      ]),
-    );
-    return resolveVariables(
-      of,
-      values,
-      options.queries?.queries(),
-      (row) => input.unstyled === true && row.children !== undefined,
-    );
-  });
-  options.queries?.report(() => variables().used);
-  const wrapsAComponent = () => typeof input.component === "function";
+  const own = [
+    options?.color === undefined ? undefined : colorResolver(options.color, props),
+    typeof of === "string" || options?.variables === undefined
+      ? undefined
+      : variablesResolver(of, options.variables, props, options.queries),
+  ].filter(isResolver);
+  const rest = omit(props, ...(options?.keep ?? []), ...own.flatMap(({ keys }) => keys));
+  const resolvers = [...own, stylePropResolver(rest)];
+  const wrapsAComponent = () => typeof props.component === "function";
   const stylesApi = omit(rest, (key) => !isStylesApiPropKey(key));
   const partClass = (name: string): JSX.ClassValue => [
-    input.unstyled ? undefined : stylex.attrs(compiled[name]).class,
+    props.unstyled ? undefined : stylex.attrs(compiled[name]).class,
     stableClass(component, name),
-    name === rootPart ? options.carried?.class() : undefined,
-    input.classes?.[name],
+    name === rootPart ? options?.carried?.class() : undefined,
+    props.classes?.[name],
   ];
-  const ownStyle = (name: string): JSX.CSSProperties => presentStyle(input.styles?.[name]);
+  const ownStyle = (name: string): JSX.CSSProperties => presentStyle(props.styles?.[name]);
+  const forwarded: object = omit<Record<string, unknown>, typeof handledKeys>(rest, ...handledKeys);
   const root = merge(
-    omit<Record<string, unknown>, typeof handledKeys>(rest, ...handledKeys),
+    forwarded,
     () => (wrapsAComponent() ? stylesApi : {}),
-    () => colored().attributes,
+    () => resolvers.reduce((all, { resolved }) => ({ ...all, ...resolved().attributes }), {}),
     {
       get class() {
         return [
           partClass(rootPart),
-          colored().classes,
-          variables().classes,
-          resolved().classes,
-          input.class,
+          resolvers.flatMap(({ resolved }) => resolved().classes),
+          props.class,
         ];
       },
       get style() {
         return withConsumerStyle(
           {
-            ...colored().properties,
-            ...variables().properties,
-            ...resolved().properties,
-            ...presentStyle(options.carried?.style()),
+            ...resolvers.reduce((all, { resolved }) => ({ ...all, ...resolved().properties }), {}),
+            ...presentStyle(options?.carried?.style()),
             ...ownStyle(rootPart),
           },
-          input.style,
+          props.style,
         );
       },
     },
-  ) as RootProps<Props, KeptBy<Options> & keyof Props>;
+  );
   const part = (name: string): Part => ({
     get class() {
       return partClass(name);
