@@ -76,7 +76,9 @@ inEveryEngine((browser) => {
       const emphasise = page.getByRole("button", { name: "Emphasise" });
       const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
       const followerSummary = follower.locator("summary");
-      expect(await computed(emphasise, "background-color")).toBe(expected("--solix-color-primary"));
+      expect(await computed(emphasise, "background-color")).toBe(
+        expected("--solix-color-primary-6"),
+      );
       expect(await emphasise.getAttribute("aria-pressed")).toBe("false");
       expect(await computed(follower, "outline-style")).toBe("none");
       expect(await computed(followerSummary, "background-color")).toBe(
@@ -94,10 +96,11 @@ inEveryEngine((browser) => {
       ).toBe(expected("danger"));
 
       await emphasise.click();
+      await page.getByRole("heading").first().hover();
 
       await expect
         .poll(() => computed(emphasise, "background-color"))
-        .toBe(expected("--solix-color-primary"));
+        .toBe(expected("--solix-color-primary-6"));
       expect(await computed(follower, "outline-style")).toBe("none");
       expect(await computed(followerSummary, "background-color")).toBe(
         expected("--solix-color-surface"),

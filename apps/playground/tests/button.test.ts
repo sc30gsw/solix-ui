@@ -28,11 +28,11 @@ inEveryEngine((browser) => {
       const overridden = page.getByTestId("overridden");
 
       expect(await computed(page.getByTestId("default"), "background-color")).toBe(
-        expected("--solix-color-primary"),
+        expected("--solix-color-primary-6"),
       );
       expect(await computed(overridden, "background-color")).toBe(expected("danger"));
-      expect(await computed(overridden, "color")).toBe(expected("--solix-color-on-primary"));
-      expect(await computed(overridden, "height")).toBe(expected("--solix-control-height-md"));
+      expect(await computed(overridden, "color")).toBe(expected("--solix-color-primary-contrast"));
+      expect(await computed(overridden, "height")).toBe(expected("--solix-control-height-sm"));
       expect(await computed(overridden, "border-top-left-radius")).toBe(
         expected("--solix-radius-md"),
       );
@@ -43,8 +43,8 @@ inEveryEngine((browser) => {
       const button = page.getByRole("button", { name: "Class from classes.root" });
 
       expect(await computed(button, "background-color")).toBe(expected("danger"));
-      expect(await computed(button, "color")).toBe(expected("--solix-color-on-primary"));
-      expect(await computed(button, "height")).toBe(expected("--solix-control-height-md"));
+      expect(await computed(button, "color")).toBe(expected("--solix-color-primary-contrast"));
+      expect(await computed(button, "height")).toBe(expected("--solix-control-height-sm"));
     });
 
     test("unstyled leaves a button that looks like a button the library does not style, and keeps the stable class", async () => {

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createComponent, renderToString } from "@solidjs/web";
 import type { Component } from "solid-js";
+import type * as Colors from "#/src/colors.ts";
 import type * as CreateTheme from "#/src/create-theme.ts";
 import type * as Library from "#/src/index.ts";
 import type * as Parts from "#/src/parts.ts";
@@ -48,6 +49,12 @@ export function isBuiltComponent(exported: unknown): boolean {
 export const { handledKeys, rootPart, stylesApiPropKeys } = (await import(
   join(dist, "parts.js")
 )) as typeof Parts;
+
+export const { resolveColor } = (await import(join(dist, "colors.js"))) as typeof Colors;
+
+export const defaultColorClasses: ReadonlySet<string> = new Set(
+  resolveColor(undefined, undefined).classes,
+);
 
 export const { scaleOfThemeKey } = (await import(
   join(dist, "create-theme.js")

@@ -214,7 +214,10 @@ inEveryEngine((browser) => {
       const { page } = opened;
       const field = page.getByRole("textbox", { name: "Tab values" });
       const list = tabList(page, generated);
-      const wrapping = Array.from({ length: 5 }, (_, index) => `a wide tab number ${index}`);
+      const wrapping = Array.from(
+        { length: 12 },
+        (_, index) => `a wide tab number ${index} of a list that wraps`,
+      );
       const where = () =>
         field.evaluate((element) => ({
           scrolled: window.scrollY,

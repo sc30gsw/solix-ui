@@ -53,6 +53,9 @@ const partsHelperFile = "packages/core/src/parts.ts";
 const partsModule = "parts.ts";
 const libraryEntry = /(?:^|\/)src\/index\.ts$/;
 const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
+const colorPropsType = "ColorProps";
+const colorPropsFile = "packages/core/src/colors.ts";
+const colorOption = "color";
 const rootBinding = "root";
 const partBinding = "part";
 const stylesApiTypeArgument = `typeof ${stylesVariable}`;
@@ -288,7 +291,25 @@ function propsShapeOf(alias: ts.TypeAliasDeclaration | undefined): PropsShape | 
   return { kind, element, stylesApi, ownProps, alias };
 }
 
-type OwnPropNames = { names: string[]; unread: string[] };
+type OwnPropNames = { names: string[]; unread: string[]; colored: boolean };
+
+function isColorProps(member: ts.TypeNode): boolean {
+  if (!ts.isTypeReferenceNode(member)) return false;
+  const declaration = symbolOf(librarySources, member.typeName)?.declarations?.[0]?.resolve();
+  return (
+    declaration !== undefined &&
+    ts.isTypeAliasDeclaration(declaration) &&
+    declaration.name.text === colorPropsType &&
+    relativePath(fileOf(declaration)) === colorPropsFile
+  );
+}
+
+function hasColorOption(argument: ts.Expression): boolean {
+  return (
+    ts.isObjectLiteralExpression(argument) &&
+    argument.properties.some((property) => staticPropertyName(property) === colorOption)
+  );
+}
 
 function typeMembers(type: ts.TypeNode): ts.TypeNode[] {
   if (ts.isParenthesizedTypeNode(type)) return typeMembers(type.type);
@@ -303,9 +324,13 @@ function ownPropNames(ownProps: ts.TypeNode | undefined): OwnPropNames {
   const literalMembers = members.filter(ts.isTypeLiteralNode).flatMap((literal) => literal.members);
   return {
     names: [...new Set(literalMembers.flatMap((member) => staticPropertyName(member) ?? []))],
+    colored: members.some(isColorProps),
     unread: [
       ...members.filter(
-        (member) => !ts.isTypeLiteralNode(member) && member.getText() !== displayPropsRefused,
+        (member) =>
+          !ts.isTypeLiteralNode(member) &&
+          member.getText() !== displayPropsRefused &&
+          !isColorProps(member),
       ),
       ...literalMembers.filter((member) => staticPropertyName(member) === undefined),
     ].map((member) => member.getText()),
@@ -341,13 +366,19 @@ function keptOffRootProblems(
   const readsChildren = descendants(fn).some(
     (node) => ts.isPropertyAccessExpression(node) && node.getText() === `props.${childrenProp}`,
   );
-  const { names, unread } = ownPropNames(shape.ownProps);
+  const { names, unread, colored } = ownPropNames(shape.ownProps);
+  const givesColor = call.arguments.slice(3).some(hasColorOption);
   const handledByTheComponent = [...names, ...(readsChildren ? [childrenProp] : [])];
   return [
     ...unread.map(
       (member) =>
-        `write ${member} in the own props of ${name}Props as an inline type literal, such as { label: string }, so this check reads each key it declares and requires it off the root. Only ${displayPropsRefused} may stand on its own.`,
+        `write ${member} in the own props of ${name}Props as an inline type literal, such as { label: string }, so this check reads each key it declares and requires it off the root. Only ${displayPropsRefused} and ${colorPropsType}, whose members the ${colorOption} option keeps off the root, may stand on their own.`,
     ),
+    ...(colored && !givesColor
+      ? [
+          `pass { ${colorOption}: <its default variant> } to ${partsHelper}, so it keeps the members of ${colorPropsType} off the root and turns them into the palette's class and data-variant.`,
+        ]
+      : []),
     ...handledByTheComponent
       .filter((prop) => !kept.includes(prop))
       .map(

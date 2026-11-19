@@ -1,13 +1,15 @@
 import { readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
+import { colorVariantTable, palettesIn, paletteToken } from "#/src/style-prop-table.ts";
+import { fileNamedBy } from "../../../scripts/subpath";
 import { schemeValues, tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
 import { parse, ts } from "../../../scripts/syntax";
 
 type Minimum = { ratio: number; criterion: string };
 type Conditional = Map<string, ts.Expression>;
 type Block = { name: string; properties: Map<string, Conditional> };
-type Side = { property: string; token: string | undefined; written: string };
+type Side = { property: string; token: string | undefined; written: string; slot?: string };
 type Pairing = { where: string; foreground: Side; background: Side; minimum: Minimum };
 
 const minimumContrast: [property: RegExp, minimum: Minimum][] = [
@@ -17,6 +19,7 @@ const minimumContrast: [property: RegExp, minimum: Minimum][] = [
 const pageBackground = "--solix-color-body";
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const sourceDirectory = dirname(tokensFile);
+const variantColorsFile = join(repositoryRoot, sourceDirectory, "variant-colors.stylex.ts");
 
 const remLength = /^\d+(?:\.\d+)?rem$/;
 const number = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
@@ -31,6 +34,8 @@ type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
 const tokens = tokenValues();
 const colourTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
 const shadowTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "shadow");
+const { palettes } = palettesIn(colourTokens);
+const variants = Object.entries(colorVariantTable);
 const lengthTokens = Object.keys(tokens).filter(
   (name) => !["colour", "shadow"].includes(tokenKind(name)),
 );
@@ -154,6 +159,31 @@ function tokenReferencedBy(value: ts.Expression | undefined): string | undefined
     : undefined;
 }
 
+function importedFrom(identifier: ts.Identifier): string | undefined {
+  const source = identifier.getSourceFile();
+  const declaration = source.statements.filter(ts.isImportDeclaration).find((statement) => {
+    const bindings = statement.importClause?.namedBindings;
+    return (
+      bindings !== undefined &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.some(({ name }) => name.text === identifier.text)
+    );
+  });
+  return declaration && ts.isStringLiteral(declaration.moduleSpecifier)
+    ? fileNamedBy(source.fileName, declaration.moduleSpecifier.text)
+    : undefined;
+}
+
+function slotReferencedBy(value: ts.Expression | undefined): string | undefined {
+  return value &&
+    ts.isElementAccessExpression(value) &&
+    ts.isIdentifier(value.expression) &&
+    ts.isStringLiteral(value.argumentExpression) &&
+    importedFrom(value.expression) === variantColorsFile
+    ? value.argumentExpression.text
+    : undefined;
+}
+
 function side(
   property: string,
   values: Conditional,
@@ -165,6 +195,7 @@ function side(
   const resolved = variable ? valueUnder(variable, condition) : written;
   return {
     property,
+    slot: slotReferencedBy(resolved),
     token: tokenReferencedBy(resolved),
     written: variable
       ? `${written.getText()}, which the root block sets to ${resolved?.getText() ?? "nothing"}`
@@ -177,6 +208,50 @@ function conditionsOf(values: Conditional, root: Block | undefined): string[] {
     condition,
     ...(variableIn(root, value)?.keys() ?? []),
   ]);
+}
+
+const thePage: Side = { property: "the page", token: pageBackground, written: pageBackground };
+
+function slotToken(
+  slot: string,
+  palette: string,
+  slots: Record<string, string>,
+): string | undefined {
+  const value = slots[slot];
+  if (value === undefined || value === "transparent") return undefined;
+  return value.startsWith("--") ? value : paletteToken(palette, value);
+}
+
+function inEachPaletteAndVariant(pairing: Pairing): Pairing[] {
+  const { foreground, background } = pairing;
+  if (foreground.slot === undefined && background.slot === undefined) return [pairing];
+  return palettes.flatMap((palette) =>
+    variants.flatMap(([variant, slots]): Pairing[] => {
+      const resolve = (given: Side): Side | undefined => {
+        if (given.slot === undefined) return given;
+        const token = slotToken(given.slot, palette, slots);
+        return token === undefined
+          ? undefined
+          : { ...given, token, written: `${given.written}, which is ${token}` };
+      };
+      const front = resolve(foreground);
+      if (front === undefined) return [];
+      return [
+        {
+          ...pairing,
+          where: `${pairing.where} with color="${palette}" variant="${variant}"`,
+          foreground: front,
+          background: resolve(background) ?? thePage,
+        },
+      ];
+    }),
+  );
+}
+
+function drawnOutside(property: string, offset: ts.Expression | undefined): boolean {
+  return (
+    property === "outlineColor" && !(offset?.getText() ?? "").replace(/^["'`]/, "").startsWith("-")
+  );
 }
 
 function pairingsIn(file: string): Pairing[] {
@@ -193,15 +268,19 @@ function pairingsIn(file: string): Pairing[] {
         (values) => conditionsOf(values, root),
       ),
     );
+    const offset = properties.get("outlineOffset");
     return [...conditions].flatMap((condition) =>
-      foregrounds.map(({ property, values, minimum }) => ({
-        where: `${file} styles.${name} (${condition})`,
-        foreground: side(property, values, condition, root),
-        background: background
-          ? side("backgroundColor", background, condition, root)
-          : { property: "the page", token: pageBackground, written: pageBackground },
-        minimum,
-      })),
+      foregrounds
+        .map(({ property, values, minimum }) => ({
+          where: `${file} styles.${name} (${condition})`,
+          foreground: side(property, values, condition, root),
+          background:
+            background && !drawnOutside(property, offset && valueUnder(offset, condition))
+              ? side("backgroundColor", background, condition, root)
+              : thePage,
+          minimum,
+        }))
+        .flatMap(inEachPaletteAndVariant),
     );
   });
 }

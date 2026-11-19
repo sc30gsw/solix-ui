@@ -47,9 +47,10 @@ function playgroundValue(selector: string, property: string): string {
 }
 
 const quarterPixelsInRem = 0.328125;
+const pixelInRem = 0.0625;
 
 function lengthNoEngineRounds(index: number): string {
-  return `${index + 1 + quarterPixelsInRem}rem`;
+  return `${(index + 1) * pixelInRem + quarterPixelsInRem}rem`;
 }
 
 function sentinelValues(names: string[]): Record<string, string> {
@@ -119,7 +120,7 @@ export async function expectedValues(
       sentinelByName ? `var(${name})` : value,
     ]),
     ["danger", "color", playgroundValue(".danger", "background-color")],
-    ["brandGreen", "color", playgroundValue(".brand-green", "--solix-color-primary")],
+    ["brandGreen", "color", playgroundValue(".brand-green", "--solix-color-primary-6")],
     ["roomy", "margin-top", playgroundValue(".roomy", "margin-top")],
     ["pinnedMargin", "margin-top", playgroundValue(":root", "--playground-pinned-margin")],
     ["partBackground", "color", playgroundValue(":root", "--playground-part-background")],

@@ -12,6 +12,7 @@ import { stableClassPrefix } from "#/src/stable-class.ts";
 
 import {
   behaviourSdkLayer,
+  colorRules,
   colorSchemeLayer,
   componentLayer,
   hiddenLayer,
@@ -163,6 +164,7 @@ export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
     `@layer ${LIBRARY_CASCADE_LAYER} {`,
     libraryLayerOrder,
     `@layer ${componentLayer} {`,
+    colorRules(tokens.light.map(([property]) => property)),
     css,
     "}",
     `@layer ${STYLE_PROP_LAYER} {`,

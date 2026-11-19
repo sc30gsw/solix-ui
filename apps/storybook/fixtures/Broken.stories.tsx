@@ -12,7 +12,9 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-const tooSmall = { root: { height: "12px", width: "12px", padding: "0" } };
+const tooSmall = {
+  root: { height: "12px", width: "12px", "min-height": "0", "min-width": "0", padding: "0" },
+};
 
 export const NoAccessibleName: Story = {
   args: { children: undefined },

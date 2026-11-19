@@ -1,6 +1,6 @@
 # Token theme
 
-The library's public tokens are custom properties that start with `--solix-`, written in `packages/core/src/tokens.stylex.ts`. The app overrides only `--solix-color-primary`, for part of the page. A library button inside that part takes the new colour, and a button outside it does not. The same override would also change anything else in that part that uses the primary colour. That includes the open `Disclosure` summary and its content edge, and the focus border of a `TextInput`. The journey observes only the button.
+The library's public tokens are custom properties that start with `--solix-`, written in `packages/core/src/tokens.stylex.ts`. The app overrides only `--solix-color-primary-6`, the primary palette's solid shade, for part of the page. A library button inside that part takes the new colour, and a button outside it does not. The journey observes only the button.
 
 ## Sub-features
 
@@ -17,9 +17,9 @@ Preconditions:
 
 - `doctor.sh` exits 0.
 
-- **Themed subtree.** Open the page and look at the button named `Themed`. Run `.agents/skills/verify-playground/scripts/drive.mjs token-theme`. The observation `background follows the consumer's token value` (the `--solix-color-primary` value in the `.brand-green` rule of `apps/playground/src/app.css`) passes, and `a button outside the themed subtree keeps the default` (the primary token) passes.
+- **Themed subtree.** Open the page and look at the button named `Themed`. Run `.agents/skills/verify-playground/scripts/drive.mjs token-theme`. The observation `background follows the consumer's token value` (the `--solix-color-primary-6` value in the `.brand-green` rule of `apps/playground/src/app.css`) passes, and `a button outside the themed subtree keeps the default` (the primary token) passes.
 - **Proof.** The evidence directory holds `01-page.png`, `02-themed-button.png`, `recording.webm` and `observations.json`.
 
 ## Gotchas
 
-- The override is a plain CSS rule in the app that sets `--solix-color-primary`. Nothing in JavaScript takes part, so this journey also passes with scripts off.
+- The override is a plain CSS rule in the app that sets `--solix-color-primary-6`. Nothing in JavaScript takes part, so this journey also passes with scripts off.

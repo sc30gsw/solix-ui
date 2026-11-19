@@ -51,9 +51,9 @@ const journeys = {
     const button = page.getByRole("button", { name: "Default" });
     await shot("page", "Open the page.");
     await shot("default-button", "Look at the button named Default.", button);
-    observe("background", await style(button, "background-color"), expected("--solix-color-primary"));
-    observe("text colour", await style(button, "color"), expected("--solix-color-on-primary"));
-    observe("height", await style(button, "height"), expected("--solix-control-height-md"));
+    observe("background", await style(button, "background-color"), expected("--solix-color-primary-6"));
+    observe("text colour", await style(button, "color"), expected("--solix-color-primary-contrast"));
+    observe("height", await style(button, "height"), expected("--solix-control-height-sm"));
   },
   "consumer-override": async ({ page, observe, shot, expected }) => {
     const overridden = page.getByRole("button", { name: "Overridden" });
@@ -68,7 +68,7 @@ const journeys = {
     await shot("page", "Open the page.");
     await shot("themed-button", "Look at the button named Themed, which sits in a subtree where the app overrides a token.", themed);
     observe("background follows the consumer's token value", await style(themed, "background-color"), expected("brandGreen"));
-    observe("a button outside the themed subtree keeps the default", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected("--solix-color-primary"));
+    observe("a button outside the themed subtree keeps the default", await style(page.getByRole("button", { name: "Default" }), "background-color"), expected("--solix-color-primary-6"));
   },
   "provider-theme": async ({ page, observe, shot, expected }) => {
     const themed = page.getByText(themeNames.themed, { exact: true });
@@ -91,7 +91,7 @@ const journeys = {
     const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
     const followerSummary = follower.locator("summary");
     await shot("before", "Open the page. The Emphasise button has the default colour and the Follows disclosure has no outline.");
-    observe("before: Emphasise background", await style(emphasise, "background-color"), expected("--solix-color-primary"));
+    observe("before: Emphasise background", await style(emphasise, "background-color"), expected("--solix-color-primary-6"));
     observe("before: Emphasise aria-pressed", await emphasise.getAttribute("aria-pressed"), "false");
     observe("before: Follows outline", await style(follower, "outline-style"), "none");
     observe("before: Follows summary background", await style(followerSummary, "background-color"), expected("--solix-color-surface"));
@@ -107,7 +107,7 @@ const journeys = {
     await emphasise.click();
     await page.waitForFunction((element) => element.getAttribute("aria-pressed") === "false", await emphasise.elementHandle());
     await shot("after-second-click", "Click Emphasise again. Both return to how they started.");
-    observe("after a second click: Emphasise background", await style(emphasise, "background-color"), expected("--solix-color-primary"));
+    observe("after a second click: Emphasise background", await style(emphasise, "background-color"), expected("--solix-color-primary-6"));
     observe("after a second click: Follows outline", await style(follower, "outline-style"), "none");
     observe("after a second click: Follows summary background", await style(followerSummary, "background-color"), expected("--solix-color-surface"));
   },

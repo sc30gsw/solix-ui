@@ -195,7 +195,7 @@ inEveryEngine((browser) => {
         "a consumer's override of a token wins in either scheme",
       ).toBe(themedInTheSystemScheme);
       expect(await computed(page.getByTestId("default"), "background-color")).toBe(
-        await colourOf(page, written("--solix-color-primary", other)),
+        await colourOf(page, written("--solix-color-primary-6", other)),
       );
 
       await press(page, schemeButtons[system]);

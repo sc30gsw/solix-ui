@@ -57,7 +57,7 @@ inEveryEngine((browser) => {
       expect(await computed(styled, "cursor")).toBe(await computed(libraryDefault, "cursor"));
     });
 
-    test("a StyleX block that sets --solix-color-primary on a wrapper themes the library's components inside it", async () => {
+    test("a StyleX block that sets --solix-color-primary-6 on a wrapper themes the library's components inside it", async () => {
       const themed = page.getByRole("button", { name: "StyleX theme" });
 
       expect(await background(themed)).toBe(await background(page.getByTestId("theme reference")));

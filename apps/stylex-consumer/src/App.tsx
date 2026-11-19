@@ -10,10 +10,10 @@ const styles = stylex.create({
     backgroundColor: "oklch(0.45 0.15 300)",
   },
   brand: {
-    "--solix-color-primary": "oklch(0.54 0.12 155)",
+    "--solix-color-primary-6": "oklch(0.54 0.12 155)",
   },
   primary: {
-    backgroundColor: "var(--solix-color-primary)",
+    backgroundColor: "var(--solix-color-primary-6)",
   },
 });
 

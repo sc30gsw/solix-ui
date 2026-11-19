@@ -46,6 +46,7 @@ import {
   rootPart,
   stableClass,
   stylesheet,
+  defaultColorClasses,
 } from "#/tests/built-library.ts";
 import {
   classesPropsFrom,
@@ -400,7 +401,9 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
   const visibilityGiven = Object.values(visibility).filter(
     (given) => given !== null && given !== undefined && given !== false,
   ).length;
-  const libraryClasses = classes.filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`));
+  const libraryClasses = classes.filter(
+    (found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`) && !defaultColorClasses.has(found),
+  );
   const styleClasses = libraryClasses.filter((found) => stylePropClasses.has(found));
   const readByAClass = styleClasses.filter((found) => declared.has(`--${found}`));
 
@@ -523,7 +526,10 @@ test.each(polymorphicComponents)(
     expect(root.tag).toBe("section");
     expect(
       classesOf(root)
-        .filter((found) => found.startsWith(`${LIBRARY_CLASS_PREFIX}-`))
+        .filter(
+          (found) =>
+            found.startsWith(`${LIBRARY_CLASS_PREFIX}-`) && !defaultColorClasses.has(found),
+        )
         .sort(),
     ).toEqual(["sx-dark-hidden", "sx-display", "sx-hidden-from-sm", "sx-p"]);
     expect(Object.fromEntries(declarationsIn(valuesOf(root, "style")[0]))).toEqual({
