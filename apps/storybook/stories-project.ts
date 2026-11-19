@@ -6,13 +6,14 @@ import { browserInEveryEngine } from "../../scripts/browser-instances.ts";
 import { allowedRuntimeDependencyNames } from "../../scripts/runtime-dependencies.ts";
 import "#/story-color-scheme.ts";
 import type { StoriesServer } from "#/tests/support/test-servers.ts";
+import { anyFreePort } from "../../tests/support/server-process.ts";
 
 const schemeOfEachStory = join(import.meta.dirname, "story-color-scheme.setup.ts");
 
 const preBundledForStories = ["@stylexjs/stylex"];
 const storyTimeout = 30_000;
 
-export function storiesProject({ project, port, colorScheme }: StoriesServer, configDir: string) {
+export function storiesProject({ project, colorScheme }: StoriesServer, configDir: string) {
   return defineConfig({
     root: dirname(configDir),
     plugins: [solid(), storybookTest({ configDir })],
@@ -26,7 +27,7 @@ export function storiesProject({ project, port, colorScheme }: StoriesServer, co
       setupFiles: [schemeOfEachStory],
       testTimeout: storyTimeout,
       hookTimeout: storyTimeout,
-      api: { port, strictPort: true },
+      api: { port: anyFreePort, strictPort: true },
       browser: browserInEveryEngine(),
     },
   });

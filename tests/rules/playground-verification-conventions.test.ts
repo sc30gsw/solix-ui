@@ -20,6 +20,7 @@ import {
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
+import { anyFreePort } from "#/tests/support/server-process.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const skill = ".agents/skills/verify-playground";
@@ -28,9 +29,15 @@ const featureDirectory = `${skill}/features`;
 const featureIndex = `${featureDirectory}/README.md`;
 const driveScript = `${skill}/scripts/drive.mjs`;
 const evidenceScript = `${skill}/scripts/evidence.mjs`;
-const launchScript = `${skill}/scripts/launch.sh`;
-const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
-const testConfig = "vite.config.ts";
+const portHolders = [
+  "vite.config.ts",
+  "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}",
+  "apps/*/*.ts",
+  "apps/*/.storybook/*.ts",
+  "apps/*/fixtures/**/*.ts",
+  `${skill}/scripts/*.mjs`,
+];
+const portTexts = [`${skill}/scripts/*.sh`, `${skill}/**/*.md`];
 const setupsModules = "apps/playground/src/sections/*-setups.ts";
 const namesObject = /Names$/;
 const letterOrDigit = /[\p{L}\p{N}]/u;
@@ -58,8 +65,10 @@ const featureLink = /\]\(\.\/([\w-]+)\.md\)/g;
 const secondLevelHeading = /^## (.+)$/gm;
 const portName = /port/i;
 const portNumbers = { lowest: 1024, highest: 65_535 };
-const launchDefaultPort = /\$\{VERIFY_PLAYGROUND_PORT:-(\d+)\}/;
-const localAddress = /127\.0\.0\.1:(\d+)/g;
+const listenCall = /\blisten$/;
+const portInCode = /127\.0\.0\.1:(\d+)|--port[= ]["'`]?(\d+)|\bPORT[=:]\s*["'`]?(\d+)/g;
+const portInScriptsAndDocs =
+  /(?:127\.0\.0\.1|localhost):(\d+)|--port[= ]["'`]?(\d+)|\bPORT[=:]\s*["'`]?(\d+)|_PORT:-(\d+)/g;
 
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
@@ -187,8 +196,8 @@ function holdsAPort(literal: ts.NumericLiteral): boolean {
   if (!Number.isInteger(value) || value < portNumbers.lowest || value > portNumbers.highest)
     return false;
   const holder = literal.parent;
-  if (ts.isCallExpression(holder) || ts.isNewExpression(holder)) {
-    return holder.arguments?.some((argument) => argument === literal) ?? false;
+  if (ts.isCallExpression(holder)) {
+    return holder.arguments.includes(literal) && listenCall.test(holder.expression.getText());
   }
   if (
     ts.isVariableDeclaration(holder) ||
@@ -211,40 +220,31 @@ function portsIn(source: ts.SourceFile): string[] {
   return [...found];
 }
 
-test("every test server and the verification instance listen on ports of their own", () => {
-  const launchPort = launchDefaultPort.exec(read(launchScript))?.[1];
-  const paths = globSync([testConfig, testCode], { cwd: repositoryRoot }).sort();
-  const sources = parseAll(paths.map((path) => join(repositoryRoot, path)));
-  const ports = paths.flatMap((path, index) =>
-    portsIn(sources[index]).map((port) => ({ path, port })),
-  );
-  const violations = ports.flatMap(({ path, port }, index) => [
-    ...ports
-      .slice(0, index)
-      .filter((other) => other.port === port)
-      .map((other) => `${path}: port ${port} is already used by ${other.path}; pick a free one.`),
-    ...(port === launchPort
-      ? [`${path}: port ${port} is the default port of ${launchScript}; pick another.`]
-      : []),
-  ]);
-  const documented = [skillFile, featureIndex].flatMap((path) =>
-    [...read(path).matchAll(localAddress)]
-      .filter(([, port]) => port !== launchPort)
-      .map(
-        ([address]) =>
-          `${path}: write 127.0.0.1:${launchPort}, the default in ${launchScript}, not ${address}.`,
-      ),
+function portsWrittenIn(text: string, written: RegExp): string[] {
+  return [...text.matchAll(written)]
+    .map((match) => match.slice(1).find((port) => port !== undefined) ?? "")
+    .filter((port) => Number(port) >= portNumbers.lowest);
+}
+
+test("no test server, test configuration or verification instance names a fixed port: each listens on a port the system gives it, so two runs never meet", () => {
+  const codePaths = globSync(portHolders, { cwd: repositoryRoot }).sort();
+  const sources = parseAll(codePaths.map((path) => join(repositoryRoot, path)));
+  const textPaths = globSync(portTexts, { cwd: repositoryRoot }).sort();
+  const violations = [
+    ...codePaths.flatMap((path, index) => portsIn(sources[index]).map((port) => ({ path, port }))),
+    ...codePaths.flatMap((path) =>
+      portsWrittenIn(read(path), portInCode).map((port) => ({ path, port })),
+    ),
+    ...textPaths.flatMap((path) =>
+      portsWrittenIn(read(path), portInScriptsAndDocs).map((port) => ({ path, port })),
+    ),
+  ].map(
+    ({ path, port }) =>
+      `${path}: port ${port} is fixed. Listen on port ${anyFreePort} through startServer, listening or viteOnAFreePort, and read the port the server got.`,
   );
 
-  expect(
-    launchPort,
-    `${launchScript}: set the default as \${VERIFY_PLAYGROUND_PORT:-NNNN}`,
-  ).toBeDefined();
-  expect(
-    ports.length,
-    `${testCode}: no port was found, written as a call argument or as the value of a name that holds "port"`,
-  ).toBeGreaterThan(0);
-  expect([...violations, ...documented]).toEqual([]);
+  expect(codePaths.length).toBeGreaterThan(0);
+  expect([...new Set(violations)]).toEqual([]);
 });
 
 type HeldName = { name: string; module: string };

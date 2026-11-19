@@ -1,0 +1,41 @@
+name: Pull request
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  text:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          node-version-file: package.json
+          cache: true
+      - run: node scripts/check-pull-request-text.ts "$GITHUB_EVENT_PATH"
+        env:
+          SOLIX_PRIVATE_TERMS: ${{ secrets.SOLIX_PRIVATE_TERMS }}
+
+  fixes-carry-tests:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          node-version-file: package.json
+          cache: true
+      - run: node scripts/check-fixes-carry-tests.ts "$PULL_REQUEST_BASE" "$PULL_REQUEST_HEAD"
+        env:
+          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+          PULL_REQUEST_HEAD: ${{ github.event.pull_request.head.sha }}
