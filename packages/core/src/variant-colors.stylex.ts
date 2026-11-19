@@ -1,8 +1,8 @@
 import * as stylex from "@stylexjs/stylex";
 
 export const variantColors = stylex.defineVars({
-  "--sx-variant-background": "transparent",
-  "--sx-variant-hover": "transparent",
-  "--sx-variant-color": "currentColor",
-  "--sx-variant-border": "transparent",
+  "--solixc-variant-background": "transparent",
+  "--solixc-variant-hover": "transparent",
+  "--solixc-variant-color": "currentColor",
+  "--solixc-variant-border": "transparent",
 });
