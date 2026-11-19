@@ -2,9 +2,11 @@ import { FORM_INDEX, formRootRule } from "#/src/constants.ts";
 import {
   childOf,
   getPath,
+  isAtOrUnder,
   isIndexSegment,
   type PathSegments,
   splitPath,
+  withIndexesAs,
 } from "#/src/internal-paths.ts";
 import { filterErrors, isError } from "#/src/internal-status.ts";
 import {
@@ -155,11 +157,7 @@ export function ruleForPath(path: string, rules: unknown, values: unknown): AnyR
 }
 
 function fieldResultOf(path: string, result: FormValidationResult): FormFieldValidationResult {
-  const segments = path.split(".");
-  const key = Object.keys(result.errors).find((errorKey) => {
-    const errorSegments = errorKey.split(".");
-    return segments.every((segment, index) => segment === errorSegments[index]);
-  });
+  const key = Object.keys(result.errors).find((errorKey) => isAtOrUnder(errorKey, path));
   if (key === undefined) return { hasError: false, error: null };
   return { hasError: true, error: result.errors[key] };
 }
@@ -194,7 +192,8 @@ export function shouldValidateOnChange(
   validateInputOnChange: boolean | readonly string[],
 ): boolean {
   if (typeof validateInputOnChange === "boolean") return validateInputOnChange;
-  return validateInputOnChange.includes(path.replace(/[.][0-9]+/g, `.${FORM_INDEX}`));
+  const general = withIndexesAs(path, FORM_INDEX);
+  return general !== undefined && validateInputOnChange.includes(general);
 }
 
 export function failureOf(error: FormError | undefined): FormError {

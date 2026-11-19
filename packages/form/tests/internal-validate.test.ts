@@ -415,3 +415,9 @@ test("an empty string and 0 are errors on every path, as filterErrors keeps them
     error: 0,
   });
 });
+
+test("shouldValidateOnChange takes an index only as a whole segment, a leading one included", () => {
+  expect(shouldValidateOnChange("a.1b", ["a.1b"])).toBe(true);
+  expect(shouldValidateOnChange("0.name", [`${FORM_INDEX}.name`])).toBe(true);
+  expect(shouldValidateOnChange("a.01", [`a.${FORM_INDEX}`])).toBe(false);
+});

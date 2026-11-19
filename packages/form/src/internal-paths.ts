@@ -60,6 +60,16 @@ export function isNestedUnder(key: string, path: string): boolean {
   return key.startsWith(`${path}.`);
 }
 
+export function isAtOrUnder(key: string, path: string): boolean {
+  return key === path || isNestedUnder(key, path);
+}
+
+export function withIndexesAs(path: string, marker: string): string | undefined {
+  return splitPath(path)
+    ?.map((segment) => (isIndexSegment(segment) ? marker : segment))
+    .join(".");
+}
+
 function isContainer(value: unknown): value is object {
   return typeof value === "object" && value !== null;
 }

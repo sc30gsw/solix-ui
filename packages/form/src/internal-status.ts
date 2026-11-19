@@ -1,10 +1,10 @@
-import { isNestedUnder } from "#/src/internal-paths.ts";
+import { isAtOrUnder } from "#/src/internal-paths.ts";
 import { type FormError, type FormErrors, type FormStatus, type RuleResult } from "#/src/types.ts";
 
 export function getStatus(status: Readonly<FormStatus>, path?: string): boolean {
   const keys = Object.keys(status);
   if (path === undefined) return keys.some((key) => status[key]);
-  return status[path] === true || keys.some((key) => isNestedUnder(key, path) && status[key]);
+  return keys.some((key) => isAtOrUnder(key, path) && status[key]);
 }
 
 export function isError(result: RuleResult): result is FormError {
