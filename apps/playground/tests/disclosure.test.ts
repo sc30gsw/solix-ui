@@ -58,6 +58,8 @@ inEveryEngine((browser) => {
 
     afterEach(async () => {
       await opened.close();
+
+      expect(opened.consoleProblems, "console errors and warnings of the test's page").toEqual([]);
     });
 
     test("starts closed, opens on a click of its summary and closes on the next click", async () => {
@@ -152,6 +154,10 @@ inEveryEngine((browser) => {
         await computed(summary, "color"),
         "styles.summary beats the library's open text colour",
       ).toBe(opened.expected("partText"));
+    });
+
+    test("the page and every interaction above report no console error or warning", () => {
+      expect(opened.consoleProblems).toEqual([]);
     });
   });
 });

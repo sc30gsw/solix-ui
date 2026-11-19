@@ -377,6 +377,23 @@ inEveryEngine((browser) => {
       test.each(checks)("%s", async (___, check) => {
         await check({ page: opened.page, expected: opened.expected, fromMd });
       });
+
+      test("the page reports no console error or warning", () => {
+        expect(opened.consoleProblems).toEqual([]);
+      });
     });
+  });
+
+  test("a page widened from one pixel below md to md passes every check at md, and reports no console error or warning", async () => {
+    const { page, expected, consoleProblems, close } = await openPage(browser(), url, {
+      viewport: { width: mdBreakpointInPixels - 1, height: viewportHeight },
+    });
+
+    await page.setViewportSize({ width: mdBreakpointInPixels, height: viewportHeight });
+
+    for (const [, check] of checks) await check({ page, expected, fromMd: true });
+    expect(consoleProblems).toEqual([]);
+
+    await close();
   });
 });
