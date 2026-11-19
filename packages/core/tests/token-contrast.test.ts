@@ -6,12 +6,10 @@ import {
   colorVariantTable,
   isShade,
   luminanceWeights,
-  type Oklch,
+  namedPalettes as palettes,
   ownPaletteOf,
   type Palette,
-  paletteAliases,
   paletteClass,
-  palettes as ownPalettes,
   paletteToken,
   primaryPalette,
   primaryProperty,
@@ -24,6 +22,13 @@ import {
   contrastExceptions,
   inScheme,
 } from "../../../tests/support/contrast-exceptions";
+import {
+  cssNumber,
+  type Oklch,
+  oklabOf,
+  oklchText,
+  parsedOklch,
+} from "../../../tests/support/oklch";
 import { stableClass } from "#/src/stable-class.ts";
 import { fileNamedBy } from "../../../scripts/subpath";
 import { schemeValues, tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
@@ -53,9 +58,6 @@ const variantColorsFile = join(repositoryRoot, sourceDirectory, "variant-colors.
 const primaryColorsFile = join(repositoryRoot, sourceDirectory, "primary-colors.stylex.ts");
 
 const remLength = /^\d+(?:\.\d+)?rem$/;
-const number = String.raw`(\d+(?:\.\d+)?|\.\d+)`;
-const oklchText = String.raw`oklch\(${number} ${number} ${number}(?: / ${number})?\)`;
-const oklchNotation = new RegExp(`^${oklchText}$`);
 const schemes = ["light", "dark"] as const;
 type Scheme = (typeof schemes)[number];
 const gamutTolerance = 1e-4;
@@ -63,12 +65,11 @@ const gamutTolerance = 1e-4;
 const tokens = tokenValues();
 const colourTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
 const shadowTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "shadow");
-const palettes: Palette[] = [...ownPalettes, ...Object.keys(paletteAliases).filter(isAliasName)];
 const variants = Object.entries(colorVariantTable);
 const lengthTokens = Object.keys(tokens).filter(
   (name) => !["colour", "shadow"].includes(tokenKind(name)),
 );
-const shadowLength = String.raw`(?:0|-?${number}rem)`;
+const shadowLength = String.raw`(?:0|-?${cssNumber}rem)`;
 const oneShadow = new RegExp(`^(?:${shadowLength} ){2,4}${oklchText}$`);
 const commaOutsideBrackets = /,\s*(?![^(]*\))/;
 
@@ -85,24 +86,13 @@ function componentPart(component: string, part: string, condition: string): stri
     : `.${stableClass(component, "root")}${condition} ${own}`;
 }
 
-function isAliasName(name: string): name is keyof typeof paletteAliases {
-  return Object.hasOwn(paletteAliases, name);
-}
-
-function oklch(value: string): Oklch | undefined {
-  const match = oklchNotation.exec(value);
-  if (!match) return undefined;
-  const [lightness, chroma, hue] = match.slice(1, 4).map(Number);
-  return { lightness, chroma, hue, alpha: match[4] === undefined ? 1 : Number(match[4]) };
-}
-
 function valueIn(name: string, scheme: Scheme): string | undefined {
   return schemeValues(tokens[name])?.[scheme];
 }
 
 function colourIn(name: string, scheme: Scheme): Oklch | undefined {
   const value = valueIn(name, scheme);
-  return value === undefined ? undefined : oklch(value);
+  return value === undefined ? undefined : parsedOklch(value);
 }
 
 type Rgb = readonly [red: number, green: number, blue: number];
@@ -129,10 +119,8 @@ function opaque(colour: Oklch): Rgb {
   return over({ ...colour, alpha: 1 }, [0, 0, 0]);
 }
 
-function linearSrgb({ lightness, chroma, hue }: Oklch): [number, number, number] {
-  const radians = (hue * Math.PI) / 180;
-  const a = chroma * Math.cos(radians);
-  const b = chroma * Math.sin(radians);
+function linearSrgb(colour: Oklch): [number, number, number] {
+  const [lightness, a, b] = oklabOf(colour);
   const long = (lightness + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const medium = (lightness - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const short = (lightness - 0.0894841775 * a - 1.291485548 * b) ** 3;

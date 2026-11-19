@@ -12,7 +12,6 @@ import {
   customColorClass,
   type Palette,
   type Shade,
-  paletteAliases,
   paletteClass,
   palettes,
   paletteToken,
@@ -26,11 +25,9 @@ import {
   slotDefaults,
   contrastLuminance,
   luminanceWeights,
-  mixedInOklab,
-  type Oklch,
+  namedPalettes,
   ownPaletteOf,
   textWithoutAPalette,
-  transparentOklch,
   variantAttribute,
   writtenColor,
 } from "#/src/color-table.ts";
@@ -46,16 +43,18 @@ import { stylesheet } from "#/tests/built-library.ts";
 import { layersAround } from "#/tests/cascade-layers.ts";
 import { render } from "#/tests/fixtures.ts";
 import { classesOf, declarationsIn, rootElementOf, valuesOf } from "#/tests/markup.ts";
+import {
+  mixedInOklab,
+  type Oklch,
+  oklabOf,
+  parsedOklch,
+  transparentOklch,
+} from "../../../tests/support/oklch.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
 import { schemeValues, tokenKind, tokenValues } from "../../../scripts/tokens";
 
 const primaryColorsFile = "packages/core/src/primary-colors.stylex.ts";
-const named: Palette[] = [
-  ...palettes,
-  ...Object.keys(paletteAliases).filter((name): name is keyof typeof paletteAliases =>
-    Object.hasOwn(paletteAliases, name),
-  ),
-];
+const named = namedPalettes;
 const variants = Object.keys(colorVariantTable);
 const slots = Object.keys(colorVariantTable.default.palette);
 
@@ -93,9 +92,7 @@ function styleOf(props: Record<string, unknown>): Record<string, string> {
 test("the colour tokens hold exactly one token for each shade of each palette of the colour table, and none for an alias", () => {
   const colourTokens = Object.keys(tokenValues()).filter((name) => tokenKind(name) === "colour");
   const ofAPalette = (name: string) =>
-    [...palettes, ...Object.keys(paletteAliases)].some((palette) =>
-      name.startsWith(`--solix-color-${palette}-`),
-    );
+    named.some((palette) => name.startsWith(`--solix-color-${palette}-`));
 
   expect(colourTokens.filter(ofAPalette).toSorted()).toEqual(
     palettes.flatMap((palette) => shades.map((shade) => paletteToken(palette, shade))).toSorted(),
@@ -301,10 +298,9 @@ const aliasDeclarations =
   )?.declarations ?? {};
 
 function oklchOf(written: string): Oklch {
-  const match = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+)(?: \/ ([\d.]+))?\)$/.exec(written);
-  if (!match) throw new Error(`${written} is no oklch() colour`);
-  const [lightness, chroma, hue] = match.slice(1, 4).map(Number);
-  return { lightness, chroma, hue, alpha: match[4] === undefined ? 1 : Number(match[4]) };
+  const colour = parsedOklch(written);
+  if (colour === undefined) throw new Error(`${written} is no oklch() colour`);
+  return colour;
 }
 
 function argumentsOf(inside: string): string[] {
@@ -427,11 +423,8 @@ const documentedMixes: Record<string, (given: Given, scheme: Scheme) => Painted>
   }),
 };
 
-function inOklab({ lightness, chroma, hue, alpha }: Oklch): number[] {
-  const radians = (hue * Math.PI) / 180;
-  return [lightness, chroma * Math.cos(radians), chroma * Math.sin(radians), alpha].map(
-    (channel) => Math.round(channel * 1e6) / 1e6 || 0,
-  );
+function inOklab(colour: Oklch): number[] {
+  return [...oklabOf(colour), colour.alpha].map((channel) => Math.round(channel * 1e6) / 1e6 || 0);
 }
 
 function asLab(colours: Painted): Record<string, number[]> {

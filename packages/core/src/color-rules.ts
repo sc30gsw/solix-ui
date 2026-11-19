@@ -11,10 +11,8 @@ import {
   contrastShade,
   customColorClass,
   derivedShades,
-  isPalette,
-  paletteAliases,
+  namedPalettes,
   paletteClass,
-  palettes,
   paletteToken,
   primaryPalette,
   primaryProperty,
@@ -66,7 +64,7 @@ function variantRule(selector: string, slots: VariantRow[keyof VariantRow]): str
 export function colorRules(): string {
   const variants = Object.entries(colorVariantTable);
   const rules = [
-    ...[...palettes, ...Object.keys(paletteAliases).filter(isPalette)].map(
+    ...namedPalettes.map(
       (palette) =>
         `.${paletteClass(palette)}{${shadesFrom((shade) => shadeSource(palette, shade))}}`,
     ),
