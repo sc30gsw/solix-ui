@@ -32,11 +32,11 @@ import {
   visibilityPropNames,
 } from "#/src/style-prop-table.ts";
 import { colorValueOf } from "#/src/color-table.ts";
+import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const pixelsPerRem = 16;
 const colorScale = "color" satisfies Scale;
-export const characterThatEndsADeclaration = /[;{}]/;
 const containerWidthUnits = ["rem", "px", "em"] as const;
 const fractionLeadingZeros = ["", "0", "00", "000"] as const;
 const unsignedInteger = "(?:0|[1-9]\\d*)";

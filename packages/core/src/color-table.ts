@@ -1,4 +1,5 @@
 import { cssColorFunctions, isCssColorKeyword } from "#/src/css-colors.ts";
+import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
 import type { variantColors } from "#/src/variant-colors.stylex.ts";
 
 export const palettes = [
@@ -203,7 +204,7 @@ export function shadeSource(palette: Palette, shade: Shade): ColourToken {
   return paletteToken(ownPaletteOf(palette), shade);
 }
 
-const solid = "6" satisfies Shade;
+export const solidShade = "6" satisfies Shade;
 const shadeSeparator = ".";
 const colourSyntax = new RegExp(
   `^(?:#[\\da-f]{3,8}|(?:${cssColorFunctions.join("|")})\\(.+\\))$`,
@@ -216,7 +217,7 @@ export type ParsedColor =
   | { readonly kind: "colour"; readonly value: string };
 
 export function parseColor(written: unknown): ParsedColor | undefined {
-  if (typeof written !== "string" || /[;{}]/.test(written)) return undefined;
+  if (typeof written !== "string" || characterThatEndsADeclaration.test(written)) return undefined;
   if (isPalette(written)) return { kind: "palette", palette: written };
   const at = written.lastIndexOf(shadeSeparator);
   const palette = written.slice(0, at);
@@ -231,6 +232,6 @@ export function parseColor(written: unknown): ParsedColor | undefined {
 
 export function colorValueOf(written: string): string | undefined {
   const parsed = parseColor(written);
-  if (parsed?.kind === "palette") return `var(${shadeSource(parsed.palette, solid)})`;
+  if (parsed?.kind === "palette") return `var(${shadeSource(parsed.palette, solidShade)})`;
   return parsed?.kind === "shade" ? parsed.value : undefined;
 }
