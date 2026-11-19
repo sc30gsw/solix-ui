@@ -3,6 +3,7 @@ import type { Browser, Page } from "playwright";
 import { describe, expect, inject, test } from "vite-plus/test";
 import { behaviourSdkHiddenRule } from "../../../packages/core/build-pipeline.mjs";
 import { libraryStyleMark } from "../../../packages/core/src/style-prop-table";
+import { expectedValues } from "../../../scripts/expected-values";
 import { elementsOf, valuesOf } from "../../../packages/core/tests/markup";
 import { policyHeader } from "#/src/middleware.ts";
 import { themedByTheProvider, themedSpacing, themeNames } from "#/src/sections/theme-setups.ts";
@@ -105,13 +106,36 @@ function spacingOf(page: Page, text: string): Promise<string> {
     .evaluate((node, name) => getComputedStyle(node).getPropertyValue(name).trim(), spacingToken);
 }
 
+function paddingOf(page: Page, text: string): Promise<string> {
+  return page
+    .getByText(text, { exact: true })
+    .evaluate((node) => getComputedStyle(node).paddingTop);
+}
+
+function paddingFor(page: Page, length: string): Promise<string> {
+  return page.evaluate((written) => {
+    const probe = document.createElement("div");
+    probe.style.paddingTop = written;
+    document.body.append(probe);
+    const padding = getComputedStyle(probe).paddingTop;
+    probe.remove();
+    return padding;
+  }, length);
+}
+
 inEveryEngine((browser) => {
   describe.each(howItIsServed)("a page %s", (_, served) => {
-    test("every <style> on it carries the page's nonce, the policy refuses none, and the theme stays under its selector", async () => {
+    test("every <style> on it carries the page's nonce, the policy refuses none, and the theme stays under its selector, where it sets a Box's padding", async () => {
       const { page, nonce, refused, close } = await openServed(browser(), served);
       const styles = await stylesOn(page);
       const themed = await spacingOf(page, themeNames.themed);
       const untouched = await spacingOf(page, themeNames.untouched);
+      const padding = {
+        themed: await paddingOf(page, themeNames.themed),
+        untouched: await paddingOf(page, themeNames.untouched),
+      };
+      const fromTheTheme = await paddingFor(page, themedSpacing.md);
+      const expected = await expectedValues(page);
       await close();
 
       expect(styles.map((style) => style.nonce)).toEqual(styles.map(() => nonce));
@@ -122,6 +146,12 @@ inEveryEngine((browser) => {
       if (served.javaScriptEnabled) expect(refused).toEqual([]);
       expect(themed).toBe(themedSpacing.md);
       expect(untouched).not.toBe(themed);
+      expect(padding.themed, "p=md under the provider's selector reads the theme's spacing").toBe(
+        fromTheTheme,
+      );
+      expect(padding.untouched, "p=md outside it keeps the library's spacing").toBe(
+        expected("--solix-spacing-md"),
+      );
     });
   });
 });
