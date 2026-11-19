@@ -311,3 +311,11 @@ test("setPath writes a list's length as an assignment does, so setting it shorte
   expect(setPath("a.length", 1, target)).toStrictEqual({ a: [1] });
   expect(target.a).toStrictEqual([1, 2, 3]);
 });
+
+test("getPath reads only own properties, so a path never reaches what a prototype holds", () => {
+  expect(getPath("toString", {})).toBeUndefined();
+  expect(getPath("a.hasOwnProperty", { a: {} })).toBeUndefined();
+  expect(getPath("list.map", { list: [] })).toBeUndefined();
+  expect(getPath("name.length", { name: "John" })).toBe(4);
+  expect(getPath("list.length", { list: [1, 2] })).toBe(2);
+});

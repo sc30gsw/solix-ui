@@ -59,12 +59,18 @@ function isContainer(value: unknown): value is object {
   return typeof value === "object" && value !== null;
 }
 
+export function childOf(container: unknown, key: PropertyKey): unknown {
+  if (container === null || container === undefined) return undefined;
+  const boxed: object = Object(container);
+  return Object.hasOwn(boxed, key) ? Reflect.get(boxed, key) : undefined;
+}
+
 export function getPath(path: unknown, values: unknown): unknown {
   const segments = splitPath(path);
   if (segments === undefined || !isContainer(values)) return undefined;
   return segments.reduce<unknown>(
     (current, segment) =>
-      current === null || current === undefined ? current : Reflect.get(Object(current), segment),
+      current === null || current === undefined ? current : childOf(current, segment),
     values,
   );
 }
@@ -103,7 +109,7 @@ function withEntry(target: object, key: string, value: unknown): object {
 function rewritten(target: object, segments: PathSegments, depth: number, value: unknown): object {
   const key = segments.at(depth) ?? "";
   if (depth === segments.length - 1) return withEntry(target, key, value);
-  const child: unknown = Reflect.get(target, key);
+  const child = childOf(target, key);
   if (!isContainer(child)) return target;
   const updated = rewritten(child, segments, depth + 1, value);
   return updated === child ? target : withEntry(target, key, updated);

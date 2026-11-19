@@ -320,3 +320,17 @@ test("validateValues gives no errors for a validate function that returns null o
     errors: {},
   });
 });
+
+test("a rule is found only among the rules' own properties, never on their prototype", async () => {
+  const inherited = Object.create({ [formRootRule]: () => "inherited", b: () => "inherited" });
+
+  expect(validateFieldValue("toString", {}, { toString: 1 })).toStrictEqual({
+    hasError: false,
+    error: null,
+  });
+  expect(ruleForPath("constructor", {})).toBeUndefined();
+  expect(validateValues({ a: inherited }, { a: { b: 1 } })).toStrictEqual({
+    hasErrors: false,
+    errors: {},
+  });
+});

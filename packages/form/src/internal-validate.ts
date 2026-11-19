@@ -1,5 +1,5 @@
 import { FORM_INDEX, formRootRule } from "#/src/constants.ts";
-import { getPath } from "#/src/internal-paths.ts";
+import { childOf, getPath } from "#/src/internal-paths.ts";
 import { filterErrors } from "#/src/internal-status.ts";
 import {
   type FormError,
@@ -52,7 +52,7 @@ function isRule(value: unknown): value is AnyRule {
 }
 
 function rootRuleOf(rules: object): AnyRule | undefined {
-  const rule: unknown = Reflect.get(rules, formRootRule);
+  const rule = childOf(rules, formRootRule);
   return isRule(rule) ? rule : undefined;
 }
 
@@ -117,7 +117,7 @@ export function ruleForPath(path: string, rules: unknown): AnyRule | undefined {
     .filter((segment) => !/^\d+$/.test(segment))
     .reduce<unknown>(
       (current, segment) =>
-        typeof current === "object" && current !== null ? Reflect.get(current, segment) : undefined,
+        typeof current === "object" && current !== null ? childOf(current, segment) : undefined,
       rules,
     );
   return isRule(found) ? found : undefined;
