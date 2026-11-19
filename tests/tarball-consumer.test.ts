@@ -41,6 +41,7 @@ import {
   componentLibraries,
   installedVersions,
   installedVp,
+  libraryNames,
   libraryPackages,
   packageManagerAnswerTimeout,
   repositoryRoot,
@@ -50,6 +51,7 @@ import {
 const [library] = componentLibraries;
 const libraryName = library.manifest.name ?? "";
 const fixtures = join(repositoryRoot, "tests/fixtures/tarball-consumer");
+const formRulesFixture = "form-rules.ts";
 const installAndBuildTimeout = 240_000;
 const packTimeout = packageManagerAnswerTimeout * libraryPackages.length;
 const fromOutsideTheRepository = allowedRuntimeDependencyNames();
@@ -212,6 +214,7 @@ describe("installed into a consumer outside the workspace", () => {
     const versionOf = (name: string) => catalog[name];
     mkdirSync(join(app, "src"));
     copyFileSync(join(fixtures, "vite.config.ts"), join(app, "vite.config.ts"));
+    copyFileSync(join(fixtures, formRulesFixture), join(app, "src", formRulesFixture));
     writeFileSync(
       join(app, "package.json"),
       JSON.stringify({
@@ -261,7 +264,7 @@ describe("installed into a consumer outside the workspace", () => {
     buildWith("TabsApp.tsx");
   }, installAndBuildTimeout);
 
-  test("a consumer that names every library by its packed tarball gets one copy of each, the one the component library resolves as its peer, and gets the SDK as a dependency of the component library, at the version the catalog pins, without listing it", () => {
+  test("a consumer that names every library by its packed tarball gets one copy of each, the one the component library resolves when it names it as a peer, and gets the SDK as a dependency of the component library, at the version the catalog pins, without listing it", () => {
     const installed = (name: string) =>
       JSON.parse(readFileSync(join(besideTheLibrary(), name, "package.json"), "utf8")) as {
         version: string;
@@ -273,12 +276,17 @@ describe("installed into a consumer outside the workspace", () => {
     const { catalog } = pnpmSettings();
 
     const settings = readFileSync(join(app, workspaceFile), "utf8");
-    for (const { manifest } of libraryPackages) {
-      const name = manifest.name ?? "";
+    const resolvedByTheLibrary = libraryNames.filter(
+      (name) => name === libraryName || name in (library.manifest.peerDependencies ?? {}),
+    );
+    for (const name of libraryNames) {
       expect(consumer.dependencies[name], `${name} in the consumer's own manifest`).toMatch(
         /\.tgz$/,
       );
       expect(settings.includes(name), `${name} in the consumer's ${workspaceFile}`).toBe(false);
+    }
+    expect(resolvedByTheLibrary).toContain(libraryName);
+    for (const name of resolvedByTheLibrary) {
       expect(realpathSync(join(besideTheLibrary(), name)), name).toBe(
         realpathSync(join(app, "node_modules", name)),
       );

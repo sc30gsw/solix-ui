@@ -46,7 +46,7 @@ function fixesItsOwnSettings(library: Library, node: ts.Node): boolean {
 
 export const listenerRolesRule = forbidOutside({
   description: `only ${listenerModule} refers to listen or to the DOM's addEventListener and removeEventListener, by any spelling refersToDomMember resolves, and outside it no call of listenerSettings leaves its options out or writes them as a literal`,
-  home: { file: listenerModule },
+  homes: () => [{ file: listenerModule }],
   find: (library, node) => {
     if (isValueReference(node) && refersTo(library, node, rawListen)) return true;
     if (fixesItsOwnSettings(library, node)) return true;

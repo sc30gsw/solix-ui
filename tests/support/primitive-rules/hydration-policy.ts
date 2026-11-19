@@ -6,7 +6,7 @@ const hydrationNames = ["ssrSource", "from"];
 
 export const hydrationPolicyRule = forbidOutside({
   description: `only ${policyModule} refers to Solid's ssrSource option or its from`,
-  home: { file: policyModule },
+  homes: () => [{ file: policyModule }],
   find: (library, node) =>
     (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isComputedPropertyName(node)) &&
     !ts.isImportSpecifier(node.parent) &&

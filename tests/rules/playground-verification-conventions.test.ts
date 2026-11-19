@@ -66,7 +66,8 @@ const secondLevelHeading = /^## (.+)$/gm;
 const portName = /port/i;
 const portNumbers = { lowest: 1024, highest: 65_535 };
 const listenCall = /\blisten$/;
-const portInText =
+const portInCode = /127\.0\.0\.1:(\d+)|--port[= ]["'`]?(\d+)|\bPORT[=:]\s*["'`]?(\d+)/g;
+const portInScriptsAndDocs =
   /(?:127\.0\.0\.1|localhost):(\d+)|--port[= ]["'`]?(\d+)|\bPORT[=:]\s*["'`]?(\d+)|_PORT:-(\d+)/g;
 
 function read(path: string): string {
@@ -219,8 +220,8 @@ function portsIn(source: ts.SourceFile): string[] {
   return [...found];
 }
 
-function portsWrittenIn(text: string): string[] {
-  return [...text.matchAll(portInText)]
+function portsWrittenIn(text: string, written: RegExp): string[] {
+  return [...text.matchAll(written)]
     .map((match) => match.slice(1).find((port) => port !== undefined) ?? "")
     .filter((port) => Number(port) >= portNumbers.lowest);
 }
@@ -228,10 +229,15 @@ function portsWrittenIn(text: string): string[] {
 test("no test server, test configuration or verification instance names a fixed port: each listens on a port the system gives it, so two runs never meet", () => {
   const codePaths = globSync(portHolders, { cwd: repositoryRoot }).sort();
   const sources = parseAll(codePaths.map((path) => join(repositoryRoot, path)));
-  const textPaths = globSync([...portHolders, ...portTexts], { cwd: repositoryRoot }).sort();
+  const textPaths = globSync(portTexts, { cwd: repositoryRoot }).sort();
   const violations = [
     ...codePaths.flatMap((path, index) => portsIn(sources[index]).map((port) => ({ path, port }))),
-    ...textPaths.flatMap((path) => portsWrittenIn(read(path)).map((port) => ({ path, port }))),
+    ...codePaths.flatMap((path) =>
+      portsWrittenIn(read(path), portInCode).map((port) => ({ path, port })),
+    ),
+    ...textPaths.flatMap((path) =>
+      portsWrittenIn(read(path), portInScriptsAndDocs).map((port) => ({ path, port })),
+    ),
   ].map(
     ({ path, port }) =>
       `${path}: port ${port} is fixed. Listen on port ${anyFreePort} through startServer, listening or viteOnAFreePort, and read the port the server got.`,

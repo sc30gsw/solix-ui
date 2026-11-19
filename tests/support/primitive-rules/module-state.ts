@@ -53,6 +53,6 @@ const moduleState: Rule = (library) =>
   );
 
 export const moduleStateRule: PrimitiveRule = {
-  description: "no primitive keeps state at module level",
+  description: "no module keeps state at module level",
   rule: moduleState,
 };
