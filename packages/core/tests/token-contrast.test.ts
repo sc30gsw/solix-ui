@@ -2,24 +2,27 @@ import { readdirSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
+  colorClass,
   colorVariantTable,
   isShade,
   ownPaletteOf,
   type Palette,
   paletteAliases,
+  paletteClass,
   palettes as ownPalettes,
   paletteToken,
   primaryPalette,
   primaryProperty,
+  shadeClass,
   shades,
+  variantAttribute,
 } from "#/src/color-table.ts";
 import {
-  componentPart,
   type ContrastKind,
   contrastExceptions,
   inScheme,
-  variantPart,
 } from "../../../tests/support/contrast-exceptions";
+import { stableClass } from "#/src/stable-class.ts";
 import { fileNamedBy } from "../../../scripts/subpath";
 import { schemeValues, tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
 import { parse, ts } from "../../../scripts/syntax";
@@ -68,6 +71,19 @@ const lengthTokens = Object.keys(tokens).filter(
 const shadowLength = String.raw`(?:0|-?${number}rem)`;
 const oneShadow = new RegExp(`^(?:${shadowLength} ){2,4}${oklchText}$`);
 const commaOutsideBrackets = /,\s*(?![^(]*\))/;
+
+function variantPart(palette: Palette | undefined, variant: string): string {
+  const named = palette === undefined ? colorClass : paletteClass(palette);
+  return `.${named}[${variantAttribute}="${variant}"]:not(.${shadeClass})`;
+}
+
+function componentPart(component: string, part: string, condition: string): string {
+  const own = `.${stableClass(component, part)}`;
+  if (condition === "default") return own;
+  return part === "root"
+    ? `${own}${condition}`
+    : `.${stableClass(component, "root")}${condition} ${own}`;
+}
 
 function isAliasName(name: string): name is keyof typeof paletteAliases {
   return Object.hasOwn(paletteAliases, name);
