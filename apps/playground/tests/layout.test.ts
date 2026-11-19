@@ -9,6 +9,7 @@ import {
   type OpenPage,
   scriptModes,
 } from "#/tests/support/playground.ts";
+import { expectTheBoxCascade } from "#/tests/support/box-cascade.ts";
 
 const url = inject("playgroundUrl");
 const pixelsPerMediaQueryEm = 16;
@@ -380,15 +381,17 @@ inEveryEngine((browser) => {
     });
   });
 
-  test("a page widened from one pixel below md to md passes every check at md", async () => {
+  test("a page widened from one pixel below md to md passes the Box's checks and every layout check at md", async () => {
     const { page, expected, close } = await openPage(browser(), url, {
       viewport: { width: mdBreakpointInPixels - 1, height: viewportHeight },
     });
+    try {
+      await page.setViewportSize({ width: mdBreakpointInPixels, height: viewportHeight });
 
-    await page.setViewportSize({ width: mdBreakpointInPixels, height: viewportHeight });
-
-    for (const [, check] of checks) await check({ page, expected, fromMd: true });
-
-    await close();
+      await expectTheBoxCascade({ page, expected, fromMd: true });
+      for (const [, check] of checks) await check({ page, expected, fromMd: true });
+    } finally {
+      await close();
+    }
   });
 });
