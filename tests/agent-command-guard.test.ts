@@ -28,10 +28,14 @@ const refused: [Refusal, string[]][] = [
       "bash -c 'git stash'",
       "eval git stash",
       "true; git\\\n stash",
+      "bash <<< 'git stash'",
+      "echo git stash | bash",
+      "printf 'git stash' | sh",
+      "bash <<'EOF'\ngit stash\nEOF",
     ],
   ],
   [
-    "noVerify",
+    "hooksSkipped",
     [
       "git commit --no-verify -m 'feat: x'",
       "git commit -n -m 'feat: x'",
@@ -40,6 +44,16 @@ const refused: [Refusal, string[]][] = [
       "flock /tmp/solix-test.lock git commit -a -n -m x",
       "git -c user.name=x commit -n",
       "sh -c 'git commit -n -m x'",
+      "HUSKY=0 git commit -m x",
+      "VP_GIT_HOOKS=0 git commit -m x",
+      "export VITE_GIT_HOOKS=0",
+      "env HUSKY=0 git merge main",
+      "git -c core.hooksPath=/dev/null commit -m x",
+      "git -c CORE.HOOKSPATH=x merge main",
+      "git config core.hooksPath /dev/null",
+      "git config --unset core.hooksPath",
+      "git config set core.hooksPath x",
+      "git merge --no-verify main",
     ],
   ],
   [
@@ -50,6 +64,9 @@ const refused: [Refusal, string[]][] = [
       "pnpm exec playwright@1.0.0 install",
       "node node_modules/playwright/cli.js install webkit",
       "PLAYWRIGHT_BROWSERS_PATH=/tmp/x node_modules/.bin/playwright install",
+      "node node_modules/playwright-core/cli.js install",
+      "node node_modules/@playwright/test/cli.js install",
+      "node_modules/playwright/lib/cli/cli.js install chromium",
     ],
   ],
   [
@@ -96,6 +113,19 @@ const allowed = [
   "sed -i 's/a/b/' pnpm-workspace.yaml",
   "vp test 2>&1 | tee ../run.log",
   "flock /tmp/solix-test.lock vp run verify",
+  "HUSKY=2 git commit -m x",
+  "git -c core.hooksPath=/dev/null log",
+  "git config core.hooksPath",
+  "git config --get core.hooksPath",
+  "vp config",
+  "git merge -n main",
+  "git merge --no-verify-signatures main",
+  "git commit -uno -m x",
+  "git commit -Skey -m x",
+  "git diff main -- pnpm-workspace.yaml | grep minimumReleaseAge",
+  "grep minimumReleaseAge pnpm-workspace.yaml > /tmp/out",
+  "cp pnpm-workspace.yaml /tmp/x && grep minimumReleaseAge /tmp/x",
+  "echo git stash | grep stash",
 ];
 
 describe("the agent command guard", () => {
@@ -112,7 +142,7 @@ describe("the agent command guard", () => {
 
   test("allows playwright install in CI, and still refuses the rest there", () => {
     expect(refusalsOf("vp exec playwright install chromium", true)).toEqual([]);
-    expect(refusalsOf("git stash && git commit -n", true)).toEqual(["stash", "noVerify"]);
+    expect(refusalsOf("git stash && git commit -n", true)).toEqual(["stash", "hooksSkipped"]);
   });
 });
 

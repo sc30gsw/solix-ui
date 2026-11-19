@@ -2,13 +2,15 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-type Token = { word: string } | { operator: string };
+type Token = { word: string } | { operator: string } | { input: string };
 
 type Lexed = { tokens: Token[]; end: number };
 
 const separators = new Set([";", "&", "&&", "|", "||", "|&", "\n", "(", ")", ";;"]);
 const fileWrites = new Set([">", ">>", ">|", "&>", "&>>"]);
-const takesAnOperand = new Set([...fileWrites, "<", ">&", "<&", "<<<"]);
+const hereString = "<<<";
+const takesAnOperand = new Set([...fileWrites, "<", ">&", "<&", hereString]);
+const pipes = new Set(["|", "|&"]);
 const operators = [
   "&>>",
   "<<<",
@@ -61,13 +63,24 @@ const gitOptionsWithAValue = new Set([
   "--super-prefix",
 ]);
 const commitShortOptionsWithAValue = new Set(["m", "F", "c", "C", "t"]);
+const commitShortOptionsWithAnAttachedValue = new Set(["u", "S"]);
+const hookSwitches = new Set(["HUSKY", "VP_GIT_HOOKS", "VITE_GIT_HOOKS"]);
+const hooksOff = "0";
+const hooksPathKey = "core.hookspath";
+const hookedSubcommands = new Set(["commit", "merge"]);
+const configWritingOptions = new Set(["--unset", "--unset-all", "--add", "--replace-all"]);
+const configWritingSubcommands = new Set(["set", "unset"]);
+const echoes = new Set(["echo", "printf"]);
+const playwrightCli = /(^|\/)(@playwright\/test|playwright(-core)?)\/(.*\/)?cli\.m?js$/;
+const playwrightPrograms = new Set(["playwright", "playwright-core"]);
 const noVerify = "--no-verify";
 const shortestNoVerifyGitAccepts = "--no-veri";
 const packageManagers = new Set(["pnpm", "npm", "npx", "pnpx", "yarn", "corepack", "vp", "vpr"]);
 const configWrites = new Set(["set", "delete"]);
 const assignmentTakers = new Set(["env", "export", "declare", "typeset", "local", "readonly"]);
 const inPlaceEditors = new Set(["sed", "perl", "yq"]);
-const fileWriters = new Set(["tee", "dd", "cp", "mv", "install"]);
+const copiers = new Set(["cp", "mv", "install"]);
+const ddOutput = "of=";
 const pnpmConfigFile = /pnpm-workspace\.ya?ml|\.npmrc|package\.json|pnpm\/rc\b/;
 const assignment = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const versionSuffix = /@[^/]*$/;
@@ -79,8 +92,8 @@ export const refusals = {
     "git stash is refused: the stash is shared by every worktree of this repository, so another agent's stash can be popped into yours. Commit the work on a branch instead.",
   playwrightInstall:
     "playwright install is refused outside CI: the local browsers are the ones the tests were confirmed with. Use the installed ones, and leave recording evidence to CI.",
-  noVerify:
-    "git commit --no-verify (or -n) is refused: the pre-commit hook is what makes a commit hold only verified code. Fix what the hook reports.",
+  hooksSkipped:
+    "Skipping the git hooks is refused: --no-verify, -n on a commit, HUSKY, VP_GIT_HOOKS or VITE_GIT_HOOKS set to 0, and another core.hooksPath each turn off the checks that make a commit hold only verified code. Fix what the hooks report.",
   releaseAge:
     "Setting a pnpm release-age setting, minimumReleaseAgeExclude or trustLockfile is refused: a release younger than the minimum age is not installed. Wait for it.",
 } as const;
@@ -192,7 +205,7 @@ function lex(line: string, start: number, closer?: string): Lexed {
       if (operator === "\n" && pendingHeredocs.length > 0) {
         for (const delimiter of pendingHeredocs.splice(0)) {
           const { body, end } = heredocBody(line, index, delimiter);
-          tokens.push({ word: body });
+          tokens.push({ input: body });
           index = end;
         }
       }
@@ -209,18 +222,22 @@ function wordOf(word: string | undefined): Token[] {
   return word === undefined ? [] : [{ word }];
 }
 
-type SimpleCommand = { words: string[]; written: string[] };
+type SimpleCommand = { words: string[]; written: string[]; input: string[]; piped: boolean };
 
 function simpleCommands(tokens: readonly Token[]): SimpleCommand[] {
-  const commands: SimpleCommand[] = [{ words: [], written: [] }];
+  const commands: SimpleCommand[] = [{ words: [], written: [], input: [], piped: false }];
   let operand: string | undefined;
   for (const token of tokens) {
     const current = commands[commands.length - 1];
     if ("operator" in token) {
-      if (separators.has(token.operator)) commands.push({ words: [], written: [] });
+      if (separators.has(token.operator))
+        commands.push({ words: [], written: [], input: [], piped: pipes.has(token.operator) });
       operand = takesAnOperand.has(token.operator) ? token.operator : undefined;
+    } else if ("input" in token) {
+      current.input.push(token.input);
     } else if (operand !== undefined) {
       if (fileWrites.has(operand)) current.written.push(token.word);
+      if (operand === hereString) current.input.push(token.word);
       operand = undefined;
     } else {
       current.words.push(token.word);
@@ -242,12 +259,45 @@ function assignsAReleaseAgeSetting(word: string): boolean {
   return assignment.test(word) && namesAReleaseAgeSetting(word.slice(0, word.indexOf("=")));
 }
 
-function gitSubcommand(args: readonly string[]): { name: string; args: string[] } | undefined {
+type GitCall = { name: string; args: string[]; configs: string[] };
+
+function gitSubcommand(args: readonly string[]): GitCall | undefined {
+  const configs: string[] = [];
   let index = 0;
   while (index < args.length && args[index].startsWith("-")) {
+    if (args[index] === "-c" || args[index] === "--config-env") configs.push(args[index + 1] ?? "");
     index += gitOptionsWithAValue.has(args[index]) ? 2 : 1;
   }
-  return index < args.length ? { name: args[index], args: args.slice(index + 1) } : undefined;
+  return index < args.length
+    ? { name: args[index], args: args.slice(index + 1), configs }
+    : undefined;
+}
+
+function setsTheHooksPath(config: string): boolean {
+  return config.split("=")[0].toLowerCase() === hooksPathKey;
+}
+
+function turnsTheHooksOff(word: string): boolean {
+  if (!assignment.test(word)) return false;
+  const [name, value] = [word.slice(0, word.indexOf("=")), word.slice(word.indexOf("=") + 1)];
+  return hookSwitches.has(name) && value === hooksOff;
+}
+
+function writesTheHooksPath(configArgs: readonly string[]): boolean {
+  const key = configArgs.findIndex((arg) => arg.toLowerCase() === hooksPathKey);
+  if (key === -1) return false;
+  return (
+    configWritingSubcommands.has(configArgs[0]) ||
+    configArgs.some((arg) => configWritingOptions.has(arg)) ||
+    configArgs.slice(key + 1).some((arg) => !arg.startsWith("-"))
+  );
+}
+
+function skipsTheHooksOf({ name, args, configs }: GitCall): boolean {
+  if (name === "config") return writesTheHooksPath(args);
+  if (!hookedSubcommands.has(name)) return false;
+  if (configs.some(setsTheHooksPath)) return true;
+  return name === "commit" ? skipsTheHooks(args) : args.includes(noVerify);
 }
 
 function skipsTheHooks(commitArgs: readonly string[]): boolean {
@@ -260,10 +310,15 @@ function skipsTheHooks(commitArgs: readonly string[]): boolean {
         return true;
     } else if (arg.startsWith("-") && arg.length > 1) {
       const letters = arg.slice(1).split("");
-      const valueAt = letters.findIndex((letter) => commitShortOptionsWithAValue.has(letter));
+      const valueAt = letters.findIndex(
+        (letter) =>
+          commitShortOptionsWithAValue.has(letter) ||
+          commitShortOptionsWithAnAttachedValue.has(letter),
+      );
       const flags = valueAt === -1 ? letters : letters.slice(0, valueAt);
       if (flags.includes("n")) return true;
-      if (valueAt === letters.length - 1) index += 1;
+      if (valueAt === letters.length - 1 && commitShortOptionsWithAValue.has(letters[valueAt]))
+        index += 1;
     }
   }
   return false;
@@ -278,9 +333,9 @@ function refusalsFrom(
   if (program === "git") {
     const subcommand = gitSubcommand(rest);
     if (subcommand?.name === "stash") return ["stash"];
-    if (subcommand?.name === "commit" && skipsTheHooks(subcommand.args)) return ["noVerify"];
+    if (subcommand !== undefined && skipsTheHooksOf(subcommand)) return ["hooksSkipped"];
   }
-  if ((program === "playwright" || word.endsWith("playwright/cli.js")) && !inCi) {
+  if ((playwrightPrograms.has(program) || playwrightCli.test(word)) && !inCi) {
     if (rest.find((arg) => !arg.startsWith("-")) === "install") return ["playwrightInstall"];
   }
   if (packageManagers.has(program)) {
@@ -291,13 +346,17 @@ function refusalsFrom(
     if (sets) return ["releaseAge"];
   }
   if (assignmentTakers.has(program) && rest.some(assignsAReleaseAgeSetting)) return ["releaseAge"];
+  if (assignmentTakers.has(program) && rest.some(turnsTheHooksOff)) return ["hooksSkipped"];
   return [];
 }
 
 function refusalsOfCommand({ words }: SimpleCommand, inCi: boolean): Refusal[] {
   const leadingAssignments = words.findIndex((word) => !assignment.test(word));
   const assignments = leadingAssignments === -1 ? words : words.slice(0, leadingAssignments);
-  const found: Refusal[] = assignments.some(assignsAReleaseAgeSetting) ? ["releaseAge"] : [];
+  const found: Refusal[] = [
+    ...(assignments.some(assignsAReleaseAgeSetting) ? (["releaseAge"] as const) : []),
+    ...(assignments.some(turnsTheHooksOff) ? (["hooksSkipped"] as const) : []),
+  ];
   if (leadingAssignments === -1) return found;
   const program = programName(words[leadingAssignments]);
   if (readsData.has(program)) return found;
@@ -313,25 +372,45 @@ function refusalsOfCommand({ words }: SimpleCommand, inCi: boolean): Refusal[] {
   return found;
 }
 
+function operandsAfter(words: readonly string[], index: number): string[] {
+  return words.slice(index + 1).filter((arg) => !arg.startsWith("-"));
+}
+
+function filesWritten({ words, written }: SimpleCommand): string[] {
+  return [
+    ...written,
+    ...words.flatMap((word, index) => {
+      const program = programName(word);
+      const operands = operandsAfter(words, index);
+      if (program === "tee") return operands;
+      if (copiers.has(program)) return operands.slice(-1);
+      if (program === "dd")
+        return words
+          .filter((arg) => arg.startsWith(ddOutput))
+          .map((arg) => arg.slice(ddOutput.length));
+      if (inPlaceEditors.has(program) && words.slice(index + 1).some((arg) => arg.startsWith("-i")))
+        return operands.filter((arg) => pnpmConfigFile.test(arg));
+      return [];
+    }),
+  ];
+}
+
 function writesAPnpmConfigFile(commands: readonly SimpleCommand[]): boolean {
-  const writes = commands.some(
-    ({ words, written }) =>
-      written.length > 0 ||
-      words.some(
-        (word, index) =>
-          fileWriters.has(programName(word)) ||
-          (inPlaceEditors.has(programName(word)) &&
-            words.slice(index + 1).some((arg) => arg.startsWith("-i"))),
-      ),
-  );
-  const text = commands.flatMap(({ words, written }) => [...words, ...written]);
+  const text = commands.flatMap(({ words, input }) => [...words, ...input]);
   return (
-    writes && text.some(namesAReleaseAgeSetting) && text.some((word) => pnpmConfigFile.test(word))
+    commands.some((command) => filesWritten(command).some((file) => pnpmConfigFile.test(file))) &&
+    text.some(namesAReleaseAgeSetting)
   );
 }
 
-function shellScriptsIn({ words }: SimpleCommand): string[] {
-  return words.flatMap((word, index) => {
+function programOf({ words }: SimpleCommand): string | undefined {
+  const at = words.findIndex((word) => !assignment.test(word));
+  return at === -1 ? undefined : programName(words[at]);
+}
+
+function shellScriptsIn(command: SimpleCommand, before: SimpleCommand | undefined): string[] {
+  const { words, input, piped } = command;
+  const scripts = words.flatMap((word, index) => {
     const program = programName(word);
     if (program === "eval") return [words.slice(index + 1).join(" ")];
     if (!shells.has(program)) return [];
@@ -339,6 +418,16 @@ function shellScriptsIn({ words }: SimpleCommand): string[] {
     const script = flag === -1 ? undefined : words[index + 2 + flag];
     return script === undefined ? [] : [script];
   });
+  if (scripts.length > 0 || !shells.has(programOf(command) ?? "")) return scripts;
+  const echoed =
+    piped && before !== undefined && echoes.has(programOf(before) ?? "")
+      ? [
+          before.words
+            .slice(before.words.findIndex((word) => echoes.has(programName(word))) + 1)
+            .join(" "),
+        ]
+      : [];
+  return [...input, ...echoed];
 }
 
 export function refusalsOf(line: string, inCi: boolean): Refusal[] {
@@ -346,7 +435,9 @@ export function refusalsOf(line: string, inCi: boolean): Refusal[] {
   const found = [
     ...commands.flatMap((command) => refusalsOfCommand(command, inCi)),
     ...(writesAPnpmConfigFile(commands) ? (["releaseAge"] as const) : []),
-    ...commands.flatMap(shellScriptsIn).flatMap((script) => refusalsOf(script, inCi)),
+    ...commands
+      .flatMap((command, index) => shellScriptsIn(command, commands[index - 1]))
+      .flatMap((script) => refusalsOf(script, inCi)),
   ];
   return [...new Set(found)];
 }
