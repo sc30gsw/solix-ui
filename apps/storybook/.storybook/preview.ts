@@ -11,6 +11,7 @@ import {
   selectorsTheAccessibilityAddonLeavesUnscanned,
 } from "#/accessibility-scan.ts";
 import "@solix/core/styles.css";
+import "#/.storybook/preview.css";
 
 const projectAccessibility: Record<string, unknown> = {
   test: "error",

@@ -11,7 +11,11 @@ const playgroundPort = 4319;
 
 export type TestFilesOfEachProject = Readonly<Record<string, readonly string[]>>;
 
-export type RunSettings = { testNamePattern: string | null; env: Record<string, string> };
+export type RunSettings = {
+  testNamePattern: string | null;
+  env: Record<string, string>;
+  provided: Record<string, unknown>;
+};
 
 declare module "vite-plus/test" {
   interface ProvidedContext {
@@ -35,6 +39,7 @@ function runSettingsOfEachProject(project: TestProject): Record<string, RunSetti
         env: Object.fromEntries(
           Object.entries(config.env ?? {}).map(([key, value]) => [key, String(value)]),
         ),
+        provided: { ...config.provide },
       },
     ]),
   );

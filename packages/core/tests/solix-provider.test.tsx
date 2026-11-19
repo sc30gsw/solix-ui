@@ -8,6 +8,7 @@ import type * as CreateTheme from "#/src/create-theme.ts";
 import { layerOrder, libraryCascadeLayer, libraryStyleMark } from "#/src/style-prop-table.ts";
 import { dist, library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
+import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
 
 const { scaleOfThemeKey } = (await import(join(dist, "create-theme.js"))) as typeof CreateTheme;
@@ -76,7 +77,7 @@ function isThemeKey(key: string): key is keyof typeof scaleOfThemeKey {
   return Object.hasOwn(scaleOfThemeKey, key);
 }
 
-function expectedDeclarations({ theme: given }: Drawn): string[] {
+function expectedDeclarations({ theme: given }: Pick<Drawn, "theme">): string[] {
   return Object.entries(given).flatMap(([key, written]) =>
     isThemeKey(key)
       ? Object.entries(written).flatMap(([size, declared]) => {
@@ -161,6 +162,26 @@ test("on the server, the provider writes its theme as one marked style with the 
         ).toEqual(declarations);
       },
     ),
+    { numRuns: generatedRuns },
+  );
+});
+
+test("given no cssVariablesSelector, the provider writes its theme under a selector whose subject names no element type, so it styles no <html> or <body> by name, for generated themes", async (context) => {
+  await assertProperty(
+    context,
+    fc.property(theme, (given) => {
+      const css = styleOf(
+        renderToString(() => createComponent(library.SolixProvider, { theme: given })),
+      );
+      const rules: postcss.Rule[] = [];
+      const written = postcss.parse(css ?? "");
+      written.walkRules((rule) => {
+        rules.push(rule);
+      });
+
+      expect(rules).toHaveLength(expectedDeclarations({ theme: given }).length > 0 ? 1 : 0);
+      expect(rulesThatStyleThePage(written)).toEqual([]);
+    }),
     { numRuns: generatedRuns },
   );
 });

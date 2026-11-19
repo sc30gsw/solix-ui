@@ -9,11 +9,15 @@ import {
   storyIndex,
 } from "#/tests/support/stories.ts";
 import { collectTelemetry, telemetryUrlVariable } from "#/tests/support/telemetry-collector.ts";
-import { brokenStoriesServer, brokenStoriesTelemetryPort } from "#/tests/support/test-servers.ts";
+import {
+  brokenStoriesServer,
+  brokenStoriesTelemetryPort,
+  storiesServers,
+} from "#/tests/support/test-servers.ts";
 
 type BrokenStory = Exclude<keyof typeof BrokenStories, "default">;
 
-type Outcome = { status: string; messages: string };
+type Outcome = { status: string; messages: string; colorSchemeAtTheEnd: string | undefined };
 
 const reasonOf: { [Story in BrokenStory]: string } = {
   NoAccessibleName: "button-name",
@@ -31,6 +35,7 @@ const reasonOf: { [Story in BrokenStory]: string } = {
   RenderedWhereTheScanDoesNotLook: "the canvas holds .sb-wrapper",
   PlayTurnsTheCheckOff: 'while it ran:\na11y.test is "off"',
   NamelessLinkAfterAWrite: "link-name",
+  SetsTheOtherScheme: "leaves the colour scheme of its project",
 };
 
 const fixturesDirectory = join(storybookDirectory, "fixtures");
@@ -64,8 +69,8 @@ describe.each(enginesToVerify())("in %s, one run of every broken story", (engine
       brokenStoriesRunTimeout,
     );
     runOutput = "unreadable" in run.report ? `${run.report.unreadable}\n${run.output}` : run.output;
-    for (const { id, status, messages } of "tests" in run.report ? run.report.tests : []) {
-      outcomes.set(id, { status, messages: messages.join("\n") });
+    for (const story of "tests" in run.report ? run.report.tests : []) {
+      outcomes.set(story.id, { ...story, messages: story.messages.join("\n") });
     }
   }, brokenStoriesRunTimeout + childRunMargin);
 
@@ -80,6 +85,28 @@ describe.each(enginesToVerify())("in %s, one run of every broken story", (engine
       expect(otherReasons.filter((other) => outcome?.messages.includes(other))).toEqual([]);
     },
   );
+
+  test("the page of every broken story that ran ends in the project's colour scheme, and in the other for the one that sets it, read from the page after each story", () => {
+    const { colorScheme } = brokenStoriesServer;
+    const other = storiesServers
+      .map((server) => server.colorScheme)
+      .find((scheme) => scheme !== colorScheme);
+    const setsTheOther: BrokenStory = "SetsTheOtherScheme";
+
+    expect(
+      Object.fromEntries(
+        Object.keys(reasonOf).map((story) => [
+          story,
+          outcomes.get(storyIdOf(story))?.colorSchemeAtTheEnd,
+        ]),
+      ),
+      runOutput,
+    ).toEqual(
+      Object.fromEntries(
+        Object.keys(reasonOf).map((story) => [story, story === setsTheOther ? other : colorScheme]),
+      ),
+    );
+  });
 
   test("runs every broken story Storybook indexes, and no other", () => {
     expect([...outcomes.keys()].sort(), runOutput).toEqual(
