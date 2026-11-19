@@ -70,6 +70,10 @@ export function getPath(path: unknown, values: unknown): unknown {
 }
 
 function put(target: object, key: PropertyKey, value: unknown): void {
+  if (Array.isArray(target)) {
+    Reflect.set(target, key, value);
+    return;
+  }
   Object.defineProperty(target, key, {
     value,
     writable: true,

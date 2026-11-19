@@ -304,3 +304,10 @@ test("setPath returns its input itself for a path through a missing or scalar pa
     }),
   );
 });
+
+test("setPath writes a list's length as an assignment does, so setting it shortens a copy of the list", () => {
+  const target = { a: [1, 2, 3] };
+
+  expect(setPath("a.length", 1, target)).toStrictEqual({ a: [1] });
+  expect(target.a).toStrictEqual([1, 2, 3]);
+});
