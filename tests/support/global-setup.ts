@@ -13,6 +13,7 @@ export type RunSettings = {
   env: Record<string, string>;
   provided: Record<string, unknown>;
   groupOrder: number;
+  globalSetup: string[];
 };
 
 declare module "vite-plus/test" {
@@ -39,6 +40,7 @@ function runSettingsOfEachProject(project: TestProject): Record<string, RunSetti
         ),
         provided: { ...config.provide },
         groupOrder: config.sequence.groupOrder,
+        globalSetup: [config.globalSetup].flat().map((file) => relative(repositoryRoot, file)),
       },
     ]),
   );
