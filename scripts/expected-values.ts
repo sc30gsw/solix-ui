@@ -22,6 +22,7 @@ const probedProperty = {
   radius: "border-top-left-radius",
   spacing: "margin-top",
   length: "height",
+  shadow: "box-shadow",
 } satisfies Record<TokenKind, string>;
 
 type Probe = [name: string, property: string, value: string];
@@ -53,13 +54,15 @@ function lengthNoEngineRounds(index: number): string {
 
 function sentinelValues(names: string[]): Record<string, string> {
   const colours = names.filter((name) => tokenKind(name) === "colour");
-  const lengths = names.filter((name) => tokenKind(name) !== "colour");
+  const shadows = names.filter((name) => tokenKind(name) === "shadow");
+  const lengths = names.filter((name) => !["colour", "shadow"].includes(tokenKind(name)));
   return Object.fromEntries([
     ...colours.map((name, index) => [
       name,
       `oklch(0.6 0.1 ${Math.round((360 * index) / colours.length)})`,
     ]),
     ...lengths.map((name, index) => [name, lengthNoEngineRounds(index)]),
+    ...shadows.map((name, index) => [name, `0 0 ${lengthNoEngineRounds(index)} oklch(0 0 0)`]),
   ]);
 }
 

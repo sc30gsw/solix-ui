@@ -174,11 +174,33 @@ export const tokens = stylex.defineVars({
   "--solix-font-size-md": "0.9375rem",
   "--solix-font-size-lg": "1.0625rem",
   "--solix-font-size-xl": "1.3125rem",
+  "--solix-font-size-h1": "2.125rem",
+  "--solix-font-size-h2": "1.625rem",
+  "--solix-font-size-h3": "1.375rem",
+  "--solix-font-size-h4": "1.125rem",
+  "--solix-font-size-h5": "1rem",
+  "--solix-font-size-h6": "0.875rem",
   "--solix-line-height-xs": "1rem",
   "--solix-line-height-sm": "1.25rem",
   "--solix-line-height-md": "1.5rem",
   "--solix-line-height-lg": "1.75rem",
   "--solix-line-height-xl": "2rem",
+  "--solix-line-height-h1": "2.75rem",
+  "--solix-line-height-h2": "2.25rem",
+  "--solix-line-height-h3": "1.875rem",
+  "--solix-line-height-h4": "1.625rem",
+  "--solix-line-height-h5": "1.5rem",
+  "--solix-line-height-h6": "1.3125rem",
+  "--solix-shadow-xs":
+    "0 0.0625rem 0.1875rem oklch(0 0 0 / 0.05), 0 0.0625rem 0.125rem oklch(0 0 0 / 0.1)",
+  "--solix-shadow-sm":
+    "0 0.0625rem 0.1875rem oklch(0 0 0 / 0.05), 0 0.625rem 0.9375rem -0.3125rem oklch(0 0 0 / 0.05), 0 0.4375rem 0.4375rem -0.3125rem oklch(0 0 0 / 0.04)",
+  "--solix-shadow-md":
+    "0 0.0625rem 0.1875rem oklch(0 0 0 / 0.05), 0 1.25rem 1.5625rem -0.3125rem oklch(0 0 0 / 0.05), 0 0.625rem 0.625rem -0.3125rem oklch(0 0 0 / 0.04)",
+  "--solix-shadow-lg":
+    "0 0.0625rem 0.1875rem oklch(0 0 0 / 0.05), 0 1.75rem 1.4375rem -0.4375rem oklch(0 0 0 / 0.05), 0 0.75rem 0.75rem -0.4375rem oklch(0 0 0 / 0.04)",
+  "--solix-shadow-xl":
+    "0 0.0625rem 0.1875rem oklch(0 0 0 / 0.05), 0 2.25rem 1.75rem -0.4375rem oklch(0 0 0 / 0.05), 0 1.0625rem 1.0625rem -0.4375rem oklch(0 0 0 / 0.04)",
   "--solix-control-height-md": "2.5rem",
   "--solix-container-size-xs": "34rem",
   "--solix-container-size-sm": "45rem",

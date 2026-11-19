@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { createComponent, renderToString } from "@solidjs/web";
 import type { Component } from "solid-js";
+import type * as CreateTheme from "#/src/create-theme.ts";
 import type * as Library from "#/src/index.ts";
 import type * as Parts from "#/src/parts.ts";
 import type * as StableClass from "#/src/stable-class.ts";
@@ -47,6 +48,10 @@ export function isBuiltComponent(exported: unknown): boolean {
 export const { handledKeys, rootPart, stylesApiPropKeys } = (await import(
   join(dist, "parts.js")
 )) as typeof Parts;
+
+export const { scaleOfThemeKey } = (await import(
+  join(dist, "create-theme.js")
+)) as typeof CreateTheme;
 
 export const { stableClass } = (await import(join(dist, "stable-class.js"))) as typeof StableClass;
 

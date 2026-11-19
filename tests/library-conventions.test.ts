@@ -12,6 +12,7 @@ import {
   builtComponents,
   carriedComponents,
   compiledClassesOf,
+  scaleOfThemeKey,
 } from "#/packages/core/tests/built-library.ts";
 import { allowedRuntimeDependencies, loads } from "#/scripts/runtime-dependencies.ts";
 import { fileNamedBy } from "#/scripts/subpath.ts";
@@ -914,11 +915,13 @@ test("the barrel exports every component and its props type once, and by name wh
   }
 });
 
-test("every public token is named --solix-*, is used by a component or the scale of a style prop or a variable, and is defined once", () => {
+test("every public token is named --solix-*, is used by a component or the scale of a style prop, a variable or a theme key, and is defined once", () => {
   const scalesOfStyleProps = [
-    ...Object.values(stylePropTable),
-    ...variableNames.map(variableRow),
-  ].flatMap((row) => ("scale" in row && row.scale !== undefined ? [row.scale] : []));
+    ...[...Object.values(stylePropTable), ...variableNames.map(variableRow)].flatMap((row) =>
+      "scale" in row && row.scale !== undefined ? [row.scale] : [],
+    ),
+    ...Object.values(scaleOfThemeKey),
+  ];
   for (const { source } of libraries) {
     const tokensFile = relativePath(join(source, "tokens.stylex.ts"));
     const defined = Object.keys(tokenValues(tokensFile));
@@ -940,7 +943,7 @@ test("every public token is named --solix-*, is used by a component or the scale
     ).toEqual([]);
     expect(
       defined.filter((name) => !used.includes(name)),
-      `tokens in ${tokensFile} that no component uses and no scale of a style prop or a variable covers`,
+      `tokens in ${tokensFile} that no component uses and no scale of a style prop, a variable or a theme key covers`,
     ).toEqual([]);
     expect(
       used.filter((name) => !defined.includes(name)),

@@ -9,6 +9,7 @@ const kindByPrefix = [
   ["--solix-color-", "colour"],
   ["--solix-radius-", "radius"],
   ["--solix-spacing-", "spacing"],
+  ["--solix-shadow-", "shadow"],
 ] as const;
 const kindOfAnyOtherToken = "length";
 

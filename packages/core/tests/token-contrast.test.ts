@@ -30,7 +30,13 @@ type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
 
 const tokens = tokenValues();
 const colourTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
-const lengthTokens = Object.keys(tokens).filter((name) => tokenKind(name) !== "colour");
+const shadowTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "shadow");
+const lengthTokens = Object.keys(tokens).filter(
+  (name) => !["colour", "shadow"].includes(tokenKind(name)),
+);
+const shadowLength = String.raw`(?:0|-?${number}rem)`;
+const oneShadow = new RegExp(`^(?:${shadowLength} ){2,4}${oklchText}$`);
+const commaOutsideBrackets = /,\s*(?![^(]*\))/;
 
 function oklch(value: string): Oklch | undefined {
   const match = oklchNotation.exec(value);
@@ -226,6 +232,20 @@ test("every other token is a length in rem, so it means the same wherever it is 
     );
 
   expect(lengthTokens.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
+test("every shadow token is a list of shadows, each two to four lengths in rem or 0 and then an OKLCH colour", () => {
+  const violations = shadowTokens
+    .filter(
+      (name) => !tokens[name].split(commaOutsideBrackets).every((shadow) => oneShadow.test(shadow)),
+    )
+    .map(
+      (name) =>
+        `${name} is "${tokens[name]}" in ${tokensFile}. Write each shadow as its offsets, blur and spread in rem or 0, then oklch(L C H / A), and separate the shadows with commas.`,
+    );
+
+  expect(shadowTokens.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 });
 

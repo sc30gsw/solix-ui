@@ -6,6 +6,7 @@ export const scaleOfThemeKey = {
   radius: "radius",
   fontSizes: "font-size",
   lineHeights: "line-height",
+  shadows: "shadow",
 } as const satisfies Record<string, Scale>;
 
 type ThemeKey = keyof typeof scaleOfThemeKey;

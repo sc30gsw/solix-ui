@@ -1,7 +1,14 @@
 import type { JSX } from "@solidjs/web";
 import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 
-export type Scale = "spacing" | "font-size" | "line-height" | "radius" | "color" | "container-size";
+export type Scale =
+  | "spacing"
+  | "font-size"
+  | "line-height"
+  | "radius"
+  | "color"
+  | "container-size"
+  | "shadow";
 
 export type PropertyRow = {
   readonly property: keyof JSX.CSSProperties;
