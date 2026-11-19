@@ -23,9 +23,11 @@ inEveryEngine((browser) => {
       await opened.close();
     });
 
-    test("a button named Default is on the page and has the library's background, text colour and height", async () => {
+    test("a <button> named exactly Default is on the page and has the library's background, text colour and height", async () => {
       const { page, expected } = opened;
-      const button = page.getByRole("button", { name: "Default" });
+      const button = page.getByRole("button", { name: "Default", exact: true });
+
+      expect(await button.evaluate((node) => node.tagName)).toBe("BUTTON");
 
       expect(await computed(button, "background-color")).toBe(expected("--solix-color-primary"));
       expect(await computed(button, "color")).toBe(expected("--solix-color-on-primary"));

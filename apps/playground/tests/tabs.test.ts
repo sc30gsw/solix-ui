@@ -16,6 +16,7 @@ import {
   manual,
   optional,
   panelOf,
+  setupOf,
   stateOf,
   tabList,
   tabLists,
@@ -149,9 +150,7 @@ inEveryEngine((browser) => {
     test("the selected tab takes the primary text colour, and every other enabled tab the text colour", async () => {
       const { page, expected } = onPage;
       const { selected } = await stateOf(page, account);
-      const enabled = tabsSetups
-        .filter(({ list }) => list === account)
-        .flatMap(({ tabs }) => tabs.filter(({ disabled }) => !disabled));
+      const enabled = setupOf(account).tabs.filter(({ disabled }) => !disabled);
 
       expect(enabled).not.toEqual([]);
       for (const { name } of enabled) {
