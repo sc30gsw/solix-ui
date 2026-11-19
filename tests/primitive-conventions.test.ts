@@ -11,6 +11,8 @@ import {
 import { fileNamedBy, namesAPackage } from "#/scripts/subpath.ts";
 import { importsOf, isTypeOnlyImport, parse, ts } from "#/scripts/syntax.ts";
 import {
+  kindsWithRules,
+  libraryKindNames,
   type LibraryRegistration,
   libraryPackages,
   repositoryRoot,
@@ -18,6 +20,7 @@ import {
 
 const fixtureDirectory = join(repositoryRoot, "tests/fixtures/primitive-rules");
 const fixtureRegistration: LibraryRegistration = { kind: "primitives", errorBoundaries: [] };
+const logicRegistration: LibraryRegistration = { kind: "logic", errorBoundaries: [] };
 const viteConfig = "vite.config.ts";
 const preBundledName = "preBundledForBrowserTests";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
@@ -32,6 +35,16 @@ const checked = libraryPackages
   }));
 afterAll(() => {
   for (const { library } of checked) library.dispose();
+});
+
+test("these rules skip only a library of a kind libraryKinds gives no rule, the components kind, which the component contract checks instead", () => {
+  expect(libraryKindNames.filter((kind) => rulesOfKind(kind).length === 0)).toEqual(
+    kindsWithRules(["none"]),
+  );
+  expect(kindsWithRules(["none"])).toEqual(["components"]);
+  expect(
+    libraryPackages.filter(({ kind }) => rulesOfKind(kind).length === 0).map(({ kind }) => kind),
+  ).toEqual(["components"]);
 });
 
 test.each(checked)(
@@ -261,6 +274,22 @@ test("each rule passes a fixture that holds only what it allows", () => {
   expect(findings).toEqual(
     Object.fromEntries(Object.keys(primitiveRules).map((name) => [name, []])),
   );
+});
+
+test("the rules of the logic kind read a logic fixture with Node's types, so a global Node declares too is no browser-only read", () => {
+  const asLogic = loadLibrary(join(fixtureDirectory, "logic"), logicRegistration);
+  const findings = Object.fromEntries(
+    rulesOfKind("logic").map((name) => [name, primitiveRules[name].rule(asLogic)]),
+  );
+  asLogic.dispose();
+  const asPrimitives = loadLibrary(join(fixtureDirectory, "logic"), fixtureRegistration);
+  const withoutNodeTypes = primitiveRules.browserGlobalReads.rule(asPrimitives);
+  asPrimitives.dispose();
+
+  expect(findings).toEqual(Object.fromEntries(rulesOfKind("logic").map((name) => [name, []])));
+  expect(locationsOf(withoutNodeTypes)).toEqual([
+    located("logic", "src/get-abort-signal.ts", "new AbortController()"),
+  ]);
 });
 
 test("each rule flags every line of a fixture that breaks it, and nothing else", () => {
