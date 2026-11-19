@@ -1,4 +1,5 @@
 import {
+  calledDeclaration,
   declarationsOf,
   descendants,
   fileOf,
@@ -10,6 +11,7 @@ import {
   type MemberRead,
   nameOf,
   type Program,
+  propertyDeclarations,
   stringsIn,
   ts,
 } from "#/scripts/syntax.ts";
@@ -17,6 +19,7 @@ import { located } from "#/tests/support/primitive-rules/library.ts";
 
 const playwrightPackages = ["playwright", "playwright-core"];
 export const captures = ["screenshot", "screenshots", "screencast", "video", "recordVideo"];
+const captureOptions = ["screenshots", "recordVideo"];
 const readValuesInstead =
   "The checks read values, not pixels: compare a computed style, an attribute or the markup instead.";
 
@@ -51,11 +54,36 @@ function readOfAMember(program: Program, node: ts.Node): MemberRead | undefined 
     : undefined;
 }
 
+function writesACaptureOption(program: Program, node: ts.Node): boolean {
+  return (
+    givesAnOption(node) && optionName(program, node).some((name) => captureOptions.includes(name))
+  );
+}
+
+function handsPlaywrightACaptureOption(program: Program, node: ts.Node): boolean {
+  if (!ts.isCallExpression(node)) return false;
+  const called = calledDeclaration(program, node);
+  return (
+    called !== undefined &&
+    isFileOfPackage(fileOf(called), playwrightPackages) &&
+    node.arguments.some(
+      (argument) => propertyDeclarations(program, argument, captureOptions).length > 0,
+    )
+  );
+}
+
 export function capturesIn(program: Program, file: string): string[] {
   const source = program.sourceFile(file);
   if (!source) throw new Error(`${file}: TypeScript opened no source for this file.`);
-  return descendants(source).flatMap((node) => {
+  const nodes = descendants(source);
+  const optionsWritten = nodes.some((node) => writesACaptureOption(program, node));
+  return nodes.flatMap((node) => {
     const found = (how: string) => [`${located(node)}: ${firstLine(node)}: ${how}`];
+    if (optionsWritten && handsPlaywrightACaptureOption(program, node)) {
+      return found(
+        `this hands a Playwright call options that capture an image or a recording, however they were built. ${readValuesInstead}`,
+      );
+    }
     if (givesAnOption(node)) {
       return optionName(program, node).some((name) => captures.includes(name)) &&
         declarationsOf(program, node).some(isACapture)
@@ -108,6 +136,18 @@ export const refusedCaptureSpellings: Record<string, [text: string, extension: s
     'import { chromium } from "playwright";\nconst browser = await chromium.launch();\nconst page = await browser.newPage();\nawait page.screenshot({ path: "page.png" });\n',
     ".mjs",
   ],
+  "options built apart from the call and handed to it": [
+    'import type { Browser } from "playwright";\nconst options = { recordVideo: { dir: "videos" } };\nexport const recorded = (browser: Browser) => browser.newContext(options);\n',
+    ".ts",
+  ],
+  "options spread into the call": [
+    'import type { Browser } from "playwright";\nconst base = { recordVideo: { dir: "videos" } };\nexport const recorded = (browser: Browser) => browser.newContext({ ...base, viewport: null });\n',
+    ".ts",
+  ],
+  "trace options built apart": [
+    'import type { BrowserContext } from "playwright";\nconst traced = { screenshots: true, snapshots: false };\nexport const start = (context: BrowserContext) => context.tracing.start(traced);\n',
+    ".ts",
+  ],
   "a screenshot read from a value typed any": [
     "export const shot = (page: any) => page.screenshot();\n",
     ".ts",
@@ -116,6 +156,10 @@ export const refusedCaptureSpellings: Record<string, [text: string, extension: s
 export const allowedCaptureSpellings: Record<string, [text: string, extension: string]> = {
   "a page's computed style": [
     'import type { Page } from "playwright";\nexport const read = (page: Page) => page.locator("button").evaluate((node) => getComputedStyle(node).color);\n',
+    ".ts",
+  ],
+  "an option of the same name handed to another library": [
+    "type Recorder = { start: (options: { recordVideo: boolean }) => void };\nconst options = { recordVideo: true };\nexport const started = (recorder: Recorder) => recorder.start(options);\n",
     ".ts",
   ],
   "a screenshot of another library": [
