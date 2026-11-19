@@ -1,3 +1,4 @@
+import fc from "fast-check";
 import { expect, test, vi } from "vite-plus/test";
 import { FORM_INDEX, formRootRule } from "#/src/constants.ts";
 import {
@@ -9,6 +10,8 @@ import {
   validateFieldValue,
   validateValues,
 } from "#/src/internal-validate.ts";
+import { type FormValidateInput } from "#/src/types.ts";
+import { assertProperty } from "../../../tests/support/properties.ts";
 
 const below2 = (error: string) => (value: unknown) =>
   typeof value === "number" && value < 2 ? error : null;
@@ -300,15 +303,16 @@ test("runRule hands the rule the value at its path, the values, the path and the
   expect(rule).toHaveBeenCalledWith(4, values, "a.0.b", signal);
 });
 
-test("ruleForPath walks the rules by the path's segments, skipping list indexes", () => {
+test("ruleForPath walks the rules beside the values by the path's segments, stepping into a list's item rules at an index", () => {
   const rule = () => null;
   const rules = { a: { b: rule }, c: rule };
+  const values = { a: [{}, {}, {}, { b: 1 }], c: 1 };
 
-  expect(ruleForPath("a.3.b", rules)).toBe(rule);
-  expect(ruleForPath("c", rules)).toBe(rule);
-  expect(ruleForPath("a", rules)).toBeUndefined();
-  expect(ruleForPath("c.d", rules)).toBeUndefined();
-  expect(ruleForPath("x.y", undefined)).toBeUndefined();
+  expect(ruleForPath("a.3.b", rules, values)).toBe(rule);
+  expect(ruleForPath("c", rules, values)).toBe(rule);
+  expect(ruleForPath("a", rules, values)).toBeUndefined();
+  expect(ruleForPath("c.d", rules, values)).toBeUndefined();
+  expect(ruleForPath("x.y", undefined, values)).toBeUndefined();
 });
 
 test("validateValues gives no errors for a validate function that returns null or undefined", async () => {
@@ -328,9 +332,69 @@ test("a rule is found only among the rules' own properties, never on their proto
     hasError: false,
     error: null,
   });
-  expect(ruleForPath("constructor", {})).toBeUndefined();
+  expect(ruleForPath("constructor", {}, {})).toBeUndefined();
   expect(validateValues({ a: inherited }, { a: { b: 1 } })).toStrictEqual({
     hasErrors: false,
     errors: {},
   });
+});
+
+test("validateFieldValue of a list item does not run the rule of the whole list on it", () => {
+  const rules = { tags: (value: unknown) => (Array.isArray(value) ? null : "not a list") };
+  const values = { tags: ["a", "b"] };
+
+  expect(validateValues(rules, values)).toStrictEqual({ hasErrors: false, errors: {} });
+  expect(validateFieldValue("tags.0", rules, values)).toStrictEqual({
+    hasError: false,
+    error: null,
+  });
+});
+
+const ruleKey = fc.constantFrom("a", "b", "list");
+
+const oddRule = (_value: unknown, _values: unknown, path: string) => path;
+
+const { rules: generatedRules } = fc.letrec((tie) => ({
+  rules: fc.dictionary(
+    ruleKey,
+    fc.oneof({ depthSize: "small" }, fc.constant(oddRule), tie("rules")),
+    {
+      maxKeys: 3,
+    },
+  ),
+}));
+
+const { node: generatedValue } = fc.letrec((tie) => ({
+  node: fc.oneof(
+    { depthSize: "small" },
+    fc.integer(),
+    fc.dictionary(ruleKey, tie("node"), { maxKeys: 3 }),
+    fc.array(tie("node"), { maxLength: 3 }),
+  ),
+}));
+
+const fieldPath = fc
+  .array(fc.oneof(ruleKey, fc.constantFrom("0", "1")), { minLength: 1, maxLength: 4 })
+  .map((segments) => segments.join("."));
+
+function firstErrorAtOrUnder(path: string, errors: Record<string, unknown>) {
+  const key = Object.keys(errors).find((each) => each === path || each.startsWith(`${path}.`));
+  return key === undefined
+    ? { hasError: false, error: null }
+    : { hasError: true, error: errors[key] };
+}
+
+test("validateFieldValue gives, for generated rules, values and paths, the first error validateValues gives at or under the path", async (context) => {
+  await assertProperty(
+    context,
+    fc.property(generatedRules, generatedValue, fieldPath, (generated, values: unknown, path) => {
+      const rules = generated as FormValidateInput<unknown>;
+      const all = validateValues(rules, values);
+      if (isThenable(all)) throw new Error("the generated rules are synchronous");
+
+      expect(validateFieldValue(path, rules, values)).toStrictEqual(
+        firstErrorAtOrUnder(path, all.errors),
+      );
+    }),
+  );
 });

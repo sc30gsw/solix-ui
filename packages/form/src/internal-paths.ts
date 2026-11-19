@@ -51,6 +51,11 @@ export function splitPath(path: unknown): PathSegments | undefined {
   return segments.some((segment) => unsafeSegments.includes(segment)) ? undefined : segments;
 }
 
+export function isIndexSegment(segment: string): boolean {
+  const index = Number(segment);
+  return Number.isSafeInteger(index) && index >= 0 && String(index) === segment;
+}
+
 export function isNestedUnder(key: string, path: string): boolean {
   return key.startsWith(`${path}.`);
 }

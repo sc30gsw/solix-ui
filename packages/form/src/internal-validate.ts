@@ -1,5 +1,11 @@
 import { FORM_INDEX, formRootRule } from "#/src/constants.ts";
-import { childOf, getPath } from "#/src/internal-paths.ts";
+import {
+  childOf,
+  getPath,
+  isIndexSegment,
+  type PathSegments,
+  splitPath,
+} from "#/src/internal-paths.ts";
 import { filterErrors } from "#/src/internal-status.ts";
 import {
   type FormError,
@@ -111,16 +117,41 @@ export function validateValues<Values>(
   return now === undefined ? settled(outcomes) : resultOf(Object.fromEntries(now));
 }
 
-export function ruleForPath(path: string, rules: unknown): AnyRule | undefined {
-  const found = path
-    .split(".")
-    .filter((segment) => !/^\d+$/.test(segment))
-    .reduce<unknown>(
-      (current, segment) =>
-        typeof current === "object" && current !== null ? childOf(current, segment) : undefined,
-      rules,
-    );
-  return isRule(found) ? found : undefined;
+function isRecord(value: unknown): value is object {
+  return typeof value === "object" && value !== null;
+}
+
+function ruleAt(
+  rules: unknown,
+  segments: PathSegments,
+  depth: number,
+  at: string,
+  validation: { values: unknown; perItem: boolean },
+): AnyRule | undefined {
+  if (!isRecord(rules)) return undefined;
+  const segment = segments.at(depth) ?? "";
+  const next = at === "" ? segment : `${at}.${segment}`;
+  const last = depth === segments.length - 1;
+  if (validation.perItem) {
+    return isIndexSegment(segment) && !last
+      ? ruleAt(rules, segments, depth + 1, next, { values: validation.values, perItem: false })
+      : undefined;
+  }
+  const child = childOf(rules, segment);
+  if (last) return isRule(child) ? child : undefined;
+  const value = getPath(next, validation.values);
+  if (!isRecord(child) || !isRecord(value)) return undefined;
+  return ruleAt(child, segments, depth + 1, next, {
+    values: validation.values,
+    perItem: Array.isArray(value),
+  });
+}
+
+export function ruleForPath(path: string, rules: unknown, values: unknown): AnyRule | undefined {
+  const segments = splitPath(path);
+  return segments === undefined
+    ? undefined
+    : ruleAt(rules, segments, 0, "", { values, perItem: false });
 }
 
 function fieldResultOf(path: string, result: FormValidationResult): FormFieldValidationResult {
@@ -145,7 +176,7 @@ export function validateFieldValue<Values>(
   signal: AbortSignal = new AbortController().signal,
 ): FormFieldValidationResult | Promise<FormFieldValidationResult> {
   if (typeof path !== "string") return { hasError: false, error: null };
-  const rule = typeof validate === "function" ? undefined : ruleForPath(path, validate);
+  const rule = typeof validate === "function" ? undefined : ruleForPath(path, validate, values);
   if (rule) {
     const outcome = runRule(rule, path, { values, resolve, signal });
     return isThenable(outcome)
