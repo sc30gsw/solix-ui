@@ -35,3 +35,21 @@ export const NeverBelowTheTargetSize: Story = {
     await expect(Math.min(width, height)).toBeGreaterThanOrEqual(24);
   },
 };
+
+const givenColour = "oklch(0.45 0.15 260)";
+
+export const GivenColors: Story = {
+  render: () => (
+    <div>
+      <Button color="red.6" autoContrast>
+        Given shade
+      </Button>
+      <Button color={givenColour}>Given colour</Button>
+    </div>
+  ),
+  play: async ({ canvas }) => {
+    await expect(
+      getComputedStyle(canvas.getByRole("button", { name: "Given colour" })).backgroundColor,
+    ).toBe(givenColour);
+  },
+};

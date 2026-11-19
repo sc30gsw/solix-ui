@@ -6,6 +6,7 @@ import {
   colorVariantTable,
   isShade,
   luminanceWeights,
+  type Oklch,
   ownPaletteOf,
   type Palette,
   paletteAliases,
@@ -58,8 +59,6 @@ const oklchNotation = new RegExp(`^${oklchText}$`);
 const schemes = ["light", "dark"] as const;
 type Scheme = (typeof schemes)[number];
 const gamutTolerance = 1e-4;
-
-type Oklch = { lightness: number; chroma: number; hue: number; alpha: number };
 
 const tokens = tokenValues();
 const colourTokens = Object.keys(tokens).filter((name) => tokenKind(name) === "colour");
