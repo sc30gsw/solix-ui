@@ -1,5 +1,5 @@
 import { readdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
   colorVariantTable,
@@ -13,7 +13,13 @@ import {
   primaryProperty,
   shades,
 } from "#/src/color-table.ts";
-import { contrastExceptions } from "../../../tests/support/contrast-exceptions";
+import {
+  componentPart,
+  type ContrastKind,
+  contrastExceptions,
+  inScheme,
+  variantPart,
+} from "../../../tests/support/contrast-exceptions";
 import { fileNamedBy } from "../../../scripts/subpath";
 import { schemeValues, tokenKind, tokensFile, tokenValues } from "../../../scripts/tokens";
 import { parse, ts } from "../../../scripts/syntax";
@@ -22,10 +28,17 @@ type Minimum = { ratio: number; criterion: string };
 type Conditional = Map<string, ts.Expression>;
 type Block = { name: string; properties: Map<string, Conditional> };
 type Side = { property: string; token: string | undefined; written: string; slot?: string };
-type Pairing = { where: string; foreground: Side; background: Side; minimum: Minimum };
+type Pairing = {
+  where: string;
+  part: string;
+  foreground: Side;
+  background: Side;
+  minimum: Minimum;
+};
 
+const textMinimum = 4.5;
 const minimumContrast: [property: RegExp, minimum: Minimum][] = [
-  [/^color$/, { ratio: 4.5, criterion: "WCAG 1.4.3" }],
+  [/^color$/, { ratio: textMinimum, criterion: "WCAG 1.4.3" }],
   [/^(?:border\w*Color|outlineColor)$/, { ratio: 3, criterion: "WCAG 1.4.11" }],
 ];
 const pageBackground = "--solix-color-body";
@@ -268,32 +281,41 @@ function slotToken(
   slot: string,
   palette: Palette,
   slots: Readonly<Record<string, string>>,
-): string | undefined {
+): { token: string; fromAShade: boolean } | undefined {
   const value = slots[slot];
   if (value === undefined || value === "transparent") return undefined;
-  return isShade(value) ? paletteToken(ownPaletteOf(palette), value) : value;
+  return isShade(value)
+    ? { token: paletteToken(ownPaletteOf(palette), value), fromAShade: true }
+    : { token: value, fromAShade: false };
 }
 
 function inEachPaletteAndVariant(pairing: Pairing): Pairing[] {
   const { foreground, background } = pairing;
   if (foreground.slot === undefined && background.slot === undefined) return [pairing];
   return palettes.flatMap((palette) =>
-    variants.flatMap(([variant, { named: slots }]): Pairing[] => {
+    variants.flatMap(([variant, { named }]): Pairing[] => {
+      let fromAShade = false;
       const resolve = (given: Side): Side | undefined => {
         if (given.slot === undefined) return given;
-        const token = slotToken(given.slot, palette, slots);
-        return token === undefined
-          ? undefined
-          : { ...given, token, written: `${given.written}, which is ${token}` };
+        const found = slotToken(given.slot, palette, named);
+        if (found === undefined) return undefined;
+        fromAShade ||= found.fromAShade;
+        return {
+          ...given,
+          token: found.token,
+          written: `${given.written}, which is ${found.token}`,
+        };
       };
       const front = resolve(foreground);
       if (front === undefined) return [];
+      const back = resolve(background) ?? thePage;
       return [
         {
           ...pairing,
           where: `${pairing.where} with color="${palette}" variant="${variant}"`,
+          part: variantPart(fromAShade ? palette : undefined, variant),
           foreground: front,
-          background: resolve(background) ?? thePage,
+          background: back,
         },
       ];
     }),
@@ -325,6 +347,7 @@ function pairingsIn(file: string): Pairing[] {
       foregrounds
         .map(({ property, values, minimum }) => ({
           where: `${file} styles.${name} (${condition})`,
+          part: componentPart(basename(file, ".tsx"), name, condition),
           foreground: side(property, values, condition, root),
           background:
             background && !drawnOutside(property, offset && valueUnder(offset, condition))
@@ -403,17 +426,27 @@ test("every colour token lies inside sRGB in both schemes", () => {
 const exceptionsFile = "tests/support/contrast-exceptions.ts";
 const belowItsMinimum = new Set<string>();
 
-function pairKey(foreground: string, background: string, scheme: Scheme): string {
-  return `${foreground} on ${background} in the ${scheme} scheme`;
+function pairKey(
+  foreground: string,
+  background: string,
+  scheme: Scheme,
+  kind: ContrastKind,
+  drawnIn: string,
+): string {
+  return `${kind} ${foreground} on ${background} in the ${scheme} scheme, drawn in ${drawnIn}`;
+}
+
+function kindOf(minimum: Minimum): ContrastKind {
+  return minimum.ratio === textMinimum ? "text" : "edge";
 }
 
 const excepted = new Set(
-  contrastExceptions.map(({ foreground, background, scheme }) =>
-    pairKey(foreground, background, scheme),
+  contrastExceptions.map(({ foreground, background, scheme, kind, drawnIn }) =>
+    pairKey(foreground, background, scheme, kind, drawnIn),
   ),
 );
 
-function measured({ where, foreground, background, minimum }: Pairing): string[] {
+function measured({ where, part, foreground, background, minimum }: Pairing): string[] {
   const front = foreground.token;
   const back = background.token;
   if (front === undefined || back === undefined) {
@@ -437,12 +470,12 @@ function measured({ where, foreground, background, minimum }: Pairing): string[]
     const drawnOn = over(backColour, opaque(page));
     const ratio = contrastRatio(over(frontColour, drawnOn), drawnOn);
     if (ratio >= minimum.ratio) return [];
-    const key = pairKey(front, back, scheme);
+    const key = pairKey(front, back, scheme, kindOf(minimum), inScheme(scheme, part));
     belowItsMinimum.add(key);
     return excepted.has(key)
       ? []
       : [
-          `${where}: ${pair} has contrast ${ratio.toFixed(2)}:1, below the ${minimum.ratio}:1 that ${minimum.criterion} asks for, and contrastExceptions in ${exceptionsFile} does not list it. Change one of them in ${tokensFile}.`,
+          `${where}: ${pair} has contrast ${ratio.toFixed(2)}:1, below the ${minimum.ratio}:1 that ${minimum.criterion} asks for, and contrastExceptions in ${exceptionsFile} does not list ${key}. Change one of them in ${tokensFile}.`,
         ];
   });
 }
