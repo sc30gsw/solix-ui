@@ -51,6 +51,10 @@ export function splitPath(path: unknown): PathSegments | undefined {
   return segments.some((segment) => unsafeSegments.includes(segment)) ? undefined : segments;
 }
 
+export function isNestedUnder(key: string, path: string): boolean {
+  return key.startsWith(`${path}.`);
+}
+
 function isContainer(value: unknown): value is object {
   return typeof value === "object" && value !== null;
 }

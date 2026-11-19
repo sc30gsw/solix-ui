@@ -1,4 +1,4 @@
-import { isNestedUnder } from "#/src/internal-lists.ts";
+import { isNestedUnder } from "#/src/internal-paths.ts";
 import { type FormErrors, type FormStatus, type RuleResult } from "#/src/types.ts";
 
 export function getStatus(status: Readonly<FormStatus>, path?: string): boolean {

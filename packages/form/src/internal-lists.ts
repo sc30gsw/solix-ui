@@ -1,4 +1,4 @@
-import { getPath, setPath } from "#/src/internal-paths.ts";
+import { getPath, isNestedUnder, setPath } from "#/src/internal-paths.ts";
 import { type ReorderPayload } from "#/src/types.ts";
 
 export type ListOperation =
@@ -7,14 +7,14 @@ export type ListOperation =
   | ({ kind: "reorder" } & ReorderPayload)
   | { kind: "replace"; index: number; item: unknown };
 
-function indexOf(segment: string): number | undefined {
+function listIndexOf(segment: string): number | undefined {
   const index = Number(segment);
   return Number.isSafeInteger(index) && index >= 0 && String(index) === segment ? index : undefined;
 }
 
 function hasListIndexes(operation: ListOperation): boolean {
   const indexes = operation.kind === "reorder" ? [operation.from, operation.to] : [operation.index];
-  return indexes.every((index) => index === undefined || indexOf(String(index)) !== undefined);
+  return indexes.every((index) => index === undefined || listIndexOf(String(index)) !== undefined);
 }
 
 function changed(list: readonly unknown[], operation: ListOperation): readonly unknown[] {
@@ -45,10 +45,6 @@ export function changeListAt<Values>(
   return Array.isArray(list) ? setPath(path, changed(list, operation), values) : values;
 }
 
-export function isNestedUnder(key: string, path: string): boolean {
-  return key.startsWith(`${path}.`);
-}
-
 function movedIndex(index: number, operation: ListOperation): number | undefined {
   switch (operation.kind) {
     case "insert":
@@ -69,7 +65,7 @@ function movedIndex(index: number, operation: ListOperation): number | undefined
 function movedKey(key: string, path: string, operation: ListOperation): string | undefined {
   if (!isNestedUnder(key, path)) return key;
   const [segment = "", ...rest] = key.slice(path.length + 1).split(".");
-  const index = indexOf(segment);
+  const index = listIndexOf(segment);
   if (index === undefined) return key;
   const moved = movedIndex(index, operation);
   return moved === undefined ? undefined : [path, moved, ...rest].join(".");
