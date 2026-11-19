@@ -15,7 +15,6 @@ export const palettes = [
   "green",
   "lime",
   "yellow",
-  "orange",
 ] as const;
 
 export const shades = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "contrast"] as const;
@@ -28,6 +27,7 @@ export const primaryAlias = "primary";
 
 export const paletteAliases = {
   [primaryAlias]: primaryPalette,
+  orange: "yellow",
 } as const satisfies Record<string, OwnPalette>;
 
 export type Palette = OwnPalette | keyof typeof paletteAliases;

@@ -172,20 +172,6 @@ export const tokens = stylex.defineVars({
   "--solix-color-yellow-9": "light-dark(oklch(0.5152 0.0823 71.27), oklch(0.8669 0.1009 76.34))",
   "--solix-color-yellow-contrast":
     "light-dark(oklch(0.2103 0.0059 285.89), oklch(0.2103 0.0059 285.89))",
-  "--solix-color-orange-0": "light-dark(oklch(0.98 0.0154 73.68), oklch(0.266 0.079 36.26))",
-  "--solix-color-orange-1":
-    "light-dark(oklch(0.7819 0.1585 72.33 / 0.15), oklch(0.8203 0.1388 76.34 / 0.12))",
-  "--solix-color-orange-2":
-    "light-dark(oklch(0.7819 0.1585 72.33 / 0.2), oklch(0.8203 0.1388 76.34 / 0.16))",
-  "--solix-color-orange-3": "light-dark(oklch(0.837 0.121 66.29), oklch(0.553 0.1794 38.4))",
-  "--solix-color-orange-4": "light-dark(oklch(0.75 0.1751 55.93), oklch(0.646 0.1982 41.12))",
-  "--solix-color-orange-5": "light-dark(oklch(0.705 0.1931 47.6), oklch(0.646 0.1982 41.12))",
-  "--solix-color-orange-6": "light-dark(oklch(0.7819 0.1585 72.33), oklch(0.8203 0.1388 76.34))",
-  "--solix-color-orange-7": "light-dark(oklch(0.7247 0.1422 72.2), oklch(0.7593 0.1244 76.21))",
-  "--solix-color-orange-8": "light-dark(oklch(0.47 0.1562 37.3), oklch(0.837 0.121 66.29))",
-  "--solix-color-orange-9": "light-dark(oklch(0.5152 0.0823 71.27), oklch(0.8669 0.1009 76.34))",
-  "--solix-color-orange-contrast":
-    "light-dark(oklch(0.2103 0.0059 285.89), oklch(0.2103 0.0059 285.89))",
   "--solix-radius-xs": "0.125rem",
   "--solix-radius-sm": "0.25rem",
   "--solix-radius-md": "0.375rem",
