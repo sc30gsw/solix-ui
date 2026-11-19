@@ -50,6 +50,7 @@ import {
   typedSource,
   unwrapped,
   variablesDefiner,
+  variablesFile,
 } from "#/tests/support/library-sources.ts";
 
 const stylexModule = "@stylexjs/stylex";
@@ -507,7 +508,7 @@ test("no array or object in a test file lists the components by hand, unless the
   expect(violations).toEqual([]);
 });
 
-test("each Component.variables.ts sits beside its Component.tsx, imports at run time only the style-prop table, and exports one constant, the variables that defineVariables gives for that component", () => {
+test("each Component.variables.ts sits beside its Component.tsx, imports at run time only the variables module, and exports one constant, the variables that defineVariables gives for that component", () => {
   const variablesFiles = libraries.flatMap(({ source }) =>
     readdirSync(source)
       .filter((entry) => VARIABLES_MODULE.test(entry))
@@ -524,7 +525,7 @@ test("each Component.variables.ts sits beside its Component.tsx, imports at run 
         !isTypeOnlyImport(statement.importClause) &&
         (!specifier ||
           !ts.isStringLiteralLikeNode(specifier) ||
-          fileNamedBy(file, specifier.text) !== join(repositoryRoot, stylePropTableFile))
+          fileNamedBy(file, specifier.text) !== join(repositoryRoot, variablesFile))
       );
     });
     const defined = source.statements.flatMap((statement) =>
@@ -541,11 +542,11 @@ test("each Component.variables.ts sits beside its Component.tsx, imports at run 
       functions.length + types.length + others.length === 1
         ? []
         : [
-            `export one constant, \`${variablesDefiner}("${name}", { ... })\` from ${stylePropTableFile}, and nothing else`,
+            `export one constant, \`${variablesDefiner}("${name}", { ... })\` from ${variablesFile}, and nothing else`,
           ]),
       ...runTimeImports.map(
         (statement) =>
-          `import only ${stylePropTableFile} at run time, so build.mjs loads this module in plain Node: ${firstLine(statement)}`,
+          `import only ${variablesFile} at run time, so build.mjs loads this module in plain Node: ${firstLine(statement)}`,
       ),
     ].map((problem) => `${relativePath(file)}: ${problem}.`);
   });

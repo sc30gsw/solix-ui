@@ -9,7 +9,7 @@ import type * as Library from "#/src/index.ts";
 import type * as Parts from "#/src/parts.ts";
 import type * as StableClass from "#/src/stable-class.ts";
 import type * as StyleProps from "#/src/style-props.ts";
-import type { VariableRow, Variables } from "#/src/style-prop-table.ts";
+import type { VariableRow, Variables } from "#/src/variables.ts";
 import {
   aliasDeclarationsOfTypeAt,
   aliasDeclarationsReturnedBy,

@@ -11,8 +11,8 @@ import { colorClassPrefix } from "#/src/color-table.ts";
 import { colorSchemeRules, defaultColorScheme } from "#/src/color-schemes.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 
+import { stylePropClassPrefix } from "#/src/style-prop-table.ts";
 import {
-  isVariables,
   behaviourSdkLayer,
   colorSchemeLayer,
   componentLayer,
@@ -21,9 +21,9 @@ import {
   libraryLayerOrder,
   libraryLayers,
   outerLayerOrder,
-  stylePropClassPrefix,
   stylePropLayer,
-} from "#/src/style-prop-table.ts";
+} from "#/src/layers.ts";
+import { isVariables } from "#/src/variables.ts";
 
 export const LIBRARY_CASCADE_LAYER = libraryCascadeLayer;
 export const LIBRARY_CLASS_PREFIX = stylePropClassPrefix;

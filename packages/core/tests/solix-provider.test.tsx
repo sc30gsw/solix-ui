@@ -15,7 +15,8 @@ import {
 } from "#/src/color-table.ts";
 import { colorSchemeAttribute } from "#/src/color-schemes.ts";
 import type * as CreateTheme from "#/src/create-theme.ts";
-import { layerOrder, libraryCascadeLayer, libraryStyleMark } from "#/src/style-prop-table.ts";
+import { libraryStyleMark } from "#/src/style-prop-table.ts";
+import { layerOrder, libraryCascadeLayer } from "#/src/layers.ts";
 import { dist, library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
 import { rulesThatStyleThePage } from "#/tests/page-rules.ts";

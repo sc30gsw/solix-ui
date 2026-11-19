@@ -1,4 +1,4 @@
-import { defineVariables } from "#/src/style-prop-table.ts";
+import { defineVariables } from "#/src/variables.ts";
 
 export const gridVariables = defineVariables("Grid", {
   "grid-align": { kind: "raw", responsive: false },

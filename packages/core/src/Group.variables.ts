@@ -1,4 +1,4 @@
-import { defineVariables } from "#/src/style-prop-table.ts";
+import { defineVariables } from "#/src/variables.ts";
 
 export const groupVariables = defineVariables("Group", {
   "group-align": { kind: "raw", responsive: false },

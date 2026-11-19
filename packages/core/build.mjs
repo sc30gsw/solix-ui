@@ -20,8 +20,11 @@ await buildSources(layout, async (filename, source) => {
   return compiled.code;
 });
 
-const { colorLayer, stylePropLayer, stylePropRules } = await import(
+const { stylePropRules } = await import(
   pathToFileURL(join(layout.outputDirectory, "style-prop-table.js")).href
+);
+const { colorLayer, stylePropLayer } = await import(
+  pathToFileURL(join(layout.outputDirectory, "layers.js")).href
 );
 const { colorRules } = await import(
   pathToFileURL(join(layout.outputDirectory, "color-rules.js")).href

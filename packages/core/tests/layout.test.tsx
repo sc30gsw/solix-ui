@@ -15,7 +15,7 @@ import type {
 } from "#/src/index.ts";
 import type { createParts, PartsOptions } from "#/src/parts.ts";
 import type { spaceVariables } from "#/src/Space.variables.ts";
-import type { Variables } from "#/src/style-prop-table.ts";
+import type { Variables } from "#/src/variables.ts";
 import { breakpointWidths } from "#/src/style-prop-table.ts";
 import type { ContainerWidth } from "#/src/style-props.ts";
 import { isContainerWidth, library } from "#/tests/built-library.ts";

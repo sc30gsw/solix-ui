@@ -10,10 +10,8 @@ import type { PolymorphicProps } from "#/src/parts.ts";
 import {
   baseKey,
   canonicalOf,
-  layerOrder,
   libraryStyleMark,
   canonicalStylePropNames,
-  containerQueryLayer,
   type DisplayPropName,
   displayPropNames,
   responsiveKeys,
@@ -21,6 +19,7 @@ import {
   variableClass,
   visibilityClasses,
 } from "#/src/style-prop-table.ts";
+import { layerOrder, containerQueryLayer } from "#/src/layers.ts";
 import {
   classTokens,
   declarationsByPart,

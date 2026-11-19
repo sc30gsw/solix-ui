@@ -1,5 +1,7 @@
 import type { JSX } from "@solidjs/web";
 import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
+import { childRuleLayer } from "#/src/layers.ts";
+import type { VariableRow, Variables } from "#/src/variables.ts";
 
 export type Scale =
   | "spacing"
@@ -21,36 +23,7 @@ export type PropertyRow = {
 
 type AliasRow = { readonly aliasOf: string };
 
-type ChildRule = {
-  readonly when?: string;
-  readonly path: readonly [string, ...string[]];
-  readonly set: (own: string) => Readonly<Record<string, string>>;
-};
-
-export type VariableRow = {
-  readonly kind: "length" | "raw";
-  readonly scale?: Scale;
-  readonly responsive: boolean;
-  readonly children?: readonly ChildRule[];
-};
-
-export type VariableRows = Readonly<Record<string, VariableRow>>;
-
-export type Variables<Rows extends VariableRows = VariableRows> = {
-  readonly component: string;
-  readonly rows: Rows;
-};
-
 export const stylePropClassPrefix = "sx";
-export const colorLayer = "colors";
-export const libraryCascadeLayer = "solix";
-export const componentLayer = "components";
-export const stylePropLayer = "style-props";
-export const colorSchemeLayer = "color-scheme";
-export const containerQueryLayer = "container-queries";
-export const childRuleLayer = "child-rules";
-export const hiddenLayer = "hidden";
-export const behaviourSdkLayer = "ui-sdk";
 export const libraryStyleMark = "data-solix-rules";
 
 export const breakpointWidths = {
@@ -173,25 +146,6 @@ export const canonicalStylePropNames = stylePropNames.filter(isCanonical);
 export const breakpoints = Object.keys(breakpointWidths).filter(isBreakpoint);
 export const responsiveKeys: ResponsiveKey[] = [baseKey, ...breakpoints];
 export const visibilityPropNames = Object.keys(visibilityTable).filter(isVisibilityPropName);
-export function defineVariables<const Rows extends VariableRows>(
-  component: string,
-  rows: Rows,
-): Variables<Rows> {
-  return { component, rows };
-}
-
-export function isVariables(value: unknown): value is Variables {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "component" in value &&
-    typeof value.component === "string" &&
-    "rows" in value &&
-    typeof value.rows === "object" &&
-    value.rows !== null
-  );
-}
-
 export function variableProperty(name: string): `--${string}` {
   return `--${name}`;
 }
@@ -324,19 +278,6 @@ function childRules(variables: readonly Variables[]): string[] {
     }),
   );
 }
-
-const outerLayers = [behaviourSdkLayer, libraryCascadeLayer] as const;
-export const libraryLayers = [
-  colorLayer,
-  componentLayer,
-  stylePropLayer,
-  colorSchemeLayer,
-  containerQueryLayer,
-  hiddenLayer,
-] as const;
-export const outerLayerOrder = `@layer ${outerLayers.join(", ")};`;
-export const libraryLayerOrder = `@layer ${libraryLayers.join(", ")};`;
-export const layerOrder = `${outerLayerOrder}@layer ${libraryCascadeLayer}{${libraryLayerOrder}}`;
 
 export function stylePropRules(variables: readonly Variables[]): string {
   const readers = readersOf(variables);

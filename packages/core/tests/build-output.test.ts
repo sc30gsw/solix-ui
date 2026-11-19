@@ -17,6 +17,12 @@ import {
 import {
   breakpoints,
   canonicalStylePropNames,
+  responsiveKeys,
+  stylePropNames,
+  variableClass,
+  visibilityClasses,
+} from "#/src/style-prop-table.ts";
+import {
   childRuleLayer,
   colorLayer,
   colorSchemeLayer,
@@ -25,11 +31,7 @@ import {
   layerOrder,
   libraryLayerOrder,
   libraryLayers,
-  responsiveKeys,
-  stylePropNames,
-  variableClass,
-  visibilityClasses,
-} from "#/src/style-prop-table.ts";
+} from "#/src/layers.ts";
 import { paletteToken, primaryName, shades } from "#/src/color-table.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 import {
@@ -78,6 +80,8 @@ const ownerSchemeHiding: [className: string, scheme: string, property: string][]
 const ownerDefaultScheme = "light";
 const pageRoot = ":root";
 const builtStylePropTable = "style-prop-table.js";
+const builtLayers = "layers.js";
+const builtVariablesModule = "variables.js";
 const boxSides = ["top", "right", "bottom", "left"];
 const sidesOfLogicalPart: Record<string, string[]> = {
   inline: ["left", "right"],
@@ -506,19 +510,25 @@ function runTimeImportsOf(file: string): string[] {
   return imports;
 }
 
-test("the built style-prop table imports nothing, and each built Component.variables.js imports only it, so build.mjs can load them in plain Node", () => {
+test("the built style-prop table imports only the layer registry, which imports nothing, and each built Component.variables.js imports only defineVariables from the variables module, which imports nothing, so build.mjs can load them in plain Node", () => {
   const variablesModules = readdirSync(dist).filter((entry) => VARIABLES_MODULE.test(entry));
 
   expect(
     runTimeImportsOf(join(dist, builtStylePropTable)),
-    "packages/core/src/style-prop-table.ts: remove each import that stays at run time. build.mjs loads this module in plain Node, before the rest of the library is bundled.",
-  ).toEqual([]);
+    "packages/core/src/style-prop-table.ts: import only the layer registry at run time. build.mjs loads this module in plain Node, before the rest of the library is bundled.",
+  ).toEqual([`import { childRuleLayer } from "./${builtLayers}";`]);
+  for (const plain of [builtLayers, builtVariablesModule]) {
+    expect(
+      runTimeImportsOf(join(dist, plain)),
+      `packages/core/src/${plain.replace(/\.js$/, ".ts")}: remove each import that stays at run time. build.mjs loads this module in plain Node, before the rest of the library is bundled.`,
+    ).toEqual([]);
+  }
   expect(variablesModules.length).toBeGreaterThan(0);
   for (const entry of variablesModules) {
     expect(
       runTimeImportsOf(join(dist, entry)),
-      `packages/core/src/${entry.replace(/\.js$/, ".ts")}: import only defineVariables from the style-prop table at run time. build.mjs loads this module in plain Node, before the rest of the library is bundled.`,
-    ).toEqual([`import { defineVariables } from "./${builtStylePropTable}";`]);
+      `packages/core/src/${entry.replace(/\.js$/, ".ts")}: import only defineVariables from the variables module at run time. build.mjs loads this module in plain Node, before the rest of the library is bundled.`,
+    ).toEqual([`import { defineVariables } from "./${builtVariablesModule}";`]);
   }
 });
 

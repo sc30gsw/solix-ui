@@ -1,4 +1,4 @@
-import { defineVariables } from "#/src/style-prop-table.ts";
+import { defineVariables } from "#/src/variables.ts";
 
 export const simpleGridVariables = defineVariables("SimpleGrid", {
   "sg-auto-rows": { kind: "raw", responsive: false },

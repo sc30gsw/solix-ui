@@ -1,4 +1,4 @@
-import { defineVariables } from "#/src/style-prop-table.ts";
+import { defineVariables } from "#/src/variables.ts";
 
 export const flexVariables = defineVariables("Flex", {
   "flex-align": { kind: "raw", responsive: true },
