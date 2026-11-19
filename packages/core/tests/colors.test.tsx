@@ -37,7 +37,7 @@ import {
   libraryLayers,
   stylePropClassPrefix,
 } from "#/src/style-prop-table.ts";
-import type { ColorProps } from "#/src/colors.ts";
+import type { ColorProps, SolixColor } from "#/src/colors.ts";
 import type { createParts, PartsOptions } from "#/src/parts.ts";
 import { stylesheet } from "#/tests/built-library.ts";
 import { layersAround } from "#/tests/cascade-layers.ts";
@@ -214,7 +214,7 @@ test("autoContrast is off unless it is true: only then does the root take the cl
   expect(Object.keys(ruleFor(`.${shadeClass}`))).not.toContain(shadeProperty("contrast"));
 });
 
-test("any other CSS colour writes one custom property, itself, with the shade and custom classes, and a value that is no colour, such as red-6, blue.12 or one that holds ;, { or }, falls back to the primary palette and writes nothing", async (context) => {
+test("any other CSS colour writes one custom property, itself, with the shade and custom classes, and a value that is no colour, such as red-6, blue.12, the typo bleu, the keyword inherit, Red in capitals or one that holds ;, { or }, falls back to the primary palette and writes nothing", async (context) => {
   await assertProperty(
     context,
     fc.property(
@@ -224,7 +224,7 @@ test("any other CSS colour writes one custom property, itself, with the shade an
           .constantFrom("oklch(0.5 0.1 20)", "rgb(10 20 30)", "transparent", "rebeccapurple")
           .map((color) => ({ color, valid: true })),
         fc
-          .constantFrom("red-6", "blue.12", "#f00;", "red}", "a{b")
+          .constantFrom("red-6", "blue.12", "#f00;", "red}", "a{b", "bleu", "inherit", "Red")
           .map((color) => ({ color, valid: false })),
       ),
       fc.constantFrom(...variants),
@@ -491,4 +491,19 @@ test("createParts refuses, by type, the props of a component that takes ColorPro
   expectTypeOf<Probe<{ label?: string }>>().toExtend<
     PropsTaken<{ label?: string }, { keep: ["label"] }>
   >();
+});
+
+test("SolixColor takes a palette, a palette's shade, a CSS colour keyword, a hex colour and a colour function, and refuses, by type, a typo, a CSS-wide keyword and a name in capitals", () => {
+  expectTypeOf<"red">().toExtend<SolixColor>();
+  expectTypeOf<"primary.6">().toExtend<SolixColor>();
+  expectTypeOf<"rebeccapurple">().toExtend<SolixColor>();
+  expectTypeOf<"transparent">().toExtend<SolixColor>();
+  expectTypeOf<"currentColor">().toExtend<SolixColor>();
+  expectTypeOf<"#0af">().toExtend<SolixColor>();
+  expectTypeOf<"oklch(0.5 0.1 20)">().toExtend<SolixColor>();
+  expectTypeOf<"var(--brand)">().toExtend<SolixColor>();
+  expectTypeOf<"bleu">().not.toExtend<SolixColor>();
+  expectTypeOf<"inherit">().not.toExtend<SolixColor>();
+  expectTypeOf<"Red">().not.toExtend<SolixColor>();
+  expectTypeOf<"red-6">().not.toExtend<SolixColor>();
 });
