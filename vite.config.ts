@@ -4,13 +4,13 @@ import { join } from "node:path";
 import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
+import { anyFreePort } from "#/tests/support/server-process.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
-const browserTestServerPort = 4322;
 const checkerRules = "tests/rules/**/*.test.ts";
 const programOpeners = [
   "tests/rules/**",
@@ -172,7 +172,7 @@ export default defineConfig({
           test: {
             name: "browser",
             include: [browserTests],
-            api: { port: browserTestServerPort, strictPort: true },
+            api: { port: anyFreePort, strictPort: true },
             browser: browserInEveryEngine(),
           },
         },

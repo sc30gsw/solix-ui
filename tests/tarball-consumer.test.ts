@@ -30,7 +30,11 @@ import {
   sharedSettings,
   ts,
 } from "#/scripts/syntax.ts";
-import { type RunningServer, startServer } from "#/tests/support/server-process.ts";
+import {
+  type RunningServer,
+  startServer,
+  viteOnAFreePort,
+} from "#/tests/support/server-process.ts";
 import {
   type ExportTarget,
   type Manifest,
@@ -46,8 +50,6 @@ import {
 const [library] = componentLibraries;
 const libraryName = library.manifest.name ?? "";
 const fixtures = join(repositoryRoot, "tests/fixtures/tarball-consumer");
-const builtServerPort = 4323;
-const developmentServerPort = 4324;
 const installAndBuildTimeout = 240_000;
 const packTimeout = packageManagerAnswerTimeout * libraryPackages.length;
 const fromOutsideTheRepository = allowedRuntimeDependencyNames();
@@ -55,21 +57,9 @@ const settingsAConsumerWrites = ["plugins"];
 const subpathImportPrefix = "#";
 const settingsOfAnAppInThisRepository = join(repositoryRoot, "apps/playground/tsconfig.json");
 const [engine] = enginesToVerify();
-const servers: [label: string, port: number, command: string[]][] = [
-  ["the built server in plain Node", builtServerPort, ["node", "dist/server/node.js"]],
-  [
-    "the development server",
-    developmentServerPort,
-    [
-      "node_modules/.bin/vp",
-      "dev",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(developmentServerPort),
-      "--strictPort",
-    ],
-  ],
+const servers: [label: string, command: string[]][] = [
+  ["the built server in plain Node", ["node", "dist/server/node.js"]],
+  ["the development server", ["node_modules/.bin/vp", "dev", ...viteOnAFreePort]],
 ];
 
 type Packed = {
@@ -385,14 +375,14 @@ describe("installed into a consumer outside the workspace", () => {
     expect(ofTheSdk(clientModules())).not.toEqual([]);
   });
 
-  describe.each(servers)(`served by %s, in ${engine}`, (_, port, command) => {
+  describe.each(servers)(`served by %s, in ${engine}`, (_, command) => {
     let browser: Browser;
     let server: RunningServer;
     let page: Page;
     const problems: string[] = [];
 
     beforeAll(async () => {
-      server = await startServer({ directory: app, port, command });
+      server = await startServer({ directory: app, command });
       browser = await browserType(engine).launch();
       page = await browser.newPage();
       page.on("console", (message) => {
@@ -406,7 +396,7 @@ describe("installed into a consumer outside the workspace", () => {
 
     afterAll(async () => {
       await browser.close();
-      server.stop();
+      await server.stop();
     });
 
     test("the consumer's Tabs arrive rendered, hydrate, and select by click and by arrow key, with no console error or warning", async () => {
