@@ -1,4 +1,6 @@
 import { createTheme, SolixProvider } from "@solix/core";
+import { createEffect } from "solid-js";
+import { hydratedMark } from "#/src/hydrated-mark.ts";
 import { BoxSection } from "#/src/sections/BoxSection.tsx";
 import { ButtonSection } from "#/src/sections/ButtonSection.tsx";
 import { CenterSection } from "#/src/sections/CenterSection.tsx";
@@ -27,6 +29,10 @@ import "@solix/core/styles.css";
 const playgroundTheme = createTheme({ spacing: themedSpacing });
 
 export default function App() {
+  createEffect(
+    () => undefined,
+    () => document.documentElement.setAttribute(hydratedMark, ""),
+  );
   return (
     <SolixProvider
       theme={playgroundTheme}
