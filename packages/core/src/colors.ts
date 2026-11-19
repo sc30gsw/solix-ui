@@ -20,9 +20,9 @@ import { characterThatEndsADeclaration, type ResolvedStyleProps } from "#/src/st
 
 export type SolixColor = Palette | `${Palette}.${Shade}` | (string & {});
 
-export type ColorProps<Variant extends string = ColorVariant> = {
+export type ColorProps = {
   color?: SolixColor;
-  variant?: Variant | (string & {});
+  variant?: ColorVariant;
   autoContrast?: boolean;
 };
 
