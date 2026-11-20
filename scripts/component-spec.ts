@@ -6,7 +6,7 @@ import {
   openLibraryProgram,
   sharedPropTypes,
 } from "#/scripts/component-props.ts";
-import { type Program, ts, virtualFile } from "#/scripts/syntax.ts";
+import { type ts, type Program, virtualFile } from "#/scripts/syntax.ts";
 
 export type SpecProp = ComponentProp & { readonly common: boolean; readonly behaviour: boolean };
 
@@ -14,33 +14,41 @@ export type SpecComponent = Omit<LibraryComponent, "props"> & {
   readonly props: readonly SpecProp[];
 };
 
-const commonPropsSource = `import type { JSX } from "@solidjs/web";
-import type { ElementProps } from ${JSON.stringify(sharedPropTypes)};
+const probesSource = `import type { JSX } from "@solidjs/web";
+import type { ControlledProps, ElementProps } from ${JSON.stringify(sharedPropTypes)};
 
 function Common(props: ElementProps<"div", { root: object }>): JSX.Element {
   return <div />;
 }
 
-export { Common };
+function Controlled(props: ElementProps<"div", { root: object }, ControlledProps<string>>): JSX.Element {
+  return <div />;
+}
+
+export { Common, Controlled };
 `;
-const controlledPropsType = "ControlledProps";
 
 function isCallable(prop: ComponentProp): boolean {
   return [...prop.kinds].every((kind) => kind === "function" || kind === "absent");
 }
 
-function controlledDeclarations(program: Program): Set<ts.Node> {
-  const alias = program
-    .sourceFile(sharedPropTypes)
-    ?.statements.find(
-      (statement) =>
-        ts.isTypeAliasDeclaration(statement) && statement.name.text === controlledPropsType,
-    );
-  return new Set(
-    alias && ts.isTypeAliasDeclaration(alias) && ts.isTypeLiteralNode(alias.type)
-      ? alias.type.members
-      : [],
+function declarationsOf(props: readonly ComponentProp[] | undefined): Set<ts.Node> {
+  return new Set(props?.flatMap(({ declarations }) => declarations));
+}
+
+function controlledDeclarations(
+  controlled: readonly ComponentProp[] | undefined,
+  common: ReadonlySet<ts.Node>,
+): Set<ts.Node> {
+  const own = (controlled ?? []).filter(
+    ({ declarations }) => !declarations.some((declaration) => common.has(declaration)),
   );
+  if (own.length === 0) {
+    throw new Error(
+      `${sharedPropTypes}: a component whose own props are ControlledProps<string> takes no prop beyond those every element component shares, so the spec cannot tell which props ControlledProps declares. Export ControlledProps from it as the props of a controlled component.`,
+    );
+  }
+  return declarationsOf(own);
 }
 
 function specOf(
@@ -62,11 +70,11 @@ export function openSpecProgram(entry: string = libraryEntry): {
   program: Program;
   components: SpecComponent[];
 } {
-  const commonFile = virtualFile(commonPropsSource, ".tsx");
-  const { program, elementFile } = openLibraryProgram(entry, [commonFile]);
-  const [shared] = componentsIn(program, elementFile, commonFile);
-  const common = new Set(shared?.props.flatMap(({ declarations }) => declarations));
-  const controlled = controlledDeclarations(program);
+  const probesFile = virtualFile(probesSource, ".tsx");
+  const { program, elementFile } = openLibraryProgram(entry, [probesFile]);
+  const [shared, controlledProbe] = componentsIn(program, elementFile, probesFile);
+  const common = declarationsOf(shared?.props);
+  const controlled = controlledDeclarations(controlledProbe?.props, common);
   const components = componentsIn(program, elementFile, entry).map((component) => ({
     ...component,
     props: specOf(component.props, common, controlled),
