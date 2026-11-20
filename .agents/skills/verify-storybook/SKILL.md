@@ -83,7 +83,7 @@ Storybook's Vitest addon turns each story into a Vitest browser test, so the sto
 ## What a pass does not cover
 
 - A value picked in the controls panel. No gate runs on it; the accessibility panel scans it there. A given shade or CSS colour from the `color` select may fall below its contrast, which is the consumer's to check; the palettes and variants the library chooses are held by `packages/core/tests/token-contrast.test.ts`.
-- The free part of an open type: a select offers only the type's literals, so `size` offers the scale and not any length, and `component` the tag names and not a component.
+- The part of a union that its one control cannot give. A text gives no number and no responsive object, so `size` takes a scale key or a CSS length in the panel but not a number of pixels; a number gives no string, so `GridCol`'s `span` takes a number but not `auto` or `content`; a select over the `string & {}` idiom offers its literals and no other string. `component` offers every tag Solid's `ValidComponent` takes, `area`, `base` and `script` among them, because which tag is sensible depends on where the component sits, inside an `svg`, a `map` or a list, and a narrower list would be one written by hand; it offers no component.
 - Descriptions and defaults in the controls table. The props carry no doc comments, and a default such as a component's default variant is a value, not a type.
 - A control for a function or an object with a method: it is listed with `control: false`.
 - The four experimental WCAG 2 A and AA rules: `css-orientation-lock`, `p-as-heading`, `table-fake-caption` and `td-has-header`.
