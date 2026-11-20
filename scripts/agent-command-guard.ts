@@ -89,6 +89,47 @@ const assignment = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const versionSuffix = /@[^/]*$/;
 const notNameCharacter = /[^a-z]/g;
 const releaseAgeSettings = ["minimumreleaseage", "trustlockfile"];
+const installers = new Set(["pnpm", "npm", "yarn", "bun", "vp"]);
+const installVerbs = new Set(["install", "add", "i"]);
+const globalModifier = "global";
+const installOptionsWithAValue = new Set([
+  "--prefix",
+  "--workspace",
+  "--cwd",
+  "-C",
+  "--dir",
+  "--registry",
+  "--userconfig",
+  "--user-config",
+  "--python",
+  "--global-folder",
+  "--modules-dir",
+  "--store-dir",
+  "--cache",
+  "--loglevel",
+  "--filter",
+  "-F",
+]);
+const lowestMajor = /^[\s^~=v<>]*(\d+)/;
+export const bannedDependencies = new Set([
+  "react",
+  "react-dom",
+  "next",
+  "vite-plugin-solid",
+  "eslint-plugin-solid",
+  "@solidjs/start",
+  "solid-start",
+  "solid-app-router",
+  "vinxi",
+]);
+export const newestSolidOneMajors = new Map([
+  ["solid-js", 1],
+  ["@solidjs/router", 1],
+  ["@solidjs/meta", 0],
+  ["@tanstack/solid-router", 1],
+  ["@tanstack/solid-query", 5],
+  ["@solidjs/testing-library", 0],
+]);
 
 export const refusals = {
   stash:
@@ -99,6 +140,8 @@ export const refusals = {
     "Skipping the git hooks is refused: --no-verify, -n on a commit, HUSKY, VP_GIT_HOOKS or VITE_GIT_HOOKS set to 0, and another core.hooksPath each turn off the checks that make a commit hold only verified code. Fix what the hooks report.",
   releaseAge:
     "Setting a pnpm release-age setting, minimumReleaseAgeExclude or trustLockfile is refused: a release younger than the minimum age is not installed. Wait for it.",
+  bannedDependency:
+    "Installing a package that solid2-kit doctor fails on is refused: React, Next.js, vite-plugin-solid, eslint-plugin-solid, SolidStart 0.x or 1.x, and a Solid 1.x line of a Solid package. Use the Solid 2 form that the solid-2 skill gives.",
 } as const;
 
 export type Refusal = keyof typeof refusals;
@@ -340,6 +383,29 @@ function skipsTheHooks(commitArgs: readonly string[]): boolean {
   return false;
 }
 
+function installedSpecs(args: readonly string[]): string[] {
+  const verbFrom = (start: number): number => {
+    let index = start;
+    while (index < args.length && args[index].startsWith("-")) {
+      index += installOptionsWithAValue.has(args[index]) ? 2 : 1;
+    }
+    return index;
+  };
+  const first = verbFrom(0);
+  const verb = args[first] === globalModifier ? verbFrom(first + 1) : first;
+  if (!installVerbs.has(args[verb] ?? "")) return [];
+  return args.slice(verb + 1).filter((arg) => !arg.startsWith("-"));
+}
+
+export function isBannedDependency(spec: string): boolean {
+  const at = spec.indexOf("@", 1);
+  const name = at === -1 ? spec : spec.slice(0, at);
+  if (bannedDependencies.has(name)) return true;
+  const newestRefused = newestSolidOneMajors.get(name);
+  const major = at === -1 ? undefined : lowestMajor.exec(spec.slice(at + 1))?.[1];
+  return newestRefused !== undefined && major !== undefined && Number(major) <= newestRefused;
+}
+
 function refusalsFrom(
   program: string,
   word: string,
@@ -362,6 +428,9 @@ function refusalsFrom(
     if (sets) return ["releaseAge"];
   }
   if (assignmentTakers.has(program) && rest.some(assignsAReleaseAgeSetting)) return ["releaseAge"];
+  if (installers.has(program) && installedSpecs(rest).some(isBannedDependency)) {
+    return ["bannedDependency"];
+  }
   return [];
 }
 

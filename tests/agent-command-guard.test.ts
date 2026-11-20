@@ -1,9 +1,22 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
+import { pathToFileURL } from "node:url";
+import { kitPackage } from "#/scripts/agent-kit.ts";
 import {
+  bannedDependencies,
   guardHookCommand,
+  newestSolidOneMajors,
   type Refusal,
   refusals,
   refusalsOf,
@@ -99,6 +112,24 @@ const refused: [Refusal, string[]][] = [
       "cat >> pnpm-workspace.yaml <<'EOF'\nminimumReleaseAgeExclude:\n  - solid-js\nEOF",
     ],
   ],
+  [
+    "bannedDependency",
+    [
+      "pnpm add react",
+      "npm install react-dom@19.0.0",
+      "pnpm --filter @solix/core add -D vite-plugin-solid",
+      "yarn add --dev eslint-plugin-solid",
+      "npm i @solidjs/start",
+      "yarn global add vinxi",
+      "vp add next",
+      "bun add solid-app-router",
+      "pnpm add solid-js@1.9.5",
+      "pnpm add '@solidjs/router@^0.15.0'",
+      "npm install @tanstack/solid-query@5",
+      "flock /tmp/solix-test.lock pnpm add react",
+      "bash -c 'pnpm add react'",
+    ],
+  ],
 ];
 
 const allowed = [
@@ -142,6 +173,14 @@ const allowed = [
   "git -cuser.name=x commit -m y",
   "git --config-env=user.name=NAME commit -m y",
   "git pull",
+  "pnpm add solid-js@2.0.1",
+  "pnpm add @solidjs/router@2",
+  "npm install @tanstack/solid-query@6",
+  "pnpm why react",
+  "cat node_modules/react/package.json",
+  "grep -n react package.json",
+  "echo pnpm add react",
+  "pnpm add reactivity-helpers",
 ];
 
 describe("the agent command guard", () => {
@@ -280,4 +319,47 @@ describe("the guard fails closed", () => {
 
     expect(imported).toEqual([]);
   });
+});
+
+type Finding = { id: string; message: string };
+
+async function kitDoctor(): Promise<{
+  banned: string[];
+  findings: (dependencies: Record<string, string>) => Finding[];
+}> {
+  const doctor: unknown = await import(
+    pathToFileURL(join(repositoryRoot, kitPackage, "bin/doctor.mjs")).href
+  );
+  const banned: unknown = Reflect.get(Object(doctor), "BANNED_DEPS");
+  const findingsOf: unknown = Reflect.get(Object(doctor), "doctorFindings");
+  if (typeof findingsOf !== "function") throw new Error("the kit's doctor has no doctorFindings.");
+  return {
+    banned: Object.keys(Object(banned)),
+    findings: (dependencies) =>
+      inTemporaryTreeSync(dependencies, (root) => Reflect.apply(findingsOf, undefined, [root])),
+  };
+}
+
+function inTemporaryTreeSync<T>(dependencies: Record<string, string>, use: (root: string) => T): T {
+  const root = mkdtempSync(join(tmpdir(), "kit-doctor-"));
+  try {
+    writeFileSync(join(root, "package.json"), JSON.stringify({ devDependencies: dependencies }));
+    return use(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("the guard refuses an install of exactly the packages the kit's doctor bans, and of the Solid 1.x lines it fails on", async () => {
+  const doctor = await kitDoctor();
+  const solidOneLine = (name: string, range: string) =>
+    doctor
+      .findings({ [name]: range })
+      .some(({ message }) => message.includes("the Solid 1.x line"));
+
+  expect([...bannedDependencies].sort()).toEqual([...doctor.banned].sort());
+  for (const [name, major] of newestSolidOneMajors) {
+    expect(solidOneLine(name, `^${major}.0.0`), `${name}@${major}`).toBe(true);
+    expect(solidOneLine(name, `^${major + 1}.0.0`), `${name}@${major + 1}`).toBe(false);
+  }
 });
