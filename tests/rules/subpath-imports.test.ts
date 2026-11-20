@@ -121,7 +121,10 @@ test(`the rule flags every way a file can reach a file of its own package withou
     const changed = migrated.map((file) => relative(root, file));
     const after = moduleReferences(filesTheRuleCovers(root));
     const reachedAt = (references: readonly ModuleReference[]) =>
-      references.map(({ file, line, reached }) => `${relative(root, file)}:${line} ${reached}`);
+      references.map(
+        ({ file, line, reach }) =>
+          `${relative(root, file)}:${line} ${reach.kind === "file" ? reach.path : reach.kind}`,
+      );
 
     expect(changed.toSorted()).toEqual([
       "package.json",
