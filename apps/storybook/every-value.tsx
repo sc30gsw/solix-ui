@@ -92,7 +92,7 @@ function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
 }
 
 function valuesOf(meta: ValuesMeta, prop: string): readonly Option[] {
-  const argType = meta.argTypes[prop];
+  const argType = meta.argTypes?.[prop];
   const values =
     argType?.options ?? (isBooleanControl(argType?.control) ? bothBooleans : undefined);
   if (values === undefined || values.length < 2) {
@@ -133,14 +133,13 @@ export function everyValueOf(
   args: Args = {},
   rendersAs: Readonly<Record<string, string | undefined>> = {},
 ): object {
-  const values = valuesOf(meta, prop);
   const label = `Every ${prop}`;
   const renderOne = renderOf(meta);
   return {
     args,
     render: (given: Args, context: Context) => (
       <ul aria-label={label}>
-        <For each={values}>
+        <For each={valuesOf(meta, prop)}>
           {(value) => (
             <li>
               <p>{`${prop}: ${String(value)}`}</p>
@@ -151,6 +150,7 @@ export function everyValueOf(
       </ul>
     ),
     play: ({ canvasElement }: { readonly canvasElement: Element }) => {
+      const values = valuesOf(meta, prop);
       const items = [...canvasElement.querySelectorAll(`ul[aria-label="${label}"] > li`)];
       const looks = items.map(renderedLooks);
       const lookOfValue = (value: Option) => looks[values.indexOf(value)];
