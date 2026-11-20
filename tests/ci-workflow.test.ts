@@ -206,9 +206,14 @@ function newestCheckProblemsIn(workflows: Record<string, Workflow>): string[] {
   const found = Object.entries(workflows).flatMap(([file, workflow]) =>
     jobsRunningTheNewestCheck(workflow).map((name) => ({ file, name })),
   );
-  if (found.length !== 1) {
+  if (found.length === 0) {
     return [
-      `${found.length} jobs of the workflows that run on ${pullRequestEvent} run ${newestReleasesCheck}, not exactly one: ${found.map(({ file, name }) => `${file}: ${name}`).join(", ")}.`,
+      `no job of a workflow that runs on ${pullRequestEvent} runs ${newestReleasesCheck}; give one job a workflow of its own that runs it.`,
+    ];
+  }
+  if (found.length > 1) {
+    return [
+      `${found.length} jobs of the workflows that run on ${pullRequestEvent} run ${newestReleasesCheck}, not one: ${found.map(({ file, name }) => `${file}: ${name}`).join(", ")}.`,
     ];
   }
   const [{ file }] = found;
@@ -266,7 +271,7 @@ function aWorkflow(changes: {
   };
 }
 
-const gateSteps = `actions/checkout with {"fetch-depth":0}, voidzero-dev/setup-vp with {"node-version-file":"package.json","cache":true}, then run ${newestReleasesCheck}, each setting nothing else but a name`;
+const gateSteps = `actions/checkout with {"fetch-depth":0} and, if it likes, {"persist-credentials":false}, voidzero-dev/setup-vp with {"node-version-file":"package.json","cache":true}, then run ${newestReleasesCheck}, each setting nothing else but a name`;
 
 const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
   [
@@ -349,6 +354,17 @@ const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
       ],
     }),
     `step 1 of the a job has with {"fetch-depth":0,"ref":"\${{ github.base_ref }}"}, not {"fetch-depth":0}; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "a checkout that keeps its credentials",
+    aWorkflow({
+      steps: [
+        { ...checkout, with: { ...checkout.with, "persist-credentials": true } },
+        setUpVp,
+        check,
+      ],
+    }),
+    `step 1 of the a job has with {"fetch-depth":0,"persist-credentials":true}, not {"fetch-depth":0}; a gate job's steps are exactly ${gateSteps}.`,
   ],
   [
     "the setup step left out",
@@ -439,6 +455,45 @@ const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
     "the a job reads secrets.SOLIX_PRIVATE_TERMS; a gate job reads no secret.",
   ],
 ];
+
+const rightRuns: [what: string, workflow: Workflow][] = [
+  [
+    "a setup step that gives cache before node-version-file",
+    aWorkflow({
+      steps: [
+        checkout,
+        { ...setUpVp, with: { cache: true, "node-version-file": "package.json" } },
+        check,
+      ],
+    }),
+  ],
+  [
+    "a checkout that keeps no credentials",
+    aWorkflow({
+      steps: [
+        { ...checkout, with: { ...checkout.with, "persist-credentials": false } },
+        setUpVp,
+        check,
+      ],
+    }),
+  ],
+  [
+    "an action named in another case",
+    aWorkflow({ steps: [{ ...checkout, uses: "Actions/Checkout@v7" }, setUpVp, check] }),
+  ],
+];
+
+test.for(rightRuns)("the pull-request newest-release rule, on %s, allows it", ([, workflow]) => {
+  expect(newestCheckProblems(workflow)).toEqual([]);
+});
+
+test("the pull-request newest-release rule says so plainly when no job runs the check", () => {
+  expect(newestCheckProblemsIn({ [ciWorkflow]: { on: { pull_request: null }, jobs: {} } })).toEqual(
+    [
+      `no job of a workflow that runs on ${pullRequestEvent} runs ${newestReleasesCheck}; give one job a workflow of its own that runs it.`,
+    ],
+  );
+});
 
 test.for(wrongRuns)(
   "the pull-request newest-release rule, on %s, refuses it",

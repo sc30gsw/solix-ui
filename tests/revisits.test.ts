@@ -98,7 +98,7 @@ test(`no revisit in ${roadmapFile} is met by the registry fixture in ${fixtureFi
   expect(report.problems).toEqual([]);
 });
 
-test(`the ${revisitJob} job is a gate job that runs the revisit check: its steps are exactly the checkout, the setup and the check, it sets only runs-on, timeout-minutes, steps and permissions, which only read, its workflow sets nothing that reaches it but its permissions, and it reads no secret`, () => {
+test(`the ${revisitJob} job is a gate job that runs the revisit check: its steps are exactly the checkout, the setup and the check, it sets only runs-on, timeout-minutes, steps and permissions, which only read, its workflow sets only name, on, permissions and jobs, and it reads no secret`, () => {
   expect(gateJobProblems(workflowAt(weeklyWorkflow), revisitJob, revisitsCheck)).toEqual([]);
 });
 

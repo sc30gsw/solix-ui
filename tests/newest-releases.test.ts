@@ -502,6 +502,20 @@ test(`${heldBackFile} is read against its type, so an entry of the wrong shape f
   expect(() => heldBackFrom([{ ...entry, whlie: {} }])).toThrow(
     `${heldBackFile}: entry 1 (a-package): it sets whlie; an entry sets only name, reason, liftWhen, holds and while.`,
   );
+  const condition = { pin: "vite-plus", requiresExactly: { name: "vitest", version: "5.1.0" } };
+  expect(() => heldBackFrom([{ ...entry, while: { ...condition, until: "never" } }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): while sets until; it sets only pin and requiresExactly.`,
+  );
+  expect(() =>
+    heldBackFrom([
+      {
+        ...entry,
+        while: { ...condition, requiresExactly: { ...condition.requiresExactly, range: "^5" } },
+      },
+    ]),
+  ).toThrow(
+    `${heldBackFile}: entry 1 (a-package): while.requiresExactly sets range; it sets only name and version.`,
+  );
 });
 
 test("a held-back entry that holds nothing back, or has no reason or no liftWhen, fails the check", () => {

@@ -509,6 +509,12 @@ export function failureLines(problems: readonly Problem[], run: RunEnvironment):
 }
 
 const keysOfAHold = ["name", "reason", "liftWhen", "holds", "while"];
+const keysOfACondition = ["pin", "requiresExactly"];
+const keysOfARequiredRelease = ["name", "version"];
+
+function keysBeyond(part: unknown, allowed: readonly string[]): string[] {
+  return isRecord(part) ? Object.keys(part).filter((key) => !allowed.includes(key)) : [];
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -516,14 +522,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function holdShapeProblems(entry: unknown): string[] {
   if (!isRecord(entry)) return ["give it as an object."];
-  const beyond = Object.keys(entry).filter((key) => !keysOfAHold.includes(key));
+  const beyond = keysBeyond(entry, keysOfAHold);
   const condition = entry.while;
   const required = isRecord(condition) ? condition.requiresExactly : undefined;
+  const conditionBeyond = keysBeyond(condition, keysOfACondition);
+  const requiredBeyond = keysBeyond(required, keysOfARequiredRelease);
   return [
     ...(beyond.length > 0
       ? [
           `it sets ${beyond.join(", ")}; an entry sets only name, reason, liftWhen, holds and while.`,
         ]
+      : []),
+    ...(conditionBeyond.length > 0
+      ? [`while sets ${conditionBeyond.join(", ")}; it sets only pin and requiresExactly.`]
+      : []),
+    ...(requiredBeyond.length > 0
+      ? [`while.requiresExactly sets ${requiredBeyond.join(", ")}; it sets only name and version.`]
       : []),
     ...(["name", "reason", "liftWhen"].every((key) => typeof entry[key] === "string")
       ? []

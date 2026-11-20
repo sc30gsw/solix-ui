@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { parse as parseYaml } from "yaml";
 import { repositoryRoot } from "#/scripts/repository.ts";
 
@@ -27,8 +28,17 @@ const keysOfAGateWorkflow = ["name", "on", "permissions", "jobs"];
 const keysOfAGateJob = ["runs-on", "timeout-minutes", "steps", "permissions"];
 const keysOfASetUpStep = ["uses", "with", "name"];
 const keysOfTheGateStep = ["run", "name"];
-const setUpSteps: readonly { action: string; with: Record<string, unknown> }[] = [
-  { action: "actions/checkout", with: { "fetch-depth": 0 } },
+type SetUpStep = {
+  action: string;
+  with: Record<string, unknown>;
+  mayAlsoSet?: Record<string, unknown>;
+};
+const setUpSteps: readonly SetUpStep[] = [
+  {
+    action: "actions/checkout",
+    with: { "fetch-depth": 0 },
+    mayAlsoSet: { "persist-credentials": false },
+  },
   {
     action: "voidzero-dev/setup-vp",
     with: { "node-version-file": "package.json", cache: true },
@@ -68,21 +78,32 @@ function keysBeyond(part: object, allowed: readonly string[]): string[] {
   return Object.keys(part).filter((key) => !allowed.includes(key));
 }
 
-function isDeepEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+function described(step: SetUpStep): string {
+  const also = step.mayAlsoSet ? ` and, if it likes, ${JSON.stringify(step.mayAlsoSet)}` : "";
+  return `${step.action} with ${JSON.stringify(step.with)}${also}`;
 }
 
 function gateStepsFor(command: string): string {
-  return `${setUpSteps.map((step) => `${step.action} with ${JSON.stringify(step.with)}`).join(", ")}, then run ${command}, each setting nothing else but a name`;
+  return `${setUpSteps.map(described).join(", ")}, then run ${command}, each setting nothing else but a name`;
 }
 
-function setUpStepProblem(step: Step, expected: (typeof setUpSteps)[number]): string | undefined {
+function withMatches(given: Record<string, unknown>, expected: SetUpStep): boolean {
+  const allowed = { ...expected.mayAlsoSet, ...expected.with };
+  return (
+    Object.keys(expected.with).every((key) => key in given) &&
+    Object.entries(given).every(
+      ([key, value]) => key in allowed && isDeepStrictEqual(value, allowed[key]),
+    )
+  );
+}
+
+function setUpStepProblem(step: Step, expected: SetUpStep): string | undefined {
   const beyond = keysBeyond(step, keysOfASetUpStep);
   if (beyond.length > 0) return `sets ${beyond.join(", ")}`;
-  if (step.uses?.split("@")[0] !== expected.action) {
+  if (step.uses?.split("@")[0]?.toLowerCase() !== expected.action) {
     return `uses ${step.uses ?? "no action"}, not ${expected.action}`;
   }
-  return isDeepEqual(step.with ?? {}, expected.with)
+  return withMatches(step.with ?? {}, expected)
     ? undefined
     : `has with ${JSON.stringify(step.with ?? {})}, not ${JSON.stringify(expected.with)}`;
 }
