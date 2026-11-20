@@ -233,7 +233,7 @@ test("after the focused element is removed, Tab keeps focus in the trap", async 
   }
 });
 
-test("a stylesheet that arrives after the trap turns on and hides the element it focused leaves the trap as removing that element does: the next Tab and Shift+Tab keep focus in the trap, on an element that shows", async () => {
+test("a stylesheet that arrives after the trap turns on and hides the element it focused leaves the trap as removing that element does: Tab moves to B and C, Tab from C wraps to B, the first stop that shows, and Shift+Tab from B wraps to C", async () => {
   button("before");
   const region = html(
     `<div><button id="a">A</button><button id="b">B</button><button id="c">C</button></div>`,
@@ -243,9 +243,16 @@ test("a stylesheet that arrives after the trap turns on and hides the element it
   expect(focusedId()).toBe("a");
 
   stylesheetArrives("#a { display: none; }");
-  for (const backwards of [false, false, true]) {
+  for (const [backwards, lands] of [
+    [false, "b"],
+    [false, "c"],
+    [false, "b"],
+    [true, "c"],
+  ] as const) {
     await tab(backwards);
-    expect(["b", "c"], "focus stays in the trap, on an element that shows").toContain(focusedId());
+    expect(focusedId(), `after ${backwards ? "Shift+Tab" : "Tab"}, focus is on ${lands}`).toBe(
+      lands,
+    );
   }
 });
 
