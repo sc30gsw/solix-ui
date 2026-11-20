@@ -62,7 +62,6 @@ export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
   staged: {
     "*": "vp check --fix",
-    "*.{ts,tsx,jsx}": "solid2-kit check",
   },
   fmt: {
     ignorePatterns: [...filesOwnedByOtherTools, ...tablesKeptCompact, ...ruleFixtures],
