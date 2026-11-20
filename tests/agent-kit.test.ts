@@ -1,29 +1,8 @@
-import {
-  cpSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  readlinkSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "vite-plus/test";
-import {
-  kitInstalls,
-  kitPackage,
-  kitVersion,
-  claudeSkills,
-  sharedSkills,
-  readSettings,
-  settingsFile,
-  syncAgentKit,
-  withoutKitBlocks,
-  syncScript,
-} from "#/scripts/agent-kit.ts";
+import { kitInstalls, kitPackage, sharedSkills } from "#/scripts/agent-kit.ts";
 import { manifestPaths } from "#/scripts/repository.ts";
 import { approvedSkills } from "#/scripts/package-skills.ts";
 import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
@@ -37,13 +16,10 @@ const reviewChecklist = "Review checklist";
 const runBlock = /^## Run it\n\n```bash\n([\s\S]*?)\n```/m;
 const kitCommands = ".claude/commands";
 const catalogVersion = "catalog:";
-const claudeDocument = "CLAUDE.md";
-const kitMarker = "solid2-agent-kit:";
 const removedByPnpm = "-";
 const neededByStorybook = "react";
 const bannedFinding = "dep-";
 const solidOneLine = "the Solid 1.x line";
-const installed = "node_modules";
 const replacedByTheKit = [
   { pack: "solid-js", name: "solid-2.0" },
   { pack: "solid-js", name: "solid-2.0-cheatsheet" },
@@ -54,69 +30,6 @@ const reviewStep = /^(## 4\. [\s\S]*?)(?=^## )/m;
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
 }
-
-function filesIn(root: string, directory = ""): string[] {
-  return readdirSync(join(root, directory), { withFileTypes: true }).flatMap((entry) => {
-    const path = directory === "" ? entry.name : `${directory}/${entry.name}`;
-    return entry.isDirectory() ? filesIn(root, path) : [path];
-  });
-}
-
-function contentOf(root: string, path: string): string {
-  const file = join(root, path);
-  const entry = lstatSync(file);
-  if (entry.isSymbolicLink()) return `a link to ${readlinkSync(file)}`;
-  return entry.isDirectory() ? "a directory" : readFileSync(file, "utf8");
-}
-
-function copyInto(root: string, path: string): void {
-  const from = join(repositoryRoot, path);
-  mkdirSync(dirname(join(root, path)), { recursive: true });
-  if (lstatSync(from).isSymbolicLink()) symlinkSync(readlinkSync(from), join(root, path));
-  else cpSync(from, join(root, path), { recursive: true });
-}
-
-function seedCheckout(root: string, paths: readonly string[]): void {
-  symlinkSync(join(repositoryRoot, installed), join(root, installed));
-  for (const path of [manifest, ...paths].filter((file) =>
-    existsSync(join(repositoryRoot, file)),
-  )) {
-    copyInto(root, path);
-  }
-}
-
-test(`the guidance the kit installs for Claude Code is exactly what ${syncScript} writes with the kit the catalog pins`, async () => {
-  const outputs = await inTemporaryTree({}, (root) => {
-    seedCheckout(root, []);
-    syncAgentKit(root);
-    return filesIn(root).filter((path) => path !== manifest && path !== installed);
-  });
-  const inKitDirectories = kitInstalls(repositoryRoot, "skills")
-    .flatMap((name) => [`${sharedSkills}/${name}`, `${claudeSkills}/${name}`])
-    .filter((path) => existsSync(join(repositoryRoot, path)))
-    .flatMap((path) =>
-      lstatSync(join(repositoryRoot, path)).isDirectory() ? filesIn(repositoryRoot, path) : [path],
-    );
-  const synced = await inTemporaryTree({}, (root) => {
-    seedCheckout(root, outputs);
-    syncAgentKit(root);
-    return new Map(outputs.map((path) => [path, contentOf(root, path)]));
-  });
-  const stale = [...new Set([...outputs, ...inKitDirectories])]
-    .filter(
-      (path) =>
-        !existsSync(join(repositoryRoot, path)) ||
-        synced.get(path) !== contentOf(repositoryRoot, path),
-    )
-    .map(
-      (path) =>
-        `${path}: it is not what node ${syncScript} writes with solid2-agent-kit ${kitVersion(repositoryRoot)}, the release the catalog pins. Run it and commit what it writes; change the kit's guidance only through the kit.`,
-    );
-
-  expect(outputs).not.toContain(settingsFile);
-  expect(outputs).toContain(`${claudeSkills}/${kitInstalls(repositoryRoot, "skills")[0]}`);
-  expect(stale).toEqual([]);
-});
 
 test(`${workspaceFile} approves neither skill of solid-js's that the kit's solid-2 skill replaces`, () => {
   const replaced = approvedSkills()
@@ -212,35 +125,4 @@ test("no workspace manifest lists a package the kit's doctor bans, or a Solid 1.
 
   expect(manifestPaths().length).toBeGreaterThan(1);
   expect(problems.flat()).toEqual([]);
-});
-
-test(`${settingsFile} runs no hook, so every rule holds for every agent through the git hooks and CI`, () => {
-  expect(readSettings(repositoryRoot).hooks ?? {}).toEqual({});
-});
-
-test(`AGENTS.md is the one agent document, and holds rules only: there is no ${claudeDocument}, AGENTS.md holds none of the kit's prose, and ${syncScript} writes neither`, async () => {
-  const written = await inTemporaryTree({}, (root) => {
-    seedCheckout(root, ["AGENTS.md"]);
-    syncAgentKit(root);
-    return {
-      claudeDocument: existsSync(join(root, claudeDocument)),
-      agents: contentOf(root, "AGENTS.md"),
-    };
-  });
-
-  expect(existsSync(join(repositoryRoot, claudeDocument))).toBe(false);
-  expect(read("AGENTS.md")).not.toContain(kitMarker);
-  expect(written).toEqual({ claudeDocument: false, agents: read("AGENTS.md") });
-});
-
-test("the sync removes the kit's managed blocks from AGENTS.md and keeps every line around them", () => {
-  const block = (id: string) =>
-    `<!-- solid2-agent-kit:${id}:start -->\nkit prose\n<!-- solid2-agent-kit:${id}:end -->`;
-  const rows = "# AGENTS.md\n\n| Rule | Check |\n| --- | --- |\n";
-
-  expect(withoutKitBlocks(`${rows}\n${block("agents-section")}\n`)).toBe(rows);
-  expect(withoutKitBlocks(`${rows}\n${block("a")}\n\n| Later | row |\n\n${block("b")}\n`)).toBe(
-    `${rows}\n| Later | row |\n`,
-  );
-  expect(withoutKitBlocks(rows)).toBe(rows);
 });

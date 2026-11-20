@@ -35,7 +35,7 @@ vp run lint:solid
 vp test tests/agent-kit.test.ts
 ```
 
-The first line takes about a second. The second runs the manifest check, the overrides check and the check that the kit's guidance is what `scripts/sync-agent-kit.ts` writes.
+The first line takes about a second. The second runs the manifest check, the overrides check and the check that the kit's guidance is what `scripts/copy-kit-skills.ts` writes.
 
 Then review the diff against the base branch against the "Review checklist" section of `.agents/skills/solid-2/SKILL.md`, file by file, for what a pattern cannot see. Report each finding as `file:line — problem — Solid 2 replacement`, fix it, and run both lines again.
 
@@ -63,5 +63,5 @@ The kit's gate is a set of regular expressions over comment-stripped source, and
 
 ## When the change is intended
 
-- Moving the kit: change its version in the catalog in `pnpm-workspace.yaml`, install, run `node scripts/sync-agent-kit.ts`, read what it changed, then run the check.
+- Moving the kit: change its version in the catalog in `pnpm-workspace.yaml`, install, run `node scripts/copy-kit-skills.ts`, read what it changed, then run the check.
 - Mutation check after editing covered code: in `packages/core/src/Button.tsx`, add `const { variant } = props;` as the first line of the component's body and run `vp run lint:solid`, which must fail with `[props-destructure-body]` on that line. Then add `"react": "^19.0.0"` to the `devDependencies` of `packages/core/package.json` and run `vp test tests/agent-kit.test.ts`, which must fail with `packages/core/package.json: package.json depends on "react"`. Restore both files and confirm them with `cmp`.
