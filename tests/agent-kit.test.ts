@@ -36,6 +36,7 @@ const subdirectory = "packages/core";
 const kitSkill = `.claude/skills/${kitInstalls(repositoryRoot, "skills")[0]}`;
 const manifest = "package.json";
 const reactFixture = "tests/fixtures/agent-kit/react-hook.txt";
+const lintScript = "lint:solid";
 const readOnlyCommands = [
   "sed -n 1,40p .claude/settings.json",
   "cat .claude/settings.json 2>/dev/null",
@@ -286,6 +287,10 @@ test("step 4 of open-pull-request runs every command the kit installs, next to T
         `${openPullRequest}: in step 4, next to Thermos, run /${command} and say to follow ${commandFile(command)} where a slash command cannot start.`,
     );
 
+  const lintSolid: unknown = Reflect.get(JSON.parse(read(manifest)).scripts ?? {}, lintScript);
+
   expect(step).toContain("Thermos");
   expect(missing).toEqual([]);
+  expect(step).toContain(`\`vp run ${lintScript}\``);
+  expect(lintSolid).toMatch(/^solid2-kit check --dir \. && solid2-kit doctor$/);
 });
