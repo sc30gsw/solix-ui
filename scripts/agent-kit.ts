@@ -1,9 +1,11 @@
 import { spawnSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   renameSync,
+  rmdirSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -15,6 +17,7 @@ export const kitBin = `${kitPackage}/bin/solid2-kit.mjs`;
 export const settingsFile = ".claude/settings.json";
 export const sharedSkills = ".agents/skills";
 export const claudeSkills = ".claude/skills";
+export const claudeCommands = ".claude/commands";
 export const syncScript = "scripts/sync-agent-kit.ts";
 export const agentsDocument = "AGENTS.md";
 export const kitProse = ["CLAUDE.md"];
@@ -45,6 +48,11 @@ export function syncAgentKit(root: string): string {
     throw new Error(`solid2-kit sync failed in ${root}:\n${sync.stdout}${sync.stderr}`);
   }
   for (const file of kitProse) rmSync(join(root, file), { force: true });
+  for (const name of kitInstalls(root, "commands")) {
+    rmSync(join(root, claudeCommands, `${name}.md`), { force: true });
+  }
+  const commands = join(root, claudeCommands);
+  if (existsSync(commands) && readdirSync(commands).length === 0) rmdirSync(commands);
   const agents = readFileSync(join(root, agentsDocument), "utf8");
   const block = agents.indexOf(kitBlockStart);
   if (block !== -1)

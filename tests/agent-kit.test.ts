@@ -31,6 +31,10 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const manifest = "package.json";
 const lintScript = "lint:solid";
+const solidReview = ".agents/skills/verify-solid2/SKILL.md";
+const reviewChecklist = "Review checklist";
+const runBlock = /^## Run it\n\n```bash\n([\s\S]*?)\n```/m;
+const kitCommands = ".claude/commands";
 const catalogVersion = "catalog:";
 const claudeDocument = "CLAUDE.md";
 const kitMarker = "solid2-agent-kit:";
@@ -45,10 +49,6 @@ const replacedByTheKit = [
 ];
 const openPullRequest = ".agents/skills/open-pull-request/SKILL.md";
 const reviewStep = /^(## 4\. [\s\S]*?)(?=^## )/m;
-
-function commandFile(command: string): string {
-  return `.claude/commands/${command}.md`;
-}
 
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
@@ -130,21 +130,24 @@ test(`${workspaceFile} approves neither skill of solid-js's that the kit's solid
   expect(replaced).toEqual([]);
 });
 
-test("step 4 of open-pull-request runs every command the kit installs, next to Thermos", () => {
+test(`step 4 of open-pull-request runs ${solidReview}, which runs the kit's gates as vp run ${lintScript} and walks the kit's review checklist, and no agent has a command of the kit's`, () => {
   const step = reviewStep.exec(read(openPullRequest))?.[1] ?? "";
-  const missing = kitInstalls(repositoryRoot, "commands")
-    .filter((command) => !step.includes(`/${command}`) || !step.includes(commandFile(command)))
-    .map(
-      (command) =>
-        `${openPullRequest}: in step 4, next to Thermos, run /${command} and say to follow ${commandFile(command)} where a slash command cannot start.`,
-    );
-
+  const review = existsSync(join(repositoryRoot, solidReview)) ? read(solidReview) : "";
   const lintSolid: unknown = Reflect.get(JSON.parse(read(manifest)).scripts ?? {}, lintScript);
+  const kitSkill = `${sharedSkills}/${kitInstalls(repositoryRoot, "skills")[0]}/SKILL.md`;
 
   expect(step).toContain("Thermos");
-  expect(missing).toEqual([]);
-  expect(step).toContain(`\`vp run ${lintScript}\``);
+  expect(step).toContain(`\`${solidReview}\``);
+  expect(runBlock.exec(review)?.[1]?.split("\n")).toContain(`vp run ${lintScript}`);
   expect(lintSolid).toMatch(/^solid2-kit check --dir \. && solid2-kit doctor$/);
+  expect(review).toContain(`\`${kitSkill}\``);
+  expect(review).toContain(reviewChecklist);
+  expect(
+    read(kitSkill)
+      .split("\n")
+      .some((line) => line.startsWith(`## ${reviewChecklist}`)),
+  ).toBe(true);
+  expect(existsSync(join(repositoryRoot, kitCommands))).toBe(false);
 });
 
 type DoctorFinding = { id: string; message: string };
