@@ -21,6 +21,7 @@ import {
   readSettings,
   settingsFile,
   syncAgentKit,
+  withoutKitBlocks,
   syncScript,
 } from "#/scripts/agent-kit.ts";
 import { manifestPaths } from "#/scripts/repository.ts";
@@ -230,4 +231,16 @@ test(`AGENTS.md is the one agent document, and holds rules only: there is no ${c
   expect(existsSync(join(repositoryRoot, claudeDocument))).toBe(false);
   expect(read("AGENTS.md")).not.toContain(kitMarker);
   expect(written).toEqual({ claudeDocument: false, agents: read("AGENTS.md") });
+});
+
+test("the sync removes the kit's managed blocks from AGENTS.md and keeps every line around them", () => {
+  const block = (id: string) =>
+    `<!-- solid2-agent-kit:${id}:start -->\nkit prose\n<!-- solid2-agent-kit:${id}:end -->`;
+  const rows = "# AGENTS.md\n\n| Rule | Check |\n| --- | --- |\n";
+
+  expect(withoutKitBlocks(`${rows}\n${block("agents-section")}\n`)).toBe(rows);
+  expect(withoutKitBlocks(`${rows}\n${block("a")}\n\n| Later | row |\n\n${block("b")}\n`)).toBe(
+    `${rows}\n| Later | row |\n`,
+  );
+  expect(withoutKitBlocks(rows)).toBe(rows);
 });

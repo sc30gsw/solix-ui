@@ -22,6 +22,9 @@ export const syncScript = "scripts/sync-agent-kit.ts";
 export const agentsDocument = "AGENTS.md";
 export const kitProse = ["CLAUDE.md"];
 export const kitBlockStart = "<!-- solid2-agent-kit:";
+const kitBlock =
+  /<!-- solid2-agent-kit:([\w-]+):start -->[\s\S]*?<!-- solid2-agent-kit:\1:end -->/g;
+const blankLinesLeft = /\n{3,}/g;
 
 type Settings = { hooks?: Record<string, unknown> };
 
@@ -39,6 +42,12 @@ export function kitInstalls(root: string, kind: "skills" | "commands"): string[]
   );
 }
 
+export function withoutKitBlocks(text: string): string {
+  return text.includes(kitBlockStart)
+    ? `${text.replace(kitBlock, "").replace(blankLinesLeft, "\n\n").trimEnd()}\n`
+    : text;
+}
+
 export function syncAgentKit(root: string): string {
   const sync = spawnSync(process.execPath, [join(root, kitBin), "sync", "--claude", "--no-hooks"], {
     cwd: root,
@@ -54,9 +63,7 @@ export function syncAgentKit(root: string): string {
   const commands = join(root, claudeCommands);
   if (existsSync(commands) && readdirSync(commands).length === 0) rmdirSync(commands);
   const agents = readFileSync(join(root, agentsDocument), "utf8");
-  const block = agents.indexOf(kitBlockStart);
-  if (block !== -1)
-    writeFileSync(join(root, agentsDocument), `${agents.slice(0, block).trimEnd()}\n`);
+  writeFileSync(join(root, agentsDocument), withoutKitBlocks(agents));
   for (const name of kitInstalls(root, "skills")) {
     const shared = join(root, sharedSkills, name);
     rmSync(shared, { recursive: true, force: true });
