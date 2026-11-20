@@ -1,6 +1,11 @@
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import type { GeneratedControls } from "virtual:story-controls";
 
-export type ComponentMeta<C> = Meta<C> & { component: C; argTypes: GeneratedControls<C> };
+type ControlsKeptWhole = {
+  parameters?: NonNullable<Meta["parameters"]> & { controls?: never };
+};
 
-export type ComponentStory<Of> = Omit<StoryObj<Of>, "argTypes">;
+export type ComponentMeta<C> = Omit<Meta<C>, "parameters"> &
+  ControlsKeptWhole & { component: C; argTypes: GeneratedControls<C> };
+
+export type ComponentStory<Of> = Omit<StoryObj<Of>, "argTypes" | "parameters"> & ControlsKeptWhole;
