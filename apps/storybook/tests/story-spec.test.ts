@@ -6,7 +6,7 @@ import {
   openSpecProgram,
   type SpecComponent,
   type SpecProp,
-} from "#/tests/support/component-spec.ts";
+} from "../../../scripts/component-spec.ts";
 import { storyIndex } from "#/tests/support/stories.ts";
 
 type Holder = { readonly kind: "component"; readonly name: string } | { readonly kind: "shared" };
@@ -39,7 +39,7 @@ beforeAll(async () => {
       Object.entries(props).map(([prop, value]) => ({ component, prop, value, played })),
     ),
   );
-  const opened = openSpecProgram([]);
+  const opened = openSpecProgram();
   components = opened.components;
   opened.program.dispose();
 }, indexTimeout);

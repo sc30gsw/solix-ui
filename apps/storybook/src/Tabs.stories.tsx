@@ -31,6 +31,7 @@ type Story = ComponentStory<typeof meta>;
 export const Default: Story = {};
 
 export const ArrowKeysMoveTheSelection: Story = {
+  args: { activateTabWithKeyboard: true },
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole("tab", { name: "Inbox" }));
     await userEvent.keyboard("{ArrowRight}");
@@ -127,5 +128,16 @@ export const UnmountsHiddenPanels: Story = {
   args: { keepMounted: false },
   play: async ({ canvas }) => {
     await expect(canvas.queryByText("Drafts panel")).toBeNull();
+  },
+};
+
+export const KeepsTheSelectedTabOnAPress: Story = {
+  args: { allowTabDeactivation: false },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Inbox" }));
+    await expect(canvas.getByRole("tab", { name: "Inbox" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   },
 };

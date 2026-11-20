@@ -77,6 +77,7 @@ export default meta;
 type Story = ComponentStory<typeof meta>;
 
 export const ThemedSpacing: Story = {
+  args: { withCssVariables: true },
   play: async ({ canvas }) => {
     const probe = document.createElement("div");
     probe.style.paddingTop = themedPadding;

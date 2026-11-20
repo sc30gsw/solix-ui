@@ -124,9 +124,11 @@ function chosenFor(members: readonly Member[]): Chosen {
   const closed = options.length > 0 && !has("text", "number");
   const onlyBooleans = options.every((option) => typeof option === "boolean");
   const bothBooleans = options.length === 2 && onlyBooleans;
-  if (closed && bothBooleans && !has("suggested")) return { control: { type: "boolean" } };
+  if (closed && bothBooleans && !has("suggested")) {
+    return { control: { type: "boolean" }, values: options };
+  }
   if (closed) {
-    const whole = !has("suggested") && !onlyBooleans && options.length > 1;
+    const whole = !has("suggested") && options.length > 1;
     return { control: { type: "select", options }, ...(whole ? { values: options } : {}) };
   }
   if (has("suggested", "text")) return { control: { type: "text" } };

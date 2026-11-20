@@ -1,5 +1,6 @@
 import { Center } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
+import { everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -25,3 +26,5 @@ export const AsASpan: Story = {
     </Center>
   ),
 };
+
+export const EveryInline: Story = everyValueOf(meta, "inline");

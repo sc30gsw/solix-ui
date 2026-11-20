@@ -210,3 +210,7 @@ export const EveryPosition: Story = everyValueOf(meta, "pos");
 export const EveryHiddenFrom: Story = everyValueOf(meta, "hiddenFrom");
 
 export const EveryVisibleFrom: Story = everyValueOf(meta, "visibleFrom");
+
+export const EveryLightHidden: Story = everyValueOf(meta, "lightHidden");
+
+export const EveryDarkHidden: Story = everyValueOf(meta, "darkHidden");

@@ -47,6 +47,7 @@ export const GivenColors: Story = {
       <Button color="red.6" autoContrast>
         Given shade
       </Button>
+      <Button autoContrast={false}>Primary without auto contrast</Button>
       <Button color={givenColour}>Given colour</Button>
     </div>
   ),
@@ -101,3 +102,5 @@ export const AsALink: Story = {
     await expect(canvas.getByRole("link", { name: "Go" })).toHaveAttribute("href", "#as-a-link");
   },
 };
+
+export const EveryUnstyled: Story = everyValueOf(meta, "unstyled");

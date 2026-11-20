@@ -4,10 +4,11 @@ import {
   componentPropsOf,
   type Control,
   libraryComponentProps,
+  libraryEntry,
 } from "#/scripts/component-props.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
-import { openSpecProgram } from "#/apps/storybook/tests/support/component-spec.ts";
-import { virtualFile } from "#/scripts/syntax.ts";
+import { openSpecProgram } from "#/scripts/component-spec.ts";
+import { openProgram, stringLiteralTypesOf, ts, virtualFile } from "#/scripts/syntax.ts";
 
 const probe = `import type { JSX } from "@solidjs/web";
 
@@ -93,7 +94,7 @@ export { Stateful };
 `;
 
 test("a prop carries its doc comment as its description, the literal its component falls back to with ?? as its default, every value of a closed union, whether the props every element component shares declare it, and whether it is behaviour: a callback, a prop ControlledProps declares, or an own boolean or closed union of a component that has one of those", () => {
-  const { program, components } = openSpecProgram([], virtualFile(statefulProbe, ".tsx"));
+  const { program, components } = openSpecProgram(virtualFile(statefulProbe, ".tsx"));
   program.dispose();
   const [{ props }] = components;
   const own = props.filter(({ common }) => !common);
@@ -117,7 +118,7 @@ test("a prop carries its doc comment as its description, the literal its compone
       values: ["calm", "loud"],
       behaviour: true,
     },
-    loop: { description: "", defaultValue: "true", behaviour: true },
+    loop: { description: "", defaultValue: "true", values: [false, true], behaviour: true },
     renderTone: { description: "", behaviour: true },
     label: { description: "", behaviour: false },
   });
@@ -145,3 +146,57 @@ test("a default the code reaches through a helper's options type, as ColorScheme
     defaultColorScheme: expect.any(String),
   });
 });
+
+const everyValue = join(repositoryRoot, "apps/storybook/every-value.tsx");
+
+test("everyValueOf takes exactly the public props whose spec holds every value: for every exported component, ClosedPropsOf names, among its public props, those that carry values, booleans among them", () => {
+  const { program: specProgram, components } = openSpecProgram();
+  specProgram.dispose();
+  const closedOf = (name: string) => `Closed${name}`;
+  const probe = virtualFile(
+    [
+      `import type { ClosedPropsOf } from ${JSON.stringify(everyValue)};`,
+      `import type * as library from ${JSON.stringify(libraryEntry)};`,
+      ...components.map(
+        ({ name }) => `export type ${closedOf(name)} = ClosedPropsOf<typeof library.${name}>;`,
+      ),
+      "",
+    ].join("\n"),
+    ".ts",
+  );
+  const program = openProgram([probe]);
+  try {
+    const aliases = new Map(
+      (program.sourceFile(probe)?.statements ?? []).flatMap((statement) =>
+        ts.isTypeAliasDeclaration(statement) ? [[statement.name.text, statement.name]] : [],
+      ),
+    );
+    const disagreements = components.flatMap(({ name, props }) => {
+      const alias = aliasesOrThrow(aliases, closedOf(name));
+      const publicProps = new Set(props.map((prop) => prop.name));
+      const typed = stringLiteralTypesOf(program.checker, alias)
+        .filter((prop) => publicProps.has(prop))
+        .toSorted();
+      const spec = props
+        .filter(({ values }) => values !== undefined)
+        .map((prop) => prop.name)
+        .toSorted();
+      return typed.join() === spec.join()
+        ? []
+        : [
+            `${name}: ClosedPropsOf names ${typed.join(", ") || "nothing"}, but the spec holds every value of ${spec.join(", ") || "nothing"}. Make the type in apps/storybook/every-value.tsx and the values in scripts/syntax/props.ts tell closed unions alike.`,
+          ];
+    });
+
+    expect(components.length).toBeGreaterThan(0);
+    expect(disagreements).toEqual([]);
+  } finally {
+    program.dispose();
+  }
+});
+
+function aliasesOrThrow(aliases: ReadonlyMap<string, ts.Node>, name: string): ts.Node {
+  const alias = aliases.get(name);
+  if (!alias) throw new Error(`${name}: the probe declares no such alias.`);
+  return alias;
+}

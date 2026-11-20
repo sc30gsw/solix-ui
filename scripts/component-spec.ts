@@ -5,8 +5,8 @@ import {
   libraryEntry,
   openLibraryProgram,
   sharedPropTypes,
-} from "../../../../scripts/component-props.ts";
-import { type Program, ts, virtualFile } from "../../../../scripts/syntax.ts";
+} from "#/scripts/component-props.ts";
+import { type Program, ts, virtualFile } from "#/scripts/syntax.ts";
 
 export type SpecProp = ComponentProp & { readonly common: boolean; readonly behaviour: boolean };
 
@@ -53,21 +53,17 @@ function specOf(
   const stateful = props.some(drivesState);
   return props.map((prop) => {
     const shared = prop.declarations.some((declaration) => common.has(declaration));
-    const chosen = prop.control.type === "boolean" || prop.values !== undefined;
-    const own = !shared && chosen && (stateful || prop.required);
+    const own = !shared && prop.values !== undefined && (stateful || prop.required);
     return { ...prop, common: shared, behaviour: drivesState(prop) || own };
   });
 }
 
-export function openSpecProgram(
-  files: readonly string[],
-  entry: string = libraryEntry,
-): {
+export function openSpecProgram(entry: string = libraryEntry): {
   program: Program;
   components: SpecComponent[];
 } {
   const commonFile = virtualFile(commonPropsSource, ".tsx");
-  const { program, elementFile } = openLibraryProgram(entry, [commonFile, ...files]);
+  const { program, elementFile } = openLibraryProgram(entry, [commonFile]);
   const [shared] = componentsIn(program, elementFile, commonFile);
   const common = new Set(shared?.props.flatMap(({ declarations }) => declarations));
   const controlled = controlledDeclarations(program);

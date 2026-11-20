@@ -47,3 +47,21 @@ export const KeptMountedWhileHidden: Story = {
     await expect(canvas.getByText("Profile panel")).not.toBeVisible();
   },
 };
+
+export const UnmountedWhileHidden: Story = {
+  args: { keepMounted: false },
+  render: (args) => (
+    <Tabs defaultValue="security" keepMounted={false}>
+      <Tabs.List aria-label="Account">
+        <Tabs.Tab value="profile">Profile</Tabs.Tab>
+        <Tabs.Tab value="security">Security</Tabs.Tab>
+      </Tabs.List>
+      <Tabs.Panel {...args} />
+      <Tabs.Panel value="security">Security panel</Tabs.Panel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("tabpanel", { name: "Security" })).toBeVisible();
+    await expect(canvas.queryByText("Profile panel")).toBeNull();
+  },
+};

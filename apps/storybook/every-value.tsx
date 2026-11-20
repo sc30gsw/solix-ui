@@ -22,21 +22,35 @@ type IsLiteral<V> = V extends string
       ? true
       : false;
 type EveryLiteral<V> = false extends (V extends unknown ? IsLiteral<V> : never) ? false : true;
+type Intersected<V> = (V extends unknown ? (value: V) => void : never) extends (
+  value: infer All,
+) => void
+  ? All
+  : never;
+type MoreThanOne<V> = [V] extends [Intersected<V>] ? false : true;
 type Closed<V> = [Scalar<V>] extends [never]
   ? false
-  : [Scalar<V>] extends [boolean]
-    ? false
-    : EveryLiteral<Scalar<V>>;
+  : MoreThanOne<Scalar<V>> extends true
+    ? EveryLiteral<Scalar<V>>
+    : false;
 
 export type ClosedProps<P> = {
-  [Key in keyof P]-?: Closed<P[Key]> extends true ? Key : never;
-}[keyof P] &
-  string;
+  [Key in keyof P & string]-?: Closed<P[Key]> extends true ? Key : never;
+}[keyof P & string];
 
 type PropsOf<C> = C extends (props: infer P) => unknown ? P : never;
+
+export type ClosedPropsOf<C> = ClosedProps<PropsOf<C>>;
+
+type ValueOf<
+  C,
+  K extends keyof PropsOf<C>,
+> = `${Scalar<PropsOf<C>[K]> & (string | number | boolean)}`;
 type ValuesMeta = {
   readonly component: unknown;
-  readonly argTypes: Readonly<Record<string, { readonly options?: readonly Option[] } | undefined>>;
+  readonly argTypes: Readonly<
+    Record<string, { readonly options?: readonly Option[]; readonly control?: unknown } | undefined>
+  >;
   readonly render?: Render;
 };
 
@@ -67,6 +81,28 @@ function renderedLooks(item: Element): string {
     .join("|");
 }
 
+const bothBooleans = [true, false];
+
+function isBooleanControl(control: unknown): boolean {
+  return isRecord(control) && control.type === "boolean";
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null;
+}
+
+function valuesOf(meta: ValuesMeta, prop: string): readonly Option[] {
+  const argType = meta.argTypes[prop];
+  const values =
+    argType?.options ?? (isBooleanControl(argType?.control) ? bothBooleans : undefined);
+  if (values === undefined || values.length < 2) {
+    throw new Error(
+      `everyValueOf(meta, "${prop}"): the meta's argTypes give "${prop}" no select of two or more options and no boolean control, so there are no values to show. Give it argTypesOf(component) from virtual:story-controls.`,
+    );
+  }
+  return values;
+}
+
 function isRendered(component: unknown): component is (props: Args) => JSX.Element {
   return typeof component === "function";
 }
@@ -84,19 +120,20 @@ function renderOf(meta: ValuesMeta): Render {
 
 export function everyValueOf<
   M extends { readonly component: Component; readonly argTypes: object },
+  K extends ClosedPropsOf<M["component"]> & keyof M["argTypes"],
 >(
   meta: M,
-  prop: ClosedProps<PropsOf<M["component"]>>,
+  prop: K,
   args?: Partial<PropsOf<M["component"]>>,
-  rendersAs?: Readonly<Record<string, string>>,
+  rendersAs?: Partial<Record<ValueOf<M["component"], K>, ValueOf<M["component"], K>>>,
 ): ComponentStory<M>;
 export function everyValueOf(
   meta: ValuesMeta,
   prop: string,
   args: Args = {},
-  rendersAs: Readonly<Record<string, string>> = {},
+  rendersAs: Readonly<Record<string, string | undefined>> = {},
 ): object {
-  const values = meta.argTypes[prop]?.options ?? [];
+  const values = valuesOf(meta, prop);
   const label = `Every ${prop}`;
   const renderOne = renderOf(meta);
   return {
@@ -128,6 +165,7 @@ export function everyValueOf(
       const unlike = Object.entries(rendersAs)
         .filter(
           ([value, as]) =>
+            as !== undefined &&
             looks[values.map(String).indexOf(value)] !== looks[values.map(String).indexOf(as)],
         )
         .map(([value, as]) => `${value} as ${as}`);

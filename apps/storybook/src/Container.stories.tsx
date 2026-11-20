@@ -24,3 +24,5 @@ export const Fluid: Story = {
 };
 
 export const EveryStrategy: Story = everyValueOf(meta, "strategy");
+
+export const EveryFluid: Story = everyValueOf(meta, "fluid");

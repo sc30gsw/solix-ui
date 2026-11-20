@@ -47,3 +47,5 @@ export const Aligned: Story = {
     overflow: "hidden",
   },
 };
+
+export const EveryGrow: Story = everyValueOf(meta, "grow", { columns: 24 });

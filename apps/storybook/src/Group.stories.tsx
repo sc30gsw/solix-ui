@@ -31,3 +31,9 @@ export const EveryWrap: Story = everyValueOf(meta, "wrap");
 export const KeptToItsShare: Story = {
   args: { grow: true, preventGrowOverflow: true, justify: "center", align: "flex-end" },
 };
+
+export const EveryGrow: Story = everyValueOf(meta, "grow");
+
+export const EveryPreventGrowOverflow: Story = everyValueOf(meta, "preventGrowOverflow", {
+  grow: true,
+});
