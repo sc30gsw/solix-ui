@@ -1,8 +1,7 @@
-import { readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { parse as parseYaml } from "yaml";
 import { staticStorybookDirectory } from "#/apps/storybook/tests/support/test-servers.ts";
+import { type Step, workflowAt } from "#/tests/support/workflows.ts";
 import { repositoryRoot, workflowFiles } from "#/tests/support/workspace.ts";
 
 const ciWorkflow = ".github/workflows/ci.yml";
@@ -12,17 +11,6 @@ const pullRequestEvent = "pull_request";
 const secretsTheWorkflowsRead = ["SOLIX_PRIVATE_TERMS"];
 const expression = /\$\{\{([\s\S]*?)\}\}/g;
 const secretsContext = /(?<![\w.])secrets(?:\s*\.\s*(\w+))?/g;
-
-type Step = { run?: string; uses?: string; with?: Record<string, unknown> } & Record<
-  string,
-  unknown
->;
-type Job = { permissions?: unknown; steps?: Step[] };
-type Workflow = { on?: unknown; permissions?: unknown; jobs?: Record<string, Job> };
-
-function workflowAt(file: string): Workflow {
-  return parseYaml(readFileSync(join(repositoryRoot, file), "utf8")) as Workflow;
-}
 
 function events(on: unknown): string[] {
   if (typeof on === "string") return [on];
