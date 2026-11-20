@@ -110,7 +110,7 @@ export type DocumentSnapshot = {
   stylesheets: StylesheetSnapshot[];
 };
 
-export function documentSnapshot(outcomesAt: string): DocumentSnapshot {
+function documentSnapshot(outcomesAt: string): DocumentSnapshot {
   const outcomes: unknown = Reflect.get(window, outcomesAt);
   const outcomeOf = (link: HTMLLinkElement): StylesheetSnapshot["outcome"] =>
     outcomes instanceof WeakMap ? (outcomes.get(link) ?? "pending") : "not watched";

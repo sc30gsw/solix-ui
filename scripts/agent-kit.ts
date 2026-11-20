@@ -31,10 +31,19 @@ function present(path: string): boolean {
 }
 
 function heldAsCommitted(root: string, path: string): boolean {
-  const git = (args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  const git = (args: string[]) => {
+    try {
+      return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: "pipe" }).trim();
+    } catch (cause) {
+      throw new Error(
+        `${path}: telling a committed copy of the kit's from the project's own files needs git, and git ${args[0]} failed here. Run the copy in a git checkout.`,
+        { cause },
+      );
+    }
+  };
   return (
     git(["ls-files", "--", path]) !== "" &&
-    git(["status", "--porcelain", "--untracked-files=all", "--", path]) === ""
+    git(["status", "--porcelain", "--untracked-files=all", "--ignored", "--", path]) === ""
   );
 }
 

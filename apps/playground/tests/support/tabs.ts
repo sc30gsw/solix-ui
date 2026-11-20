@@ -190,22 +190,23 @@ function listSnapshots(lists: Element[]): ListSnapshot[] {
   });
 }
 
+function listsOf(page: Page, list: string): Promise<ListSnapshot[]> {
+  return tabList(page, list).evaluateAll(listSnapshots);
+}
+
 export async function snapshotOf(page: Page, list: string): Promise<TabsSnapshot> {
-  return {
-    lists: await tabList(page, list).evaluateAll(listSnapshots),
-    document: await snapshotOfDocument(page),
-  };
+  return { lists: await listsOf(page, list), document: await snapshotOfDocument(page) };
 }
 
 export function stateFrom(
-  snapshot: TabsSnapshot,
+  lists: readonly ListSnapshot[],
   list: string,
   names: readonly string[] = tabNamesOf(list),
 ): TabsReading {
-  const [found, ...more] = snapshot.lists;
+  const [found, ...more] = lists;
   if (found === undefined || more.length > 0) {
     throw new Error(
-      `${list}: the page renders ${snapshot.lists.length} lists of tabs by that name, not one.`,
+      `${list}: the page renders ${lists.length} lists of tabs by that name, not one.`,
     );
   }
   if (found.tabs.length !== names.length) {
@@ -231,11 +232,7 @@ export async function stateOf(
   list: string,
   names: readonly string[] = tabNamesOf(list),
 ): Promise<TabsState> {
-  const { selected, focused, tabStops, shown } = stateFrom(
-    await snapshotOf(page, list),
-    list,
-    names,
-  );
+  const { selected, focused, tabStops, shown } = stateFrom(await listsOf(page, list), list, names);
   return { selected, focused, tabStops, shown };
 }
 

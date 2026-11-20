@@ -74,27 +74,29 @@ export function solidRanges(manifest: VersionManifest | undefined): [string, str
     .filter(([other]) => solidPackages.includes(other));
 }
 
-function refusesWhatOthersTake(
+type Refusal = { from: "below" | "above"; why: string };
+
+function refusalOf(
   documents: Documents,
   name: string,
+  version: string,
   taken: Record<string, string>,
-): boolean {
-  const version = taken[name] ?? "";
-  return solidRanges(manifestOf(documents, name, version)).some(([other, range]) => {
+): Refusal | undefined {
+  for (const [other, range] of solidRanges(manifestOf(documents, name, version))) {
     const theirs = taken[other] ?? "";
     if (semver.validRange(range) === null) {
       throw new Error(
         `${name}@${version}: its range "${range}" for ${other} is not a semver range, so nothing tells whether it accepts the ${other} release taken.`,
       );
     }
-    if (semver.satisfies(theirs, range)) return false;
-    if (semver.gtr(theirs, range)) {
-      throw new Error(
-        `${name}@${version}: its range "${range}" for ${other} refuses ${other}@${theirs} from above. The canary steps back only the package whose own range refuses, which assumes that no Solid package's range for another has an upper bound below that package's newest release. Pick these releases by hand.`,
-      );
+    if (!semver.satisfies(theirs, range)) {
+      return {
+        from: semver.gtr(theirs, range) ? "above" : "below",
+        why: `${name}@${version}: its range "${range}" for ${other} refuses ${other}@${theirs}`,
+      };
     }
-    return true;
-  });
+  }
+  return undefined;
 }
 
 export function newestSolidReleases(
@@ -116,8 +118,18 @@ export function newestSolidReleases(
     const taken = Object.fromEntries(
       solidPackages.map((name) => [name, candidates[name]?.[0] ?? ""]),
     );
-    const refusing = solidPackages.find((name) => refusesWhatOthersTake(documents, name, taken));
+    const refusing = solidPackages.find(
+      (name) => refusalOf(documents, name, taken[name] ?? "", taken) !== undefined,
+    );
     if (refusing === undefined) return taken;
+    const left = (candidates[refusing] ?? []).map((version) =>
+      refusalOf(documents, refusing, version, taken),
+    );
+    if (left.every((refusal) => refusal?.from === "above")) {
+      throw new Error(
+        `${left[0]?.why} from above, and so does every older release of ${refusing} that is left. The canary steps back only the package whose own range refuses, which assumes that a Solid package's range for another has no upper bound below that package's newest release. Pick these releases by hand.`,
+      );
+    }
     candidates[refusing]?.shift();
   }
 }

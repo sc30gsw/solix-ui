@@ -157,12 +157,12 @@ test("a published version with no publish time stops the canary by name", () => 
   ).toThrow("solid-js: the registry gives no publish time for solid-js@2.0.1");
 });
 
-test("the Solid 2 canary stops, naming its assumption, when a Solid package's range refuses another's newest release from above, since stepping the refusing package back cannot help", () => {
+test("the Solid 2 canary stops, naming its assumption, when every release left of a Solid package refuses another's newest release from above, since stepping it back further cannot help", () => {
   const exactPeer = solidLine((version) => version, releases);
   exactPeer["solid-js"] = registryDocument([...releases, ["2.0.2", 2]]);
 
   expect(() => newestSolidReleases(exactPeer, policy, now)).toThrow(
-    '@solidjs/web@2.0.1: its range "2.0.1" for solid-js refuses solid-js@2.0.2 from above.',
+    '@solidjs/web@2.0.1: its range "2.0.1" for solid-js refuses solid-js@2.0.2 from above, and so does every older release of @solidjs/web that is left.',
   );
 });
 
@@ -182,4 +182,14 @@ test("the Solid 2 canary holds a Solid package to each of its ranges for another
   twoLists["@solidjs/signals"] = registryDocument([["2.0.0", 20]]);
 
   expect(newestSolidReleases(twoLists, policy, now)["solid-js"]).toBe("2.0.0");
+});
+
+test("the Solid 2 canary steps back a package whose range refuses another's newest release from above while an older release of it is left that does not", () => {
+  const olderAccepts = solidLine((version) => (version === "2.0.1" ? "2.0.1" : "^2.0.0"), releases);
+  olderAccepts["solid-js"] = registryDocument([...releases, ["2.0.2", 2]]);
+
+  expect(newestSolidReleases(olderAccepts, policy, now)).toMatchObject({
+    "solid-js": "2.0.2",
+    "@solidjs/web": "2.0.0",
+  });
 });

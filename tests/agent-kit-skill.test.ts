@@ -23,6 +23,7 @@ import {
 } from "#/scripts/agent-kit.ts";
 import { approvedSkills, folderHash, kitSkills } from "#/scripts/package-skills.ts";
 import { workspaceFile } from "#/scripts/pnpm-settings.ts";
+import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
@@ -139,9 +140,9 @@ function committed(root: string): void {
   for (const args of [
     ["init", "--quiet"],
     ["add", "--all"],
-    ["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "a"],
+    ["commit", "--quiet", "-m", "a"],
   ]) {
-    execFileSync("git", args, { cwd: root });
+    gitInScratchRepository(root, args);
   }
 }
 
@@ -234,4 +235,77 @@ test(`${copyScript} refuses a skill the kit ships under the name of a skill the 
     );
     expect(existsSync(join(root, sharedSkills, "packaged"))).toBe(false);
   });
+});
+
+const keptByTheKit = { ...shippedByTheKit(["kept"]), ...formerKitCopy("kept") };
+const keptCopy = `${sharedSkills}/kept/SKILL.md`;
+
+function inACommittedTree(tree: Record<string, string>, use: (root: string) => void) {
+  return inTemporaryTree(tree, (root) => {
+    linkedFromClaude(root, "kept");
+    committed(root);
+    writeFileSync(join(root, kitSkillSource, "kept/SKILL.md"), "the kit's kept, updated");
+    use(root);
+  });
+}
+
+test(`${copyScript} replaces a committed copy of a skill the kit still ships when the kit updates it`, async () => {
+  await inACommittedTree(keptByTheKit, (root) => {
+    expect(copyKitSkills(root, ["kept"])).toEqual(["kept"]);
+    expect(readFileSync(join(root, keptCopy), "utf8")).toBe("the kit's kept, updated");
+    expect(readlinkSync(join(root, claudeSkills, "kept"))).toBe(`../../${sharedSkills}/kept`);
+  });
+});
+
+test(`${copyScript} refuses to replace a copy of a skill the kit still ships that holds an uncommitted edit or an ignored file, and changes nothing`, async () => {
+  const refusal = `${sharedSkills}/kept: git does not hold it as committed, so it may be the project's.`;
+  await inACommittedTree(keptByTheKit, (root) => {
+    writeFileSync(join(root, keptCopy), "the project's edit, uncommitted");
+
+    expect(() => copyKitSkills(root, ["kept"])).toThrow(refusal);
+    expect(readFileSync(join(root, keptCopy), "utf8")).toBe("the project's edit, uncommitted");
+  });
+  await inACommittedTree({ ...keptByTheKit, ".gitignore": "*.local\n" }, (root) => {
+    writeFileSync(join(root, sharedSkills, "kept/notes.local"), "the project's ignored notes");
+
+    expect(() => copyKitSkills(root, ["kept"])).toThrow(refusal);
+    expect(readFileSync(join(root, sharedSkills, "kept/notes.local"), "utf8")).toBe(
+      "the project's ignored notes",
+    );
+  });
+});
+
+test(`${copyScript} says it needs git, and changes nothing, when it would remove or replace a copy in a checkout without git`, async () => {
+  await inTemporaryTree({ ...shippedByTheKit(["renamed"]), ...formerKitCopy("former") }, (root) => {
+    expect(() => copyKitSkills(root, ["former"])).toThrow(
+      `${sharedSkills}/former: telling a committed copy of the kit's from the project's own files needs git`,
+    );
+    expect(existsSync(join(root, sharedSkills, "former/SKILL.md"))).toBe(true);
+    expect(existsSync(join(root, sharedSkills, "renamed"))).toBe(false);
+  });
+});
+
+const writtenForOneAgent = [
+  ".claude/commands",
+  ".claude/hooks",
+  ".cursor/commands",
+  ".cursor/hooks",
+  ".cursor/hooks.json",
+  ".cursor/rules",
+];
+
+test("no command, hook or rule file written for one agent is in the repository, committed or not", () => {
+  const found = execFileSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "--", ...writtenForOneAgent],
+    { cwd: repositoryRoot, encoding: "utf8" },
+  )
+    .split("\n")
+    .filter((path) => path !== "")
+    .map(
+      (path) =>
+        `${path}: it is written for one agent. Hold its rule with a check every agent runs, or in a skill under ${sharedSkills}.`,
+    );
+
+  expect(found).toEqual([]);
 });

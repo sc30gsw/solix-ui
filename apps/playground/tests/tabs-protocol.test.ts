@@ -33,14 +33,14 @@ const notATab = "a tab the list does not have";
 const unrenderedList = "<main><p>no list of tabs yet</p></main>";
 const failsWithin = 5_000;
 type Model = RovingListState & { list: RovingList };
-type Real = { page: Page; openedAt: number };
+type Real = { page: Page; readyAt: number };
 
 function become(model: Model, next: RovingListState): void {
   model.selected = next.selected;
   model.focused = next.focused;
 }
 
-async function expectAgreement(model: Model, { page, openedAt }: Real): Promise<void> {
+async function expectAgreement(model: Model, { page, readyAt }: Real): Promise<void> {
   const { name: list } = model.list;
   const expected = {
     selected: model.selected,
@@ -53,17 +53,17 @@ async function expectAgreement(model: Model, { page, openedAt }: Real): Promise<
     await expect
       .poll(async () => {
         last = await snapshotOf(page, list);
-        return stateFrom(last, list);
+        return stateFrom(last.lists, list);
       })
       .toMatchObject(expected);
   } catch (cause) {
     throw new Error(
-      `${list}: the page does not agree with the model, which expects ${JSON.stringify(expected)}. It first polled ${Math.round(firstPoll - openedAt)} ms after the page was ready, and gave up ${Math.round(performance.now() - firstPoll)} ms later. The page showed ${last === undefined ? "nothing: no snapshot of it came back" : JSON.stringify(last)}.`,
+      `${list}: the page does not agree with the model, which expects ${JSON.stringify(expected)}. It first polled ${Math.round(firstPoll - readyAt)} ms after the page was ready, and gave up ${Math.round(performance.now() - firstPoll)} ms later. The page showed ${last === undefined ? "nothing: no snapshot of it came back" : JSON.stringify(last)}.`,
       { cause },
     );
   }
   if (last === undefined) throw new Error(`${list}: the poll agreed with no snapshot of the page.`);
-  const { active, ariaSelected, tabStops } = stateFrom(last, list);
+  const { active, ariaSelected, tabStops } = stateFrom(last.lists, list);
   expect(
     active,
     "the tabs that carry data-active are the ones whose aria-selected is true",
@@ -141,7 +141,7 @@ function everySequenceAgreesOn(page: Page) {
     fc.commands(steps, { maxCommands: longestSequence }),
     async (list, sequence) => {
       await opened(page, url, "hydrated");
-      const real = { page, openedAt: performance.now() };
+      const real = { page, readyAt: performance.now() };
       const model = atTheStartOf(list);
 
       await expectAgreement(model, real);
@@ -245,7 +245,7 @@ inEveryEngine((browser) => {
     model.focused = notATab;
     await opened(page, url, "hydrated");
 
-    const failure = await expectAgreement(model, { page, openedAt: performance.now() }).then(
+    const failure = await expectAgreement(model, { page, readyAt: performance.now() }).then(
       () => "",
       (error: unknown) => String(error),
     );
@@ -273,7 +273,7 @@ inEveryEngine((browser) => {
     if (list === undefined) throw new Error("the playground renders no list of tabs.");
     const asked = performance.now();
 
-    const failure = await expectAgreement(atTheStartOf(list), { page, openedAt: asked }).then(
+    const failure = await expectAgreement(atTheStartOf(list), { page, readyAt: asked }).then(
       () => "",
       (error: unknown) => String(error),
     );
@@ -290,7 +290,7 @@ inEveryEngine((browser) => {
     await opened(page, url, "hydrated");
     const list = theOptionalList();
     const model = atTheStartOf(list);
-    const real = { page, openedAt: performance.now() };
+    const real = { page, readyAt: performance.now() };
     await clickOn(list, files).run(model, real);
     await page.evaluate((distance) => {
       window.addEventListener(
