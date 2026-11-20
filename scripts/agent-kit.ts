@@ -24,6 +24,8 @@ export const kitHookCommands: Record<KitHookEvent, string> = {
   Stop: fromTheProjectDirectory,
 };
 
+export const kitFileTools = "Edit|MultiEdit|Write";
+
 type HookEntry = { matcher?: string; hooks?: { type?: string; command?: string }[] };
 
 type Settings = { hooks?: Partial<Record<string, HookEntry[]>> };
@@ -63,6 +65,9 @@ export function syncAgentKit(root: string): string {
       throw new Error(
         `solid2-kit sync wrote ${entries.length} ${event} entries to ${settingsFile}, not one.`,
       );
+    }
+    if (event === "PreToolUse") {
+      for (const entry of entries) entry.matcher = kitFileTools;
     }
     for (const hook of entries.flatMap(({ hooks }) => hooks ?? [])) {
       hook.command = kitHookCommands[event];

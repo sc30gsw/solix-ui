@@ -24,6 +24,7 @@ import {
   syncAgentKit,
   syncScript,
 } from "#/scripts/agent-kit.ts";
+import { refusals } from "#/scripts/agent-command-guard.ts";
 import { approvedSkills } from "#/scripts/package-skills.ts";
 import { workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
@@ -35,6 +36,15 @@ const subdirectory = "packages/core";
 const kitSkill = `.claude/skills/${kitInstalls(repositoryRoot, "skills")[0]}`;
 const manifest = "package.json";
 const reactFixture = "tests/fixtures/agent-kit/react-hook.txt";
+const readOnlyCommands = [
+  "sed -n 1,40p .claude/settings.json",
+  "cat .claude/settings.json 2>/dev/null",
+  "grep -n solid .claude/skills/solid-2/SKILL.md 2>&1",
+  "diff -r node_modules/solid2-agent-kit/files/skills/solid-2 .claude/skills/solid-2",
+  "cp .claude/commands/solid2-review.md /tmp/review.md",
+  "git diff main -- .claude/settings.json > /tmp/settings.diff",
+  "git status",
+];
 const installed = "node_modules";
 const restatedShare = 0.8;
 const codeName = /`([A-Za-z_$][\w$.]*)/g;
@@ -106,6 +116,32 @@ function runKitHook(
   return { status: run.status, stderr: run.stderr };
 }
 
+function runHooks(
+  event: KitHookEvent,
+  payload: Record<string, unknown>,
+  { path, cwd }: { path: string; cwd: string },
+): Run & { stdout: string } {
+  const tool = typeof payload.tool_name === "string" ? payload.tool_name : "";
+  const runs = (readSettings(repositoryRoot).hooks?.[event] ?? [])
+    .filter(({ matcher }) => matcher === undefined || new RegExp(`^(?:${matcher})$`).test(tool))
+    .flatMap(({ hooks }) => hooks ?? [])
+    .map(({ command }) =>
+      spawnSync("sh", ["-c", command ?? ""], {
+        cwd,
+        input: JSON.stringify({ hook_event_name: event, cwd, ...payload }),
+        encoding: "utf8",
+        env: { ...process.env, PATH: path, CLAUDE_PROJECT_DIR: repositoryRoot },
+      }),
+    );
+  return {
+    status: runs.some((run) => run.status === blocking)
+      ? blocking
+      : (runs.find((run) => run.status !== 0)?.status ?? 0),
+    stdout: runs.map((run) => run.stdout).join(""),
+    stderr: runs.map((run) => run.stderr).join(""),
+  };
+}
+
 function shell(command: string): Record<string, unknown> {
   return { tool_name: "Bash", tool_input: { command } };
 }
@@ -157,23 +193,26 @@ describe.each(nodesOnPath())("the kit's hooks under %s", (node) => {
         },
         (root) => {
           const hook = (event: KitHookEvent, payload: Record<string, unknown>) =>
-            runKitHook(event, payload, { path, cwd });
-          const tamper = hook("PreToolUse", shell(`rm -rf ${kitSkill}`));
+            runHooks(event, payload, { path, cwd });
+          const clean = { status: 0, stdout: "", stderr: "" };
+          const tamper = hook("PreToolUse", {
+            tool_name: "Write",
+            tool_input: { file_path: join(repositoryRoot, kitSkill, "SKILL.md"), content: "" },
+          });
           const install = hook("PreToolUse", shell("pnpm add react"));
           const reported = hook("PostToolUse", written(join(root, "React.tsx")));
 
           expect(tamper.status).toBe(blocking);
           expect(tamper.stderr).toContain(kitGuardrail);
-          expect(install.status).toBe(blocking);
-          expect(install.stderr).toContain(kitGuardrail);
-          expect(hook("PreToolUse", shell("git status"))).toEqual({ status: 0, stderr: "" });
+          expect(install.status).toBe(0);
+          expect(install.stdout).toContain(refusals.bannedDependency);
+          expect(readOnlyCommands.map((command) => hook("PreToolUse", shell(command)))).toEqual(
+            readOnlyCommands.map(() => clean),
+          );
           expect(reported.status).toBe(blocking);
           expect(reported.stderr).toContain("[react-import]");
-          expect(hook("PostToolUse", written(join(root, "Solid.tsx")))).toEqual({
-            status: 0,
-            stderr: "",
-          });
-          expect(hook("Stop", { stop_hook_active: false })).toEqual({ status: 0, stderr: "" });
+          expect(hook("PostToolUse", written(join(root, "Solid.tsx")))).toEqual(clean);
+          expect(hook("Stop", { stop_hook_active: false })).toEqual(clean);
         },
       );
     },

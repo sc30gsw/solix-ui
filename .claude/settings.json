@@ -32,7 +32,7 @@
         ]
       },
       {
-        "matcher": "Edit|MultiEdit|Write|Bash",
+        "matcher": "Edit|MultiEdit|Write",
         "hooks": [
           {
             "type": "command",
