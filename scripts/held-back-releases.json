@@ -1,1 +1,7 @@
-[]
+[
+  {
+    "name": "@vitest/browser-playwright",
+    "reason": "vite-plus 1.7.0, its newest release, depends on vitest 5.1.0 exactly and asks for @vitest/browser-playwright 5.1.0 as its peer, so 5.1.1 installs a second vitest, 5.1.1, beside the one vp test runs.",
+    "liftWhen": "A vite-plus release old enough to install depends on vitest 5.1.1 or later."
+  }
+]
