@@ -8,6 +8,7 @@ const url = inject("playgroundUrl");
 const probe = "output[data-hydration-probe]";
 const revealWait = { timeout: 5_000 };
 const headroomCalls = '[data-case-calls="createHeadroom"]';
+const lateStylesheet = 1_500;
 
 type Revealed = { expected: string; restore: () => Promise<unknown> };
 
@@ -169,7 +170,7 @@ async function hydratedWhileScrolled(browser: Browser, y: number): Promise<strin
       await released;
       await route.continue();
     });
-    await opened(page, url, "commit");
+    await opened(page, url, "stylesheetsLoaded");
     await page.locator(headroomCalls).waitFor({ state: "attached" });
     await scrolledTo(page, y);
     gate.open();
@@ -296,5 +297,29 @@ inEveryEngine((browser) => {
   test("a page that hydrates scrolled past fixedAt calls no headroom callback, and one that hydrates at the top calls onPin and onFix", async () => {
     expect(await hydratedWhileScrolled(browser(), 400)).toBe("none");
     expect(await hydratedWhileScrolled(browser(), 0)).toBe("pin fix");
+  });
+});
+
+inEveryEngine((browser) => {
+  test("a page opened until stylesheetsLoaded has every stylesheet loaded, so a test that reads its layout reads it styled, however late the stylesheet arrives", async () => {
+    const context = await browser().newContext();
+    try {
+      const page = await context.newPage();
+      await page.route("**/*.css", async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, lateStylesheet));
+        await route.continue();
+      });
+      await opened(page, url, "stylesheetsLoaded");
+
+      expect(
+        await page.evaluate(() =>
+          [...document.querySelectorAll('link[rel="stylesheet"]')].map(
+            (link) => link instanceof HTMLLinkElement && link.sheet !== null,
+          ),
+        ),
+      ).toEqual([true]);
+    } finally {
+      await context.close();
+    }
   });
 });

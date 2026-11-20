@@ -1,7 +1,7 @@
 import type { ConsoleMessage, Page } from "playwright";
 import { hydratedMark } from "#/src/hydrated-mark.ts";
 
-export type OpenedUntil = "hydrated" | "commit" | "load";
+export type OpenedUntil = "hydrated" | "stylesheetsLoaded" | "commit" | "load";
 
 export const pageDidNotBecomeReady = "the page did not become ready";
 
@@ -78,6 +78,21 @@ function withWhatThePageSaid(said: string[], cause: unknown): Error {
   return new Error(`${String(cause)} The page said: ${said.join(" | ") || "nothing"}`, { cause });
 }
 
+function everyStylesheetLoaded(): boolean {
+  const readable = (link: Element) => {
+    if (!(link instanceof HTMLLinkElement) || link.sheet === null) return false;
+    try {
+      return link.sheet.cssRules.length >= 0;
+    } catch {
+      return false;
+    }
+  };
+  return (
+    document.body !== null &&
+    [...document.querySelectorAll('link[rel="stylesheet"]')].every(readable)
+  );
+}
+
 export async function opened(
   page: Page,
   url: string,
@@ -88,6 +103,11 @@ export async function opened(
   }: { timeout?: number; reportsToTheConsole?: ExpectedReport } = {},
 ): Promise<void> {
   keepListening(page, reportsToTheConsole);
+  if (until === "stylesheetsLoaded") {
+    await page.goto(url, { waitUntil: "commit", timeout });
+    await page.waitForFunction(everyStylesheetLoaded, undefined, { timeout });
+    return;
+  }
   if (until !== "hydrated") {
     await page.goto(url, { waitUntil: until });
     return;
