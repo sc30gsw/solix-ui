@@ -26,8 +26,9 @@ import { type Listing, now, policy, registryDocument } from "#/tests/support/reg
 import {
   cronProblems,
   expectEveryJobToRunWeeklyAndFailTheRun,
-  expectJobToHaveOneStepRunning,
+  weeklyWorkflow,
 } from "#/tests/support/weekly-workflow.ts";
+import { gateJobProblems, newestReleasesCheck, workflowAt } from "#/tests/support/workflows.ts";
 
 const manifest = { packageManager: "pnpm@12.18.0", engines: { node: "^26.13.1" } };
 
@@ -444,8 +445,8 @@ test("every job of the weekly workflow runs each week and fails the run when it 
   expectEveryJobToRunWeeklyAndFailTheRun();
 });
 
-test("the pins job has exactly one step that runs the pin check, with no if and no continue-on-error", () => {
-  expectJobToHaveOneStepRunning("pins", "node scripts/check-newest-releases.ts");
+test("the pins job is a gate job that runs the pin check in exactly one step: it sets only runs-on, timeout-minutes, steps and permissions, which only read, each step sets only uses, with, run and name, the workflow sets nothing that reaches it but its permissions, and it reads no secret", () => {
+  expect(gateJobProblems(workflowAt(weeklyWorkflow), "pins", newestReleasesCheck)).toEqual([]);
 });
 
 test("a UI SDK pin follows the release the latest dist-tag names, once it is old enough to install: a release ahead of latest is not newer, a pin ahead of latest fails by name, and a document with no latest tag fails by name", () => {

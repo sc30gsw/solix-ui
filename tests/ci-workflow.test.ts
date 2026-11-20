@@ -1,7 +1,16 @@
 import { relative, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { staticStorybookDirectory } from "#/apps/storybook/tests/support/test-servers.ts";
-import { type Job, type Step, type Workflow, workflowAt } from "#/tests/support/workflows.ts";
+import {
+  gateJobProblems,
+  newestReleasesCheck,
+  permissionsLeftOut,
+  secretsNamedIn,
+  type Step,
+  type Workflow,
+  workflowAt,
+  writeScopes,
+} from "#/tests/support/workflows.ts";
 import { repositoryRoot, workflowFiles } from "#/tests/support/workspace.ts";
 
 const ciWorkflow = ".github/workflows/ci.yml";
@@ -10,8 +19,6 @@ const uploadAction = "actions/upload-artifact";
 const pullRequestEvent = "pull_request";
 const runsDespiteAFailure = /\b(?:always|failure|cancelled)\s*\(/;
 const secretsTheWorkflowsRead = ["SOLIX_PRIVATE_TERMS"];
-const expression = /\$\{\{([\s\S]*?)\}\}/g;
-const secretsContext = /(?<![\w.])secrets(?:\s*\.\s*(\w+))?/g;
 
 function events(on: unknown): string[] {
   if (typeof on === "string") return [on];
@@ -66,17 +73,6 @@ test("on a pull request, once verify passes, the job that runs it uploads the St
   ]);
 });
 
-function writeScopes(permissions: unknown): string[] {
-  if (permissions === "read-all") return [];
-  if (typeof permissions === "string") return [permissions];
-  if (typeof permissions !== "object" || permissions === null || Array.isArray(permissions)) {
-    return [String(permissions)];
-  }
-  return Object.entries(permissions).flatMap(([scope, access]) =>
-    access === "read" || access === "none" ? [] : [`${scope}: ${String(access)}`],
-  );
-}
-
 test("no job of any workflow can push to the repository or write to its pull requests or issues: each job's permissions, its own or its workflow's, are written out and grant nothing but read", () => {
   const violations = workflowFiles.flatMap((file) => {
     const { permissions, jobs = {} } = workflowAt(file);
@@ -98,12 +94,6 @@ test("no job of any workflow can push to the repository or write to its pull req
   expect(violations).toEqual([]);
 });
 
-function stringsOf(value: unknown): string[] {
-  if (typeof value === "string") return [value];
-  if (typeof value !== "object" || value === null) return [];
-  return [...Object.keys(value), ...Object.values(value).flatMap(stringsOf)];
-}
-
 const everySecret = "inherit";
 
 function secretsReadIn(workflow: Workflow): string[] {
@@ -112,11 +102,9 @@ function secretsReadIn(workflow: Workflow): string[] {
     .map(([name]) => `the ${name} job hands every secret to the workflow it calls`);
   return [
     ...inherited,
-    ...stringsOf(workflow)
-      .flatMap((text) => [...text.matchAll(expression)].map(([, inside]) => inside))
-      .flatMap((inside) => [...inside.matchAll(secretsContext)])
-      .filter(([, name]) => name === undefined || !secretsTheWorkflowsRead.includes(name))
-      .map(([read]) => `it reads ${read}`),
+    ...secretsNamedIn(workflow)
+      .filter(({ name }) => name === undefined || !secretsTheWorkflowsRead.includes(name))
+      .map(({ read }) => `it reads ${read}`),
   ];
 }
 
@@ -169,142 +157,171 @@ test.for(secretSpellings)("the secrets rule, on %s, refuses it: %s", ([, refused
   expect(secretsReadIn(workflow).length > 0).toBe(refused);
 });
 
-const newestReleasesCheck = "node scripts/check-newest-releases.ts";
 const pullRequestActivities = ["opened", "synchronize", "reopened"];
+const keysOfAPullRequestTrigger = ["types"];
 
-function pullRequestTypes(on: unknown): unknown {
-  if (typeof on !== "object" || on === null || Array.isArray(on)) return undefined;
+function pullRequestTriggerProblems(on: unknown): string[] {
+  if (!events(on).includes(pullRequestEvent))
+    return [`the workflow does not run on ${pullRequestEvent}.`];
+  if (typeof on !== "object" || on === null || Array.isArray(on)) return [];
   const trigger: unknown = Reflect.get(on, pullRequestEvent);
-  return typeof trigger === "object" && trigger !== null
-    ? Reflect.get(trigger, "types")
-    : undefined;
+  if (trigger === null || trigger === undefined) return [];
+  if (typeof trigger !== "object")
+    return [`${pullRequestEvent} is set to ${JSON.stringify(trigger)}.`];
+  const narrowed = Object.keys(trigger)
+    .filter((key) => !keysOfAPullRequestTrigger.includes(key))
+    .map((key) => `${pullRequestEvent} sets ${key}, so some pull requests skip the check.`);
+  const types: unknown = Reflect.get(trigger, "types");
+  const missing =
+    types === undefined
+      ? []
+      : pullRequestActivities
+          .filter((activity) => !(Array.isArray(types) && types.includes(activity)))
+          .map((activity) => `${pullRequestEvent} types leave out ${activity}.`);
+  return [...narrowed, ...missing];
 }
 
-function runsOnEveryPushToAPullRequest(on: unknown): boolean {
-  if (!events(on).includes(pullRequestEvent)) return false;
-  const types = pullRequestTypes(on);
-  return (
-    types === undefined ||
-    (Array.isArray(types) && pullRequestActivities.every((type) => types.includes(type)))
-  );
-}
-
-type CheckingJob = { name: string; workflow: Workflow; job: Job };
-
-function jobsRunningTheNewestCheck(workflow: Workflow): CheckingJob[] {
+function jobsRunningTheNewestCheck(workflow: Workflow): string[] {
   if (!events(workflow.on).includes(pullRequestEvent)) return [];
   return Object.entries(workflow.jobs ?? {}).flatMap(([name, job]) =>
-    (job.steps ?? []).some((step) => step.run?.trim() === newestReleasesCheck)
-      ? [{ name, workflow, job }]
-      : [],
+    (job.steps ?? []).some((step) => step.run?.trim() === newestReleasesCheck) ? [name] : [],
   );
 }
 
-type HowItRuns = {
-  everyPushToAPullRequest: boolean;
-  stepsThatRunTheCheck: number;
-  skippedOrAllowedToFail: string[];
-  writes: string[];
-  secrets: string[];
-};
-
-function howItRuns({ workflow, job }: CheckingJob): HowItRuns {
-  const steps = job.steps ?? [];
-  return {
-    everyPushToAPullRequest: runsOnEveryPushToAPullRequest(workflow.on),
-    stepsThatRunTheCheck: steps.filter((step) => step.run?.trim() === newestReleasesCheck).length,
-    skippedOrAllowedToFail: [job, ...steps].flatMap((part) =>
-      ["if", "needs", "continue-on-error"].filter((key) => key in part),
-    ),
-    writes: writeScopes(job.permissions ?? workflow.permissions),
-    secrets: stringsOf(job)
-      .flatMap((text) => [...text.matchAll(expression)].map(([, inside]) => inside))
-      .flatMap((inside) => [...inside.matchAll(secretsContext)].map(([read]) => read)),
-  };
+function newestCheckProblems(workflow: Workflow): string[] {
+  const [name] = jobsRunningTheNewestCheck(workflow);
+  return name === undefined
+    ? [`no job runs ${newestReleasesCheck}.`]
+    : [
+        ...pullRequestTriggerProblems(workflow.on),
+        ...gateJobProblems(workflow, name, newestReleasesCheck),
+      ];
 }
 
-const runsAsItShould: HowItRuns = {
-  everyPushToAPullRequest: true,
-  stepsThatRunTheCheck: 1,
-  skippedOrAllowedToFail: [],
-  writes: [],
-  secrets: [],
-};
-
-test(`on every pull request, at its opening, at each push and at its reopening, one job runs ${newestReleasesCheck} in one step and fails the run when the check fails: no if, needs or continue-on-error skips it or lets it fail, its permissions only read, and it reads no secret at all`, () => {
+test(`on every pull request, at its opening, at each push and at its reopening, one job runs ${newestReleasesCheck} in one step and fails the run when the check fails: the pull_request trigger sets only types, the workflow sets nothing that reaches its jobs but its permissions, the job sets only runs-on, timeout-minutes, steps and permissions, which only read, each step sets only uses, with, run and name, and nothing reads a secret`, () => {
   const found = workflowFiles.flatMap((file) =>
-    jobsRunningTheNewestCheck(workflowAt(file)).map((checking) => ({ file, checking })),
+    jobsRunningTheNewestCheck(workflowAt(file)).map((name) => ({ file, name })),
   );
 
   expect(
-    found.map(({ file, checking }) => `${file}: ${checking.name}`),
+    found.map(({ file, name }) => `${file}: ${name}`),
     `exactly one job of a workflow that runs on ${pullRequestEvent} runs ${newestReleasesCheck}`,
   ).toHaveLength(1);
-  const [{ file, checking }] = found;
-  expect(howItRuns(checking), `${file}: the ${checking.name} job`).toEqual(runsAsItShould);
+  const [{ file }] = found;
+  expect(newestCheckProblems(workflowAt(file)), file).toEqual([]);
 });
 
 const check = { run: newestReleasesCheck };
 const readOnly = { contents: "read" };
-const wrongRuns: [what: string, workflow: Workflow, wrong: Partial<HowItRuns>][] = [
+const gate = { "runs-on": "ubuntu-latest", "timeout-minutes": 10 };
+
+function aWorkflow(changes: {
+  on?: unknown;
+  workflow?: object;
+  job?: object;
+  step?: object;
+}): Workflow {
+  return {
+    on: changes.on ?? { pull_request: null },
+    permissions: readOnly,
+    ...changes.workflow,
+    jobs: { a: { ...gate, ...changes.job, steps: [{ ...check, ...changes.step }] } },
+  };
+}
+
+const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
   [
     "pull_request types that leave out reopened",
-    {
-      on: { pull_request: { types: ["opened", "synchronize"] } },
-      permissions: readOnly,
-      jobs: { a: { steps: [check] } },
-    },
-    { everyPushToAPullRequest: false },
+    aWorkflow({ on: { pull_request: { types: ["opened", "synchronize"] } } }),
+    "pull_request types leave out reopened.",
+  ],
+  [
+    "pull_request paths",
+    aWorkflow({ on: { pull_request: { paths: ["package.json"] } } }),
+    "pull_request sets paths, so some pull requests skip the check.",
+  ],
+  [
+    "pull_request branches",
+    aWorkflow({ on: { pull_request: { branches: ["main"] } } }),
+    "pull_request sets branches, so some pull requests skip the check.",
   ],
   [
     "the check run twice",
-    { on: "pull_request", permissions: readOnly, jobs: { a: { steps: [check, check] } } },
-    { stepsThatRunTheCheck: 2 },
+    { ...aWorkflow({}), jobs: { a: { ...gate, steps: [check, check] } } },
+    `the a job runs ${newestReleasesCheck} in 2 steps, not in exactly one.`,
   ],
   [
     "a job that runs if always()",
-    { on: "pull_request", permissions: readOnly, jobs: { a: { if: "always()", steps: [check] } } },
-    { skippedOrAllowedToFail: ["if"] },
+    aWorkflow({ job: { if: "always()" } }),
+    "the a job sets if; a gate job sets only runs-on, timeout-minutes, steps, permissions.",
   ],
   [
     "a job that needs another",
-    { on: "pull_request", permissions: readOnly, jobs: { a: { needs: "b", steps: [check] } } },
-    { skippedOrAllowedToFail: ["needs"] },
+    aWorkflow({ job: { needs: "b" } }),
+    "the a job sets needs; a gate job sets only runs-on, timeout-minutes, steps, permissions.",
+  ],
+  [
+    "a job whose default shell runs nothing",
+    aWorkflow({ job: { defaults: { run: { shell: "true {0}" } } } }),
+    "the a job sets defaults; a gate job sets only runs-on, timeout-minutes, steps, permissions.",
+  ],
+  [
+    "a job whose matrix excludes its one run",
+    aWorkflow({
+      job: { strategy: { matrix: { run: ["never"], exclude: [{ run: "never" }] } } },
+    }),
+    "the a job sets strategy; a gate job sets only runs-on, timeout-minutes, steps, permissions.",
+  ],
+  [
+    "a job with no timeout",
+    { ...aWorkflow({}), jobs: { a: { "runs-on": "ubuntu-latest", steps: [check] } } },
+    "give the a job timeout-minutes, so a hung step ends.",
+  ],
+  [
+    "a workflow whose default shell runs nothing",
+    aWorkflow({ workflow: { defaults: { run: { shell: "true {0}" } } } }),
+    "the workflow sets defaults, which reaches the a job.",
+  ],
+  [
+    "a workflow env that reads the private-term list",
+    aWorkflow({ workflow: { env: { T: "${{ secrets.SOLIX_PRIVATE_TERMS }}" } } }),
+    "the workflow sets env, which reaches the a job.",
   ],
   [
     "a step that may fail",
-    {
-      on: "pull_request",
-      permissions: readOnly,
-      jobs: { a: { steps: [{ ...check, "continue-on-error": true }] } },
-    },
-    { skippedOrAllowedToFail: ["continue-on-error"] },
+    aWorkflow({ step: { "continue-on-error": true } }),
+    "step 1 of the a job sets continue-on-error; a gate step sets only uses, with, run, name.",
+  ],
+  [
+    "a step whose shell runs nothing",
+    aWorkflow({ step: { shell: "true {0}" } }),
+    "step 1 of the a job sets shell; a gate step sets only uses, with, run, name.",
+  ],
+  [
+    "a step whose NODE_OPTIONS exits before the check",
+    aWorkflow({ step: { env: { NODE_OPTIONS: "--import=data:text/javascript,process.exit(0)" } } }),
+    "step 1 of the a job sets env; a gate step sets only uses, with, run, name.",
   ],
   [
     "no permissions written out",
-    { on: "pull_request", jobs: { a: { steps: [check] } } },
-    { writes: ["undefined"] },
+    { on: { pull_request: null }, jobs: { a: { ...gate, steps: [check] } } },
+    `the a job is given ${permissionsLeftOut}; a gate job only reads.`,
   ],
   [
     "a job that may write",
-    { on: "pull_request", jobs: { a: { permissions: { contents: "write" }, steps: [check] } } },
-    { writes: ["contents: write"] },
+    aWorkflow({ job: { permissions: { contents: "write" } } }),
+    "the a job is given contents: write; a gate job only reads.",
   ],
   [
-    "the private-term list read by the job",
-    {
-      on: "pull_request",
-      permissions: readOnly,
-      jobs: { a: { steps: [{ ...check, env: { T: "${{ secrets.SOLIX_PRIVATE_TERMS }}" } }] } },
-    },
-    { secrets: ["secrets.SOLIX_PRIVATE_TERMS"] },
+    "the private-term list read in a step's with",
+    aWorkflow({ step: { with: { T: "${{ secrets.SOLIX_PRIVATE_TERMS }}" } } }),
+    "the a job reads secrets.SOLIX_PRIVATE_TERMS; a gate job reads no secret.",
   ],
 ];
 
 test.for(wrongRuns)(
   "the pull-request newest-release rule, on %s, refuses it",
-  ([, workflow, wrong]) => {
-    const [checking] = jobsRunningTheNewestCheck(workflow);
-    expect(howItRuns(checking)).toEqual({ ...runsAsItShould, ...wrong });
+  ([, workflow, problem]) => {
+    expect(newestCheckProblems(workflow)).toContain(problem);
   },
 );

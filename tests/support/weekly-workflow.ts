@@ -1,7 +1,7 @@
 import { expect } from "vite-plus/test";
 import { workflowAt } from "#/tests/support/workflows.ts";
 
-const weeklyWorkflow = ".github/workflows/newest-releases.yml";
+export const weeklyWorkflow = ".github/workflows/newest-releases.yml";
 
 type WeeklyTrigger = { schedule?: { cron?: string }[] };
 
