@@ -227,7 +227,7 @@ test("autoContrast is off unless it is true: only then does the root take the cl
   expect(Object.keys(ruleFor(`.${shadeClass}`))).not.toContain(shadeProperty("contrast"));
 });
 
-test("any other CSS colour, a hex colour of 3, 4, 6 or 8 digits included, writes one custom property, itself, with the shade and custom classes, and a value that is no colour, such as red-6, blue.12, the typo bleu, the keyword inherit, Red or RGB() in capitals, a hex colour of any other count of digits, #zzz, or one that holds ;, { or }, falls back to the primary palette and writes nothing", async (context) => {
+test("any other CSS colour, a hex colour of 3, 4, 6 or 8 digits, a system colour, currentcolor and contrast-color() included, writes one custom property, itself, with the shade and custom classes, and a value that is no colour, such as red-6, blue.12, the typo bleu, the keyword inherit, Red or RGB() in capitals, a hex colour of any other count of digits, #zzz, or one that holds ;, { or }, falls back to the primary palette and writes nothing", async (context) => {
   await assertProperty(
     context,
     fc.property(
@@ -239,7 +239,17 @@ test("any other CSS colour, a hex colour of 3, 4, 6 or 8 digits included, writes
           .stringMatching(/^#(?:[\da-fA-F]{1,2}|[\da-fA-F]{5}|[\da-fA-F]{7}|[\da-fA-F]{9,12})$/)
           .map((color) => ({ color, valid: false })),
         fc
-          .constantFrom("oklch(0.5 0.1 20)", "rgb(10 20 30)", "transparent", "rebeccapurple")
+          .constantFrom(
+            "oklch(0.5 0.1 20)",
+            "rgb(10 20 30)",
+            "transparent",
+            "rebeccapurple",
+            "currentColor",
+            "currentcolor",
+            "CanvasText",
+            "AccentColor",
+            "contrast-color(red)",
+          )
           .map((color) => ({ color, valid: true })),
         fc
           .constantFrom(
@@ -554,7 +564,12 @@ test("a variant the component's color option does not list falls back to its def
   });
 });
 
-test("SolixColor takes a palette, a palette's shade, a CSS colour keyword, a hex colour and a colour function, and refuses, by type, a typo, a CSS-wide keyword, a name or function in capitals, and a hex colour whose first three characters are not hex digits", () => {
+test("SolixColor takes a palette, a palette's shade, a CSS colour keyword, a system colour, a hex colour and a colour function, contrast-color() included, and refuses, by type, a typo, a CSS-wide keyword, a name or function in capitals, and a hex colour whose first three characters are not hex digits", () => {
+  expectTypeOf<"CanvasText">().toExtend<SolixColor>();
+  expectTypeOf<"AccentColorText">().toExtend<SolixColor>();
+  expectTypeOf<"currentcolor">().toExtend<SolixColor>();
+  expectTypeOf<"contrast-color(red)">().toExtend<SolixColor>();
+  expectTypeOf<"canvastext">().not.toExtend<SolixColor>();
   expectTypeOf<"#ABC">().toExtend<SolixColor>();
   expectTypeOf<"#a1b2">().toExtend<SolixColor>();
   expectTypeOf<"#AABBCCDD">().toExtend<SolixColor>();
