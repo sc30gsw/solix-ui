@@ -14,6 +14,14 @@ export class Measurer {
   }
 }
 
+export class Runner {
+  readonly result: unknown;
+
+  constructor(run: () => unknown) {
+    this.result = run();
+  }
+}
+
 function readTop(element: Element): number {
   return element.scrollTop;
 }

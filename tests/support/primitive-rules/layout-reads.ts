@@ -1,5 +1,7 @@
-import { basename } from "node:path";
+import { basename, join } from "node:path";
 import {
+  calledDeclaration,
+  contextualAliases,
   declarationsOf,
   fileOf,
   isDefaultLibraryFile,
@@ -10,11 +12,9 @@ import {
   ts,
   unwrapped,
 } from "#/scripts/syntax.ts";
-import type { Home } from "#/tests/support/workspace.ts";
+import { type Home, repositoryRoot } from "#/tests/support/workspace.ts";
 import {
   calleeName,
-  callsTo,
-  type Declared,
   exportedFunctions,
   isInHome,
   type Library,
@@ -79,16 +79,15 @@ export const layoutReadExemptions: readonly LayoutReadExemption[] = [
   },
 ];
 
-const callbacksRunLater: readonly (Declared & { argument: number })[] = [
-  { file: "internal-listener.ts", name: "watchEvents", argument: 2 },
-  { file: "internal-listener.ts", name: "handleEvent", argument: 2 },
-  { file: "internal-listener.ts", name: "listenAsAsked", argument: 2 },
-  { file: "internal-dom-observer.ts", name: "observe", argument: 3 },
-];
+const runsLaterRoles = ["Listener", "ObserverReport"];
+const primitivesSource = join(repositoryRoot, "packages/primitives/src");
+const theFunctionWithAnotherThis = ["call", "apply"];
+const bound = "bind";
 
-const callsThroughTheFunction = ["call", "apply", "bind"];
-
-type FunctionNode = ts.Node & { body?: ts.Node };
+type FunctionNode = ts.Node & {
+  body?: ts.Node;
+  parameters?: readonly ts.ParameterDeclaration[];
+};
 
 function isFunctionNode(node: ts.Node): node is FunctionNode {
   return (
@@ -102,38 +101,42 @@ function isFunctionNode(node: ts.Node): node is FunctionNode {
   );
 }
 
+function inSource(node: ts.Node): boolean {
+  return !isPackageFile(fileOf(node)) && !isDefaultLibraryFile(fileOf(node));
+}
+
 function outermost(node: ts.Node): ts.Node {
   const parent = node.parent;
   return parent !== undefined && ts.isParenthesizedExpression(parent) ? outermost(parent) : node;
 }
 
-function argumentPosition(node: ts.Node): { call: ts.CallExpression; index: number } | undefined {
+function isAnArgument(node: ts.Node): boolean {
   const call = node.parent;
-  if (call === undefined || !ts.isCallExpression(call)) return undefined;
-  const index = call.arguments.findIndex((argument) => argument === node);
-  return index === -1 ? undefined : { call, index };
-}
-
-function isAtACallbackPosition(library: Library, node: ts.Node): boolean {
-  const position = argumentPosition(node);
   return (
-    position !== undefined &&
-    callbacksRunLater.some(
-      (callee) => callee.argument === position.index && callsTo(library, position.call, callee),
-    )
+    call !== undefined &&
+    (ts.isCallExpression(call) || ts.isNewExpression(call)) &&
+    (call.arguments ?? []).some((argument) => argument === node)
   );
 }
 
-function isCalledAtOnce(node: ts.Node): boolean {
-  const outer = outermost(node);
-  return outer.parent !== undefined && ts.isCallExpression(outer.parent)
-    ? outer.parent.expression === outer
-    : false;
+function runsLater(library: Library, argument: ts.Node): boolean {
+  return contextualAliases(library.compiled, argument).some(
+    (alias) => runsLaterRoles.includes(alias.name) && alias.file.startsWith(primitivesSource),
+  );
 }
 
 function isPassedToRunNow(library: Library, node: ts.Node): boolean {
   const outer = outermost(node);
-  return argumentPosition(outer) !== undefined && !isAtACallbackPosition(library, outer);
+  return isAnArgument(outer) && !runsLater(library, outer);
+}
+
+function runsWhereItStands(library: Library, fn: ts.Node): boolean {
+  const outer = outermost(fn);
+  const parent = outer.parent;
+  if (parent === undefined) return false;
+  if (ts.isCallExpression(parent) && parent.expression === outer) return true;
+  if (ts.isParameterDeclaration(parent) && parent.initializer === outer) return true;
+  return isPassedToRunNow(library, fn);
 }
 
 function nameOfFunction(fn: ts.Node): string {
@@ -157,24 +160,6 @@ function exemptionOf(
   return exemptions.find((exemption) => exemption.file === file && exemption.fn === name);
 }
 
-function functionsDeclaredBy(declaration: ts.Node): ts.Node[] {
-  if (isPackageFile(fileOf(declaration)) || isDefaultLibraryFile(fileOf(declaration))) return [];
-  if (isFunctionNode(declaration)) return declaration.body ? [declaration] : [];
-  if (ts.isVariableDeclaration(declaration) || ts.isPropertyDeclaration(declaration)) {
-    const initializer = declaration.initializer && unwrapped(declaration.initializer);
-    return initializer && isFunctionNode(initializer) ? [initializer] : [];
-  }
-  if (ts.isClassLikeDeclaration(declaration)) {
-    return declaration.members.filter(
-      (member) =>
-        ts.isConstructorDeclaration(member) ||
-        ts.isPropertyDeclaration(member) ||
-        ts.isClassStaticBlockDeclaration(member),
-    );
-  }
-  return [];
-}
-
 function readsDescriptorOfALayoutMember(library: Library, node: ts.Node): boolean {
   if (!ts.isCallExpression(node)) return false;
   const reader = declarationsOf(library.compiled, calleeName(node.expression));
@@ -195,6 +180,106 @@ export function readsLayout(library: Library, node: ts.Node): boolean {
   );
 }
 
+function returnsOf(node: ts.Node): ts.Expression[] {
+  if (isFunctionNode(node)) return [];
+  if (ts.isReturnStatement(node)) return node.expression ? [node.expression] : [];
+  const found: ts.Expression[] = [];
+  node.forEachChild((child) => {
+    found.push(...returnsOf(child));
+  });
+  return found;
+}
+
+function returnedValuesOf(fn: FunctionNode): ts.Expression[] {
+  const body = fn.body;
+  if (body === undefined) return [];
+  return ts.isExpression(body) ? [body] : returnsOf(body);
+}
+
+class Resolver {
+  readonly library: Library;
+  readonly seen = new Set<ts.Node>();
+
+  constructor(library: Library) {
+    this.library = library;
+  }
+
+  functionsItMayBe(expression: ts.Node): FunctionNode[] {
+    const value = ts.isExpression(expression) ? unwrapped(expression) : expression;
+    if (this.seen.has(value)) return [];
+    this.seen.add(value);
+    if (isFunctionNode(value)) return value.body && inSource(value) ? [value] : [];
+    if (ts.isConditionalExpression(value)) {
+      return [...this.functionsItMayBe(value.whenTrue), ...this.functionsItMayBe(value.whenFalse)];
+    }
+    if (ts.isBinaryExpression(value)) {
+      return value.operatorToken.kind === ts.SyntaxKind.CommaToken
+        ? this.functionsItMayBe(value.right)
+        : [...this.functionsItMayBe(value.left), ...this.functionsItMayBe(value.right)];
+    }
+    if (ts.isCallExpression(value)) {
+      if (this.isBound(value)) return this.functionsItMayBe(this.calleeOf(value));
+      return this.functionsACallRuns(value).flatMap((fn) =>
+        returnedValuesOf(fn).flatMap((returned) => this.functionsItMayBe(returned)),
+      );
+    }
+    if (ts.isArrayLiteralExpression(value)) {
+      return value.elements.flatMap((element) => this.functionsItMayBe(element));
+    }
+    if (ts.isObjectLiteralExpression(value)) {
+      return value.properties.flatMap((property) =>
+        ts.isPropertyAssignment(property) ? this.functionsItMayBe(property.initializer) : [],
+      );
+    }
+    if (ts.isElementAccessExpression(value)) {
+      const named = this.functionsHeldBy(memberDeclarations(this.library.compiled, value));
+      return named.length > 0 ? named : this.functionsItMayBe(value.expression);
+    }
+    return this.functionsHeldBy(memberDeclarations(this.library.compiled, value));
+  }
+
+  functionsHeldBy(declarations: readonly ts.Node[]): FunctionNode[] {
+    return declarations.flatMap((declaration) => {
+      if (!inSource(declaration)) return [];
+      if (isFunctionNode(declaration)) return declaration.body ? [declaration] : [];
+      if (ts.isBindingElement(declaration)) {
+        return this.functionsHeldBy(memberDeclarations(this.library.compiled, declaration));
+      }
+      if (
+        ts.isVariableDeclaration(declaration) ||
+        ts.isPropertyDeclaration(declaration) ||
+        ts.isPropertyAssignment(declaration) ||
+        ts.isParameterDeclaration(declaration)
+      ) {
+        return declaration.initializer ? this.functionsItMayBe(declaration.initializer) : [];
+      }
+      return [];
+    });
+  }
+
+  isBound(call: ts.CallExpression): boolean {
+    const callee = unwrapped(call.expression);
+    return ts.isPropertyAccessExpression(callee) && callee.name.text === bound;
+  }
+
+  calleeOf(call: ts.CallExpression): ts.Expression {
+    const callee = unwrapped(call.expression);
+    return ts.isPropertyAccessExpression(callee) &&
+      [...theFunctionWithAnotherThis, bound].includes(callee.name.text)
+      ? callee.expression
+      : callee;
+  }
+
+  functionsACallRuns(call: ts.CallExpression): FunctionNode[] {
+    if (this.isBound(call)) return [];
+    const resolved = calledDeclaration(this.library.compiled, call);
+    return [
+      ...(resolved ? this.functionsHeldBy([resolved]) : []),
+      ...this.functionsItMayBe(this.calleeOf(call)),
+    ];
+  }
+}
+
 type Walk = {
   library: Library;
   exemptions: readonly LayoutReadExemption[];
@@ -203,7 +288,11 @@ type Walk = {
   visited: Set<string>;
 };
 
-function runFunction(walk: Walk, fn: ts.Node, under: LayoutReadExemption | undefined): void {
+function resolve(walk: Walk): Resolver {
+  return new Resolver(walk.library);
+}
+
+function runFunction(walk: Walk, fn: FunctionNode, under: LayoutReadExemption | undefined): void {
   const exemption = under ?? exemptionOf(fn, walk.exemptions);
   const key = `${fileOf(fn)}:${fn.pos}:${exemption ? `${exemption.file}#${exemption.fn}` : ""}`;
   if (walk.visited.has(key)) return;
@@ -211,34 +300,56 @@ function runFunction(walk: Walk, fn: ts.Node, under: LayoutReadExemption | undef
   if (exemption && !walk.readsOfExemptions.has(exemption)) {
     walk.readsOfExemptions.set(exemption, new Set());
   }
-  const body = isFunctionNode(fn) ? fn.body : fn;
-  if (body) visit(walk, body, exemption);
+  for (const parameter of fn.parameters ?? []) visit(walk, parameter, exemption);
+  if (fn.body) visit(walk, fn.body, exemption);
 }
 
-function runDeclarationsOf(
+function runEach(
   walk: Walk,
-  node: ts.Node,
+  fns: readonly FunctionNode[],
   under: LayoutReadExemption | undefined,
-  onlyGetters = false,
 ): void {
-  for (const declaration of memberDeclarations(walk.library.compiled, node)) {
-    if (onlyGetters && !ts.isGetAccessorDeclaration(declaration)) continue;
-    for (const fn of functionsDeclaredBy(declaration)) runFunction(walk, fn, under);
+  for (const fn of fns) runFunction(walk, fn, under);
+}
+
+function createInstancesOf(
+  walk: Walk,
+  created: ts.Expression,
+  under: LayoutReadExemption | undefined,
+): void {
+  for (const declaration of memberDeclarations(walk.library.compiled, unwrapped(created))) {
+    if (!ts.isClassLikeDeclaration(declaration) || !inSource(declaration)) continue;
+    for (const member of declaration.members) {
+      if (ts.isConstructorDeclaration(member)) runFunction(walk, member, under);
+      else if (ts.isPropertyDeclaration(member) && member.initializer) {
+        visit(walk, member.initializer, under);
+      } else if (ts.isClassStaticBlockDeclaration(member)) visit(walk, member, under);
+    }
   }
 }
 
-function calledThrough(expression: ts.Expression): ts.Node {
-  const callee = unwrapped(expression);
-  return ts.isPropertyAccessExpression(callee) && callsThroughTheFunction.includes(callee.name.text)
-    ? unwrapped(callee.expression)
-    : callee;
+function isAssignedTo(node: ts.Node): boolean {
+  const parent = node.parent;
+  return (
+    parent !== undefined &&
+    ts.isBinaryExpression(parent) &&
+    parent.left === node &&
+    parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+    parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+  );
+}
+
+function accessorsRunBy(walk: Walk, node: ts.Node): FunctionNode[] {
+  const wanted = isAssignedTo(node) ? ts.isSetAccessorDeclaration : ts.isGetAccessorDeclaration;
+  return memberDeclarations(walk.library.compiled, node).filter(
+    (declaration): declaration is FunctionNode =>
+      wanted(declaration) && inSource(declaration) && declaration.body !== undefined,
+  );
 }
 
 function visit(walk: Walk, node: ts.Node, under: LayoutReadExemption | undefined): void {
   if (isFunctionNode(node)) {
-    if (isCalledAtOnce(node) || isPassedToRunNow(walk.library, node)) {
-      runFunction(walk, node, under);
-    }
+    if (runsWhereItStands(walk.library, node)) runFunction(walk, node, under);
     return;
   }
   if (ts.isClassLikeDeclaration(node)) return;
@@ -246,14 +357,16 @@ function visit(walk: Walk, node: ts.Node, under: LayoutReadExemption | undefined
     const bucket = under ? walk.readsOfExemptions.get(under) : walk.reads;
     bucket?.add(node);
   }
-  if (ts.isCallExpression(node)) runDeclarationsOf(walk, calledThrough(node.expression), under);
-  if (ts.isNewExpression(node)) runDeclarationsOf(walk, unwrapped(node.expression), under);
-  if (ts.isPropertyAccessExpression(node)) runDeclarationsOf(walk, node, under, true);
-  if (
-    (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) &&
-    isPassedToRunNow(walk.library, node)
-  ) {
-    runDeclarationsOf(walk, node, under);
+  if (ts.isCallExpression(node)) runEach(walk, resolve(walk).functionsACallRuns(node), under);
+  if (ts.isTaggedTemplateExpression(node)) {
+    runEach(walk, resolve(walk).functionsItMayBe(node.tag), under);
+  }
+  if (ts.isNewExpression(node)) createInstancesOf(walk, node.expression, under);
+  if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+    runEach(walk, accessorsRunBy(walk, node), under);
+  }
+  if (!isFunctionNode(node) && ts.isExpression(node) && isPassedToRunNow(walk.library, node)) {
+    runEach(walk, resolve(walk).functionsItMayBe(node), under);
   }
   node.forEachChild((child) => visit(walk, child, under));
 }
@@ -274,7 +387,7 @@ export function layoutReadsRuleWith(exemptions: readonly LayoutReadExemption[]):
         visited: new Set(),
       };
       for (const module of publicModules(library)) {
-        for (const fn of exportedFunctions(module).all) runFunction(walk, fn, undefined);
+        runEach(walk, exportedFunctions(module).all, undefined);
       }
       const unexempted = withoutFollowers(walk.reads).map(
         (node) =>

@@ -2,7 +2,11 @@ import { createAttachment } from "#/packages/primitives/src/internal-attachment.
 import { browserMethod, lookUp } from "#/packages/primitives/src/internal-browser-api.ts";
 import { observe } from "#/packages/primitives/src/internal-dom-observer.ts";
 import { watchEvents } from "#/packages/primitives/src/internal-listener.ts";
-import { Measurer, topOf } from "#/tests/fixtures/primitive-rules/forbidden/src/internal-position.ts";
+import {
+  Measurer,
+  Runner,
+  topOf,
+} from "#/tests/fixtures/primitive-rules/forbidden/src/internal-position.ts";
 
 function visibilityOf(element: HTMLElement): boolean {
   return element.checkVisibility();
@@ -14,6 +18,14 @@ function shown(element: HTMLElement): boolean {
 
 function handlerFor(top: number): () => number {
   return () => top;
+}
+
+function closureOver(element: HTMLElement): () => number {
+  return () => element.offsetLeft;
+}
+
+function measuredTag(strings: TemplateStringsArray, element: HTMLElement): number {
+  return strings.length + element.clientTop;
 }
 
 /** Holds what the rules forbid. */
@@ -55,6 +67,34 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
       watchEvents(window, ["scroll"], ((kept: number) => () => kept)(element.scrollLeft)),
     ];
     const measured = [new Measurer(element).measure(), topOf(element)];
+    const reader = { size: (target: HTMLElement) => target.scrollWidth };
+    const { size: destructured } = { size: (target: HTMLElement) => target.scrollHeight };
+    const strategies = {
+      top: (target: HTMLElement) => target.offsetTop,
+      left: (target: HTMLElement) => target.clientLeft,
+    };
+    const listed = [(target: HTMLElement) => target.offsetParent];
+    const withDefault = (read: () => unknown = () => window.pageXOffset) => read();
+    const stored = closureOver(element);
+    const setting = {
+      set to(value: number) {
+        void (value + window.pageYOffset);
+      },
+    };
+    setting.to = 1;
+    const ran = [
+      reader.size(element),
+      destructured(element),
+      strategies[element.dir === "rtl" ? "left" : "top"](element),
+      listed[0](element),
+      (element.isConnected ? () => document.scrollingElement?.scrollTop : () => 0)(),
+      (0, () => element.ownerDocument.documentElement.clientWidth)(),
+      withDefault(),
+      stored(),
+      new Promise<number>((resolve) => resolve(element.parentElement?.offsetHeight ?? 0)),
+      new Runner(() => document.body.scrollLeft),
+      measuredTag`${element}`,
+    ];
     const members = [
       document.createElementNS("http://www.w3.org/2000/svg", "rect").getBBox(),
       element.computedStyleMap(),
@@ -82,6 +122,7 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
       evaded,
       measured,
       members,
+      ran,
     ];
   });
 }
