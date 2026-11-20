@@ -35,8 +35,10 @@ beforeAll(async () => {
   const indexed = new Set(stories.map(({ id }) => id));
   records = recordedStories(directory).filter(({ storyId }) => indexed.has(storyId));
   received = records.flatMap(({ mounts }) =>
-    mounts.flatMap(({ component, props, played }) =>
-      Object.entries(props).map(([prop, value]) => ({ component, prop, value, played })),
+    mounts.flatMap(({ component, given, values, played }) =>
+      given.flatMap((prop) =>
+        (values[prop] ?? [undefined]).map((value) => ({ component, prop, value, played })),
+      ),
     ),
   );
   const opened = openSpecProgram();
@@ -96,31 +98,33 @@ test("every own prop of every component was received by that component, mounted 
   expect(unused).toEqual([]);
 });
 
-test("every value of every prop whose type is a closed union of literals was received by a component mounted in its story's canvas", () => {
+test("every value of every prop whose type is a closed union of literals was received by a component mounted in its story's canvas, and every value of one with behaviour by a component after whose mount its story's play function completed a matcher", () => {
   const missing = held(({ values }) => values !== undefined).flatMap((entry) => {
-    const seen = new Set(receivedBy(entry).map(({ value }) => value));
+    const seen = new Set(
+      receivedBy(entry)
+        .filter(({ played }) => played || !entry.prop.behaviour)
+        .map(({ value }) => value),
+    );
     const unseen = (entry.prop.values ?? []).filter((value: Option) => !seen.has(value));
     return unseen.length === 0
       ? []
       : [
-          `No indexed story mounted a component that received ${named(entry)} as ${unseen.join(", ")}. ${
-            entry.prop.behaviour
-              ? `Give it as each in ${where(entry)} whose play function checks what that value does.`
-              : `Export everyValueOf(meta, "${entry.prop.name}") from "#/every-value.tsx" in ${where(entry)}.`
-          }`,
+          entry.prop.behaviour
+            ? `No story ended with a component that received ${named(entry)} as ${unseen.join(", ")} in its canvas after its play function completed a matcher of storybook/test's expect while that component was mounted. Give it as each in ${where(entry)} whose play function checks what that value does with expect.`
+            : `No indexed story mounted a component that received ${named(entry)} as ${unseen.join(", ")}. Export everyValueOf(meta, "${entry.prop.name}") from "#/every-value.tsx" in ${where(entry)}.`,
         ];
   });
 
   expect(missing).toEqual([]);
 });
 
-test("every prop with behaviour, which its type tells, was received by a component in its story's canvas when the story ended, after which mount the story's play function made an expect assertion", () => {
+test("every prop with behaviour, which its type tells, was received by a component in its story's canvas when the story ended, after whose mount the story's play function completed a matcher", () => {
   const behaviour = held(({ behaviour }) => behaviour);
   const unplayed = behaviour
     .filter((entry) => receivedBy(entry).every(({ played }) => !played))
     .map(
       (entry) =>
-        `No story ended with a component that received ${named(entry)} in its canvas after its play function made an expect assertion of storybook/test while that component was mounted. Give it in ${where(entry)} whose play function checks what it does with expect.`,
+        `No story ended with a component that received ${named(entry)} in its canvas after its play function completed a matcher of storybook/test's expect while that component was mounted. Give it in ${where(entry)} whose play function checks what it does with expect.`,
     );
 
   expect(behaviour.length).toBeGreaterThan(0);

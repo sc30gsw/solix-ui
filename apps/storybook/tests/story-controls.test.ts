@@ -120,3 +120,22 @@ test("the controls add no arg: each composed story's args are the args its file 
   expect(indexed.flatMap(({ stories }) => stories).length).toBeGreaterThan(0);
   expect(added).toEqual([]);
 });
+
+function writesAfterEach(annotations: object): boolean {
+  return "afterEach" in annotations && annotations.afterEach !== undefined;
+}
+
+test("no indexed story or meta writes afterEach, so the play phase the story spec counts ends in the preview's afterEach, right after the play function", () => {
+  const written = indexed.flatMap(({ file, stories, module }) =>
+    [
+      ...(writesAfterEach(module.default) ? ["its meta"] : []),
+      ...stories.filter((story) => writesAfterEach(module[story] ?? {})),
+    ].map(
+      (writer) =>
+        `${file}: ${writer} writes afterEach, which runs after the play function and before the preview's afterEach ends the play phase, so an assertion there would count as the play's. Check it in the play function.`,
+    ),
+  );
+
+  expect(indexed.flatMap(({ stories }) => stories).length).toBeGreaterThan(0);
+  expect(written).toEqual([]);
+});

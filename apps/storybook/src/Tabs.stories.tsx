@@ -56,6 +56,23 @@ export const Vertical: Story = {
   },
 };
 
+export const Horizontal: Story = {
+  args: { orientation: "horizontal" },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Inbox" }));
+    await userEvent.keyboard("{ArrowRight}");
+    await expect(canvas.getByRole("tab", { name: "Drafts" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(canvas.getByRole("tab", { name: "Drafts" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  },
+};
+
 export const EveryOrientation: Story = everyValueOf(meta, "orientation");
 
 export const ControlledByItsValue: Story = {

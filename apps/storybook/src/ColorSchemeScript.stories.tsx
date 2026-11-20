@@ -36,7 +36,32 @@ export const Forced: Story = {
 export const DefaultsToDark: Story = {
   args: { defaultColorScheme: "dark" },
   play: async ({ canvasElement }) => {
-    await expect(canvasElement.querySelector("script")?.textContent).toContain('"dark"');
+    await expect(canvasElement.querySelector("script")?.textContent).toContain('var c="dark"');
+  },
+};
+
+export const DefaultsToLight: Story = {
+  args: { defaultColorScheme: "light" },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector("script")?.textContent).toContain('var c="light"');
+  },
+};
+
+export const DefaultsToTheSystemScheme: Story = {
+  args: { defaultColorScheme: "auto" },
+  play: async ({ canvasElement }) => {
+    const script = canvasElement.querySelector("script")?.textContent;
+    await expect(script).toContain('var c="auto"');
+    await expect(script).toContain("prefers-color-scheme: dark");
+  },
+};
+
+export const ForcedLight: Story = {
+  args: { forceColorScheme: "light" },
+  play: async ({ canvasElement }) => {
+    const script = canvasElement.querySelector("script");
+    await expect(script?.textContent).not.toContain("localStorage");
+    await expect(script?.textContent).toContain('"light"');
   },
 };
 

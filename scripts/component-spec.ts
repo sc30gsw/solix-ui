@@ -15,11 +15,16 @@ export type SpecComponent = Omit<LibraryComponent, "props"> & {
 };
 
 const stateTypes = ["ControlledProps<string>", "OpenedProps"];
+const commonProbe = "Common";
+
+function stateProbe(at: number): string {
+  return `State${at}`;
+}
 
 const probesSource = `import type { JSX } from "@solidjs/web";
 import type { ControlledProps, ElementProps, OpenedProps } from ${JSON.stringify(sharedPropTypes)};
 
-function Common(props: ElementProps<"div", { root: object }>): JSX.Element {
+function ${commonProbe}(props: ElementProps<"div", { root: object }>): JSX.Element {
   return <div />;
 }
 
@@ -28,13 +33,13 @@ ${stateTypes
     (
       type,
       at,
-    ) => `function State${at}(props: ElementProps<"div", { root: object }, ${type}>): JSX.Element {
+    ) => `function ${stateProbe(at)}(props: ElementProps<"div", { root: object }, ${type}>): JSX.Element {
   return <div />;
 }`,
   )
   .join("\n\n")}
 
-export { Common, ${stateTypes.map((_, at) => `State${at}`).join(", ")} };
+export { ${commonProbe}, ${stateTypes.map((_, at) => stateProbe(at)).join(", ")} };
 `;
 
 function isCallable(prop: ComponentProp): boolean {
@@ -117,8 +122,20 @@ export function openSpecProgram(entry: string = libraryEntry): {
 } {
   const probesFile = virtualFile(probesSource, ".tsx");
   const { program, elementFile } = openLibraryProgram(entry, [probesFile]);
-  const [shared, ...stateProbes] = componentsIn(program, elementFile, probesFile);
-  const common = declarationsOf(shared?.props);
-  const state = stateDeclarations(stateProbes, common);
+  const probes = componentsIn(program, elementFile, probesFile);
+  const probe = (name: string): LibraryComponent => {
+    const found = probes.find((component) => component.name === name);
+    if (found === undefined) {
+      throw new Error(
+        `${name}: the spec's probe file declares this component, but the type checker gives no exported component by this name there. Read probesSource in scripts/component-spec.ts again.`,
+      );
+    }
+    return found;
+  };
+  const common = declarationsOf(probe(commonProbe).props);
+  const state = stateDeclarations(
+    stateTypes.map((_, at) => probe(stateProbe(at))),
+    common,
+  );
   return { program, components: specOf(componentsIn(program, elementFile, entry), common, state) };
 }

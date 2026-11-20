@@ -11,6 +11,7 @@ import {
   globalSwitchesThatSkipTheAccessibilityScan,
   selectorsTheAccessibilityAddonLeavesUnscanned,
 } from "#/accessibility-scan.ts";
+import { playEnded, playStarted } from "#/play-phase.ts";
 import "@solix/core/styles.css";
 import "#/.storybook/preview.css";
 
@@ -80,9 +81,21 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
     );
   }
   diagnosticsRaised = captureSolidDiagnostics();
+  const mount = context.mount;
+  context.mount = async (...rendered) => {
+    const canvas = await mount(...rendered);
+    playStarted();
+    return canvas;
+  };
 };
 
 const afterEachStory: AfterEach<SolidRenderer> = (context) => {
+  playEnded();
+  if (context.reporting.reports.length > 0) {
+    throw new Error(
+      `The play phase ends in the preview's afterEach, so it must run first after the play function, but ${context.reporting.reports.map(({ type }) => type).join(", ")} reported before it. A story or a meta that writes afterEach, or an addon whose afterEach the preview's no longer comes before, ran first.`,
+    );
+  }
   const raised = diagnosticsRaised();
   diagnosticsRaised = () => [];
   refuseAnyWayOut("while it ran", [...waysOutOfTheGate(context), ...unscannedIn(context)]);
