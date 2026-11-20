@@ -18,6 +18,8 @@ import {
   kitSkillSource,
   sharedSkills,
 } from "#/scripts/agent-kit.ts";
+import { approvedSkills } from "#/scripts/package-skills.ts";
+import { workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
@@ -27,6 +29,10 @@ const kitTraces = ["<!-- solid2-agent-kit:", `${kitBin} hook`];
 const filesTheKitEdits = ["AGENTS.md", ".claude/settings.json"];
 const settingsFile = ".claude/settings.json";
 const settingsKeys = ["enabledPlugins", "env", "extraKnownMarketplaces"];
+const replacedByTheKit = [
+  { pack: "solid-js", name: "solid-2.0" },
+  { pack: "solid-js", name: "solid-2.0-cheatsheet" },
+];
 
 function filesIn(root: string, directory = ""): string[] {
   return readdirSync(join(root, directory), { withFileTypes: true }).flatMap((entry) => {
@@ -105,4 +111,17 @@ test("nothing the kit's installer writes, for Claude Code or Cursor, is in the r
 
 test(`${settingsFile} holds only the plugins, their marketplaces and the environment, and so no hook`, () => {
   expect(Object.keys(JSON.parse(read(settingsFile))).sort()).toEqual(settingsKeys);
+});
+
+test(`${workspaceFile} approves neither skill of solid-js's that the kit's solid-2 skill replaces`, () => {
+  const replaced = approvedSkills()
+    .filter(({ pack, name }) =>
+      replacedByTheKit.some((skill) => skill.pack === pack && skill.name === name),
+    )
+    .map(
+      ({ pack, name }) =>
+        `${pack} ${name}: the kit's solid-2 skill says what it says. Leave it out of permissions in ${workspaceFile}.`,
+    );
+
+  expect(replaced).toEqual([]);
 });

@@ -1,6 +1,6 @@
 ---
 name: open-pull-request
-description: The steps every pull request in this repository goes through before it opens, in order. Verify, then pstack `correct`, then pstack `no-comments`, then Thermos and verify-solid2, then the verification skills, then a stacked pull request with the six-section body. Use before opening or updating any pull request.
+description: The steps every pull request in this repository goes through before it opens, in order. Verify, then pstack `correct`, then pstack `no-comments`, then the review, then the verification skills, then a stacked pull request with the six-section body. Use before opening or updating any pull request.
 ---
 
 # Open a pull request
@@ -25,9 +25,9 @@ Follow the pstack `correct` skill over this branch's work. Find each mistake tha
 
 Follow the pstack `no-comments` skill over the diff against the base branch. It starts the `comment-sicko` agent. `tests/rules/workspace-rules.test.ts` fails on a comment in a script file, but it does not see files under a directory whose name starts with a dot, such as `.agents`. Neither check sees a constraint that a comment used to carry and that no name, type or test carries yet.
 
-## 4. Thermos and verify-solid2
+## 4. Review
 
-Read `.agents/skills/thermos/SKILL.md` and follow it. Start the two reviewers in `.claude/agents`, and give each one the diff against the base branch, the full contents of the changed files, and the path of its rubric: `.agents/skills/thermo-nuclear-review/SKILL.md` or `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Beside them, follow `.agents/skills/verify-solid2/SKILL.md` over the same diff: it runs the kit's gates as `vp run lint:solid` and reviews the diff against the kit's checklist for what they cannot see. Fix each finding you confirm, from the reviewers and from the review, and say why for each one you dismiss. Run step 1 again after a fix.
+Start two reviewers, each an agent or a session of its own. The first instruction of one is to read and follow `.agents/skills/thermo-nuclear-review/SKILL.md`, and the first instruction of the other is to read and follow `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Give each the diff against the base branch and the full contents of the changed files. `.agents/skills/thermos/SKILL.md` says how the rounds go. Where the agent can start the subagents in `.claude/agents`, they do the same. Beside them, review the diff with `.agents/skills/review-solid2/SKILL.md`. Fix each finding you confirm, and say why for each one you dismiss. Run step 1 again after a fix.
 
 ## 5. Verification skills
 
