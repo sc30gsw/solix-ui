@@ -1,6 +1,6 @@
 import { Tabs } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
-import { expect } from "storybook/test";
+import { expect, userEvent } from "storybook/test";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -63,5 +63,7 @@ export const UnmountedWhileHidden: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole("tabpanel", { name: "Security" })).toBeVisible();
     await expect(canvas.queryByText("Profile panel")).toBeNull();
+    await userEvent.click(canvas.getByRole("tab", { name: "Profile" }));
+    await expect(canvas.getByText("Profile panel")).toBeVisible();
   },
 };

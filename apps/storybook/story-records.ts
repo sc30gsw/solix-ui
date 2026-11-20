@@ -29,18 +29,18 @@ type Live = {
   readonly component: string;
   readonly props: Props;
   readonly readByIt: ReadonlyMap<string, ReadonlySet<RecordedValue>>;
+  readonly objectsRead: ReadonlySet<unknown>;
   readonly owner: Owner | null;
   readonly returned: unknown;
-  readonly matchersAtMount: number;
+  played: boolean;
 };
 
 const recording: {
   live: Live[];
   read: PropsRead;
   playing: boolean;
-  matchers: number;
-  matchersWhenThePlayEnded: number | undefined;
-} = { live: [], read: {}, playing: false, matchers: 0, matchersWhenThePlayEnded: undefined };
+  playEnded: boolean;
+} = { live: [], read: {}, playing: false, playEnded: false };
 
 const createdUnder = new WeakMap<Node, Owner>();
 
@@ -104,11 +104,32 @@ function startThePlay(): void {
 
 function endThePlay(): void {
   recording.playing = false;
-  recording.matchersWhenThePlayEnded = recording.matchers;
+  recording.playEnded = true;
 }
 
-export function matcherCompleted(): void {
-  if (recording.playing) recording.matchers += 1;
+function isUnder(node: Node, owner: Owner): boolean {
+  const tree = ownerTree();
+  for (let at = createdUnder.get(node) ?? null; at !== null; at = tree.getParent(at)) {
+    if (at === owner) return true;
+  }
+  return false;
+}
+
+function isAbout(subject: unknown, { owner, objectsRead }: Live): boolean {
+  if (subject instanceof Node) {
+    for (let node: Node | null = subject; node !== null; node = node.parentNode) {
+      if (owner !== null && isUnder(node, owner)) return true;
+    }
+    return false;
+  }
+  return (typeof subject === "object" || typeof subject === "function") && objectsRead.has(subject);
+}
+
+export function matcherCompleted(subject: unknown): void {
+  if (!recording.playing) return;
+  for (const live of recording.live) {
+    if (!live.played && isAbout(subject, live)) live.played = true;
+  }
 }
 
 function readOf(component: string) {
@@ -127,12 +148,19 @@ function recorded(value: unknown): RecordedValue {
     : null;
 }
 
-function seeingWhatItReads(props: Props, readByIt: Map<string, Set<RecordedValue>>): Props {
+function seeingWhatItReads(
+  props: Props,
+  readByIt: Map<string, Set<RecordedValue>>,
+  objectsRead: Set<unknown>,
+): Props {
   return new Proxy(props, {
     get(target, key) {
       const value: unknown = Reflect.get(target, key);
       if (typeof key === "string" && value !== undefined) {
         readByIt.set(key, (readByIt.get(key) ?? new Set()).add(recorded(value)));
+        if ((typeof value === "object" && value !== null) || typeof value === "function") {
+          objectsRead.add(value);
+        }
       }
       return value;
     },
@@ -142,14 +170,16 @@ function seeingWhatItReads(props: Props, readByIt: Map<string, Set<RecordedValue
 function recordingOf(component: string, real: Component): Component {
   function recordedComponent(props: Props) {
     const readByIt = new Map<string, Set<RecordedValue>>();
-    const returned = real(seeingWhatItReads(props, readByIt));
+    const objectsRead = new Set<unknown>();
+    const returned = real(seeingWhatItReads(props, readByIt, objectsRead));
     recording.live.push({
       component,
       props,
       readByIt,
+      objectsRead,
       owner: getOwner(),
       returned,
-      matchersAtMount: recording.matchers,
+      played: false,
     });
     return returned;
   }
@@ -217,7 +247,7 @@ export function instrumented(
 export function startRecording(): void {
   recording.live = [];
   recording.playing = false;
-  recording.matchersWhenThePlayEnded = undefined;
+  recording.playEnded = false;
 }
 
 function nodesOf(returned: unknown): unknown[] {
@@ -226,14 +256,6 @@ function nodesOf(returned: unknown): unknown[] {
     dispose();
     return resolved;
   });
-}
-
-function isUnder(node: Node, owner: Owner): boolean {
-  const tree = ownerTree();
-  for (let at = createdUnder.get(node) ?? null; at !== null; at = tree.getParent(at)) {
-    if (at === owner) return true;
-  }
-  return false;
 }
 
 function shownIn(canvas: Element, { owner, returned }: Live): boolean {
@@ -270,14 +292,13 @@ function valuesOf({ component, props, readByIt }: Live): Record<string, Recorded
 }
 
 export function takeRecord(canvas: Element): StoryRecord {
-  const playEnded = recording.matchersWhenThePlayEnded;
   const mounts = recording.live
     .filter((live) => shownIn(canvas, live))
     .map((live) => ({
       component: live.component,
       given: givenOf(live),
       values: valuesOf(live),
-      played: playEnded !== undefined && playEnded > live.matchersAtMount,
+      played: recording.playEnded && live.played,
     }));
   recording.live = [];
   return { mounts };

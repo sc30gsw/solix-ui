@@ -14,13 +14,13 @@ function isThenable(value: unknown): value is PromiseLike<unknown> {
   );
 }
 
-function completed(result: unknown): unknown {
+function completed(subject: unknown, result: unknown): unknown {
   if (!isThenable(result)) {
-    matcherCompleted();
+    matcherCompleted(subject);
     return result;
   }
   return Promise.resolve(result).then((value) => {
-    matcherCompleted();
+    matcherCompleted(subject);
     return value;
   });
 }
@@ -34,15 +34,15 @@ function isMatcher(key: string | symbol, value: unknown): value is (...args: unk
   );
 }
 
-function countingItsMatchers(assertion: object): object {
+function countingItsMatchers(assertion: object, subject: unknown): object {
   return new Proxy(assertion, {
     get(target, key) {
       const value: unknown = Reflect.get(target, key);
       if (isMatcher(key, value)) {
-        return (...args: unknown[]) => completed(Reflect.apply(value, target, args));
+        return (...args: unknown[]) => completed(subject, Reflect.apply(value, target, args));
       }
       if (typeof key === "string" && modifiers.has(key) && typeof value === "object" && value) {
-        return countingItsMatchers(value);
+        return countingItsMatchers(value, subject);
       }
       return value;
     },
@@ -53,7 +53,7 @@ export const expect = new Proxy(instrumentedExpect, {
   apply(target, thisArgument, args: unknown[]) {
     const assertion: unknown = Reflect.apply(target, thisArgument, args);
     return typeof assertion === "object" && assertion !== null
-      ? countingItsMatchers(assertion)
+      ? countingItsMatchers(assertion, args[0])
       : assertion;
   },
 });
