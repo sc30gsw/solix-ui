@@ -13,7 +13,7 @@ import {
   variantAttribute,
 } from "#/src/color-table.ts";
 import { createMemo } from "solid-js";
-import type { CssColorFunction, CssColorKeyword } from "#/src/css-colors.ts";
+import type { CssColorFunction, CssColorKeyword, HexDigit } from "#/src/css-colors.ts";
 import { warnInTheBrowserDuringDevelopment } from "#/src/development-warning.ts";
 import type { Resolved, Resolver } from "#/src/style-props.ts";
 
@@ -21,7 +21,7 @@ export type SolixColor =
   | Palette
   | `${Palette}.${Shade}`
   | CssColorKeyword
-  | `#${string}`
+  | `#${HexDigit}${HexDigit}${HexDigit}${string}`
   | `${CssColorFunction}(${string})`;
 
 export type ColorProps<Variant extends ColorVariant> = {
