@@ -11,6 +11,7 @@ import {
   globalSwitchesThatSkipTheAccessibilityScan,
   selectorsTheAccessibilityAddonLeavesUnscanned,
 } from "#/accessibility-scan.ts";
+import { markPlayEnded } from "#/story-records.ts";
 import "@solix/core/styles.css";
 import "#/.storybook/preview.css";
 
@@ -83,6 +84,7 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
 };
 
 const afterEachStory: AfterEach<SolidRenderer> = (context) => {
+  if (typeof context.playFunction === "function") markPlayEnded();
   const raised = diagnosticsRaised();
   diagnosticsRaised = () => [];
   refuseAnyWayOut("while it ran", [...waysOutOfTheGate(context), ...unscannedIn(context)]);

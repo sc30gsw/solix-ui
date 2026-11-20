@@ -15,6 +15,10 @@
     "story-color-scheme.setup.ts",
     "story-controls.d.ts",
     "story-meta.ts",
-    "every-value.tsx"
+    "every-value.tsx",
+    "story-records.ts",
+    "story-records.setup.ts",
+    "story-records-command.ts",
+    "instrumented-library.ts"
   ]
 }

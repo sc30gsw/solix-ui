@@ -5,12 +5,15 @@ import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 import { storyControls } from "#/scripts/story-controls.ts";
+import { storyRecordsOfThisRun } from "#/apps/storybook/story-records-command.ts";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
+const storySpec = "apps/storybook/tests/story-spec.test.ts";
+const storyRecords = storyRecordsOfThisRun();
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const checkerRules = "tests/rules/**/*.test.ts";
 const programOpeners = [
@@ -167,7 +170,7 @@ export default defineConfig({
               "packages/*/tests/**/*.test.{ts,tsx}",
               "apps/*/tests/**/*.test.{ts,tsx}",
             ],
-            exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules],
+            exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules, storySpec],
             globalSetup: ["tests/support/global-setup.ts"],
             setupFiles: ["apps/playground/tests/support/console-check.ts"],
           },
@@ -184,9 +187,19 @@ export default defineConfig({
         },
         ...storiesServers.map((server) => ({
           extends: false as const,
-          ...storiesProject(server, storybookConfigDirectory),
+          ...storiesProject(server, storybookConfigDirectory, storyRecords),
         })),
       ].map(afterTheRules),
+      {
+        extends: true,
+        test: {
+          name: "story spec",
+          environment: "node",
+          include: [storySpec],
+          provide: { storyRecords },
+          sequence: { groupOrder: 2 },
+        },
+      },
     ].map(withPackagesBuiltFirst),
   },
 });
