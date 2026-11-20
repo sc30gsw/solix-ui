@@ -29,7 +29,7 @@ export const Responsive: Story = {
 
 export const EveryType: Story = everyValueOf(meta, "type");
 
-export const EveryAutoFlow: Story = everyValueOf(meta, "autoFlow");
+export const EveryAutoFlow: Story = everyValueOf(meta, "autoFlow", { minColWidth: "6rem" });
 
 export const FitsColumnsToItsWidth: Story = {
   args: { minColWidth: "8rem", autoRows: "4rem", verticalSpacing: "lg" },

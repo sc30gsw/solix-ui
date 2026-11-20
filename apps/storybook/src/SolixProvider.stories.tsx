@@ -144,7 +144,32 @@ export const GivesItsNonceToItsStyles: Story = {
   },
 };
 
-export const EveryDefaultColorScheme: Story = everyValueOf(meta, "defaultColorScheme");
+const systemDark = "(prefers-color-scheme: dark)";
+
+function systemPrefersDark(): () => void {
+  const real = window.matchMedia;
+  window.matchMedia = (query: string) =>
+    query === systemDark
+      ? {
+          matches: true,
+          media: query,
+          onchange: null,
+          addEventListener: () => undefined,
+          removeEventListener: () => undefined,
+          addListener: () => undefined,
+          removeListener: () => undefined,
+          dispatchEvent: () => false,
+        }
+      : real.call(window, query);
+  return () => {
+    window.matchMedia = real;
+  };
+}
+
+export const EveryDefaultColorScheme: Story = {
+  ...everyValueOf(meta, "defaultColorScheme", {}, { auto: "dark" }),
+  beforeEach: systemPrefersDark,
+};
 
 export const EveryForcedColorScheme: Story = everyValueOf(meta, "forceColorScheme");
 
