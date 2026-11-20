@@ -1,5 +1,11 @@
 import { createAttachment } from "#/packages/primitives/src/internal-attachment.ts";
 import { browserMethod, lookUp } from "#/packages/primitives/src/internal-browser-api.ts";
+import { observe } from "#/packages/primitives/src/internal-dom-observer.ts";
+import { watchEvents } from "#/packages/primitives/src/internal-listener.ts";
+
+function shown(element: HTMLElement): boolean {
+  return element.checkVisibility();
+}
 
 /** Holds what the rules forbid. */
 export function createRespelled(element: HTMLElement, listener: () => void): void {
@@ -27,6 +33,29 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
     const Found = lookUp(window, "ResizeObserver");
     const { MutationObserver: Watcher } = window;
     const Named = window["IntersectionObserver"];
-    return () => [focus, stop, previous, onkeydown, handler, Found, Watcher, Named];
+    const box = element.getBoundingClientRect();
+    const { offsetWidth } = element;
+    const top = lookUp(window, "scrollY");
+    const style = getComputedStyle(element);
+    const showing = shown(element);
+    const stopWatching = watchEvents(window, ["scroll"], () => element.scrollTop + Number(shown(element)));
+    const stopObserving = observe("ResizeObserver", element, undefined, () => element.clientWidth);
+    return () => [
+      focus,
+      stop,
+      previous,
+      onkeydown,
+      handler,
+      Found,
+      Watcher,
+      Named,
+      box,
+      offsetWidth,
+      top,
+      style,
+      showing,
+      stopWatching,
+      stopObserving,
+    ];
   });
 }

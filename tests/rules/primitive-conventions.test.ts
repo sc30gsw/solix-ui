@@ -204,6 +204,16 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-respelled.ts", "const { MutationObserver: Watcher }"),
     forbiddenAt("src/create-respelled.ts", 'window["IntersectionObserver"]'),
   ],
+  layoutReads: [
+    forbiddenAt("src/create-commanded.ts", "return window.scrollY"),
+    forbiddenAt("src/create-commanded.ts", "return window.scrollX"),
+    forbiddenAt("src/internal-position.ts", "return window.scrollY"),
+    forbiddenAt("src/create-respelled.ts", "return element.checkVisibility()"),
+    forbiddenAt("src/create-respelled.ts", "element.getBoundingClientRect()"),
+    forbiddenAt("src/create-respelled.ts", "const { offsetWidth }"),
+    forbiddenAt("src/create-respelled.ts", 'lookUp(window, "scrollY")'),
+    forbiddenAt("src/create-respelled.ts", "getComputedStyle(element)"),
+  ],
   caughtErrors: [forbiddenAt("src/create-misbehaving.ts", "} catch {")],
   instanceofChecks: [forbiddenAt("src/create-misbehaving.ts", "instanceof Element")],
   focusMoves: [

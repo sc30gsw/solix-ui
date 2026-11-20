@@ -26,6 +26,7 @@ import {
   symbolOf,
   ts,
 } from "#/scripts/syntax.ts";
+import { layoutMembers } from "#/tests/support/primitive-rules/layout-reads.ts";
 import { componentLibraries, repositoryRoot, scriptFiles } from "#/tests/support/workspace.ts";
 import {
   componentFile,
@@ -257,6 +258,42 @@ test("no source of a library but library-style.tsx renders a <style>, creates a 
   expect(
     styleWritesIn(libraryStyleModule, typedSource(join(repositoryRoot, libraryStyleModule))),
   ).toHaveLength(1);
+});
+
+const layoutReadsAtTheEvent: readonly { file: string; reason: string }[] = [
+  {
+    file: "packages/core/src/light-dismiss.ts",
+    reason: "it reads the dialog's box at each press, to tell a press outside it",
+  },
+  {
+    file: "packages/core/src/step-over-disabled.ts",
+    reason: "it reads the list's direction at each key, to tell which arrow moves forward",
+  },
+];
+
+function layoutReadsIn(file: string): string[] {
+  return descendants(typedSource(file))
+    .filter((node) => domMembersOf(node).some((member) => layoutMembers.includes(member)))
+    .map(
+      (node) =>
+        `${relativePath(file)}:${lineOf(node)}: ${firstLine(node)} reads layout, and keeps what it read when a stylesheet or a resize changes the layout later. Read it at the event that needs it, in a module of layoutReadsAtTheEvent with its reason.`,
+    );
+}
+
+test("no source of a library reads a layout member but the modules that read it at the event that needs it, each with its reason, and each of those reads one", () => {
+  const atTheEvent = layoutReadsAtTheEvent.map(({ file }) => file);
+
+  expect(
+    librarySourceFiles
+      .filter((file) => !atTheEvent.includes(relativePath(file)))
+      .flatMap(layoutReadsIn),
+  ).toEqual([]);
+  for (const { file, reason } of layoutReadsAtTheEvent) {
+    expect(
+      layoutReadsIn(join(repositoryRoot, file)),
+      `${file} is listed because ${reason}, so it reads a layout member, or its entry goes`,
+    ).not.toEqual([]);
+  }
 });
 
 test("every other source file is the barrel, a component's variables, a StyleX definition, or a kebab-case module, with JSX or without", () => {
