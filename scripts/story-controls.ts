@@ -3,6 +3,7 @@ import type { Plugin, ViteDevServer } from "vite-plus";
 import {
   type ComponentProp,
   type Control,
+  type Option,
   forgetComponentProps,
   libraryComponentProps,
   libraryEntry,
@@ -14,7 +15,7 @@ import { repositoryRoot } from "#/scripts/repository.ts";
 
 export type StoryControl = {
   readonly control: false | { readonly type: Exclude<Control["type"], false> };
-  readonly options?: readonly unknown[];
+  readonly options?: readonly Option[];
 };
 
 type Summary = { readonly summary: string };

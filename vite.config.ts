@@ -63,7 +63,7 @@ function withPackagesBuiltFirst<P extends { test?: object }>(project: P) {
 }
 
 export default defineConfig({
-  plugins: lazyPlugins(() => [solid(), storyControls()]),
+  plugins: lazyPlugins(() => [solid()]),
   staged: {
     "*": "vp check --fix",
     "*.{ts,tsx,jsx}": "solid2-kit check",
@@ -162,6 +162,7 @@ export default defineConfig({
       ...[
         {
           extends: true,
+          plugins: [storyControls()],
           test: {
             name: "node",
             environment: "node",

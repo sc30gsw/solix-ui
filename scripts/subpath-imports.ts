@@ -26,7 +26,6 @@ import {
 } from "#/scripts/syntax.ts";
 
 const installedPackages = "node_modules";
-const modulePatternWildcard = "*";
 const projectSkillScripts = ".agents/skills/*/scripts/**/*.{ts,tsx,mjs,cjs,js}";
 
 export type ModuleReference = {
@@ -61,8 +60,7 @@ function declaresExactly(declaration: ts.Node, specifier: string): boolean {
   return (
     ts.isModuleDeclaration(declaration) &&
     ts.isStringLiteral(declaration.name) &&
-    declaration.name.text === specifier &&
-    !specifier.includes(modulePatternWildcard)
+    declaration.name.text === specifier
   );
 }
 
