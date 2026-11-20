@@ -1,7 +1,13 @@
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { createScrollFold, resizeSettleMs, type ScrollMove } from "#/src/internal-scroll.ts";
 import { mount, unmount } from "#/tests/support/browser-harness.ts";
-import { applied, stubbedScroll } from "#/tests/support/scroll.ts";
+import { engineWait } from "#/tests/support/dom.ts";
+import {
+  applied,
+  stubbedScroll,
+  stylesheetArrivesAndShortens,
+  tallPage,
+} from "#/tests/support/scroll.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -54,4 +60,14 @@ test("disposing the owner before a resize settles clears the timer", async () =>
   unmount();
   scroll.to(10);
   await applied();
+});
+
+test("a stylesheet that arrives after the fold goes live and shortens the page moves the window's position, and the fold steps to where it went", async () => {
+  const page = tallPage();
+  window.scrollTo({ top: 3000, behavior: "instant" });
+  const seen = moves();
+
+  stylesheetArrivesAndShortens(page);
+  await expect.poll(seen, engineWait).toEqual([{ from: 3000, to: 0 }]);
+  expect(window.scrollY).toBe(0);
 });

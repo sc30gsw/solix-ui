@@ -46,3 +46,13 @@ export function tallPage(): HTMLDivElement {
   document.body.append(spacer);
   return spacer;
 }
+
+const shortenedByTheLateStylesheet = "shortened-by-the-late-stylesheet";
+
+export function stylesheetArrivesAndShortens(page: HTMLElement): void {
+  page.classList.add(shortenedByTheLateStylesheet);
+  const stylesheet = document.createElement("style");
+  stylesheet.textContent = `.${shortenedByTheLateStylesheet} { height: 0 !important; }`;
+  document.head.append(stylesheet);
+  onTestFinished(() => stylesheet.remove());
+}
