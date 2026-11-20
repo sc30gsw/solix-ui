@@ -71,8 +71,11 @@ export {
   type ImportedName,
 } from "#/scripts/syntax/walk.ts";
 export {
+  declarationKey,
+  fallbacksIn,
   propsOfComponent,
   type ComponentProp,
+  type Fallbacks,
   type Control,
   type Option,
 } from "#/scripts/syntax/props.ts";

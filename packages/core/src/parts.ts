@@ -19,8 +19,11 @@ import {
 export const rootPart = "root";
 
 export type StylesApiProps<Styles> = {
+  /** Classes for each part, by its name, next to the part's own. */
   classes?: Partial<Record<keyof Styles, JSX.ClassValue>>;
+  /** Inline styles for each part, by its name. */
   styles?: Partial<Record<keyof Styles, JSX.CSSProperties>>;
+  /** Drops the library's look from every part, keeping its behaviour. */
   unstyled?: boolean;
 };
 
@@ -47,7 +50,12 @@ export const handledKeys = [
 
 export type HandledKey = (typeof handledKeys)[number];
 
-type Styling = { class?: JSX.ClassValue; style?: JSX.CSSProperties | string };
+type Styling = {
+  /** Classes for the root, next to the component's own. */
+  class?: JSX.ClassValue;
+  /** Inline style for the root, over the component's own. */
+  style?: JSX.CSSProperties | string;
+};
 
 type RefusedBy<T extends ValidComponent> = {
   [Key in keyof ComponentProps<T> & keyof StyleProps]-?: [
@@ -71,7 +79,14 @@ export type PolymorphicProps<
   T extends ValidComponent,
   Styles,
   OwnProps extends object = object,
-> = ElementProps<T, Styles, OwnProps & { component?: T } & { [Key in RefusedBy<T>]?: never }>;
+> = ElementProps<
+  T,
+  Styles,
+  OwnProps & {
+    /** The element or component rendered as the root. */
+    component?: T;
+  } & { [Key in RefusedBy<T>]?: never }
+>;
 
 type Part = {
   readonly class: JSX.ClassValue;

@@ -8,10 +8,13 @@ import { inTemporaryTree } from "../../../tests/support/temporary-tree.ts";
 
 const libraryWith = (values: string) => `import type { JSX } from "@solidjs/web";
 
-type ProbeProps = { tone?: ${values} };
+type ProbeProps = {
+  /** How loud it speaks. */
+  tone?: ${values};
+};
 
 function Probe(props: ProbeProps): JSX.Element {
-  return <div>{props.tone}</div>;
+  return <div>{props.tone ?? "calm"}</div>;
 }
 
 export { Probe };
@@ -82,6 +85,33 @@ test("a change to the library's source outside the root of a running server with
         await expect
           .poll(() => sent.map(({ type }) => type), { timeout: servedWithin })
           .toContain("full-reload");
+      } finally {
+        await server.close();
+      }
+    },
+  );
+});
+
+test("each served control carries its prop's doc comment as its description and the literal its component falls back to as its default, for the controls table", async () => {
+  await inTemporaryTree(
+    { "library/src/index.tsx": libraryWith('"calm" | "loud"') },
+    async (root) => {
+      symlinkSync(join(repositoryRoot, "node_modules"), join(root, "node_modules"), "dir");
+      const server = await createServer({
+        root,
+        configFile: false,
+        logLevel: "silent",
+        plugins: [storyControls(join(root, "library/src/index.tsx"))],
+        server: { middlewareMode: true, hmr: false },
+      });
+      try {
+        const code =
+          (await server.transformRequest(storyControlsModule, { ssr: true }))?.code ?? "";
+        const tone = /"Probe":\{"tone":(\{.*?\}\}\})/.exec(code)?.[1] ?? "";
+        expect(JSON.parse(tone)).toMatchObject({
+          description: "How loud it speaks.",
+          table: { defaultValue: { summary: '"calm"' } },
+        });
       } finally {
         await server.close();
       }

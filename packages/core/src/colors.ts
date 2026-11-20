@@ -25,8 +25,11 @@ export type SolixColor =
   | `${CssColorFunction}(${string})`;
 
 export type ColorProps<Variant extends ColorVariant = ColorVariant> = {
+  /** The colour: a palette, a palette's shade such as `red.6`, or any CSS colour. */
   color?: SolixColor;
+  /** How the component applies its colour. */
   variant?: Variant;
+  /** Picks a text colour that meets its contrast on a filled given colour. */
   autoContrast?: boolean;
 };
 

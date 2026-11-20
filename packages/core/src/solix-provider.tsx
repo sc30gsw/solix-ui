@@ -14,14 +14,23 @@ import { localStorageColorSchemeManager } from "#/src/local-storage-manager.ts";
 import { type GetStyleNonce, PageNonceContext } from "#/src/run-time-style.ts";
 
 export type SolixProviderProps = {
+  /** The theme whose tokens the provider sets, made with `createTheme`. */
   theme?: SolixTheme;
+  /** Gives the Content Security Policy nonce for every style the library adds at run time. */
   getStyleNonce?: GetStyleNonce;
+  /** The selector the theme's custom properties are set on. */
   cssVariablesSelector?: string;
+  /** Adds the theme's custom properties to the page; turn it off when the stylesheet already holds them. */
   withCssVariables?: boolean;
+  /** Stores the colour scheme the user picks and tells of changes; `localStorage` unless given. */
   colorSchemeManager?: SolixColorSchemeManager;
+  /** The colour scheme while nothing is stored; `auto` follows the system. */
   defaultColorScheme?: SolixColorScheme;
+  /** Holds the colour scheme to this one, whatever is stored or picked. */
   forceColorScheme?: SolixComputedColorScheme;
+  /** Gives the element that carries the colour scheme; `<html>` unless given. */
   getRootElement?: () => HTMLElement | undefined;
+  /** The part of the page the provider's theme and colour scheme reach. */
   children?: JSX.Element;
 };
 

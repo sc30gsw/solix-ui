@@ -95,9 +95,13 @@ type HiddenAtAWidth = { className: string; query: (width: string) => string };
 type HiddenInAScheme = { className: string; scheme: SolixComputedColorScheme };
 
 const visibilityTable = {
+  /** Hides it from this breakpoint's width up. */
   hiddenFrom: { className: "hidden-from", query: (width: string) => `(min-width: ${width})` },
+  /** Shows it only from this breakpoint's width up. */
   visibleFrom: { className: "visible-from", query: (width: string) => `(width < ${width})` },
+  /** Hides it in the light colour scheme. */
   lightHidden: { className: "light-hidden", scheme: "light" },
+  /** Hides it in the dark colour scheme. */
   darkHidden: { className: "dark-hidden", scheme: "dark" },
 } satisfies Record<string, HiddenAtAWidth | HiddenInAScheme>;
 

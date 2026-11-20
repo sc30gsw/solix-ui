@@ -15,8 +15,11 @@ import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
 import { PageNonceContext } from "#/src/run-time-style.ts";
 
 export type ColorSchemeScriptOptions = {
+  /** The colour scheme the script sets while nothing is stored; `auto` follows the system. */
   defaultColorScheme?: SolixColorScheme;
+  /** The colour scheme the script always sets, reading nothing stored. */
   forceColorScheme?: SolixComputedColorScheme;
+  /** The `localStorage` key the stored colour scheme is read from. */
   localStorageKey?: string;
 };
 

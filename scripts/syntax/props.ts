@@ -8,7 +8,7 @@ import {
 import * as ts from "#/scripts/syntax/ast.ts";
 import { isPackageFile, symbolOf } from "#/scripts/syntax/checker.ts";
 import type { Program } from "#/scripts/syntax/program.ts";
-import { findAncestor } from "#/scripts/syntax/walk.ts";
+import { descendants, findAncestor, staticPropertyName } from "#/scripts/syntax/walk.ts";
 
 export type Control =
   | { readonly type: "boolean" | "text" | "number" | "object" }
@@ -23,8 +23,21 @@ export type ComponentProp = {
   readonly type: string;
   readonly required: boolean;
   readonly declaredBy: string;
+  readonly declarations: readonly string[];
+  readonly description: string;
+  readonly values?: readonly Option[];
+  readonly defaultValue?: string;
 };
 
+export type Fallback = { readonly owner: string | undefined; readonly value: string };
+
+export type Fallbacks = ReadonlyMap<string, readonly Fallback[]>;
+
+const docComment = /\/\*\*([\s\S]*?)\*\/\s*$/;
+const docCommentLineStart = /^\s*\*? ?/;
+const docTag = /^@/;
+const literalTypes = TypeFlags.StringLiteral | TypeFlags.NumberLiteral | TypeFlags.BooleanLiteral;
+const propertyRow = { property: "property", scale: "scale", aliasOf: "aliasOf" } as const;
 const absent = TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void;
 const stringLike = TypeFlags.String | TypeFlags.TemplateLiteral | TypeFlags.StringMapping;
 
@@ -107,6 +120,90 @@ function controlOf(members: readonly Member[]): Control {
   return { type: false };
 }
 
+function valuesOf(members: readonly Member[]): readonly Option[] | undefined {
+  const options = members.flatMap((member) => (member.kind === "literal" ? [member.value] : []));
+  const open = members.some(({ kind }) => ["suggested", "text", "number"].includes(kind));
+  const onlyBooleans = options.every((option) => typeof option === "boolean");
+  return options.length > 1 && !open && !onlyBooleans ? options : undefined;
+}
+
+export function declarationKey(declaration: ts.Node): string {
+  return `${declaration.getSourceFile().fileName}:${declaration.pos}`;
+}
+
+function rowField(row: ts.ObjectLiteralExpression, field: string): string | undefined {
+  for (const property of row.properties) {
+    if (!ts.isPropertyAssignment(property) || staticPropertyName(property) !== field) continue;
+    return ts.isStringLiteral(property.initializer) ? property.initializer.text : undefined;
+  }
+  return undefined;
+}
+
+function rowDescriptionOf(declaration: ts.Node): string {
+  if (!ts.isPropertyAssignment(declaration)) return "";
+  const row = declaration.initializer;
+  if (!ts.isObjectLiteralExpression(row)) return "";
+  const property = rowField(row, propertyRow.property);
+  const scale = rowField(row, propertyRow.scale);
+  const aliasOf = rowField(row, propertyRow.aliasOf);
+  if (aliasOf !== undefined) return `The same as \`${aliasOf}\`.`;
+  if (property === undefined) return "";
+  return scale === undefined
+    ? `Sets the CSS \`${property}\`.`
+    : `Sets the CSS \`${property}\`, where a key of the \`${scale}\` scale names its token.`;
+}
+
+function descriptionOf(declaration: ts.Node): string {
+  const source = declaration.getSourceFile();
+  const comment = docComment.exec(source.text.slice(declaration.pos, declaration.getStart(source)));
+  if (!comment) return rowDescriptionOf(declaration);
+  const lines = comment[1].split("\n").map((line) => line.replace(docCommentLineStart, "").trim());
+  const tagAt = lines.findIndex((line) => docTag.test(line));
+  return (tagAt === -1 ? lines : lines.slice(0, tagAt)).filter(Boolean).join(" ");
+}
+
+function topLevelFunctionNameOf(node: ts.Node): string | undefined {
+  const owner = findAncestor(
+    node,
+    (ancestor) => ts.isFunctionDeclaration(ancestor) && ts.isSourceFile(ancestor.parent),
+  );
+  return owner && ts.isFunctionDeclaration(owner) ? owner.name?.text : undefined;
+}
+
+export function fallbacksIn(program: Program, sources: readonly ts.SourceFile[]): Fallbacks {
+  const found = new Map<string, Fallback[]>();
+  for (const node of sources.flatMap((source) => descendants(source))) {
+    if (
+      !ts.isBinaryExpression(node) ||
+      node.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken ||
+      !ts.isPropertyAccessExpression(node.left)
+    ) {
+      continue;
+    }
+    const fallback = program.checker.getTypeAtLocation(node.right);
+    if (!fallback || (fallback.flags & literalTypes) === 0) continue;
+    const owner = topLevelFunctionNameOf(node);
+    const prop = symbolOf(program, node.left.name);
+    for (const declaration of prop ? declarationsOfSymbol(prop) : []) {
+      const key = declarationKey(declaration);
+      found.set(key, [
+        ...(found.get(key) ?? []),
+        { owner, value: program.checker.typeToString(fallback) },
+      ]);
+    }
+  }
+  return found;
+}
+
+function defaultOf(
+  fallbacks: readonly Fallback[],
+  component: string | undefined,
+): string | undefined {
+  const own = fallbacks.filter(({ owner }) => owner === component);
+  const values = new Set((own.length > 0 ? own : fallbacks).map(({ value }) => value));
+  return values.size === 1 ? [...values][0] : undefined;
+}
+
 function ownerName(declaration: ts.Node): string {
   const owner = findAncestor(
     declaration,
@@ -119,7 +216,12 @@ function ownerName(declaration: ts.Node): string {
   return name && ts.isIdentifier(name) ? name.text : "";
 }
 
-function propOf(program: Program, symbol: CheckerSymbol): ComponentProp | undefined {
+function propOf(
+  program: Program,
+  symbol: CheckerSymbol,
+  fallbacks: Fallbacks,
+  component: string | undefined,
+): ComponentProp | undefined {
   const ownDeclarations = declarationsOfSymbol(symbol).filter(
     (declaration) => !isPackageFile(declaration.getSourceFile().fileName),
   );
@@ -128,16 +230,29 @@ function propOf(program: Program, symbol: CheckerSymbol): ComponentProp | undefi
   const members = unionMembers(declared).flatMap((member) => memberOf(program, member));
   if (members.every((member) => member.kind === "absent")) return undefined;
   const present = program.checker.getNonNullableType(declared) ?? declared;
+  const declarations = ownDeclarations.map(declarationKey);
+  const values = valuesOf(members);
+  const defaultValue = declarations
+    .map((key) => defaultOf(fallbacks.get(key) ?? [], component))
+    .find(Boolean);
   return {
     name: symbol.name,
     control: controlOf(members),
     type: program.checker.typeToString(constrained(program, present)),
     required: (symbol.flags & SymbolFlags.Optional) === 0,
     declaredBy: ownerName(ownDeclarations[0]),
+    declarations,
+    description: ownDeclarations.map(descriptionOf).find(Boolean) ?? "",
+    ...(values === undefined ? {} : { values }),
+    ...(defaultValue === undefined ? {} : { defaultValue }),
   };
 }
 
-export function propsOfComponent(program: Program, name: ts.Identifier): ComponentProp[] {
+export function propsOfComponent(
+  program: Program,
+  name: ts.Identifier,
+  fallbacks: Fallbacks = new Map(),
+): ComponentProp[] {
   const component = symbolOf(program, name);
   const type = component && program.checker.getTypeOfSymbol(component);
   if (!type) throw new Error(`${name.text}: TypeScript gives no type for this export.`);
@@ -148,7 +263,7 @@ export function propsOfComponent(program: Program, name: ts.Identifier): Compone
     if (!props) continue;
     for (const symbol of program.checker.getPropertiesOfType(props)) {
       if (found.has(symbol.name)) continue;
-      const prop = propOf(program, symbol);
+      const prop = propOf(program, symbol, fallbacks, component.name);
       if (prop) found.set(prop.name, prop);
     }
   }

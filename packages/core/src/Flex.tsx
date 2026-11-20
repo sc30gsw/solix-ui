@@ -27,16 +27,23 @@ export type FlexProps<T extends ValidComponent = "div"> = PolymorphicProps<
   T,
   typeof styles,
   {
+    /** The gap between items: a key of the `spacing` scale, a number of pixels or any CSS length. */
     gap?: VariableProp<typeof flexVariables, "flex-gap">;
+    /** The gap between rows, over `gap`: a key of the `spacing` scale, a number of pixels or any CSS length. */
     rowGap?: VariableProp<typeof flexVariables, "flex-row-gap">;
+    /** The gap between columns, over `gap`: a key of the `spacing` scale, a number of pixels or any CSS length. */
     columnGap?: VariableProp<typeof flexVariables, "flex-column-gap">;
+    /** How items line up across the main axis, as CSS `align-items`. */
     align?: VariableProp<typeof flexVariables, "flex-align", JSX.CSSProperties["align-items"]>;
+    /** How items spread along the main axis, as CSS `justify-content`. */
     justify?: VariableProp<
       typeof flexVariables,
       "flex-justify",
       JSX.CSSProperties["justify-content"]
     >;
+    /** Whether items wrap onto new lines, as CSS `flex-wrap`. */
     wrap?: VariableProp<typeof flexVariables, "flex-wrap", JSX.CSSProperties["flex-wrap"]>;
+    /** The main axis and its direction, as CSS `flex-direction`. */
     direction?: VariableProp<
       typeof flexVariables,
       "flex-direction",

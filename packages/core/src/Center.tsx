@@ -16,7 +16,10 @@ const styles = stylex.create({
 export type CenterProps<T extends ValidComponent = "div"> = PolymorphicProps<
   T,
   typeof styles,
-  { inline?: boolean }
+  {
+    /** Lays the root out as `inline-flex`, so it sits inside a line of text. */
+    inline?: boolean;
+  }
 >;
 
 export function Center<T extends ValidComponent = "div">(props: CenterProps<T>): JSX.Element;

@@ -84,7 +84,7 @@ Storybook's Vitest addon turns each story into a Vitest browser test, so the sto
 
 - A value picked in the controls panel. No gate runs on it; the accessibility panel scans it there. A given shade or CSS colour from the `color` select may fall below its contrast, which is the consumer's to check; the palettes and variants the library chooses are held by `packages/core/tests/token-contrast.test.ts`.
 - The part of a union that its one control cannot give. A text gives no number and no responsive object, so `size` takes a scale key or a CSS length in the panel but not a number of pixels; a number gives no string, so `GridCol`'s `span` takes a number but not `auto` or `content`; a select over the `string & {}` idiom offers its literals and no other string. `component` offers every tag Solid's `ValidComponent` takes, `area`, `base` and `script` among them, because which tag is sensible depends on where the component sits, inside an `svg`, a `map` or a list, and a narrower list would be one written by hand; it offers no component.
-- Descriptions and defaults in the controls table. The props carry no doc comments, and a default such as a component's default variant is a value, not a type.
+- A default the code does not give as a literal: a default that is a CSS token, such as `Button`'s `size`, or one computed, such as `GridCol`'s `span` through `withBase`, has none in the table; its doc comment says what it falls back to where that matters.
 - A control for a function or an object with a method: it is listed with `control: false`.
 - The four experimental WCAG 2 A and AA rules: `css-orientation-lock`, `p-as-heading`, `table-fake-caption` and `td-has-header`.
 - Telemetry from the stories project inside `vp run verify`; see the promise.

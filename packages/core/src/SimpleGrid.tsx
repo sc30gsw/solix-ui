@@ -37,9 +37,13 @@ export type SimpleGridProps = ElementProps<
   typeof styles,
   (
     | {
+        /** `media` keys responsive values by the viewport's width; `container` keys them by the grid's own width, through container queries. */
         type?: "media";
+        /** The number of columns. */
         cols?: VariableProp<typeof simpleGridVariables, "sg-cols", number>;
+        /** The gap between columns: a key of the `spacing` scale, a number of pixels or any CSS length. */
         spacing?: VariableProp<typeof simpleGridVariables, "sg-spacing-x">;
+        /** The gap between rows: a key of the `spacing` scale, a number of pixels or any CSS length. */
         verticalSpacing?: VariableProp<typeof simpleGridVariables, "sg-spacing-y">;
       }
     | {
@@ -49,8 +53,11 @@ export type SimpleGridProps = ElementProps<
         verticalSpacing?: ContainerVariableProp<typeof simpleGridVariables, "sg-spacing-y">;
       }
   ) & {
+    /** The narrowest a column may be; given, the grid fits as many columns as its width allows, by `autoFlow`. */
     minColWidth?: VariableProp<typeof simpleGridVariables, "sg-min-col-width">;
+    /** With `minColWidth`, `auto-fill` keeps the empty columns of a short row and `auto-fit` collapses them. */
     autoFlow?: "auto-fit" | "auto-fill";
+    /** The height of each row, as CSS `grid-auto-rows`. */
     autoRows?: VariableProp<typeof simpleGridVariables, "sg-auto-rows">;
   }
 >;

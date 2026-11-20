@@ -26,13 +26,21 @@ export type TabsProps = ElementProps<
   "div",
   typeof styles,
   {
+    /** The selected tab's value, which makes the selection controlled; `null` selects none. */
     value?: string | null;
+    /** The tab selected at first, while the selection is uncontrolled. */
     defaultValue?: string | null;
+    /** Called with the new value when the user changes the selection. */
     onChange?: (value: string | null) => void;
+    /** Lays the tabs out in a row or a column; the arrow keys follow it. */
     orientation?: TabsOrientation;
+    /** Lets the arrow keys wrap from the last tab to the first and back. */
     loop?: boolean;
+    /** Selects a tab when the arrow keys move focus to it; otherwise Enter or Space selects it. */
     activateTabWithKeyboard?: boolean;
+    /** Lets a press on the selected tab deselect it. */
     allowTabDeactivation?: boolean;
+    /** Keeps every panel in the page, hidden, while its tab is not selected. */
     keepMounted?: boolean;
   }
 >;

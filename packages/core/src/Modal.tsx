@@ -48,7 +48,13 @@ const styles = stylex.create({
 export type ModalProps = ElementProps<
   "dialog",
   typeof styles,
-  { label: string; opened: boolean; open?: never } & Partial<Record<DisplayPropName, never>>
+  {
+    /** The dialog's accessible name. */
+    label: string;
+    /** Whether the dialog is open; the consumer sets it, and `onClose` says when the user closed it. */
+    opened: boolean;
+    open?: never;
+  } & Partial<Record<DisplayPropName, never>>
 >;
 
 export function Modal(props: ModalProps) {

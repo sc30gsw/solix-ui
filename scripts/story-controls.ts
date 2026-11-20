@@ -17,9 +17,16 @@ export type StoryControl = {
   readonly options?: readonly unknown[];
 };
 
+type Summary = { readonly summary: string };
+
 export type GeneratedArgType = StoryControl & {
+  readonly description: string;
   readonly type: { readonly name: "other"; readonly value: string; readonly required: boolean };
-  readonly table: { readonly category: string; readonly type: { readonly summary: string } };
+  readonly table: {
+    readonly category: string;
+    readonly type: Summary;
+    readonly defaultValue?: Summary;
+  };
 };
 
 export const storyControlsModule = "virtual:story-controls";
@@ -37,8 +44,13 @@ export function storyControlOf({ control }: ComponentProp): StoryControl {
 function argTypeOf(prop: ComponentProp): GeneratedArgType {
   return {
     ...storyControlOf(prop),
+    description: prop.description,
     type: { name: "other", value: prop.type, required: prop.required },
-    table: { category: prop.declaredBy, type: { summary: prop.type } },
+    table: {
+      category: prop.declaredBy,
+      type: { summary: prop.type },
+      ...(prop.defaultValue === undefined ? {} : { defaultValue: { summary: prop.defaultValue } }),
+    },
   };
 }
 
