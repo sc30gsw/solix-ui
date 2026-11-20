@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, symlinkSync } from "node:fs";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 
 export const kitPackage = "node_modules/solid2-agent-kit";
@@ -8,6 +16,9 @@ export const settingsFile = ".claude/settings.json";
 export const sharedSkills = ".agents/skills";
 export const claudeSkills = ".claude/skills";
 export const syncScript = "scripts/sync-agent-kit.ts";
+export const agentsDocument = "AGENTS.md";
+export const kitProse = ["CLAUDE.md"];
+export const kitBlockStart = "<!-- solid2-agent-kit:";
 
 type Settings = { hooks?: Record<string, unknown> };
 
@@ -33,6 +44,11 @@ export function syncAgentKit(root: string): string {
   if (sync.status !== 0) {
     throw new Error(`solid2-kit sync failed in ${root}:\n${sync.stdout}${sync.stderr}`);
   }
+  for (const file of kitProse) rmSync(join(root, file), { force: true });
+  const agents = readFileSync(join(root, agentsDocument), "utf8");
+  const block = agents.indexOf(kitBlockStart);
+  if (block !== -1)
+    writeFileSync(join(root, agentsDocument), `${agents.slice(0, block).trimEnd()}\n`);
   for (const name of kitInstalls(root, "skills")) {
     const shared = join(root, sharedSkills, name);
     rmSync(shared, { recursive: true, force: true });

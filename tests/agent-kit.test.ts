@@ -32,19 +32,12 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 const manifest = "package.json";
 const lintScript = "lint:solid";
 const catalogVersion = "catalog:";
+const claudeDocument = "CLAUDE.md";
+const kitMarker = "solid2-agent-kit:";
 const removedByPnpm = "-";
 const neededByStorybook = "react";
 const bannedFinding = "dep-";
 const solidOneLine = "the Solid 1.x line";
-const solidCheatsheet = "node_modules/solid-js/CHEATSHEET.md";
-const onlyInTheCheatsheet = [
-  "resetErrorBoundaries",
-  "getListener",
-  "getObserver",
-  "equalFn",
-  "isEqual",
-  "Suspense.Provider",
-];
 const installed = "node_modules";
 const replacedByTheKit = [
   { pack: "solid-js", name: "solid-2.0" },
@@ -131,7 +124,7 @@ test(`${workspaceFile} approves neither skill of solid-js's that the kit's solid
     )
     .map(
       ({ pack, name }) =>
-        `${pack} ${name}: the kit's solid-2 skill and the rules in CLAUDE.md say what it says. Leave it out of permissions in ${workspaceFile}.`,
+        `${pack} ${name}: the kit's solid-2 skill says what it says. Leave it out of permissions in ${workspaceFile}.`,
     );
 
   expect(replaced).toEqual([]);
@@ -152,21 +145,6 @@ test("step 4 of open-pull-request runs every command the kit installs, next to T
   expect(missing).toEqual([]);
   expect(step).toContain(`\`vp run ${lintScript}\``);
   expect(lintSolid).toMatch(/^solid2-kit check --dir \. && solid2-kit doctor$/);
-});
-
-test(`AGENTS.md sends agents to ${solidCheatsheet} for what the kit's skill does not name`, () => {
-  const kitText = filesIn(join(repositoryRoot, kitPackage, "files"))
-    .filter((path) => path.endsWith(".md"))
-    .map((path) => readFileSync(join(repositoryRoot, kitPackage, "files", path), "utf8"))
-    .join("\n");
-  const row = read("AGENTS.md")
-    .split("\n")
-    .find((line) => line.startsWith("| ") && line.includes(`\`${solidCheatsheet}\``));
-
-  expect(row, `AGENTS.md: add a row that sends agents to ${solidCheatsheet}.`).toBeDefined();
-  expect(onlyInTheCheatsheet.filter((name) => !row?.includes(`\`${name}\``))).toEqual([]);
-  expect(onlyInTheCheatsheet.filter((name) => !read(solidCheatsheet).includes(name))).toEqual([]);
-  expect(onlyInTheCheatsheet.filter((name) => kitText.includes(name))).toEqual([]);
 });
 
 type DoctorFinding = { id: string; message: string };
@@ -234,4 +212,19 @@ test("no workspace manifest lists a package the kit's doctor bans, or a Solid 1.
 
 test(`${settingsFile} runs no hook, so every rule holds for every agent through the git hooks and CI`, () => {
   expect(readSettings(repositoryRoot).hooks ?? {}).toEqual({});
+});
+
+test(`AGENTS.md is the one agent document, and holds rules only: there is no ${claudeDocument}, AGENTS.md holds none of the kit's prose, and ${syncScript} writes neither`, async () => {
+  const written = await inTemporaryTree({}, (root) => {
+    seedCheckout(root, ["AGENTS.md"]);
+    syncAgentKit(root);
+    return {
+      claudeDocument: existsSync(join(root, claudeDocument)),
+      agents: contentOf(root, "AGENTS.md"),
+    };
+  });
+
+  expect(existsSync(join(repositoryRoot, claudeDocument))).toBe(false);
+  expect(read("AGENTS.md")).not.toContain(kitMarker);
+  expect(written).toEqual({ claudeDocument: false, agents: read("AGENTS.md") });
 });
