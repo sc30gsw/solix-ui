@@ -22,7 +22,15 @@ type RegistryPin = { source: "registry"; name: string; registryName: string; pin
 
 export type Pin = RegistryPin | { source: "node"; name: typeof nodePinName; pinned: string };
 
-export type HeldBack = { name: string; reason: string; liftWhen: string; holds?: string };
+export type HoldCondition = { pin: string; requiresExactly: { name: string; version: string } };
+
+export type HeldBack = {
+  name: string;
+  reason: string;
+  liftWhen: string;
+  holds?: string;
+  while?: HoldCondition;
+};
 
 const heldDirections = ["behind", "ahead"];
 
@@ -390,6 +398,33 @@ export function holdsWithoutReason(heldBack: readonly HeldBack[]): string[] {
     );
 }
 
+export function holdsWhoseConditionFailed(
+  heldBack: readonly HeldBack[],
+  pins: readonly Pin[],
+  documents: Record<string, RegistryDocument>,
+): string[] {
+  return heldBack.flatMap((held) => {
+    const condition = held.while;
+    if (condition === undefined) return [];
+    const pin = pins.find(
+      (candidate): candidate is RegistryPin =>
+        candidate.source === "registry" && candidate.name === condition.pin,
+    );
+    if (pin === undefined) {
+      return [
+        `${held.name}: its hold names ${condition.pin}, which is not a pin of the catalog; name a registry pin.`,
+      ];
+    }
+    const { name, version } = condition.requiresExactly;
+    const required = exactlyRequiredBy(documents[pin.registryName]?.versions?.[pin.pinned]);
+    return required.some((release) => release.name === name && release.version === version)
+      ? []
+      : [
+          `${held.name}: it is held back while ${pin.name} ${pin.pinned} requires ${name} ${version} exactly, and ${pin.name} ${pin.pinned} no longer does; move ${held.name} and drop or rewrite its entry in ${heldBackFile}.`,
+        ];
+  });
+}
+
 export function compareWithNewest(input: {
   pins: readonly Pin[];
   documents: Record<string, RegistryDocument>;
@@ -438,8 +473,21 @@ export function compareWithNewest(input: {
     }),
     ...holdsOfNothing(input.heldBack, comparisons),
     ...holdsWithoutReason(input.heldBack),
+    ...holdsWhoseConditionFailed(input.heldBack, input.pins, input.documents),
   ];
   return { comparisons, problems };
+}
+
+export function pullRequestAdvice(run: {
+  eventName: string | undefined;
+  baseRef: string | undefined;
+}): string[] {
+  if (run.eventName !== "pull_request") return [];
+  const base = run.baseRef || "main";
+  return [
+    `On a pull request the check reads the registry as it is now, so a pin it names as behind is behind on ${base} too, unless this pull request moved it.`,
+    `Move it in a build(deps) pull request of its own to ${base}, or hold it back there with a reason, then merge ${base} into this branch.`,
+  ];
 }
 
 export function reportTable(comparisons: readonly PinComparison[]): string {

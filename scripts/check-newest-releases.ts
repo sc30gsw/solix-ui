@@ -1,4 +1,9 @@
-import { compareWithNewest, pinsOf, reportTable } from "#/scripts/newest-releases.ts";
+import {
+  compareWithNewest,
+  pinsOf,
+  pullRequestAdvice,
+  reportTable,
+} from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   heldBackEntries,
@@ -25,6 +30,14 @@ const { comparisons, problems } = compareWithNewest({
 
 console.log(reportTable(comparisons));
 if (problems.length > 0) {
-  console.error(problems.join("\n"));
+  console.error(
+    [
+      ...problems,
+      ...pullRequestAdvice({
+        eventName: process.env.GITHUB_EVENT_NAME,
+        baseRef: process.env.GITHUB_BASE_REF,
+      }),
+    ].join("\n"),
+  );
   process.exitCode = 1;
 }

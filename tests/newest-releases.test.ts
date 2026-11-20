@@ -1,5 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import {
+  pullRequestAdvice,
   compareWithNewest,
   exactlyRequiredBy,
   type HeldBack,
@@ -399,6 +400,47 @@ test("a pin behind its channel fails the check, unless the held-back list holds 
   expect(
     check({ heldBack: [hold] }).problems.some((problem) => problem.startsWith("playwright:")),
   ).toBe(false);
+});
+
+test("a hold that names a condition lasts only while that condition is true: while the pin it names, at the version the catalog pins, requires the named release exactly", () => {
+  const hold: HeldBack = {
+    name: "playwright",
+    reason: "The runner requires playwright-core 1.63.0 exactly.",
+    liftWhen: "the runner the catalog pins no longer requires playwright-core 1.63.0 exactly.",
+    while: { pin: "semver", requiresExactly: { name: "playwright-core", version: "1.63.0" } },
+  };
+  const requiring = (version: string) =>
+    registryDocument([
+      ["7.8.5", 30],
+      ["7.8.6", 10, { dependencies: { "playwright-core": version } }],
+      ["7.8.7", 0.25],
+    ]);
+  const held = (version: string) =>
+    check({ heldBack: [hold], documents: { ...documents, semver: requiring(version) } }).problems;
+
+  expect(held("1.63.0").filter((problem) => problem.startsWith("playwright:"))).toEqual([]);
+  expect(held("1.65.1")).toContain(
+    "playwright: it is held back while semver 7.8.6 requires playwright-core 1.63.0 exactly, and semver 7.8.6 no longer does; move playwright and drop or rewrite its entry in scripts/held-back-releases.json.",
+  );
+  expect(held("^1.63.0")).toContain(
+    "playwright: it is held back while semver 7.8.6 requires playwright-core 1.63.0 exactly, and semver 7.8.6 no longer does; move playwright and drop or rewrite its entry in scripts/held-back-releases.json.",
+  );
+  expect(
+    check({
+      heldBack: [{ ...hold, while: { ...hold.while, pin: "not-a-pin" } }] as HeldBack[],
+    }).problems,
+  ).toContain(
+    "playwright: its hold names not-a-pin, which is not a pin of the catalog; name a registry pin.",
+  );
+});
+
+test("on a pull request, a failing check says that a pin behind is behind on main too and that its fix is a build(deps) pull request of its own to main; elsewhere it adds nothing", () => {
+  expect(pullRequestAdvice({ eventName: "pull_request", baseRef: "main" })).toEqual([
+    "On a pull request the check reads the registry as it is now, so a pin it names as behind is behind on main too, unless this pull request moved it.",
+    "Move it in a build(deps) pull request of its own to main, or hold it back there with a reason, then merge main into this branch.",
+  ]);
+  expect(pullRequestAdvice({ eventName: "push", baseRef: "" })).toEqual([]);
+  expect(pullRequestAdvice({ eventName: undefined, baseRef: undefined })).toEqual([]);
 });
 
 test("a held-back entry that holds nothing back, or has no reason or no liftWhen, fails the check", () => {
