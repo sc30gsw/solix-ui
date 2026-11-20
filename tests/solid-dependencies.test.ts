@@ -19,8 +19,9 @@ const neededByStorybook = "react";
 const fixtures = "tests/fixtures/solid-dependencies";
 
 type Manifest = Partial<Record<(typeof dependencyLists)[number], Record<string, string>>>;
+type Finding = { list: string; id: string; message: string };
 
-function doctorProblemsOf(manifest: Manifest): string[] {
+function doctorFindingsOf(manifest: Manifest): Finding[] {
   const { catalog } = pnpmSettings();
   return dependencyLists.flatMap((list) => {
     const versions = manifest[list];
@@ -34,7 +35,7 @@ function doctorProblemsOf(manifest: Manifest): string[] {
         ]),
       );
       writeFileSync(join(root, "package.json"), JSON.stringify({ dependencies }));
-      return doctorFindings(root).map(({ id, message }) => `${list}: [${id}] ${message}`);
+      return doctorFindings(root).map(({ id, message }) => ({ list, id, message }));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
@@ -58,16 +59,23 @@ test(`${workspaceFile} has pnpm remove from any install every package the kit's 
 
 test("every workspace manifest passes the kit's doctor, one dependency list at a time, with the catalog's versions", () => {
   const problems = manifestPaths().flatMap((path) =>
-    doctorProblemsOf(manifestAt(path)).map((problem) => `${path}: ${problem}`),
+    doctorFindingsOf(manifestAt(path)).map(
+      ({ list, id, message }) => `${path}: ${list}: [${id}] ${message}`,
+    ),
   );
 
   expect(manifestPaths().length).toBeGreaterThan(1);
   expect(problems).toEqual([]);
 });
 
-test.each(["react.json", "solid-one-peer.json"])(
-  "the kit's doctor fails the manifest %s, so the check above can fail",
-  (fixture) => {
-    expect(doctorProblemsOf(manifestAt(`${fixtures}/${fixture}`))).not.toEqual([]);
+test.each([
+  ["react.json", ["devDependencies dep-react"]],
+  ["solid-one-peer.json", ["peerDependencies solid-js-version"]],
+])(
+  "the kit's doctor fails the manifest %s with %j, so the check above can fail",
+  (fixture, ids) => {
+    expect(
+      doctorFindingsOf(manifestAt(`${fixtures}/${fixture}`)).map(({ list, id }) => `${list} ${id}`),
+    ).toEqual(ids);
   },
 );

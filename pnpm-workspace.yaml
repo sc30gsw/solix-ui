@@ -10,9 +10,9 @@ catalog:
   "@babel/plugin-syntax-jsx": ^8.0.1
   "@babel/preset-typescript": ^8.0.7
   "@solidjs/compiler": 2.0.2
-  "@solidjs/signals": 2.0.2
+  "@solidjs/signals": 2.0.3
   "@solidjs/vite-plugin": 3.0.1
-  "@solidjs/web": 2.0.2
+  "@solidjs/web": 2.0.3
   "@storybook/addon-a11y": 11.0.0-beta.3
   "@storybook/addon-vitest": 11.0.0-beta.3
   "@stylexjs/babel-plugin": 0.19.2
@@ -31,7 +31,7 @@ catalog:
   postcss-selector-parser: 7.2.1
   postcss-value-parser: 4.2.0
   semver: 7.8.6
-  solid-js: 2.0.2
+  solid-js: 2.0.3
   solid2-agent-kit: 0.29.0
   storybook: 11.0.0-beta.3
   storybook-solidjs-vite: 11.0.0-next-20261105190313

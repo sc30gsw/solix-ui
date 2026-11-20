@@ -63,7 +63,7 @@ function skillText(name: string): string {
   return existsSync(file) ? readFileSync(file, "utf8") : "";
 }
 
-function vendoredSkills(): string[] {
+function copiedOutsideSkills(): string[] {
   return outsideSkills()
     .filter(({ source }) => source !== "package")
     .map(({ name }) => name);
@@ -105,8 +105,8 @@ test("every skill is named for its directory, described, and linked from .claude
 });
 
 test("every .agents or .claude path that a project-owned skill names exists", () => {
-  const vendored = vendoredSkills();
-  const projectOwned = skillNames.filter((name) => !vendored.includes(name));
+  const copied = copiedOutsideSkills();
+  const projectOwned = skillNames.filter((name) => !copied.includes(name));
   const violations = projectOwned.flatMap((name) =>
     [...skillText(name).matchAll(agentPathInBackticks)]
       .map(([, path]) => path.replace(trailingPunctuation, ""))
@@ -382,12 +382,12 @@ test("every verification skill was last confirmed against a commit that HEAD con
 });
 
 test("no project-owned skill copies a version from the catalog", () => {
-  const vendored = vendoredSkills();
+  const copied = copiedOutsideSkills();
   const versions = Object.entries(pnpmSettings().catalog)
     .filter(([, version]) => !version.includes(":"))
     .map(([name, version]): [string, string] => [name, version.replace(versionPrefix, "")]);
   const violations = skillNames
-    .filter((name) => !vendored.includes(name))
+    .filter((name) => !copied.includes(name))
     .flatMap((name) =>
       versions
         .filter(([, version]) => skillText(name).includes(version))

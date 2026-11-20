@@ -17,7 +17,8 @@ import {
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
-import { solidPackages } from "#/scripts/newest-releases.ts";
+import { isStableOnMajor, solidMajor, solidPackages } from "#/scripts/newest-releases.ts";
+import { solidRanges } from "#/scripts/solid-2-release.ts";
 import { type PnpmSettings, pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import { storybookAppManifest } from "#/scripts/release-sources.ts";
 import {
@@ -576,18 +577,29 @@ function installAdvice(
   return `Override it in ${workspaceFile} with "${catalogReference}", so a package that brings it in cannot hold a different release.`;
 }
 
-test("every package on the Solid 2 channel is pinned to one release and installed only at it", () => {
+test("every package on the Solid 2 channel is pinned to a stable Solid 2 release that the ranges of the other Solid packages accept, and installed only at it", () => {
   const settings = pnpmSettings();
   const { catalog } = settings;
   const installed = installedVersions(solidPackages);
-  const [first = ""] = solidPackages;
   const violations = [
     ...solidPackages
-      .filter((name) => catalog[name] !== catalog[first])
+      .filter((name) => !isStableOnMajor(semver.valid(catalog[name]) ?? "0.0.0", solidMajor))
       .map(
         (name) =>
-          `${workspaceFile}: pin ${name} to ${catalog[first] ?? "a release"}, the release ${first} is pinned to, not ${catalog[name] ?? "nothing"}: the packages of a Solid release move together.`,
+          `${workspaceFile}: pin ${name} to a stable Solid ${solidMajor} release, not ${catalog[name] ?? "nothing"}. Run node scripts/solid-2-canary.ts, which takes each Solid package's own newest.`,
       ),
+    ...installed.flatMap(({ name, version, path }) =>
+      path === undefined
+        ? [
+            `${name}@${version}: the package manager gives no path for it, so its ranges cannot be read.`,
+          ]
+        : solidRanges(JSON.parse(readFileSync(join(path, packageManifest), "utf8")))
+            .filter(([other, range]) => !semver.satisfies(catalog[other] ?? "", range))
+            .map(
+              ([other, range]) =>
+                `${name}@${version} asks for ${other} ${range}, and ${workspaceFile} pins ${other} to ${catalog[other] ?? "nothing"}. Run node scripts/solid-2-canary.ts, which steps back a package whose range a newer release would refuse.`,
+            ),
+    ),
     ...solidPackages
       .filter((name) => !installed.some((each) => each.name === name))
       .map((name) => `${name} is not installed, so nothing tells which release it is.`),

@@ -91,6 +91,11 @@ function hashOfFiles(folder: string, files: readonly string[]): string {
   return hash.digest("hex");
 }
 
+export function folderHash(folder: string): string {
+  const { files, neitherFileNorFolder } = skillFolderEntries(folder);
+  return [hashOfFiles(folder, files), ...neitherFileNorFolder].join(" ");
+}
+
 export function reviewProblems(
   approved: readonly PackageSkill[],
   reviewed: ReviewedHashes,

@@ -1,4 +1,12 @@
-import { cpSync, mkdirSync, readdirSync, rmSync, symlinkSync } from "node:fs";
+import {
+  cpSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { join } from "node:path";
 
 const kitPackage = "node_modules/solid2-agent-kit";
@@ -8,22 +16,51 @@ export const sharedSkills = ".agents/skills";
 export const claudeSkills = ".claude/skills";
 export const copyScript = "scripts/copy-kit-skills.ts";
 
-export function kitInstalls(root: string, kind: "skills" | "commands"): string[] {
-  return readdirSync(join(root, kitPackage, "files", kind)).map((name) =>
-    name.replace(/\.md$/, ""),
-  );
+export function kitSkillNames(root: string): string[] {
+  return readdirSync(join(root, kitSkillSource));
 }
 
-export function copyKitSkills(root: string): string[] {
-  const names = kitInstalls(root, "skills");
-  for (const name of names) {
+function linkTo(name: string): string {
+  return `../../${sharedSkills}/${name}`;
+}
+
+function present(path: string): boolean {
+  return lstatSync(path, { throwIfNoEntry: false }) !== undefined;
+}
+
+function removeCopy(root: string, name: string): void {
+  rmSync(join(root, sharedSkills, name), { recursive: true, force: true });
+  rmSync(join(root, claudeSkills, name), { recursive: true, force: true });
+}
+
+export function copyKitSkills(root: string, copiedBefore: readonly string[]): string[] {
+  const names = kitSkillNames(root);
+  const heldByTheProject = names.flatMap((name) => {
     const shared = join(root, sharedSkills, name);
     const linked = join(root, claudeSkills, name);
-    rmSync(shared, { recursive: true, force: true });
-    rmSync(linked, { recursive: true, force: true });
-    mkdirSync(join(root, sharedSkills), { recursive: true });
-    cpSync(join(root, kitSkillSource, name), shared, { recursive: true });
-    symlinkSync(`../../${sharedSkills}/${name}`, linked);
+    const ours = copiedBefore.includes(name);
+    return [
+      ...(present(shared) && !ours ? [`${sharedSkills}/${name}`] : []),
+      ...(present(linked) &&
+      !(ours && lstatSync(linked).isSymbolicLink() && readlinkSync(linked) === linkTo(name))
+        ? [`${claudeSkills}/${name}`]
+        : []),
+    ];
+  });
+  if (heldByTheProject.length > 0) {
+    throw new Error(
+      heldByTheProject
+        .map((path) => `${path}: the kit ships a skill of this name, and it is the project's.`)
+        .join("\n"),
+    );
+  }
+  for (const name of copiedBefore.filter((name) => !names.includes(name))) removeCopy(root, name);
+  mkdirSync(join(root, sharedSkills), { recursive: true });
+  mkdirSync(join(root, claudeSkills), { recursive: true });
+  for (const name of names) {
+    removeCopy(root, name);
+    cpSync(join(root, kitSkillSource, name), join(root, sharedSkills, name), { recursive: true });
+    symlinkSync(linkTo(name), join(root, claudeSkills, name));
   }
   return names;
 }
