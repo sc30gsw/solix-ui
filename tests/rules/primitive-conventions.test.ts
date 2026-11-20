@@ -1,6 +1,7 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { afterAll, expect, test } from "vite-plus/test";
+import { layoutReadsRuleWith } from "#/tests/support/primitive-rules/layout-reads.ts";
 import {
   loadLibrary,
   primitiveRules,
@@ -208,11 +209,24 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-commanded.ts", "return window.scrollY"),
     forbiddenAt("src/create-commanded.ts", "return window.scrollX"),
     forbiddenAt("src/internal-position.ts", "return window.scrollY"),
+    forbiddenAt("src/internal-position.ts", "return this.element.clientHeight"),
+    forbiddenAt("src/internal-position.ts", "return element.scrollTop"),
+    forbiddenAt("src/create-misbehaving.ts", "const width = window.innerWidth"),
+    forbiddenAt("src/create-misbehaving.ts", "window.innerHeight + current"),
     forbiddenAt("src/create-respelled.ts", "return element.checkVisibility()"),
     forbiddenAt("src/create-respelled.ts", "element.getBoundingClientRect()"),
     forbiddenAt("src/create-respelled.ts", "const { offsetWidth }"),
     forbiddenAt("src/create-respelled.ts", 'lookUp(window, "scrollY")'),
     forbiddenAt("src/create-respelled.ts", "getComputedStyle(element)"),
+    forbiddenAt("src/create-respelled.ts", "handlerFor(element.getClientRects().length)"),
+    forbiddenAt("src/create-respelled.ts", "(void element.offsetHeight, () => undefined)"),
+    forbiddenAt("src/create-respelled.ts", "(element.scrollLeft)"),
+    forbiddenAt("src/create-respelled.ts", ".getBBox()"),
+    forbiddenAt("src/create-respelled.ts", "element.computedStyleMap()"),
+    forbiddenAt("src/create-respelled.ts", "document.elementFromPoint(0, 0)"),
+    forbiddenAt("src/create-respelled.ts", "element.innerText"),
+    forbiddenAt("src/create-respelled.ts", "window.visualViewport"),
+    forbiddenAt("src/create-respelled.ts", '"clientHeight")'),
   ],
   caughtErrors: [forbiddenAt("src/create-misbehaving.ts", "} catch {")],
   instanceofChecks: [forbiddenAt("src/create-misbehaving.ts", "instanceof Element")],
@@ -294,6 +308,28 @@ function caughtErrorsWith(errorBoundaries: readonly Required<Home>[]): string[] 
   fixture.dispose();
   return locationsOf(found);
 }
+
+test("the layout-reads rule stops at a function an exemption names, so no read in it or in what it calls is flagged, and flags an exemption whose function reads no layout as a primitive goes live", () => {
+  const fixture = loadLibrary(join(fixtureDirectory, "forbidden"), fixtureRegistration);
+  const found = layoutReadsRuleWith([
+    { file: "create-respelled.ts", fn: "shown", reason: "reads only at the moment of use" },
+    { file: "create-respelled.ts", fn: "handlerFor", reason: "reads only at the moment of use" },
+  ]).rule(fixture);
+  fixture.dispose();
+
+  expect(locationsOf(found).sort()).toEqual(
+    [
+      ...forbiddenFindings.layoutReads.filter(
+        (location) =>
+          location !== forbiddenAt("src/create-respelled.ts", "return element.checkVisibility()"),
+      ),
+      "create-respelled.ts",
+    ].sort(),
+  );
+  expect(found.at(-1)).toBe(
+    "create-respelled.ts: handlerFor reads no layout as a primitive goes live, so drop its entry from layoutReadExemptions.",
+  );
+});
 
 test("the caught errors rule passes an error boundary that catches, and flags one that is missing or holds no catch", () => {
   const catching = { file: "create-misbehaving.ts", fn: "createMisbehaving" };

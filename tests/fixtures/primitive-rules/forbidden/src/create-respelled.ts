@@ -2,9 +2,18 @@ import { createAttachment } from "#/packages/primitives/src/internal-attachment.
 import { browserMethod, lookUp } from "#/packages/primitives/src/internal-browser-api.ts";
 import { observe } from "#/packages/primitives/src/internal-dom-observer.ts";
 import { watchEvents } from "#/packages/primitives/src/internal-listener.ts";
+import { Measurer, topOf } from "#/tests/fixtures/primitive-rules/forbidden/src/internal-position.ts";
+
+function visibilityOf(element: HTMLElement): boolean {
+  return element.checkVisibility();
+}
 
 function shown(element: HTMLElement): boolean {
-  return element.checkVisibility();
+  return visibilityOf(element);
+}
+
+function handlerFor(top: number): () => number {
+  return () => top;
 }
 
 /** Holds what the rules forbid. */
@@ -40,6 +49,20 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
     const showing = shown(element);
     const stopWatching = watchEvents(window, ["scroll"], () => element.scrollTop + Number(shown(element)));
     const stopObserving = observe("ResizeObserver", element, undefined, () => element.clientWidth);
+    const evaded = [
+      watchEvents(window, ["scroll"], handlerFor(element.getClientRects().length)),
+      observe("ResizeObserver", element, undefined, (void element.offsetHeight, () => undefined)),
+      watchEvents(window, ["scroll"], ((kept: number) => () => kept)(element.scrollLeft)),
+    ];
+    const measured = [new Measurer(element).measure(), topOf(element)];
+    const members = [
+      document.createElementNS("http://www.w3.org/2000/svg", "rect").getBBox(),
+      element.computedStyleMap(),
+      document.elementFromPoint(0, 0),
+      element.innerText,
+      window.visualViewport,
+      Object.getOwnPropertyDescriptor(Element.prototype, "clientHeight"),
+    ];
     return () => [
       focus,
       stop,
@@ -56,6 +79,9 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
       showing,
       stopWatching,
       stopObserving,
+      evaded,
+      measured,
+      members,
     ];
   });
 }
