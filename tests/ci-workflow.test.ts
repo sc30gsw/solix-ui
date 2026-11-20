@@ -1,7 +1,7 @@
 import { relative, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { staticStorybookDirectory } from "#/apps/storybook/tests/support/test-servers.ts";
-import { type Step, type Workflow, workflowAt } from "#/tests/support/workflows.ts";
+import { type Job, type Step, type Workflow, workflowAt } from "#/tests/support/workflows.ts";
 import { repositoryRoot, workflowFiles } from "#/tests/support/workspace.ts";
 
 const ciWorkflow = ".github/workflows/ci.yml";
@@ -168,3 +168,143 @@ const secretSpellings: [spelling: string, refused: boolean, workflow: Workflow][
 test.for(secretSpellings)("the secrets rule, on %s, refuses it: %s", ([, refused, workflow]) => {
   expect(secretsReadIn(workflow).length > 0).toBe(refused);
 });
+
+const newestReleasesCheck = "node scripts/check-newest-releases.ts";
+const pullRequestActivities = ["opened", "synchronize", "reopened"];
+
+function pullRequestTypes(on: unknown): unknown {
+  if (typeof on !== "object" || on === null || Array.isArray(on)) return undefined;
+  const trigger: unknown = Reflect.get(on, pullRequestEvent);
+  return typeof trigger === "object" && trigger !== null
+    ? Reflect.get(trigger, "types")
+    : undefined;
+}
+
+function runsOnEveryPushToAPullRequest(on: unknown): boolean {
+  if (!events(on).includes(pullRequestEvent)) return false;
+  const types = pullRequestTypes(on);
+  return (
+    types === undefined ||
+    (Array.isArray(types) && pullRequestActivities.every((type) => types.includes(type)))
+  );
+}
+
+type CheckingJob = { name: string; workflow: Workflow; job: Job };
+
+function jobsRunningTheNewestCheck(workflow: Workflow): CheckingJob[] {
+  if (!events(workflow.on).includes(pullRequestEvent)) return [];
+  return Object.entries(workflow.jobs ?? {}).flatMap(([name, job]) =>
+    (job.steps ?? []).some((step) => step.run?.trim() === newestReleasesCheck)
+      ? [{ name, workflow, job }]
+      : [],
+  );
+}
+
+type HowItRuns = {
+  everyPushToAPullRequest: boolean;
+  stepsThatRunTheCheck: number;
+  skippedOrAllowedToFail: string[];
+  writes: string[];
+  secrets: string[];
+};
+
+function howItRuns({ workflow, job }: CheckingJob): HowItRuns {
+  const steps = job.steps ?? [];
+  return {
+    everyPushToAPullRequest: runsOnEveryPushToAPullRequest(workflow.on),
+    stepsThatRunTheCheck: steps.filter((step) => step.run?.trim() === newestReleasesCheck).length,
+    skippedOrAllowedToFail: [job, ...steps].flatMap((part) =>
+      ["if", "needs", "continue-on-error"].filter((key) => key in part),
+    ),
+    writes: writeScopes(job.permissions ?? workflow.permissions),
+    secrets: stringsOf(job)
+      .flatMap((text) => [...text.matchAll(expression)].map(([, inside]) => inside))
+      .flatMap((inside) => [...inside.matchAll(secretsContext)].map(([read]) => read)),
+  };
+}
+
+const runsAsItShould: HowItRuns = {
+  everyPushToAPullRequest: true,
+  stepsThatRunTheCheck: 1,
+  skippedOrAllowedToFail: [],
+  writes: [],
+  secrets: [],
+};
+
+test(`on every pull request, at its opening, at each push and at its reopening, one job runs ${newestReleasesCheck} in one step and fails the run when the check fails: no if, needs or continue-on-error skips it or lets it fail, its permissions only read, and it reads no secret at all`, () => {
+  const found = workflowFiles.flatMap((file) =>
+    jobsRunningTheNewestCheck(workflowAt(file)).map((checking) => ({ file, checking })),
+  );
+
+  expect(
+    found.map(({ file, checking }) => `${file}: ${checking.name}`),
+    `exactly one job of a workflow that runs on ${pullRequestEvent} runs ${newestReleasesCheck}`,
+  ).toHaveLength(1);
+  const [{ file, checking }] = found;
+  expect(howItRuns(checking), `${file}: the ${checking.name} job`).toEqual(runsAsItShould);
+});
+
+const check = { run: newestReleasesCheck };
+const readOnly = { contents: "read" };
+const wrongRuns: [what: string, workflow: Workflow, wrong: Partial<HowItRuns>][] = [
+  [
+    "pull_request types that leave out reopened",
+    {
+      on: { pull_request: { types: ["opened", "synchronize"] } },
+      permissions: readOnly,
+      jobs: { a: { steps: [check] } },
+    },
+    { everyPushToAPullRequest: false },
+  ],
+  [
+    "the check run twice",
+    { on: "pull_request", permissions: readOnly, jobs: { a: { steps: [check, check] } } },
+    { stepsThatRunTheCheck: 2 },
+  ],
+  [
+    "a job that runs if always()",
+    { on: "pull_request", permissions: readOnly, jobs: { a: { if: "always()", steps: [check] } } },
+    { skippedOrAllowedToFail: ["if"] },
+  ],
+  [
+    "a job that needs another",
+    { on: "pull_request", permissions: readOnly, jobs: { a: { needs: "b", steps: [check] } } },
+    { skippedOrAllowedToFail: ["needs"] },
+  ],
+  [
+    "a step that may fail",
+    {
+      on: "pull_request",
+      permissions: readOnly,
+      jobs: { a: { steps: [{ ...check, "continue-on-error": true }] } },
+    },
+    { skippedOrAllowedToFail: ["continue-on-error"] },
+  ],
+  [
+    "no permissions written out",
+    { on: "pull_request", jobs: { a: { steps: [check] } } },
+    { writes: ["undefined"] },
+  ],
+  [
+    "a job that may write",
+    { on: "pull_request", jobs: { a: { permissions: { contents: "write" }, steps: [check] } } },
+    { writes: ["contents: write"] },
+  ],
+  [
+    "the private-term list read by the job",
+    {
+      on: "pull_request",
+      permissions: readOnly,
+      jobs: { a: { steps: [{ ...check, env: { T: "${{ secrets.SOLIX_PRIVATE_TERMS }}" } }] } },
+    },
+    { secrets: ["secrets.SOLIX_PRIVATE_TERMS"] },
+  ],
+];
+
+test.for(wrongRuns)(
+  "the pull-request newest-release rule, on %s, refuses it",
+  ([, workflow, wrong]) => {
+    const [checking] = jobsRunningTheNewestCheck(workflow);
+    expect(howItRuns(checking)).toEqual({ ...runsAsItShould, ...wrong });
+  },
+);
