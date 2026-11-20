@@ -186,3 +186,28 @@ test("a specifier that an ambient module declaration of its package declares, su
     },
   );
 });
+
+test("a wildcard ambient module declaration, such as one for every .svg, declares no module of its own, so the rule still resolves a path it matches with Node: a path to no file is unresolved, and a path to a file of the package is rewritten", async () => {
+  await inTemporaryTree(
+    {
+      "package.json": JSON.stringify({ name: "assets", type: "module" }),
+      "src/assets.d.ts":
+        'declare module "*.svg" {\n  const url: string;\n  export default url;\n}\n',
+      "src/icon.svg": "<svg></svg>\n",
+      "src/nested/uses-icon.ts": 'import icon from "../icon.svg";\nexport { icon };\n',
+      "src/nested/uses-missing.ts": 'import missing from "./missing.svg";\nexport { missing };\n',
+    },
+    (root) => {
+      const references = moduleReferences(filesTheRuleCovers(root));
+      const named = (found: readonly ModuleReference[]) =>
+        found.map(({ file, specifier }) => `${relative(root, file)} ${specifier}`).toSorted();
+
+      expect(named(unresolvedPaths(references))).toEqual([
+        "src/nested/uses-missing.ts ./missing.svg",
+      ]);
+      expect(
+        misspelt(references, root).map(({ file, wanted }) => `${relative(root, file)} ${wanted}`),
+      ).toEqual(["src/nested/uses-icon.ts #/src/icon.svg"]);
+    },
+  );
+});

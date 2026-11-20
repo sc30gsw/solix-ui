@@ -26,6 +26,7 @@ import {
 } from "#/scripts/syntax.ts";
 
 const installedPackages = "node_modules";
+const modulePatternWildcard = "*";
 const projectSkillScripts = ".agents/skills/*/scripts/**/*.{ts,tsx,mjs,cjs,js}";
 
 export type ModuleReference = {
@@ -56,6 +57,15 @@ function resolvedByNode(file: string, specifier: string): string | undefined {
   }
 }
 
+function declaresExactly(declaration: ts.Node, specifier: string): boolean {
+  return (
+    ts.isModuleDeclaration(declaration) &&
+    ts.isStringLiteral(declaration.name) &&
+    declaration.name.text === specifier &&
+    !specifier.includes(modulePatternWildcard)
+  );
+}
+
 export function moduleReferences(files: readonly string[]): ModuleReference[] {
   const program = openProgram(files);
   try {
@@ -66,7 +76,10 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
         const specifier = moduleSpecifierOf(node);
         if (!specifier || !ts.isStringLiteralLikeNode(specifier)) return [];
         const declaration = symbolOf(program, specifier)?.declarations?.[0]?.resolve();
-        const declaredAsAModule = declaration !== undefined && ts.isModuleDeclaration(declaration);
+        const declaredAsAModule =
+          declaration !== undefined && declaresExactly(declaration, specifier.text);
+        const reachedByTheChecker =
+          declaration !== undefined && !ts.isModuleDeclaration(declaration);
         return [
           {
             file,
@@ -77,7 +90,7 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
             end: specifier.end,
             reached: declaredAsAModule
               ? undefined
-              : declaration
+              : reachedByTheChecker
                 ? realpathSync(fileOf(declaration))
                 : resolvedByNode(file, specifier.text),
             declaredAsAModule,
