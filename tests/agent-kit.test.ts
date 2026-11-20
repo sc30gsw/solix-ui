@@ -18,6 +18,7 @@ import {
   kitHookDidNotRun,
   kitHookEntries,
   kitInstalls,
+  kitPackage,
   kitNotInstalled,
   kitVersion,
   claudeSkills,
@@ -40,6 +41,15 @@ const kitSkill = `.claude/skills/${kitInstalls(repositoryRoot, "skills")[0]}`;
 const manifest = "package.json";
 const reactFixture = "tests/fixtures/agent-kit/react-hook.txt";
 const lintScript = "lint:solid";
+const solidCheatsheet = "node_modules/solid-js/CHEATSHEET.md";
+const onlyInTheCheatsheet = [
+  "resetErrorBoundaries",
+  "getListener",
+  "getObserver",
+  "equalFn",
+  "isEqual",
+  "Suspense.Provider",
+];
 const readOnlyCommands = [
   "sed -n 1,40p .claude/settings.json",
   "cat .claude/settings.json 2>/dev/null",
@@ -307,4 +317,19 @@ test("step 4 of open-pull-request runs every command the kit installs, next to T
   expect(missing).toEqual([]);
   expect(step).toContain(`\`vp run ${lintScript}\``);
   expect(lintSolid).toMatch(/^solid2-kit check --dir \. && solid2-kit doctor$/);
+});
+
+test(`AGENTS.md sends agents to ${solidCheatsheet} for what the kit's skill does not name`, () => {
+  const kitText = filesIn(join(repositoryRoot, kitPackage, "files"))
+    .filter((path) => path.endsWith(".md"))
+    .map((path) => readFileSync(join(repositoryRoot, kitPackage, "files", path), "utf8"))
+    .join("\n");
+  const row = read("AGENTS.md")
+    .split("\n")
+    .find((line) => line.startsWith("| ") && line.includes(`\`${solidCheatsheet}\``));
+
+  expect(row, `AGENTS.md: add a row that sends agents to ${solidCheatsheet}.`).toBeDefined();
+  expect(onlyInTheCheatsheet.filter((name) => !row?.includes(`\`${name}\``))).toEqual([]);
+  expect(onlyInTheCheatsheet.filter((name) => !read(solidCheatsheet).includes(name))).toEqual([]);
+  expect(onlyInTheCheatsheet.filter((name) => kitText.includes(name))).toEqual([]);
 });
