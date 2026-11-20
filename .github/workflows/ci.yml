@@ -31,3 +31,4 @@ jobs:
           name: storybook
           path: apps/storybook/dist
           if-no-files-found: error
+          retention-days: 14

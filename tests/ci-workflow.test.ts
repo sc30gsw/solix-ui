@@ -8,6 +8,7 @@ const ciWorkflow = ".github/workflows/ci.yml";
 const verifyCommand = "vp run verify";
 const uploadAction = "actions/upload-artifact";
 const pullRequestEvent = "pull_request";
+const runsDespiteAFailure = /\b(?:always|failure|cancelled)\s*\(/;
 const secretsTheWorkflowsRead = ["SOLIX_PRIVATE_TERMS"];
 const expression = /\$\{\{([\s\S]*?)\}\}/g;
 const secretsContext = /(?<![\w.])secrets(?:\s*\.\s*(\w+))?/g;
@@ -22,7 +23,7 @@ function actionOf(step: Step): string | undefined {
   return step.uses?.split("@")[0];
 }
 
-test("on a pull request, the job that runs verify then uploads the Storybook static build that verify made, and fails the step when there is none", () => {
+test("on a pull request, once verify passes, the job that runs it uploads the Storybook static build that verify made, keeps it for a set number of days, and fails the step when there is none", () => {
   const { on, jobs = {} } = workflowAt(ciWorkflow);
   const verifying = Object.entries(jobs).filter(([, { steps = [] }]) =>
     steps.some((step) => step.run?.trim() === verifyCommand),
@@ -46,14 +47,20 @@ test("on a pull request, the job that runs verify then uploads the Storybook sta
       afterVerify: index > verifyAt,
       path: resolve(repositoryRoot, String(step.with?.path)),
       ifNoFilesFound: step.with?.["if-no-files-found"],
-      continuesOnError: "continue-on-error" in step,
+      keptForDays: Number.isInteger(step.with?.["retention-days"])
+        ? Number(step.with?.["retention-days"]) > 0
+        : false,
+      runsOnlyAfterSuccess: !runsDespiteAFailure.test(JSON.stringify(step.if ?? "")),
+      continuesOnError: (step["continue-on-error"] ?? false) !== false,
     })),
-    `${ciWorkflow}: the ${name} job uploads ${relative(repositoryRoot, staticStorybookDirectory)}, which verify builds, in one ${uploadAction} step after ${verifyCommand}, with if-no-files-found: error and no continue-on-error`,
+    `${ciWorkflow}: the ${name} job uploads ${relative(repositoryRoot, staticStorybookDirectory)}, which verify builds, in one ${uploadAction} step after ${verifyCommand}, with if-no-files-found: error, a whole number of retention-days, an if that calls none of always(), failure() or cancelled(), so it runs only once verify passed, and no continue-on-error`,
   ).toEqual([
     {
       afterVerify: true,
       path: staticStorybookDirectory,
       ifNoFilesFound: "error",
+      keptForDays: true,
+      runsOnlyAfterSuccess: true,
       continuesOnError: false,
     },
   ]);
