@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { globSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { repositoryRoot } from "#/scripts/repository.ts";
 import {
   aliasDeclarationsOfTypeAt,
@@ -7,6 +8,7 @@ import {
   openProgram,
   type Program,
   propsOfComponent,
+  rereadFiles,
   ts,
   virtualFile,
 } from "#/scripts/syntax.ts";
@@ -17,6 +19,7 @@ export type ComponentProps = Readonly<Record<string, readonly ComponentProp[]>>;
 
 export const libraryEntry = join(repositoryRoot, "packages/core/src/index.ts");
 
+const librarySources = "**/*.{ts,tsx}";
 const jsxElementSource = "export const jsxElement = <></>;\n";
 
 function namedValueExports(source: ts.SourceFile): ts.Identifier[] {
@@ -84,9 +87,20 @@ export function componentPropsOf(entry: string): ComponentProps {
   }
 }
 
-let resolved: ComponentProps | undefined;
+const resolved = new Map<string, ComponentProps>();
 
-export function libraryComponentProps(): ComponentProps {
-  resolved ??= componentPropsOf(libraryEntry);
-  return resolved;
+export function libraryComponentProps(entry: string = libraryEntry): ComponentProps {
+  const props = resolved.get(entry) ?? componentPropsOf(entry);
+  resolved.set(entry, props);
+  return props;
+}
+
+export function sourcesOfTheLibrary(entry: string = libraryEntry): string[] {
+  const directory = dirname(entry);
+  return globSync(librarySources, { cwd: directory }).map((file) => join(directory, file));
+}
+
+export function forgetComponentProps(changed: readonly string[]): void {
+  resolved.clear();
+  rereadFiles(changed);
 }

@@ -1,10 +1,14 @@
-import { join } from "node:path";
-import type { Plugin } from "vite-plus";
+import { dirname, join } from "node:path";
+import type { Plugin, ViteDevServer } from "vite-plus";
 import {
   type ComponentProp,
   type Control,
+  forgetComponentProps,
   libraryComponentProps,
+  libraryEntry,
+  sourcesOfTheLibrary,
 } from "#/scripts/component-props.ts";
+import { insideOf } from "#/scripts/subpath.ts";
 import { storybookAppManifest } from "#/scripts/release-sources.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 
@@ -38,19 +42,21 @@ function argTypeOf(prop: ComponentProp): GeneratedArgType {
   };
 }
 
-export function argTypesOfEachComponent(): Record<string, Record<string, GeneratedArgType>> {
+export function argTypesOfEachComponent(
+  entry: string = libraryEntry,
+): Record<string, Record<string, GeneratedArgType>> {
   return Object.fromEntries(
-    Object.entries(libraryComponentProps()).map(([component, props]) => [
+    Object.entries(libraryComponentProps(entry)).map(([component, props]) => [
       component,
       Object.fromEntries(props.map((prop) => [prop.name, argTypeOf(prop)])),
     ]),
   );
 }
 
-function storyControlsSource(library: string): string {
+function storyControlsSource(library: string, entry: string): string {
   return `import * as library from ${JSON.stringify(library)};
 
-const argTypesOfEachComponent = ${JSON.stringify(argTypesOfEachComponent())};
+const argTypesOfEachComponent = ${JSON.stringify(argTypesOfEachComponent(entry))};
 
 export function argTypesOf(component) {
   const name = Object.keys(argTypesOfEachComponent).find((exported) => library[exported] === component);
@@ -62,16 +68,30 @@ export function argTypesOf(component) {
 `;
 }
 
-export function storyControls(): Plugin {
+export function storyControls(entry: string = libraryEntry): Plugin {
+  const isLibrarySource = (file: string) => insideOf(dirname(entry), file);
+  let server: ViteDevServer | undefined;
   return {
     name: "solix:story-controls",
+    configureServer(started) {
+      server = started;
+    },
     resolveId: (id) => (id === storyControlsModule ? resolvedStoryControlsModule : undefined),
     async load(id) {
       if (id !== resolvedStoryControlsModule) return undefined;
       const library = await this.resolve(libraryModule, storybookManifest);
       if (!library)
         throw new Error(`${storybookManifest}: ${libraryModule} does not resolve here.`);
-      return storyControlsSource(library.id);
+      for (const source of sourcesOfTheLibrary(entry)) this.addWatchFile(source);
+      return storyControlsSource(library.id, entry);
+    },
+    watchChange(id) {
+      if (!isLibrarySource(id)) return;
+      forgetComponentProps([id]);
+      for (const environment of Object.values(server?.environments ?? {})) {
+        const served = environment.moduleGraph.getModuleById(resolvedStoryControlsModule);
+        if (served) environment.moduleGraph.invalidateModule(served);
+      }
     },
   };
 }
