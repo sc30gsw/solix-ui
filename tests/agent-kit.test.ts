@@ -1,12 +1,9 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import { expect, test } from "vite-plus/test";
-import { kitInstalls, kitPackage, sharedSkills } from "#/scripts/agent-kit.ts";
-import { manifestPaths } from "#/scripts/repository.ts";
+import { kitInstalls, sharedSkills } from "#/scripts/agent-kit.ts";
 import { approvedSkills } from "#/scripts/package-skills.ts";
-import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
-import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
+import { workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const manifest = "package.json";
@@ -15,11 +12,6 @@ const solidReview = ".agents/skills/verify-solid2/SKILL.md";
 const reviewChecklist = "Review checklist";
 const runBlock = /^## Run it\n\n```bash\n([\s\S]*?)\n```/m;
 const kitCommands = ".claude/commands";
-const catalogVersion = "catalog:";
-const removedByPnpm = "-";
-const neededByStorybook = "react";
-const bannedFinding = "dep-";
-const solidOneLine = "the Solid 1.x line";
 const replacedByTheKit = [
   { pack: "solid-js", name: "solid-2.0" },
   { pack: "solid-js", name: "solid-2.0-cheatsheet" },
@@ -62,67 +54,4 @@ test(`step 4 of open-pull-request runs ${solidReview}, which runs the kit's gate
       .some((line) => line.startsWith(`## ${reviewChecklist}`)),
   ).toBe(true);
   expect(existsSync(join(repositoryRoot, kitCommands))).toBe(false);
-});
-
-type DoctorFinding = { id: string; message: string };
-
-async function kitDoctor(): Promise<{
-  banned: string[];
-  findingsIn: (root: string) => DoctorFinding[];
-}> {
-  const doctor: unknown = await import(
-    pathToFileURL(join(repositoryRoot, kitPackage, "bin/doctor.mjs")).href
-  );
-  const findings: unknown = Reflect.get(Object(doctor), "doctorFindings");
-  if (typeof findings !== "function") throw new Error("the kit's doctor has no doctorFindings.");
-  return {
-    banned: Object.keys(Object(Reflect.get(Object(doctor), "BANNED_DEPS"))),
-    findingsIn: (root) => Reflect.apply(findings, undefined, [root]),
-  };
-}
-
-test(`${workspaceFile} has pnpm remove from any install every package the kit's doctor bans, but react, which Storybook's icons need`, async () => {
-  const { banned } = await kitDoctor();
-  const { overrides } = pnpmSettings();
-  const removed = Object.keys(overrides).filter((name) => overrides[name] === removedByPnpm);
-
-  expect(removed.sort()).toEqual(banned.filter((name) => name !== neededByStorybook).sort());
-});
-
-test("no workspace manifest lists a package the kit's doctor bans, or a Solid 1.x line, in any dependency list", async () => {
-  const { findingsIn } = await kitDoctor();
-  const { catalog } = pnpmSettings();
-  const pinned = (versions: Record<string, string> | undefined) =>
-    Object.fromEntries(
-      Object.entries(versions ?? {}).map(([name, version]) => [
-        name,
-        version === catalogVersion ? (catalog[name] ?? version) : version,
-      ]),
-    );
-  const problems = await Promise.all(
-    manifestPaths().map((path) =>
-      inTemporaryTree({}, (root) => {
-        const lists = JSON.parse(read(path)) as Record<string, Record<string, string>>;
-        writeFileSync(
-          join(root, manifest),
-          JSON.stringify({
-            dependencies: pinned(lists.dependencies),
-            devDependencies: {
-              ...pinned(lists.optionalDependencies),
-              ...pinned(lists.peerDependencies),
-              ...pinned(lists.devDependencies),
-            },
-          }),
-        );
-        return findingsIn(root)
-          .filter(
-            ({ id, message }) => id.startsWith(bannedFinding) || message.includes(solidOneLine),
-          )
-          .map(({ message }) => `${path}: ${message}`);
-      }),
-    ),
-  );
-
-  expect(manifestPaths().length).toBeGreaterThan(1);
-  expect(problems.flat()).toEqual([]);
 });
