@@ -14,13 +14,7 @@ import {
   unionMembersOf,
 } from "#/scripts/syntax/checker.ts";
 import type { Program } from "#/scripts/syntax/program.ts";
-import {
-  descendants,
-  enclosingFunctionName,
-  fileOf,
-  findAncestor,
-  staticPropertyName,
-} from "#/scripts/syntax/walk.ts";
+import { descendants, fileOf, findAncestor, staticPropertyName } from "#/scripts/syntax/walk.ts";
 
 export type Option = string | number | boolean;
 
@@ -51,12 +45,12 @@ export type ComponentProp = {
   readonly defaultValue?: string;
 };
 
-export type Fallback = { readonly owner: string | undefined; readonly value: string };
-
-export type Fallbacks = ReadonlyMap<ts.Node, readonly Fallback[]>;
+export type DeclaredDefaults = {
+  readonly variable: ts.VariableDeclaration;
+  readonly values: ReadonlyMap<ts.Node, string>;
+};
 
 export type PropsOptions = {
-  readonly fallbacks?: Fallbacks;
   readonly describe?: (declarations: readonly ts.Node[]) => string;
   readonly defaults?: ReadonlyMap<ts.Node, string>;
 };
@@ -144,27 +138,9 @@ function chosenFor(members: readonly Member[]): Chosen {
   return { control: { type: false } };
 }
 
-export function fallbacksIn(program: Program, sources: readonly ts.SourceFile[]): Fallbacks {
-  const found = new Map<ts.Node, Fallback[]>();
-  for (const node of sources.flatMap((source) => descendants(source))) {
-    if (
-      !ts.isBinaryExpression(node) ||
-      node.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken ||
-      !ts.isPropertyAccessExpression(node.left)
-    ) {
-      continue;
-    }
-    const fallback = program.checker.getTypeAtLocation(node.right);
-    if (!fallback || (fallback.flags & literalTypes) === 0) continue;
-    const given = {
-      owner: enclosingFunctionName(node),
-      value: program.checker.typeToString(fallback),
-    };
-    for (const declaration of declarationsOfSymbol(symbolOf(program, node.left.name))) {
-      found.set(declaration, [...(found.get(declaration) ?? []), given]);
-    }
-  }
-  return found;
+export function literalTypeAt(program: Program, node: ts.Node): string | undefined {
+  const type = program.checker.getTypeAtLocation(node);
+  return type && (type.flags & literalTypes) !== 0 ? program.checker.typeToString(type) : undefined;
 }
 
 const partialType = "Partial";
@@ -183,42 +159,34 @@ function isPartialOfTheLibrary(program: Program, type: ts.TypeNode): boolean {
 export function declaredDefaultsIn(
   program: Program,
   sources: readonly ts.SourceFile[],
-): Map<ts.Node, string> {
-  const found = new Map<ts.Node, string>();
-  for (const node of sources.flatMap((source) => descendants(source))) {
-    if (
-      !ts.isSatisfiesExpression(node) ||
-      !ts.isObjectLiteralExpression(node.expression) ||
-      !isPartialOfTheLibrary(program, node.type)
-    ) {
-      continue;
-    }
-    const satisfied = program.checker.getTypeAtLocation(node.type);
-    for (const property of node.expression.properties) {
-      const value = ts.isPropertyAssignment(property)
-        ? property.initializer
-        : ts.isShorthandPropertyAssignment(property)
-          ? property.name
-          : undefined;
-      const name = staticPropertyName(property);
-      const given = value && program.checker.getTypeAtLocation(value);
-      const prop = satisfied && name && program.checker.getPropertyOfType(satisfied, name);
-      if (!given || !prop || (given.flags & literalTypes) === 0) continue;
-      for (const declaration of declarationsOfSymbol(prop)) {
-        found.set(declaration, program.checker.typeToString(given));
+): DeclaredDefaults[] {
+  return sources.flatMap((source) =>
+    descendants(source).flatMap((node): DeclaredDefaults[] => {
+      if (
+        !ts.isSatisfiesExpression(node) ||
+        !ts.isVariableDeclaration(node.parent) ||
+        !ts.isObjectLiteralExpression(node.expression) ||
+        !isPartialOfTheLibrary(program, node.type)
+      ) {
+        return [];
       }
-    }
-  }
-  return found;
-}
-
-function defaultOf(
-  fallbacks: readonly Fallback[],
-  component: string | undefined,
-): string | undefined {
-  const own = fallbacks.filter(({ owner }) => owner === component);
-  const values = new Set((own.length > 0 ? own : fallbacks).map(({ value }) => value));
-  return values.size === 1 ? [...values][0] : undefined;
+      const satisfied = program.checker.getTypeAtLocation(node.type);
+      const values = new Map<ts.Node, string>();
+      for (const property of node.expression.properties) {
+        const value = ts.isPropertyAssignment(property)
+          ? property.initializer
+          : ts.isShorthandPropertyAssignment(property)
+            ? property.name
+            : undefined;
+        const name = staticPropertyName(property);
+        const given = value && literalTypeAt(program, value);
+        const prop = satisfied && name && program.checker.getPropertyOfType(satisfied, name);
+        if (given === undefined || !prop) continue;
+        for (const declaration of declarationsOfSymbol(prop)) values.set(declaration, given);
+      }
+      return [{ variable: node.parent, values }];
+    }),
+  );
 }
 
 function ownerName(declaration: ts.Node): string {
@@ -236,8 +204,7 @@ function ownerName(declaration: ts.Node): string {
 function propOf(
   program: Program,
   symbol: CheckerSymbol,
-  component: string,
-  { fallbacks = new Map(), describe = () => "", defaults = new Map() }: PropsOptions,
+  { describe = () => "", defaults = new Map() }: PropsOptions,
 ): ComponentProp | undefined {
   const declarations = declarationsOfSymbol(symbol).filter(
     (declaration) => !isPackageFile(declaration.getSourceFile().fileName),
@@ -248,11 +215,7 @@ function propOf(
   if (members.every((member) => member.kind === "absent")) return undefined;
   const present = program.checker.getNonNullableType(declared) ?? declared;
   const { control, values } = chosenFor(members);
-  const defaultValue =
-    declarations.map((declaration) => defaults.get(declaration)).find(Boolean) ??
-    declarations
-      .map((declaration) => defaultOf(fallbacks.get(declaration) ?? [], component))
-      .find(Boolean);
+  const defaultValue = declarations.map((declaration) => defaults.get(declaration)).find(Boolean);
   return {
     name: symbol.name,
     control,
@@ -283,7 +246,7 @@ export function propsOfComponent(
     if (!props) continue;
     for (const symbol of program.checker.getPropertiesOfType(props)) {
       if (found.has(symbol.name)) continue;
-      const prop = propOf(program, symbol, component.name, options);
+      const prop = propOf(program, symbol, options);
       if (prop) found.set(prop.name, prop);
     }
   }

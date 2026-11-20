@@ -134,7 +134,6 @@ export type GridTypeProps<Media extends object, Container extends object> =
       type?: "media";
     } & Media)
   | ({
-      /** `media` keys responsive values by the viewport's width; `container` keys them by the grid's own width, through container queries. */
       type: "container";
     } & Container);
 

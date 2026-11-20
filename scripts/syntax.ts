@@ -74,10 +74,10 @@ export {
 } from "#/scripts/syntax/walk.ts";
 export {
   declaredDefaultsIn,
-  fallbacksIn,
+  literalTypeAt,
   propsOfComponent,
   type ComponentProp,
-  type Fallbacks,
+  type DeclaredDefaults,
   type MemberKind,
   type PropsOptions,
   type Control,

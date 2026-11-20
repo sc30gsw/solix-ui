@@ -13,8 +13,10 @@ type ProbeProps = {
   tone?: ${values};
 };
 
+const defaults = { tone: "calm" } satisfies Partial<ProbeProps>;
+
 function Probe(props: ProbeProps): JSX.Element {
-  return <div>{props.tone ?? "calm"}</div>;
+  return <div>{props.tone ?? defaults.tone}</div>;
 }
 
 export { Probe };
@@ -92,7 +94,7 @@ test("a change to the library's source outside the root of a running server with
   );
 });
 
-test("each served control carries its prop's doc comment as its description and the literal its component falls back to as its default, for the controls table", async () => {
+test("each served control carries its prop's doc comment as its description and the literal its component's defaults object declares as its default, for the controls table", async () => {
   await inTemporaryTree(
     { "library/src/index.tsx": libraryWith('"calm" | "loud"') },
     async (root) => {

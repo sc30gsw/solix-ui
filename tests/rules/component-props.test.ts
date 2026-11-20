@@ -84,16 +84,18 @@ type StatefulProps = ElementProps<
   }
 >;
 
+const defaults = { tone: "calm", loop: true } satisfies Partial<StatefulProps>;
+
 function Stateful(props: StatefulProps): JSX.Element {
-  const tone = () => props.tone ?? "calm";
-  const loop = () => props.loop ?? true;
+  const tone = () => props.tone ?? defaults.tone;
+  const loop = () => props.loop ?? defaults.loop;
   return <div data-tone={tone()} data-loop={String(loop())} />;
 }
 
 export { Stateful };
 `;
 
-test("a prop carries its doc comment as its description, the literal its component falls back to with ?? as its default, every value of a closed union, whether the props every element component shares declare it, and whether it is behaviour: a callback, a prop ControlledProps declares, or an own boolean or closed union of a component that has one of those", () => {
+test("a prop carries its doc comment as its description, the literal its component's defaults object declares as its default, every value of a closed union, whether the props every element component shares declare it, and whether it is behaviour: a callback, a prop ControlledProps declares, or an own boolean or closed union of a component that has one of those", () => {
   const { program, components } = openSpecProgram(virtualFile(statefulProbe, ".tsx"));
   program.dispose();
   const [{ props }] = components;
@@ -151,6 +153,91 @@ test("a default declared in an object literal that satisfies Partial of a props 
     defaultColorScheme: '"light"',
   });
   expect(defaultsOf("Group")).toMatchObject({ preventGrowOverflow: "true" });
+});
+
+const docComment = /^\s*\/\*\*/;
+
+test("each public prop of every component the library exports is documented on one declaration, so its description is one comment and not several run together", () => {
+  const { program, components } = openSpecProgram();
+  try {
+    const twice = components.flatMap(({ name, props }) =>
+      props
+        .filter(
+          ({ declarations }) =>
+            new Set(
+              declarations.filter((declaration) => docComment.test(declaration.getFullText())),
+            ).size > 1,
+        )
+        .map(
+          ({ name: prop, declarations }) =>
+            `${name}: the prop ${prop} is documented on ${declarations.length} declarations, so its description runs their comments together. Declare it once, on the type that gives it.`,
+        ),
+    );
+
+    expect(components.length).toBeGreaterThan(0);
+    expect(twice).toEqual([]);
+  } finally {
+    program.dispose();
+  }
+});
+
+const sharedDefaultsProbe = `import type { JSX } from "@solidjs/web";
+
+type Shared = {
+  /** The tone. */
+  tone?: "calm" | "loud";
+};
+
+type PlainProps = Shared;
+
+const calm = { tone: "calm" } satisfies Partial<Shared>;
+const loud = { tone: "loud" } satisfies Partial<Shared>;
+
+function toneOf(props: Shared): string {
+  return props.tone ?? loud.tone;
+}
+
+function Calm(props: PlainProps): JSX.Element {
+  return <div data-tone={props.tone ?? calm.tone} />;
+}
+
+function Loud(props: PlainProps): JSX.Element {
+  return <div data-tone={toneOf(props)} />;
+}
+
+function Plain(props: PlainProps): JSX.Element {
+  return <div data-tone={props.tone} />;
+}
+
+export { Calm, Loud, Plain };
+`;
+
+test("a declared default belongs to the component that reads its defaults object, itself or through a function it calls, so components that share a prop's declaration keep their own defaults and one that reads none has none", () => {
+  const defaults = Object.fromEntries(
+    Object.entries(componentPropsOf(virtualFile(sharedDefaultsProbe, ".tsx"))).map(
+      ([component, props]) => [component, props.find(({ name }) => name === "tone")?.defaultValue],
+    ),
+  );
+
+  expect(defaults).toEqual({ Calm: '"calm"', Loud: '"loud"', Plain: undefined });
+});
+
+test("each component's own defaults object gives its defaults, the colour variant of Button among them", () => {
+  const defaultsOf = (component: string) =>
+    Object.fromEntries(
+      (libraryComponentProps()[component] ?? []).map(({ name, defaultValue }) => [
+        name,
+        defaultValue,
+      ]),
+    );
+
+  expect(defaultsOf("Button")).toMatchObject({ variant: '"filled"', component: '"button"' });
+  expect(defaultsOf("Container")).toMatchObject({ strategy: '"block"', size: '"md"' });
+  expect(defaultsOf("Tabs")).toMatchObject({ loop: "true", keepMounted: "true" });
+  expect(defaultsOf("SolixProvider")).toMatchObject({
+    defaultColorScheme: '"light"',
+    withCssVariables: "true",
+  });
 });
 
 const everyValue = join(repositoryRoot, "apps/storybook/every-value.tsx");

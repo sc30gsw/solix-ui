@@ -41,21 +41,27 @@ const styles = stylex.create({
   },
 });
 
-const colorOfButton = {
-  variants: ["default", "filled", "light", "outline", "subtle", "transparent"],
-  default: "filled",
-} as const satisfies ColorOption;
+const variantsOfButton = [
+  "default",
+  "filled",
+  "light",
+  "outline",
+  "subtle",
+  "transparent",
+] as const;
 
 export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<
   T,
   typeof styles,
-  ColorProps<(typeof colorOfButton.variants)[number]> & {
+  ColorProps<(typeof variantsOfButton)[number]> & {
     /** A key of the `control-height` scale sets its height, padding and font size from their scales; a number of pixels or any CSS length sets all three to that length. */
     size?: VariableProp<typeof buttonVariables, "button-height", ScaleValue<"control-height">>;
     /** Its corner radius: a key of the `radius` scale, a number of pixels or any CSS length. */
     radius?: VariableProp<typeof buttonVariables, "button-radius">;
   }
 >;
+
+const defaults = { component: "button", variant: "filled" } satisfies Partial<ButtonProps>;
 
 export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>): JSX.Element;
 export function Button(props: ButtonProps): JSX.Element;
@@ -67,8 +73,8 @@ export function Button<T extends ValidComponent = "button">(props: ButtonProps<T
       "button-padding-x": "size",
       "button-radius": "radius",
     },
-    color: colorOfButton,
+    color: { variants: variantsOfButton, default: defaults.variant } satisfies ColorOption,
   });
-  const Root = dynamic(() => props.component ?? "button");
+  const Root = dynamic(() => props.component ?? defaults.component);
   return <Root {...root} />;
 }

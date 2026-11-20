@@ -46,6 +46,8 @@ export type FlexProps<T extends ValidComponent = "div"> = PolymorphicProps<
   }
 >;
 
+const defaults = { component: "div" } satisfies Partial<FlexProps>;
+
 export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>): JSX.Element;
 export function Flex(props: FlexProps): JSX.Element;
 export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>) {
@@ -60,6 +62,6 @@ export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>) {
       "flex-wrap": "wrap",
     },
   });
-  const Root = dynamic(() => props.component ?? "div");
+  const Root = dynamic(() => props.component ?? defaults.component);
   return <Root {...root} />;
 }

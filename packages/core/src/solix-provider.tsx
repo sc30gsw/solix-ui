@@ -30,6 +30,11 @@ export type SolixProviderProps = ColorSchemeOptions & {
 };
 
 const storedInLocalStorage = localStorageColorSchemeManager();
+const defaults = {
+  defaultColorScheme,
+  cssVariablesSelector: ":root",
+  withCssVariables: true,
+} satisfies Partial<SolixProviderProps>;
 const schemeProps = [
   "colorSchemeManager",
   "defaultColorScheme",
@@ -45,7 +50,7 @@ function colorSchemeOf(props: SolixProviderProps): ProvidedColorScheme {
   if (outer === null || given.root) {
     return createProvidedColorScheme({
       manager: () => props.colorSchemeManager ?? storedInLocalStorage,
-      defaultColorScheme: () => props.defaultColorScheme ?? defaultColorScheme,
+      defaultColorScheme: () => props.defaultColorScheme ?? defaults.defaultColorScheme,
       forceColorScheme: () => props.forceColorScheme,
       getRootElement: () =>
         props.getRootElement === undefined ? document.documentElement : props.getRootElement(),
@@ -63,8 +68,11 @@ export function SolixProvider(props: SolixProviderProps) {
   const outerNonce = useContext(PageNonceContext);
   const colorScheme = colorSchemeOf(props);
   const styleSheet = () =>
-    (props.withCssVariables ?? true)
-      ? themeStyleSheet(props.theme ?? {}, props.cssVariablesSelector ?? ":root")
+    (props.withCssVariables ?? defaults.withCssVariables)
+      ? themeStyleSheet(
+          props.theme ?? {},
+          props.cssVariablesSelector ?? defaults.cssVariablesSelector,
+        )
       : undefined;
   return (
     <PageNonceContext value={() => props.getStyleNonce?.() ?? outerNonce()}>

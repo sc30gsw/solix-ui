@@ -27,8 +27,6 @@ const styles = stylex.create({
   },
 });
 
-const defaultSize = "md";
-
 export type ContainerProps = ElementProps<
   "div",
   typeof styles,
@@ -42,17 +40,19 @@ export type ContainerProps = ElementProps<
   }
 >;
 
+const defaults = { size: "md", strategy: "block" } satisfies Partial<ContainerProps>;
+
 export function Container(props: ContainerProps) {
   const { root } = createParts(containerVariables, styles, props, {
     variables: {
-      "container-size": (given) => (given.fluid ? defaultSize : (given.size ?? defaultSize)),
+      "container-size": (given) => (given.fluid ? defaults.size : (given.size ?? defaults.size)),
     },
     keep: ["fluid", "size", "strategy"],
   });
   return (
     <div
       data-fluid={props.fluid ? "true" : undefined}
-      data-strategy={props.strategy ?? "block"}
+      data-strategy={props.strategy ?? defaults.strategy}
       {...root}
     />
   );

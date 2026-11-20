@@ -28,9 +28,9 @@ export type StylesApiProps<Styles> = {
 };
 
 export type ControlledProps<V> = {
-  /** The current value, which makes the component controlled: it changes only when this does. */
+  /** The current value, which makes the component controlled: it changes only when this does. Where its type takes `null`, `null` selects nothing. */
   value?: V;
-  /** The value at first, while the component keeps its own. */
+  /** The value at first, while the component keeps its own. Where its type takes `null`, `null` selects nothing. */
   defaultValue?: V;
   /** Called with the new value when the user changes it. */
   onChange?: (value: V) => void;

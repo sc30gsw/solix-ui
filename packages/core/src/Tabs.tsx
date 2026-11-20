@@ -26,10 +26,6 @@ export type TabsProps = ElementProps<
   "div",
   typeof styles,
   ControlledProps<string | null> & {
-    /** The selected tab's value; `null` selects none. */
-    value?: string | null;
-    /** The value of the tab selected at first; `null` selects none. */
-    defaultValue?: string | null;
     /** Lays the tabs out in a row or a column; the arrow keys follow it. */
     orientation?: TabsOrientation;
     /** Lets the arrow keys wrap from the last tab to the first and back. */
@@ -43,6 +39,13 @@ export type TabsProps = ElementProps<
   }
 >;
 
+const defaults = {
+  loop: true,
+  activateTabWithKeyboard: true,
+  allowTabDeactivation: false,
+  keepMounted: true,
+} satisfies Partial<TabsProps>;
+
 export function Tabs(props: TabsProps) {
   const [value, setValue] = createUncontrolled<string | null>({
     value: () => props.value,
@@ -50,8 +53,9 @@ export function Tabs(props: TabsProps) {
     finalValue: null,
     onChange: (selected) => props.onChange?.(selected),
   });
-  const loop = () => props.loop ?? true;
-  const activateTabWithKeyboard = () => props.activateTabWithKeyboard ?? true;
+  const loop = () => props.loop ?? defaults.loop;
+  const activateTabWithKeyboard = () =>
+    props.activateTabWithKeyboard ?? defaults.activateTabWithKeyboard;
   const behaviour = createBehaviour(tabs, () => ({
     value: value(),
     onValueChange: (selected: string | null) => setValue(selected),
@@ -90,8 +94,8 @@ export function Tabs(props: TabsProps) {
           selected: value,
           baseId: () => (typeof props.id === "string" ? props.id : undefined),
           steps,
-          allowTabDeactivation: () => props.allowTabDeactivation ?? false,
-          keepMounted: () => props.keepMounted ?? true,
+          allowTabDeactivation: () => props.allowTabDeactivation ?? defaults.allowTabDeactivation,
+          keepMounted: () => props.keepMounted ?? defaults.keepMounted,
         }}
       >
         {props.children}

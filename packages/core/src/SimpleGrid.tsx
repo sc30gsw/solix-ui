@@ -60,6 +60,8 @@ export type SimpleGridProps = ElementProps<
   }
 >;
 
+const defaults = { autoFlow: "auto-fill" } satisfies Partial<SimpleGridProps>;
+
 export function SimpleGrid(props: SimpleGridProps) {
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
@@ -83,7 +85,10 @@ export function SimpleGrid(props: SimpleGridProps) {
     keep: ["autoFlow", "cols", "type"],
   });
   const grid = (
-    <div data-auto-cols={autoColumns() ? (props.autoFlow ?? "auto-fill") : undefined} {...root} />
+    <div
+      data-auto-cols={autoColumns() ? (props.autoFlow ?? defaults.autoFlow) : undefined}
+      {...root}
+    />
   );
   return (
     <Show when={container.queries()} fallback={grid}>

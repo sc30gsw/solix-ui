@@ -17,8 +17,6 @@ import {
 } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
-const defaultColumns = 12;
-
 const styles = stylex.create({
   container: {
     containerType: "inline-size",
@@ -52,9 +50,7 @@ export type GridProps = ElementProps<
     }
   > &
     GapProps<typeof gridVariables, "grid-gap", "grid-row-gap", "grid-column-gap"> & {
-      /** Classes for each part by name, `col` for every column. */
       classes?: { col?: JSX.ClassValue };
-      /** Inline styles for each part by name, `col` for every column. */
       styles?: { col?: JSX.CSSProperties };
       /** Lets the columns of a row that is not full grow to fill it. */
       grow?: boolean;
@@ -72,6 +68,8 @@ export type GridProps = ElementProps<
       overflow?: VariableProp<typeof gridVariables, "grid-overflow", JSX.CSSProperties["overflow"]>;
     }
 >;
+
+const defaults = { columns: 12, grow: false } satisfies Partial<GridProps>;
 
 export function Grid(props: GridProps) {
   const container = createQueryContainer(createUniqueId(), () => {
@@ -92,8 +90,8 @@ export function Grid(props: GridProps) {
     keep: ["breakpoints", "children", "classes", "columns", "grow", "styles", "type"],
   });
   const context = {
-    columns: () => props.columns ?? defaultColumns,
-    grow: () => props.grow ?? false,
+    columns: () => props.columns ?? defaults.columns,
+    grow: () => props.grow ?? defaults.grow,
     container,
     col: { class: () => props.classes?.col, style: () => props.styles?.col },
   };

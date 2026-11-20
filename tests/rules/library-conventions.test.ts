@@ -2,10 +2,18 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { builtComponents, compiledClassesOf } from "#/packages/core/tests/built-library.ts";
+import {
+  componentsIn,
+  librarySources as librarySourcesOf,
+  openLibraryProgram,
+} from "#/scripts/component-props.ts";
 import { fileNamedBy } from "#/scripts/subpath.ts";
 import {
   calledDeclaration,
+  declarationsOfSymbol,
+  declaredDefaultsIn,
   descendants,
+  literalTypeAt,
   exportsOf,
   fileOf,
   findAncestor,
@@ -178,12 +186,12 @@ function spreadsOn(tag: JsxTag): string[] {
   );
 }
 
-function isDynamicRoot(initializer: ts.Expression | undefined, element: string): boolean {
+function isDynamicRoot(initializer: ts.Expression | undefined): boolean {
   if (!initializer || !ts.isCallExpression(initializer)) return false;
   const [factory, ...others] = initializer.arguments;
   if (initializer.expression.getText() !== "dynamic" || !factory || others.length > 0) return false;
   if (!ts.isArrowFunction(factory) || factory.parameters.length > 0) return false;
-  return factory.body.getText() === `props.component ?? "${element}"`;
+  return factory.body.getText() === "props.component ?? defaults.component";
 }
 
 type PropsShape = {
@@ -247,9 +255,9 @@ function isColorProps(member: ts.TypeNode): boolean {
 
 const libraryFiles = new Set(librarySourceFiles);
 
-type Given = ReadonlyMap<string, ts.TypeNode>;
+type Given = ReadonlyMap<string, { readonly type: ts.TypeNode; readonly given: Given }>;
 
-function aliasedMembers(member: ts.TypeNode): ts.TypeNode[] | undefined {
+function aliasedMembers(member: ts.TypeNode, outer: Given): ts.TypeNode[] | undefined {
   if (!ts.isTypeReferenceNode(member) || isColorProps(member)) return undefined;
   const declaration = symbolOf(librarySources, member.typeName)?.declarations?.[0]?.resolve();
   if (
@@ -262,7 +270,7 @@ function aliasedMembers(member: ts.TypeNode): ts.TypeNode[] | undefined {
   const given = new Map(
     (declaration.typeParameters ?? []).flatMap((parameter, at) => {
       const argument = member.typeArguments?.[at] ?? parameter.defaultType;
-      return argument ? [[parameter.name.text, argument]] : [];
+      return argument ? [[parameter.name.text, { type: argument, given: outer }]] : [];
     }),
   );
   const aliased = typeMembers(declaration.type, given);
@@ -274,8 +282,8 @@ function typeMembers(type: ts.TypeNode, given: Given = new Map()): ts.TypeNode[]
     ts.isTypeReferenceNode(type) && ts.isIdentifier(type.typeName)
       ? given.get(type.typeName.text)
       : undefined;
-  if (parameter) return typeMembers(parameter);
-  const aliased = aliasedMembers(type);
+  if (parameter) return typeMembers(parameter.type, parameter.given);
+  const aliased = aliasedMembers(type, given);
   if (aliased) return aliased;
   if (ts.isParenthesizedTypeNode(type)) return typeMembers(type.type, given);
   if (ts.isIntersectionTypeNode(type) || ts.isUnionTypeNode(type)) {
@@ -417,9 +425,9 @@ function rootProblems(name: string, fn: ts.FunctionDeclaration, shape: PropsShap
   const tag = root.tagName.getText();
   if (shape.kind === polymorphicPropsType) {
     const element = polymorphicDefault(fn) ?? "<element>";
-    if (!isDynamicRoot(variableNamed(fn, tag)?.initializer, element)) {
+    if (!isDynamicRoot(variableNamed(fn, tag)?.initializer)) {
       problems.push(
-        `render the root as \`const ${tag} = dynamic(() => props.component ?? "${element}")\`, the dynamic() of @solidjs/web with the element the type parameter defaults to.`,
+        `render the root as \`const ${tag} = dynamic(() => props.component ?? defaults.component)\`, the dynamic() of @solidjs/web, with \`component: "${element}"\`, the element the type parameter defaults to, in \`const defaults = { ... } satisfies Partial<Props>\`.`,
       );
     }
   } else if (tag !== shape.element) {
@@ -633,4 +641,51 @@ test("only a Component.tsx calls createParts, so a module that renders a styled 
 
   expect(components.some(({ source }) => descendants(source).some(callsCreateParts))).toBe(true);
   expect(violations).toEqual([]);
+});
+
+test("a prop that falls back with ?? to a literal falls back to its component's declared default: the same prop of a defaults object that satisfies Partial of a props type, the one place the controls read a default from", () => {
+  const { program, elementFile } = openLibraryProgram();
+  try {
+    const propDeclarations = new Set(
+      componentsIn(program, elementFile).flatMap(({ props }) =>
+        props.flatMap(({ declarations }) => declarations),
+      ),
+    );
+    const sources = librarySourcesOf().flatMap((file) => program.sourceFile(file) ?? []);
+    const defaultsObjects = new Set<ts.Node>(
+      declaredDefaultsIn(program, sources).map(({ variable }) => variable),
+    );
+    const readsADefault = (fallback: ts.Expression, prop: string) =>
+      ts.isPropertyAccessExpression(fallback) &&
+      fallback.name.text === prop &&
+      declarationsOfSymbol(symbolOf(program, fallback.expression)).some((declaration) =>
+        defaultsObjects.has(declaration),
+      );
+    const problems = sources.flatMap((source) =>
+      descendants(source).flatMap((node) => {
+        if (
+          !ts.isBinaryExpression(node) ||
+          node.operatorToken.kind !== ts.SyntaxKind.QuestionQuestionToken ||
+          !ts.isPropertyAccessExpression(node.left) ||
+          !declarationsOfSymbol(symbolOf(program, node.left.name)).some((declaration) =>
+            propDeclarations.has(declaration),
+          )
+        ) {
+          return [];
+        }
+        const prop = node.left.name.text;
+        if (literalTypeAt(program, node.right) === undefined || readsADefault(node.right, prop)) {
+          return [];
+        }
+        return [
+          `${relativePath(source.fileName)}:${lineOf(node)}: ${node.getText()} falls back to a literal the controls cannot read. Declare it as ${prop} in the component's \`const defaults = { ... } satisfies Partial<Props>\` and fall back to defaults.${prop}.`,
+        ];
+      }),
+    );
+
+    expect(defaultsObjects.size).toBeGreaterThan(0);
+    expect(problems).toEqual([]);
+  } finally {
+    program.dispose();
+  }
 });

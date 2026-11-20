@@ -22,10 +22,12 @@ export type CenterProps<T extends ValidComponent = "div"> = PolymorphicProps<
   }
 >;
 
+const defaults = { component: "div" } satisfies Partial<CenterProps>;
+
 export function Center<T extends ValidComponent = "div">(props: CenterProps<T>): JSX.Element;
 export function Center(props: CenterProps): JSX.Element;
 export function Center<T extends ValidComponent = "div">(props: CenterProps<T>) {
   const { root } = createParts("Center", styles, props, { keep: ["inline"] });
-  const Root = dynamic(() => props.component ?? "div");
+  const Root = dynamic(() => props.component ?? defaults.component);
   return <Root data-inline={props.inline ? "true" : undefined} {...root} />;
 }
