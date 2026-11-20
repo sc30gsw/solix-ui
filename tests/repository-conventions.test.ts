@@ -12,7 +12,7 @@ import {
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "#/scripts/browser-engines.mjs";
-import { approvedSkills, frontMatterOf } from "#/scripts/package-skills.ts";
+import { frontMatterOf, outsideSkills } from "#/scripts/package-skills.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   outsideGeneratedOrInstalled,
@@ -43,7 +43,12 @@ const fullHistory = /^\s+fetch-depth: 0$/gm;
 const versionPrefix = /^[\^~]/;
 
 const packageSkillIgnoreFile = ".gitignore";
-const packageSkillEntries = [packageSkillIgnoreFile, ...approvedSkills().map(({ name }) => name)];
+const packageSkillEntries = [
+  packageSkillIgnoreFile,
+  ...outsideSkills()
+    .filter(({ source }) => source === "package")
+    .map(({ name }) => name),
+];
 
 const skillNames = readdirSync(skillsDirectory)
   .filter((name) => !packageSkillEntries.includes(name))
@@ -56,6 +61,12 @@ function escapeForRegExp(text: string): string {
 function skillText(name: string): string {
   const file = join(skillsDirectory, name, "SKILL.md");
   return existsSync(file) ? readFileSync(file, "utf8") : "";
+}
+
+function copiedOutsideSkills(): string[] {
+  return outsideSkills()
+    .filter(({ source }) => source !== "package")
+    .map(({ name }) => name);
 }
 
 function read(path: string): string {
@@ -94,10 +105,8 @@ test("every skill is named for its directory, described, and linked from .claude
 });
 
 test("every .agents or .claude path that a project-owned skill names exists", () => {
-  const vendored = Object.keys(
-    (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
-  );
-  const projectOwned = skillNames.filter((name) => !vendored.includes(name));
+  const copied = copiedOutsideSkills();
+  const projectOwned = skillNames.filter((name) => !copied.includes(name));
   const violations = projectOwned.flatMap((name) =>
     [...skillText(name).matchAll(agentPathInBackticks)]
       .map(([, path]) => path.replace(trailingPunctuation, ""))
@@ -373,14 +382,12 @@ test("every verification skill was last confirmed against a commit that HEAD con
 });
 
 test("no project-owned skill copies a version from the catalog", () => {
-  const vendored = Object.keys(
-    (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
-  );
+  const copied = copiedOutsideSkills();
   const versions = Object.entries(pnpmSettings().catalog)
     .filter(([, version]) => !version.includes(":"))
     .map(([name, version]): [string, string] => [name, version.replace(versionPrefix, "")]);
   const violations = skillNames
-    .filter((name) => !vendored.includes(name))
+    .filter((name) => !copied.includes(name))
     .flatMap((name) =>
       versions
         .filter(([, version]) => skillText(name).includes(version))
@@ -424,6 +431,7 @@ test("every check in the repository runs through vp run verify, before a commit,
   const verify = rootManifest().scripts?.verify ?? "";
 
   expect(verify.split(" && ")).toEqual([
+    "vp run check:lockfile",
     "vp check --deny-warnings",
     "vp run lint:solid",
     "vp run check:private-terms",

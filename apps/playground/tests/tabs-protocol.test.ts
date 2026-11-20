@@ -4,12 +4,13 @@ import { expect, inject, test } from "vite-plus/test";
 import { hydrationTimeout, opened, pageDidNotBecomeReady } from "#/tests/support/opening.ts";
 import { inEveryEngine } from "#/tests/support/playground.ts";
 import {
-  activeAndSelected,
   clickMissedItsTab,
   clickTab,
   optional,
   panelOf,
-  stateOf,
+  snapshotOf,
+  stateFrom,
+  type TabsSnapshot,
   tabLists,
   tabNames,
 } from "#/tests/support/tabs.ts";
@@ -28,29 +29,45 @@ const generatedRuns = 15;
 const longestSequence = 12;
 const generatedSequencesTimeout = 55_000;
 const scrollAwayFromThePointer = 200;
+const notATab = "a tab the list does not have";
+const unrenderedList = "<main><p>no list of tabs yet</p></main>";
+const failsWithin = 5_000;
 type Model = RovingListState & { list: RovingList };
-type Real = { page: Page };
+type Real = { page: Page; readyAt: number };
 
 function become(model: Model, next: RovingListState): void {
   model.selected = next.selected;
   model.focused = next.focused;
 }
 
-async function expectAgreement(model: Model, { page }: Real): Promise<void> {
+async function expectAgreement(model: Model, { page, readyAt }: Real): Promise<void> {
   const { name: list } = model.list;
-  await expect
-    .poll(() => stateOf(page, list))
-    .toMatchObject({
-      selected: model.selected,
-      focused: model.focused,
-      shown: model.selected === null ? [] : [panelOf(model.selected)],
-    });
-  const { active, selected } = await activeAndSelected(page, list);
+  const expected = {
+    selected: model.selected,
+    focused: model.focused,
+    shown: model.selected === null ? [] : [panelOf(model.selected)],
+  };
+  const firstPoll = performance.now();
+  let last: TabsSnapshot | undefined;
+  try {
+    await expect
+      .poll(async () => {
+        last = await snapshotOf(page, list);
+        return stateFrom(last.lists, list);
+      })
+      .toMatchObject(expected);
+  } catch (cause) {
+    throw new Error(
+      `${list}: the page does not agree with the model, which expects ${JSON.stringify(expected)}. It first polled ${Math.round(firstPoll - readyAt)} ms after the page was ready, and gave up ${Math.round(performance.now() - firstPoll)} ms later. The page showed ${last === undefined ? "nothing: no snapshot of it came back" : JSON.stringify(last)}.`,
+      { cause },
+    );
+  }
+  if (last === undefined) throw new Error(`${list}: the poll agreed with no snapshot of the page.`);
+  const { active, ariaSelected, tabStops } = stateFrom(last.lists, list);
   expect(
     active,
     "the tabs that carry data-active are the ones whose aria-selected is true",
-  ).toEqual(selected);
-  const { tabStops } = await stateOf(page, list);
+  ).toEqual(ariaSelected);
   expect(tabStops, "the list has one tab stop").toHaveLength(1);
   if (model.selected !== null) {
     expect(tabStops, "the tab stop is the selected tab").toEqual([model.selected]);
@@ -124,10 +141,11 @@ function everySequenceAgreesOn(page: Page) {
     fc.commands(steps, { maxCommands: longestSequence }),
     async (list, sequence) => {
       await opened(page, url, "hydrated");
+      const real = { page, readyAt: performance.now() };
       const model = atTheStartOf(list);
 
-      await expectAgreement(model, { page });
-      await fc.asyncModelRun(() => ({ model, real: { page } }), sequence);
+      await expectAgreement(model, real);
+      await fc.asyncModelRun(() => ({ model, real }), sequence);
     },
   );
 }
@@ -219,12 +237,61 @@ inEveryEngine((browser) => {
     await page.close();
   });
 
+  test("a disagreement with the model says what the page showed: each tab and panel, the document's state, its stylesheets and its scroll", async () => {
+    const page = await browser().newPage();
+    const [list] = tabLists;
+    if (list === undefined) throw new Error("the playground renders no list of tabs.");
+    const model = atTheStartOf(list);
+    model.focused = notATab;
+    await opened(page, url, "hydrated");
+
+    const failure = await expectAgreement(model, { page, readyAt: performance.now() }).then(
+      () => "",
+      (error: unknown) => String(error),
+    );
+
+    for (const shown of [
+      "after the page was ready",
+      "readyState",
+      "stylesheets",
+      "scrollY",
+      "ariaSelected",
+      "dataActive",
+      "hidden",
+      "display",
+    ]) {
+      expect(failure).toContain(shown);
+    }
+    expect(failure).toContain(notATab);
+    await page.close();
+  });
+
+  test("a disagreement on a page that renders no such list of tabs says what the page showed, well within the test's timeout", async () => {
+    const page = await browser().newPage();
+    await page.setContent(unrenderedList);
+    const [list] = tabLists;
+    if (list === undefined) throw new Error("the playground renders no list of tabs.");
+    const asked = performance.now();
+
+    const failure = await expectAgreement(atTheStartOf(list), { page, readyAt: asked }).then(
+      () => "",
+      (error: unknown) => String(error),
+    );
+
+    expect(performance.now() - asked).toBeLessThan(failsWithin);
+    for (const shown of [list.name, "readyState", "stylesheets", "scrollY", "lists"]) {
+      expect(failure).toContain(shown);
+    }
+    await page.close();
+  });
+
   test("a click that does not reach its tab, because the page moves under the pointer, fails by saying so and not as a disagreement with the model", async () => {
     const page = await browser().newPage();
     await opened(page, url, "hydrated");
     const list = theOptionalList();
     const model = atTheStartOf(list);
-    await clickOn(list, files).run(model, { page });
+    const real = { page, readyAt: performance.now() };
+    await clickOn(list, files).run(model, real);
     await page.evaluate((distance) => {
       window.addEventListener(
         "mousedown",
@@ -233,7 +300,7 @@ inEveryEngine((browser) => {
       );
     }, scrollAwayFromThePointer);
 
-    await expect(clickOn(list, notes).run(model, { page })).rejects.toThrow(clickMissedItsTab);
+    await expect(clickOn(list, notes).run(model, real)).rejects.toThrow(clickMissedItsTab);
     await page.close();
   });
 });

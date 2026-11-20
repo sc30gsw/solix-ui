@@ -17,7 +17,7 @@ if (unstaged.length + untracked.length > 0) {
       "The commit holds what the index holds, and verify checks the working tree, so the two must be the same.",
       ...unstaged.map((path) => `  unstaged change: ${path}`),
       ...untracked.map((path) => `  untracked file: ${path}`),
-      "Stage each one with git add, or undo it, then commit again. Never git stash: the stash is shared by every worktree.",
+      "Stage each one with git add, or undo it, then commit again.",
     ].join("\n"),
   );
   process.exit(1);

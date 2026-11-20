@@ -12,6 +12,8 @@ import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 
 export const reviewedSkillsFile = "scripts/reviewed-skills.json";
+const skillsLockFile = "skills-lock.json";
+export const kitSkills: readonly string[] = ["solid-2"];
 export const skillDirectories = [".agents/skills", ".claude/skills"];
 const skillFile = "SKILL.md";
 
@@ -22,6 +24,19 @@ export function approvedSkills(): PackageSkill[] {
   return Object.entries(pnpmSettings().approvedSkills).flatMap(([pack, names]) =>
     names.map((name) => ({ pack, name })),
   );
+}
+
+type OutsideSkill = { name: string; source: "package" | "vendored" | "kit" };
+
+export function outsideSkills(): OutsideSkill[] {
+  const lock: { skills: Record<string, unknown> } = JSON.parse(
+    readFileSync(join(repositoryRoot, skillsLockFile), "utf8"),
+  );
+  return [
+    ...approvedSkills().map(({ name }) => ({ name, source: "package" as const })),
+    ...Object.keys(lock.skills).map((name) => ({ name, source: "vendored" as const })),
+    ...kitSkills.map((name) => ({ name, source: "kit" as const })),
+  ];
 }
 
 export function reviewedHashes(): ReviewedHashes {
@@ -74,6 +89,11 @@ function hashOfFiles(folder: string, files: readonly string[]): string {
     }
   }
   return hash.digest("hex");
+}
+
+export function folderHash(folder: string): string {
+  const { files, neitherFileNorFolder } = skillFolderEntries(folder);
+  return [hashOfFiles(folder, files), ...neitherFileNorFolder].join(" ");
 }
 
 export function reviewProblems(
