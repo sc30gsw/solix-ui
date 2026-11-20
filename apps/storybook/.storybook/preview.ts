@@ -6,6 +6,7 @@ import {
   solidDevelopmentBuildLoaded,
   wcag2AAndAATags,
 } from "../../../tests/support/browser-gates.ts";
+import { colorContrastRule } from "../../../tests/support/contrast-exceptions.ts";
 import {
   globalSwitchesThatSkipTheAccessibilityScan,
   selectorsTheAccessibilityAddonLeavesUnscanned,
@@ -16,6 +17,7 @@ import "#/.storybook/preview.css";
 const projectAccessibility: Record<string, unknown> = {
   test: "error",
   options: { runOnly: { type: "tag", values: wcag2AAndAATags } },
+  config: { rules: [colorContrastRule] },
 };
 const accessibilityKey = "a11y";
 

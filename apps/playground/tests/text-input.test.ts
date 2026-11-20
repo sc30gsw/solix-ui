@@ -1,4 +1,5 @@
 import type { Locator, Page } from "playwright";
+import { paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
 import { afterEach, beforeEach, describe, expect, inject, test } from "vite-plus/test";
 import {
   computed,
@@ -66,7 +67,7 @@ inEveryEngine((browser) => {
 
       await expect
         .poll(() => computed(email, "border-top-color"))
-        .toBe(expected("--solix-color-primary"));
+        .toBe(expected(paletteToken(primaryPalette, "6")));
     });
 
     test("looks disabled and cannot be typed in when disabled", async () => {

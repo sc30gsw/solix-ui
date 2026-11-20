@@ -1,5 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { createParts, type ElementProps } from "#/src/parts.ts";
+import { primaryColors } from "#/src/primary-colors.stylex.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
@@ -7,7 +8,7 @@ const styles = stylex.create({
     backgroundColor: tokens["--solix-color-body"],
     borderColor: {
       default: tokens["--solix-color-border"],
-      ":focus-visible": tokens["--solix-color-primary"],
+      ":focus-visible": primaryColors["6"],
       ":user-invalid": tokens["--solix-color-error"],
     },
     borderRadius: tokens["--solix-radius-md"],
@@ -31,6 +32,6 @@ const styles = stylex.create({
 export type TextInputProps = ElementProps<"input", typeof styles, { children?: never }>;
 
 export function TextInput(props: TextInputProps) {
-  const { root } = createParts("TextInput", styles, props, "children");
+  const { root } = createParts("TextInput", styles, props, { keep: ["children"] });
   return <input type="text" {...root} />;
 }

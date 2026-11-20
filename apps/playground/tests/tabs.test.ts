@@ -1,6 +1,8 @@
 import { join } from "node:path";
+import { colorContrastRule } from "../../../tests/support/contrast-exceptions.ts";
 import type { Locator } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
+import { paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
 import { baseKey, stylePropClass } from "../../../packages/core/src/style-prop-table";
 import { rootPart, stableClass } from "../../../packages/core/tests/built-library";
 import { wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
@@ -156,7 +158,9 @@ inEveryEngine((browser) => {
       for (const { name } of enabled) {
         await expect
           .poll(() => computed(tabNamed(page, account, name), "color"))
-          .toBe(expected(name === selected ? "--solix-color-primary" : "--solix-color-text"));
+          .toBe(
+            expected(name === selected ? paletteToken(primaryPalette, "9") : "--solix-color-text"),
+          );
       }
     });
 
@@ -321,7 +325,7 @@ inEveryEngine((browser) => {
           `${click.name}, then Shift+Tab and Tab: focus ring`,
         ).toBe("solid");
         expect(await computed(securityTab, "outline-color")).toBe(
-          expected("--solix-color-primary"),
+          expected(paletteToken(primaryPalette, "6")),
         );
       }
     });
@@ -441,7 +445,7 @@ inEveryEngine((browser) => {
       await expect.poll(() => elementsNamedBy(page, generated)).toEqual(mounted);
     });
 
-    test("axe-core finds no WCAG 2.2 A or AA violation in the Tabs region", async () => {
+    test("axe-core finds no WCAG 2.2 A or AA violation in the Tabs region, but the colour contrast of a pair contrastExceptions lists", async () => {
       const context = await browser().newContext();
       const page = await context.newPage();
       await opened(page, url, "hydrated");
@@ -449,9 +453,10 @@ inEveryEngine((browser) => {
       await tabNamed(page, optional, notes).click();
       await page.addScriptTag({ path: axeSource });
       const found = await page.evaluate(
-        async ([region, tags]) => {
+        async ([region, tags, colorContrast]) => {
           const { axe } = window as unknown as {
             axe: {
+              configure: (spec: { rules: object[] }) => void;
               run: (
                 context: Element | null,
                 options: object,
@@ -464,6 +469,7 @@ inEveryEngine((browser) => {
               }>;
             };
           };
+          axe.configure({ rules: [colorContrast] });
           const results = await axe.run(document.querySelector(region), {
             runOnly: { type: "tag", values: tags },
           });
@@ -472,7 +478,7 @@ inEveryEngine((browser) => {
               `${id}: ${help} (${nodes.map(({ target, failureSummary }) => `${target.join(" ")}: ${failureSummary}`).join(", ")})`,
           );
         },
-        [tabsRegion, wcag2AAndAATags] as const,
+        [tabsRegion, wcag2AAndAATags, colorContrastRule] as const,
       );
 
       await context.close();

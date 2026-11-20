@@ -1,18 +1,31 @@
-import { layerOrder, libraryCascadeLayer, type Scale } from "#/src/style-prop-table.ts";
-import { characterThatEndsADeclaration, type ScaleKey, tokenOf } from "#/src/style-props.ts";
+import {
+  isPalette,
+  type Palette,
+  paletteToken,
+  primaryName,
+  shades,
+  shadeSource,
+} from "#/src/color-table.ts";
+import { colorSchemeAttribute } from "#/src/color-schemes.ts";
+import { warnInTheBrowserDuringDevelopment } from "#/src/development-warning.ts";
+import { type Scale } from "#/src/style-prop-table.ts";
+import { layerOrder, libraryCascadeLayer } from "#/src/layers.ts";
+import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
+import { type ScaleKey, tokenOf } from "#/src/style-props.ts";
 
 export const scaleOfThemeKey = {
   spacing: "spacing",
   radius: "radius",
   fontSizes: "font-size",
   lineHeights: "line-height",
+  shadows: "shadow",
 } as const satisfies Record<string, Scale>;
 
 type ThemeKey = keyof typeof scaleOfThemeKey;
 
 export type SolixTheme = {
   [Key in ThemeKey]?: { [Size in ScaleKey<(typeof scaleOfThemeKey)[Key]>]?: string | null };
-};
+} & { primaryColor?: Exclude<Palette, typeof primaryName> };
 
 const characterThatLeavesItsPlace = /[<!\\]|\/\*/;
 
@@ -49,6 +62,20 @@ function isThemeKey(key: string): key is ThemeKey {
   return Object.hasOwn(scaleOfThemeKey, key);
 }
 
+function primaryDeclarationsOf(primaryColor: unknown): string[] {
+  if (primaryColor === undefined) return [];
+  if (!isPalette(primaryColor) || primaryColor === primaryName) {
+    warnInTheBrowserDuringDevelopment(
+      () =>
+        `theme.primaryColor=${JSON.stringify(primaryColor)} is not a palette other than the ${primaryName}, so the theme leaves the ${primaryName} as it was.`,
+    );
+    return [];
+  }
+  return shades.map(
+    (shade) => `${paletteToken(primaryName, shade)}:var(${shadeSource(primaryColor, shade)});`,
+  );
+}
+
 function declarationsOf(theme: SolixTheme): string[] {
   return Object.entries(theme).flatMap(([key, sizes]) => {
     if (!isThemeKey(key) || typeof sizes !== "object" || sizes === null) return [];
@@ -62,9 +89,18 @@ function declarationsOf(theme: SolixTheme): string[] {
 }
 
 export function themeStyleSheet(theme: SolixTheme, selector: string): string | undefined {
-  const declarations = declarationsOf(theme);
-  if (declarations.length === 0 || !isWritable(selector)) return undefined;
-  return `${layerOrder}@layer ${libraryCascadeLayer}{${selector}{${declarations.join("")}}}`;
+  const placed: [rule: (block: string) => string, declarations: string[]][] = [
+    [(block) => `${selector}${block}`, declarationsOf(theme)],
+    [
+      (block) => `@scope (${selector}){:where(:scope,[${colorSchemeAttribute}])${block}}`,
+      primaryDeclarationsOf(theme.primaryColor),
+    ],
+  ];
+  const rules = placed.flatMap(([rule, declarations]) =>
+    declarations.length === 0 ? [] : [rule(`{${declarations.join("")}}`)],
+  );
+  if (rules.length === 0 || !isWritable(selector)) return undefined;
+  return `${layerOrder}@layer ${libraryCascadeLayer}{${rules.join("")}}`;
 }
 
 export function createTheme(theme: SolixTheme): SolixTheme {

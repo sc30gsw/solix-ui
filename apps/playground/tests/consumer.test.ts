@@ -1,4 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
+import { ownPaletteOf, paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
+import { brandPrimaryColor } from "#/src/sections/theme-setups.ts";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import { LIBRARY_CASCADE_LAYER } from "../../../packages/core/build-pipeline.mjs";
@@ -72,7 +74,9 @@ inEveryEngine((browser) => {
       const emphasise = page.getByRole("button", { name: "Emphasise" });
       const follower = page.locator("details").filter({ hasText: "Follows the Emphasise button" });
       const followerSummary = follower.locator("summary");
-      expect(await computed(emphasise, "background-color")).toBe(expected("--solix-color-primary"));
+      expect(await computed(emphasise, "background-color")).toBe(
+        expected(paletteToken(primaryPalette, "6")),
+      );
       expect(await emphasise.getAttribute("aria-pressed")).toBe("false");
       expect(await computed(follower, "outline-style")).toBe("none");
       expect(await computed(followerSummary, "background-color")).toBe(
@@ -90,10 +94,11 @@ inEveryEngine((browser) => {
       ).toBe(expected("danger"));
 
       await emphasise.click();
+      await page.getByRole("heading").first().hover();
 
       await expect
         .poll(() => computed(emphasise, "background-color"))
-        .toBe(expected("--solix-color-primary"));
+        .toBe(expected(paletteToken(primaryPalette, "6")));
       expect(await computed(follower, "outline-style")).toBe("none");
       expect(await computed(followerSummary, "background-color")).toBe(
         expected("--solix-color-surface"),
@@ -119,9 +124,9 @@ inEveryEngine((browser) => {
       }
     });
 
-    test("a consumer rethemes a subtree by overriding a public token", async () => {
+    test("a consumer rethemes a subtree by a provider whose theme's primaryColor names another palette, scoped by cssVariablesSelector", async () => {
       expect(await computed(opened.page.getByTestId("themed"), "background-color")).toBe(
-        opened.expected("brandGreen"),
+        opened.expected(paletteToken(ownPaletteOf(brandPrimaryColor), "6")),
       );
     });
   });

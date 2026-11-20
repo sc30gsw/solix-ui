@@ -1,4 +1,5 @@
 import type { Locator, Page } from "playwright";
+import { paletteToken, primaryPalette } from "../../../packages/core/src/color-table";
 import {
   afterAll,
   afterEach,
@@ -43,10 +44,16 @@ inEveryEngine((browser) => {
 
     async function expectOpen(): Promise<void> {
       await expect.poll(detailsIsOpen).toBe(true);
-      expect(await computed(summary, "background-color")).toBe(expected("--solix-color-primary"));
-      expect(await computed(summary, "color")).toBe(expected("--solix-color-on-primary"));
+      expect(await computed(summary, "background-color")).toBe(
+        expected(paletteToken(primaryPalette, "6")),
+      );
+      expect(await computed(summary, "color")).toBe(
+        expected(paletteToken(primaryPalette, "contrast")),
+      );
       expect(await content.isVisible()).toBe(true);
-      expect(await computed(content, "border-left-color")).toBe(expected("--solix-color-primary"));
+      expect(await computed(content, "border-left-color")).toBe(
+        expected(paletteToken(primaryPalette, "6")),
+      );
     }
 
     beforeEach(async () => {
@@ -94,8 +101,10 @@ inEveryEngine((browser) => {
       await innerSummary.click();
       await expect
         .poll(() => computed(innerSummary, "background-color"))
-        .toBe(expected("--solix-color-primary"));
-      expect(await computed(summary, "background-color")).toBe(expected("--solix-color-primary"));
+        .toBe(expected(paletteToken(primaryPalette, "6")));
+      expect(await computed(summary, "background-color")).toBe(
+        expected(paletteToken(primaryPalette, "6")),
+      );
     });
   });
 
@@ -106,7 +115,9 @@ inEveryEngine((browser) => {
     await summary.click();
 
     await expect.poll(() => page.getByText("Hidden content").isVisible()).toBe(true);
-    expect(await computed(summary, "background-color")).toBe(expected("--solix-color-primary"));
+    expect(await computed(summary, "background-color")).toBe(
+      expected(paletteToken(primaryPalette, "6")),
+    );
 
     await close();
   });

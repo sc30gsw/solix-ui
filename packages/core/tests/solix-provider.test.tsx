@@ -2,10 +2,21 @@ import { join } from "node:path";
 import { createComponent, renderToString } from "@solidjs/web";
 import fc from "fast-check";
 import postcss from "postcss";
-import { expect, test } from "vite-plus/test";
+import { expect, test, vi } from "vite-plus/test";
 import { tokenValues } from "../../../scripts/tokens";
+import {
+  isPalette,
+  ownPaletteOf,
+  paletteAliases,
+  palettes,
+  paletteToken,
+  primaryName,
+  shades,
+} from "#/src/color-table.ts";
+import { colorSchemeAttribute } from "#/src/color-schemes.ts";
 import type * as CreateTheme from "#/src/create-theme.ts";
-import { layerOrder, libraryCascadeLayer, libraryStyleMark } from "#/src/style-prop-table.ts";
+import { libraryStyleMark } from "#/src/style-prop-table.ts";
+import { layerOrder, libraryCascadeLayer } from "#/src/layers.ts";
 import { dist, library } from "#/tests/built-library.ts";
 import { elementsOf, valuesOf } from "#/tests/markup.ts";
 import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
@@ -204,4 +215,65 @@ test("a provider given no getStyleNonce gives its theme style the nonce of the p
       .filter(({ tag }) => tag === "style")
       .map((style) => valuesOf(style, "nonce")),
   ).toEqual([["outer"]]);
+});
+
+test("a theme's primaryColor writes every shade of the primary's alias from that palette, at no specificity in a scope rooted at the selector, on the root and on every element with a colour scheme inside it, so the nearest provider wins, and nothing for a value that names no palette or names the primary itself", async (context) => {
+  const named = [...palettes, ...Object.keys(paletteAliases)];
+  await assertProperty(
+    context,
+    fc.property(
+      fc.constantFrom(...named, "red.6", "#f00", "toString", "__proto__", "", "1rem;color:red"),
+      fc.constantFrom(":root", ".app", "[data-theme]", "#page > main"),
+      (primaryColor, selector) => {
+        const written: CreateTheme.SolixTheme = {};
+        Reflect.set(written, "primaryColor", primaryColor);
+        const css = styleOf(
+          renderToString(() =>
+            createComponent(library.SolixProvider, {
+              theme: written,
+              cssVariablesSelector: selector,
+            }),
+          ),
+        );
+        if (!isPalette(primaryColor) || primaryColor === primaryName) {
+          expect(css).toBeUndefined();
+          return;
+        }
+        const rules: [scope: string, selector: string, declarations: string[]][] = [];
+        postcss.parse(css ?? "").walkRules((rule) => {
+          rules.push([
+            rule.parent?.type === "atrule" ? `@${rule.parent.name} ${rule.parent.params}` : "",
+            rule.selector,
+            rule.nodes.map((node) => (node.type === "decl" ? `${node.prop}:${node.value}` : "")),
+          ]);
+        });
+
+        expect(rules).toEqual([
+          [
+            `@scope (${selector})`,
+            `:where(:scope,[${colorSchemeAttribute}])`,
+            shades.map(
+              (shade) =>
+                `${paletteToken(primaryName, shade)}:var(${paletteToken(ownPaletteOf(primaryColor), shade)})`,
+            ),
+          ],
+        ]);
+      },
+    ),
+    { numRuns: generatedRuns },
+  );
+});
+
+test("on the server a theme's primaryColor that names no palette writes nothing without a warning, which only the browser's development build gives", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  try {
+    const theme: CreateTheme.SolixTheme = {};
+    Reflect.set(theme, "primaryColor", "bleu");
+    expect(
+      styleOf(renderToString(() => createComponent(library.SolixProvider, { theme }))),
+    ).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  } finally {
+    warn.mockRestore();
+  }
 });

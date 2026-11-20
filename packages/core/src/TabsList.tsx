@@ -31,8 +31,11 @@ export type TabsListProps = ElementProps<"div", typeof styles>;
 
 export function TabsList(props: TabsListProps) {
   const tabs = useTabs("Tabs.List");
-  const { root } = tabs.behaviour.bind(createParts("TabsList", styles, props, "children"), {
-    root: { slot: "list", own: { onKeyDown: tabs.steps.onKeyDown } },
-  });
+  const { root } = tabs.behaviour.bind(
+    createParts("TabsList", styles, props, { keep: ["children"] }),
+    {
+      root: { slot: "list", own: { onKeyDown: tabs.steps.onKeyDown } },
+    },
+  );
   return <div {...root}>{props.children}</div>;
 }
