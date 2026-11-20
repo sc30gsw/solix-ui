@@ -1,6 +1,6 @@
 ---
 name: open-pull-request
-description: The steps every pull request in this repository goes through before it opens, in order. Verify, then pstack `correct`, then pstack `no-comments`, then Thermos, then the verification skills, then a stacked pull request with the six-section body. Use before opening or updating any pull request.
+description: The steps every pull request in this repository goes through before it opens, in order. Verify, then pstack `correct`, then pstack `no-comments`, then Thermos and `/solid2-review`, then the verification skills, then a stacked pull request with the six-section body. Use before opening or updating any pull request.
 ---
 
 # Open a pull request
@@ -25,9 +25,9 @@ Follow the pstack `correct` skill over this branch's work. Find each mistake tha
 
 Follow the pstack `no-comments` skill over the diff against the base branch. It starts the `comment-sicko` agent. `tests/rules/workspace-rules.test.ts` fails on a comment in a script file, but it does not see files under a directory whose name starts with a dot, such as `.agents`. Neither check sees a constraint that a comment used to carry and that no name, type or test carries yet.
 
-## 4. Thermos
+## 4. Thermos and `/solid2-review`
 
-Read `.agents/skills/thermos/SKILL.md` and follow it. Start the two reviewers in `.claude/agents`, and give each one the diff against the base branch, the full contents of the changed files, and the path of its rubric: `.agents/skills/thermo-nuclear-review/SKILL.md` or `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Fix each finding you confirm, and say why for each one you dismiss. Run step 1 again after a fix.
+Read `.agents/skills/thermos/SKILL.md` and follow it. Start the two reviewers in `.claude/agents`, and give each one the diff against the base branch, the full contents of the changed files, and the path of its rubric: `.agents/skills/thermo-nuclear-review/SKILL.md` or `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Beside them, run `/solid2-review`, the review command solid2-agent-kit installs in `.claude/commands/solid2-review.md`, over the same diff. When the session cannot start a slash command, read that file and follow it. Fix each finding you confirm, from the reviewers and from the command, and say why for each one you dismiss. Run step 1 again after a fix.
 
 ## 5. Verification skills
 

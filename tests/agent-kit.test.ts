@@ -38,6 +38,12 @@ const reactFixture = "tests/fixtures/agent-kit/react-hook.txt";
 const installed = "node_modules";
 const restatedShare = 0.8;
 const codeName = /`([A-Za-z_$][\w$.]*)/g;
+const openPullRequest = ".agents/skills/open-pull-request/SKILL.md";
+const reviewStep = /^(## 4\. [\s\S]*?)(?=^## )/m;
+
+function commandFile(command: string): string {
+  return `.claude/commands/${command}.md`;
+}
 
 type Run = { status: number | null; stderr: string };
 
@@ -230,4 +236,17 @@ test(`no package skill that ${workspaceFile} approves restates the kit's solid-2
 
   expect(approvedSkills().length).toBeGreaterThan(0);
   expect(restating).toEqual([]);
+});
+
+test("step 4 of open-pull-request runs every command the kit installs, next to Thermos", () => {
+  const step = reviewStep.exec(read(openPullRequest))?.[1] ?? "";
+  const missing = kitInstalls(repositoryRoot, "commands")
+    .filter((command) => !step.includes(`/${command}`) || !step.includes(commandFile(command)))
+    .map(
+      (command) =>
+        `${openPullRequest}: in step 4, next to Thermos, run /${command} and say to follow ${commandFile(command)} where a slash command cannot start.`,
+    );
+
+  expect(step).toContain("Thermos");
+  expect(missing).toEqual([]);
 });
