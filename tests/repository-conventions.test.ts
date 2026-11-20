@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
+import { kitInstalls } from "#/scripts/agent-kit.ts";
 import { engineNames } from "#/scripts/browser-engines.mjs";
 import { approvedSkills, frontMatterOf } from "#/scripts/package-skills.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
@@ -43,6 +44,7 @@ const versionPrefix = /^[\^~]/;
 
 const packageSkillIgnoreFile = ".gitignore";
 const packageSkillEntries = [packageSkillIgnoreFile, ...approvedSkills().map(({ name }) => name)];
+const kitSkillEntries = kitInstalls(repositoryRoot, "skills");
 
 const skillNames = readdirSync(skillsDirectory)
   .filter((name) => !packageSkillEntries.includes(name))
@@ -85,7 +87,12 @@ test("every skill is named for its directory, described, and linked from .claude
     return problems;
   });
   const dangling = readdirSync(linkedSkillsDirectory)
-    .filter((name) => !skillNames.includes(name) && !packageSkillEntries.includes(name))
+    .filter(
+      (name) =>
+        !skillNames.includes(name) &&
+        !packageSkillEntries.includes(name) &&
+        !kitSkillEntries.includes(name),
+    )
     .map((name) => `.claude/skills/${name}: remove it, there is no .agents/skills/${name}.`);
 
   expect(skillNames.length).toBeGreaterThan(0);

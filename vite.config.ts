@@ -7,7 +7,7 @@ import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
-const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
+const filesOwnedByOtherTools = [".agents/**", ".claude/**", "CLAUDE.md", "skills-lock.json"];
 const generatedEvidence = ["docs/verification/**"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
