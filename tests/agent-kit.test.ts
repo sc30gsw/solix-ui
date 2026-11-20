@@ -1,6 +1,4 @@
-import { spawnSync } from "node:child_process";
 import {
-  chmodSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -8,20 +6,15 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
-  realpathSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { delimiter, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { describe, expect, test } from "vite-plus/test";
+import { expect, test } from "vite-plus/test";
 import {
-  type KitHookEvent,
-  kitHookDidNotRun,
-  kitHookEntries,
   kitInstalls,
   kitPackage,
-  kitNotInstalled,
   kitVersion,
   claudeSkills,
   sharedSkills,
@@ -30,19 +23,13 @@ import {
   syncAgentKit,
   syncScript,
 } from "#/scripts/agent-kit.ts";
-import { refusals } from "#/scripts/agent-command-guard.ts";
 import { manifestPaths } from "#/scripts/repository.ts";
 import { approvedSkills } from "#/scripts/package-skills.ts";
 import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
-const blocking = 2;
-const kitGuardrail = "solid2-agent-kit guardrail";
-const subdirectory = "packages/core";
-const kitSkill = `.claude/skills/${kitInstalls(repositoryRoot, "skills")[0]}`;
 const manifest = "package.json";
-const reactFixture = "tests/fixtures/agent-kit/react-hook.txt";
 const lintScript = "lint:solid";
 const catalogVersion = "catalog:";
 const removedByPnpm = "-";
@@ -58,15 +45,6 @@ const onlyInTheCheatsheet = [
   "isEqual",
   "Suspense.Provider",
 ];
-const readOnlyCommands = [
-  "sed -n 1,40p .claude/settings.json",
-  "cat .claude/settings.json 2>/dev/null",
-  "grep -n solid .claude/skills/solid-2/SKILL.md 2>&1",
-  "diff -r node_modules/solid2-agent-kit/files/skills/solid-2 .claude/skills/solid-2",
-  "cp .claude/commands/solid2-review.md /tmp/review.md",
-  "git diff main -- .claude/settings.json > /tmp/settings.diff",
-  "git status",
-];
 const installed = "node_modules";
 const replacedByTheKit = [
   { pack: "solid-js", name: "solid-2.0" },
@@ -78,8 +56,6 @@ const reviewStep = /^(## 4\. [\s\S]*?)(?=^## )/m;
 function commandFile(command: string): string {
   return `.claude/commands/${command}.md`;
 }
-
-type Run = { status: number | null; stderr: string };
 
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
@@ -115,81 +91,6 @@ function seedCheckout(root: string, paths: readonly string[]): void {
   }
 }
 
-function nodesOnPath(): string[] {
-  return [
-    ...new Set(
-      (process.env.PATH ?? "")
-        .split(delimiter)
-        .filter((directory) => directory !== "")
-        .map((directory) => join(directory, "node"))
-        .filter((file) => existsSync(file))
-        .map((file) => realpathSync(file)),
-    ),
-  ];
-}
-
-function runKitHook(
-  event: KitHookEvent,
-  payload: Record<string, unknown>,
-  {
-    path,
-    cwd = repositoryRoot,
-    projectDirectory = repositoryRoot,
-  }: {
-    path: string;
-    cwd?: string;
-    projectDirectory?: string;
-  },
-): Run {
-  const command =
-    kitHookEntries(readSettings(repositoryRoot), event).flatMap(({ hooks }) => hooks ?? [])[0]
-      ?.command ?? "";
-  const run = spawnSync("sh", ["-c", command], {
-    cwd,
-    input: JSON.stringify({ hook_event_name: event, cwd, ...payload }),
-    encoding: "utf8",
-    env: { ...process.env, PATH: path, CLAUDE_PROJECT_DIR: projectDirectory },
-  });
-  return { status: run.status, stderr: run.stderr };
-}
-
-function runHooks(
-  event: KitHookEvent,
-  payload: Record<string, unknown>,
-  { path, cwd }: { path: string; cwd: string },
-): Run & { stdout: string } {
-  const tool = typeof payload.tool_name === "string" ? payload.tool_name : "";
-  const runs = (readSettings(repositoryRoot).hooks?.[event] ?? [])
-    .filter(({ matcher }) => matcher === undefined || new RegExp(`^(?:${matcher})$`).test(tool))
-    .flatMap(({ hooks }) => hooks ?? [])
-    .map(({ command }) =>
-      spawnSync("sh", ["-c", command ?? ""], {
-        cwd,
-        input: JSON.stringify({ hook_event_name: event, cwd, ...payload }),
-        encoding: "utf8",
-        env: { ...process.env, PATH: path, CLAUDE_PROJECT_DIR: repositoryRoot },
-      }),
-    );
-  return {
-    status: runs.some((run) => run.status === blocking)
-      ? blocking
-      : (runs.find((run) => run.status !== 0)?.status ?? 0),
-    stdout: runs.map((run) => run.stdout).join(""),
-    stderr: runs.map((run) => run.stderr).join(""),
-  };
-}
-
-function shell(command: string): Record<string, unknown> {
-  return { tool_name: "Bash", tool_input: { command } };
-}
-
-function written(file: string): Record<string, unknown> {
-  return {
-    tool_name: "Write",
-    tool_input: { file_path: file, content: readFileSync(file, "utf8") },
-  };
-}
-
 test(`the guidance the kit installs for Claude Code is exactly what ${syncScript} writes with the kit the catalog pins`, async () => {
   const outputs = await inTemporaryTree({}, (root) => {
     seedCheckout(root, []);
@@ -218,83 +119,9 @@ test(`the guidance the kit installs for Claude Code is exactly what ${syncScript
         `${path}: it is not what node ${syncScript} writes with solid2-agent-kit ${kitVersion(repositoryRoot)}, the release the catalog pins. Run it and commit what it writes; change the kit's guidance only through the kit.`,
     );
 
-  expect(outputs).toContain(settingsFile);
+  expect(outputs).not.toContain(settingsFile);
+  expect(outputs).toContain(`${claudeSkills}/${kitInstalls(repositoryRoot, "skills")[0]}`);
   expect(stale).toEqual([]);
-});
-
-describe.each(nodesOnPath())("the kit's hooks under %s", (node) => {
-  const path = `${dirname(node)}:/usr/bin:/bin`;
-
-  test.each([".", subdirectory])(
-    "run from the project directory when the session is in %s",
-    async (directory) => {
-      const cwd = join(repositoryRoot, directory);
-      await inTemporaryTree(
-        {
-          "React.tsx": read(reactFixture),
-          "Solid.tsx": 'import { createSignal } from "solid-js";\nexport const n = createSignal;\n',
-        },
-        (root) => {
-          const hook = (event: KitHookEvent, payload: Record<string, unknown>) =>
-            runHooks(event, payload, { path, cwd });
-          const clean = { status: 0, stdout: "", stderr: "" };
-          const tamper = hook("PreToolUse", {
-            tool_name: "Write",
-            tool_input: { file_path: join(repositoryRoot, kitSkill, "SKILL.md"), content: "" },
-          });
-          const install = hook("PreToolUse", shell("pnpm add react"));
-          const reported = hook("PostToolUse", written(join(root, "React.tsx")));
-
-          expect(tamper.status).toBe(blocking);
-          expect(tamper.stderr).toContain(kitGuardrail);
-          expect(install.status).toBe(0);
-          expect(install.stdout).toContain(refusals.bannedDependency);
-          expect(readOnlyCommands.map((command) => hook("PreToolUse", shell(command)))).toEqual(
-            readOnlyCommands.map(() => clean),
-          );
-          expect(reported.status).toBe(blocking);
-          expect(reported.stderr).toContain("[react-import]");
-          expect(hook("PostToolUse", written(join(root, "Solid.tsx")))).toEqual(clean);
-          expect(hook("Stop", { stop_hook_active: false })).toEqual(clean);
-        },
-      );
-    },
-  );
-});
-
-describe("the kit's hooks fail closed", () => {
-  test("a node on PATH that cannot run the kit blocks a tool call, or reports after one, and leaves a turn free to end", async () => {
-    await inTemporaryTree(
-      { "bin/node": "#!/bin/sh\necho 'SyntaxError: an older Node' >&2\nexit 1\n" },
-      (root) => {
-        chmodSync(join(root, "bin/node"), 0o755);
-        const path = `${join(root, "bin")}:/usr/bin:/bin`;
-        const before = runKitHook("PreToolUse", shell(`rm -rf ${kitSkill}`), { path });
-        const after = runKitHook("PostToolUse", shell("true"), { path });
-        const stop = runKitHook("Stop", { stop_hook_active: false }, { path });
-
-        expect(before.status).toBe(blocking);
-        expect(before.stderr).toContain(kitHookDidNotRun);
-        expect(after.status).toBe(blocking);
-        expect(after.stderr).toContain(kitHookDidNotRun);
-        expect(stop.status).not.toBe(blocking);
-        expect(stop.status).not.toBe(0);
-      },
-    );
-  });
-
-  test("a checkout with no kit installed, such as one before its install, lets every tool call run and says so", async () => {
-    await inTemporaryTree({}, (root) => {
-      const path = process.env.PATH ?? "";
-      const runs = [
-        runKitHook("PreToolUse", shell("pnpm install"), { path, projectDirectory: root }),
-        runKitHook("PostToolUse", shell("pnpm install"), { path, projectDirectory: root }),
-        runKitHook("Stop", { stop_hook_active: false }, { path, projectDirectory: root }),
-      ];
-
-      expect(runs).toEqual(runs.map(() => ({ status: 0, stderr: `${kitNotInstalled}\n` })));
-    });
-  });
 });
 
 test(`${workspaceFile} approves neither skill of solid-js's that the kit's solid-2 skill replaces`, () => {
@@ -403,4 +230,8 @@ test("no workspace manifest lists a package the kit's doctor bans, or a Solid 1.
 
   expect(manifestPaths().length).toBeGreaterThan(1);
   expect(problems.flat()).toEqual([]);
+});
+
+test(`${settingsFile} runs no hook, so every rule holds for every agent through the git hooks and CI`, () => {
+  expect(readSettings(repositoryRoot).hooks ?? {}).toEqual({});
 });
