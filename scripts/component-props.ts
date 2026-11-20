@@ -47,6 +47,7 @@ function sourceFileOf(program: Program, file: string): ts.SourceFile {
 export function exportsReturningAJsxElement(
   program: Program,
   elementFile: string,
+  entry: string = libraryEntry,
 ): ts.Identifier[] {
   const jsxElementAliases = declaredValues(sourceFileOf(program, elementFile)).flatMap((name) =>
     aliasDeclarationsOfTypeAt(program, name),
@@ -54,32 +55,38 @@ export function exportsReturningAJsxElement(
   if (jsxElementAliases.length === 0) {
     throw new Error("TypeScript gives no type alias for a JSX element of this project.");
   }
-  return namedValueExports(sourceFileOf(program, libraryEntry)).filter((name) =>
+  return namedValueExports(sourceFileOf(program, entry)).filter((name) =>
     aliasDeclarationsReturnedBy(program, name).some((returned) =>
       jsxElementAliases.includes(returned),
     ),
   );
 }
 
-export function openLibraryProgram(): { program: Program; elementFile: string } {
+export function openLibraryProgram(entry: string = libraryEntry): {
+  program: Program;
+  elementFile: string;
+} {
   const elementFile = virtualFile(jsxElementSource, ".tsx");
-  return { program: openProgram([libraryEntry, elementFile]), elementFile };
+  return { program: openProgram([entry, elementFile]), elementFile };
+}
+
+export function componentPropsOf(entry: string): ComponentProps {
+  const { program, elementFile } = openLibraryProgram(entry);
+  try {
+    return Object.fromEntries(
+      exportsReturningAJsxElement(program, elementFile, entry).map((name) => [
+        name.text,
+        propsOfComponent(program, name),
+      ]),
+    );
+  } finally {
+    program.dispose();
+  }
 }
 
 let resolved: ComponentProps | undefined;
 
 export function libraryComponentProps(): ComponentProps {
-  if (resolved) return resolved;
-  const { program, elementFile } = openLibraryProgram();
-  try {
-    resolved = Object.fromEntries(
-      exportsReturningAJsxElement(program, elementFile).map((name) => [
-        name.text,
-        propsOfComponent(program, name),
-      ]),
-    );
-    return resolved;
-  } finally {
-    program.dispose();
-  }
+  resolved ??= componentPropsOf(libraryEntry);
+  return resolved;
 }

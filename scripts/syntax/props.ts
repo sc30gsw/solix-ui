@@ -30,7 +30,7 @@ const stringLike = TypeFlags.String | TypeFlags.TemplateLiteral | TypeFlags.Stri
 
 type Member =
   | { kind: "literal"; value: Option }
-  | { kind: "text" | "number" | "object" | "function" | "absent" };
+  | { kind: "suggested" | "text" | "number" | "object" | "function" | "absent" };
 
 function declarationsOfSymbol(symbol: CheckerSymbol): ts.Node[] {
   return (symbol.declarations ?? []).flatMap((handle) => {
@@ -48,6 +48,20 @@ function constrained(program: Program, type: Type): Type {
   return program.checker.getBaseConstraintOfType(type) ?? type;
 }
 
+function isSuggestion(program: Program, type: Type): boolean {
+  const parts = (type.isIntersectionType() ? type.getTypes() : undefined) ?? [];
+  return (
+    parts.length === 2 &&
+    parts.some((part) => (part.flags & TypeFlags.String) !== 0) &&
+    parts.some(
+      (part) =>
+        (part.flags & TypeFlags.Object) !== 0 &&
+        program.checker.getPropertiesOfType(part).length === 0 &&
+        program.checker.getSignaturesOfType(part, SignatureKind.Call).length === 0,
+    )
+  );
+}
+
 function isStringLike(type: Type): boolean {
   if ((type.flags & stringLike) !== 0) return true;
   return type.isIntersectionType() && (type.getTypes() ?? []).some(isStringLike);
@@ -62,6 +76,7 @@ function memberOf(program: Program, type: Type): Member[] {
   if (part.isStringLiteralType() || part.isNumberLiteralType() || part.isBooleanLiteralType()) {
     return [{ kind: "literal", value: part.value as Option }];
   }
+  if (isSuggestion(program, part)) return [{ kind: "suggested" }];
   if (isStringLike(part)) return [{ kind: "text" }];
   if ((part.flags & TypeFlags.Number) !== 0) return [{ kind: "number" }];
   return isCallable(program, part) ||
@@ -81,15 +96,12 @@ function isCallable(program: Program, type: Type): boolean {
 
 function controlOf(members: readonly Member[]): Control {
   const options = members.flatMap((member) => (member.kind === "literal" ? [member.value] : []));
-  const has = (kind: Member["kind"]) => members.some((member) => member.kind === kind);
-  if (options.length > 0 && options.every((option) => typeof option === "boolean")) {
-    if (members.every((member) => member.kind === "literal" || member.kind === "absent")) {
-      return { type: "boolean" };
-    }
-  } else if (options.length > 0) {
-    return { type: "select", options };
-  }
-  if (has("text")) return { type: "text" };
+  const has = (...kinds: Member["kind"][]) => members.some(({ kind }) => kinds.includes(kind));
+  const closed = options.length > 0 && !has("text", "number");
+  const bothBooleans = options.length === 2 && options.includes(true) && options.includes(false);
+  if (closed && bothBooleans && !has("suggested")) return { type: "boolean" };
+  if (closed) return { type: "select", options };
+  if (has("suggested", "text")) return { type: "text" };
   if (has("number")) return { type: "number" };
   if (has("object")) return { type: "object" };
   return { type: false };
