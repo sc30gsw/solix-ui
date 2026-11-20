@@ -20,6 +20,8 @@ import { located } from "#/tests/support/primitive-rules/library.ts";
 const playwrightPackages = ["playwright", "playwright-core"];
 export const captures = ["screenshot", "screenshots", "screencast", "video", "recordVideo"];
 const captureOptions = ["screenshots", "recordVideo"];
+const protocolSend = "send";
+const protocolCaptures = ["Page.captureScreenshot", "Page.startScreencast"];
 const readValuesInstead =
   "The checks read values, not pixels: compare a computed style, an attribute or the markup instead.";
 
@@ -72,6 +74,22 @@ function handsPlaywrightACaptureOption(program: Program, node: ts.Node): boolean
   );
 }
 
+function sendsAProtocolCapture(program: Program, node: ts.Node): boolean {
+  if (
+    !ts.isCallExpression(node) ||
+    !ts.isPropertyAccessExpression(node.expression) ||
+    node.expression.name.text !== protocolSend
+  ) {
+    return false;
+  }
+  const called = calledDeclaration(program, node);
+  return (
+    called !== undefined &&
+    isFileOfPackage(fileOf(called), playwrightPackages) &&
+    stringsIn(program, node.arguments[0]).some((command) => protocolCaptures.includes(command))
+  );
+}
+
 export function capturesIn(program: Program, file: string): string[] {
   const source = program.sourceFile(file);
   if (!source) throw new Error(`${file}: TypeScript opened no source for this file.`);
@@ -79,6 +97,11 @@ export function capturesIn(program: Program, file: string): string[] {
   const optionsWritten = nodes.some((node) => writesACaptureOption(program, node));
   return nodes.flatMap((node) => {
     const found = (how: string) => [`${located(node)}: ${firstLine(node)}: ${how}`];
+    if (sendsAProtocolCapture(program, node)) {
+      return found(
+        `this sends Playwright's DevTools session a command that captures the page. ${readValuesInstead}`,
+      );
+    }
     if (optionsWritten && handsPlaywrightACaptureOption(program, node)) {
       return found(
         `this hands a Playwright call options that capture an image or a recording, however they were built. ${readValuesInstead}`,
@@ -148,6 +171,14 @@ export const refusedCaptureSpellings: Record<string, [text: string, extension: s
     'import type { BrowserContext } from "playwright";\nconst traced = { screenshots: true, snapshots: false };\nexport const start = (context: BrowserContext) => context.tracing.start(traced);\n',
     ".ts",
   ],
+  "a screenshot through the DevTools protocol": [
+    'import type { Page } from "playwright";\nexport const shot = async (page: Page) => (await page.context().newCDPSession(page)).send("Page.captureScreenshot");\n',
+    ".ts",
+  ],
+  "a screencast through the DevTools protocol, by a constant": [
+    'import type { CDPSession } from "playwright";\nconst command = "Page.startScreencast";\nexport const frames = (session: CDPSession) => session.send(command);\n',
+    ".ts",
+  ],
   "a screenshot read from a value typed any": [
     "export const shot = (page: any) => page.screenshot();\n",
     ".ts",
@@ -160,6 +191,10 @@ export const allowedCaptureSpellings: Record<string, [text: string, extension: s
   ],
   "an option of the same name handed to another library": [
     "type Recorder = { start: (options: { recordVideo: boolean }) => void };\nconst options = { recordVideo: true };\nexport const started = (recorder: Recorder) => recorder.start(options);\n",
+    ".ts",
+  ],
+  "another DevTools protocol command": [
+    'import type { CDPSession } from "playwright";\nexport const metrics = (session: CDPSession) => session.send("Performance.getMetrics");\n',
     ".ts",
   ],
   "a screenshot of another library": [
