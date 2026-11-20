@@ -148,6 +148,10 @@ export type Refusal = keyof typeof refusals;
 
 const guardFile = "scripts/agent-command-guard.ts";
 
+export const guardHookEvent = "PreToolUse";
+
+export const guardHookMatcher = "Bash";
+
 export const guardHookCommand = `[ -f "$CLAUDE_PROJECT_DIR/${guardFile}" ] || { echo "This checkout has no command guard, so the command runs unchecked." >&2; exit 0; }; node "$CLAUDE_PROJECT_DIR/${guardFile}" || { echo "The command guard did not run, so the command is refused." >&2; exit 2; }`;
 
 function operatorAt(line: string, index: number): string | undefined {

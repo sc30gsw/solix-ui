@@ -16,6 +16,8 @@ import { kitPackage } from "#/scripts/agent-kit.ts";
 import {
   bannedDependencies,
   guardHookCommand,
+  guardHookEvent,
+  guardHookMatcher,
   newestSolidOneMajors,
   type Refusal,
   refusals,
@@ -26,8 +28,8 @@ import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const settingsFile = ".claude/settings.json";
-const guardEvent = "PreToolUse";
-const guardedTool = "Bash";
+const guardEvent = guardHookEvent;
+const guardedTool = guardHookMatcher;
 const guardFile = "scripts/agent-command-guard.ts";
 const blocking = 2;
 const stash = { tool_name: "Bash", tool_input: { command: "git stash" } };
