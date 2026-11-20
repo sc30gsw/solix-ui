@@ -49,7 +49,7 @@ export type ModalProps = ElementProps<
   "dialog",
   typeof styles,
   {
-    /** The dialog's accessible name. */
+    /** The dialog's heading, which also gives the dialog its accessible name. */
     label: string;
     /** Whether the dialog is open; the consumer sets it, and `onClose` says when the user closed it. */
     opened: boolean;

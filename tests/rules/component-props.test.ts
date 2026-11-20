@@ -135,3 +135,13 @@ test("every public prop of every component the library exports has a doc comment
 
   expect([...new Set(undescribed)]).toEqual([]);
 });
+
+test("a default the code reaches through a helper's options type, as ColorSchemeScript's script text does, is still read from the fallback", () => {
+  const props = libraryComponentProps().ColorSchemeScript ?? [];
+  const defaults = Object.fromEntries(props.map(({ name, defaultValue }) => [name, defaultValue]));
+
+  expect(defaults).toMatchObject({
+    localStorageKey: expect.any(String),
+    defaultColorScheme: expect.any(String),
+  });
+});

@@ -30,9 +30,7 @@ export type ColorSchemeScriptProps = ColorSchemeScriptOptions &
   };
 
 type OptionsAsGiven = {
-  defaultColorScheme?: unknown;
-  forceColorScheme?: unknown;
-  localStorageKey?: string;
+  [Key in keyof ColorSchemeScriptOptions]?: Key extends "localStorageKey" ? string : unknown;
 };
 
 function inScript(value: unknown): string {
@@ -44,9 +42,8 @@ export function colorSchemeScriptText(options: OptionsAsGiven): string {
     `document.documentElement.setAttribute(${inScript(colorSchemeAttribute)},${scheme})`;
   if (isColorScheme(options.forceColorScheme))
     return `${setTo(inScript(options.forceColorScheme))};`;
-  const fallback = isColorScheme(options.defaultColorScheme)
-    ? options.defaultColorScheme
-    : defaultColorScheme;
+  const chosen = options.defaultColorScheme ?? defaultColorScheme;
+  const fallback = isColorScheme(chosen) ? chosen : defaultColorScheme;
   return [
     `(function(){var c=${inScript(fallback)};`,
     `try{var s=localStorage.getItem(${inScript(options.localStorageKey ?? colorSchemeStorageKey)});`,

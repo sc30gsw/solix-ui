@@ -39,7 +39,7 @@ export type SimpleGridProps = ElementProps<
     | {
         /** `media` keys responsive values by the viewport's width; `container` keys them by the grid's own width, through container queries. */
         type?: "media";
-        /** The number of columns. */
+        /** How many equal columns the grid has; ignored when `minColWidth` is given. */
         cols?: VariableProp<typeof simpleGridVariables, "sg-cols", number>;
         /** The gap between columns: a key of the `spacing` scale, a number of pixels or any CSS length. */
         spacing?: VariableProp<typeof simpleGridVariables, "sg-spacing-x">;
