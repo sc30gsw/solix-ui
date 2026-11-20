@@ -225,8 +225,8 @@ catalogs:
       specifier: 4.10.3
       version: 4.10.3
     modern-web-guidance:
-      specifier: 1.0.0
-      version: 1.0.0
+      specifier: 1.0.1
+      version: 1.0.1
     playwright:
       specifier: 1.65.1
       version: 1.65.1
@@ -307,7 +307,7 @@ importers:
         version: 4.10.3
       modern-web-guidance:
         specifier: 'catalog:'
-        version: 1.0.0
+        version: 1.0.1
       playwright:
         specifier: 'catalog:'
         version: 1.65.1
@@ -2264,8 +2264,8 @@ packages:
     resolution: {integrity: sha512-eRtbOb1N5iyH0tkQDAoQ4Ipsp/5qSR79Dzrz8hEPxRX10RWWR/iQXdoKmBSRCThY1Fh5EhISDtpSc93fpxUniQ==}
     engines: {node: '>=12.13'}
 
-  modern-web-guidance@1.0.0:
-    resolution: {integrity: sha512-vafIZwC8AS6QjM2yyoflZbnc7n3/TVOMLbEMRdPTwcFy0f9/Tq8s5rJQ8UIqRt2KPl9ixravyaMR4nTGuUrcmg==}
+  modern-web-guidance@1.0.1:
+    resolution: {integrity: sha512-5ztUh5F1p2PewnSkA6EhsGUXqomaZY9qe6iWJCU4JbIQxHTky7s5lMJcPE4EbD1uhbQZIhl0HROH0+s6fIiGzg==}
     engines: {node: '>=22.0.0', vscode: ^1.90.0}
     hasBin: true
 
@@ -3954,7 +3954,7 @@ snapshots:
     dependencies:
       is-what: 4.1.16
 
-  modern-web-guidance@1.0.0: {}
+  modern-web-guidance@1.0.1: {}
 
   mrmime@2.0.1: {}
 
