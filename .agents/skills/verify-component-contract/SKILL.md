@@ -44,7 +44,7 @@ It does if it edits any of these:
 | `vite.config.ts` | It sets the test include globs, the global setup, and the Solid plugin. |
 | `solid-js`, `@solidjs/web`, `@solidjs/compiler` and `@solidjs/vite-plugin` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins, they decide how a `class` value becomes a class attribute. |
 
-Last confirmed against commit `7d09d8f`. Run `git diff 7d09d8f -- packages/core scripts/dist-specifiers.ts scripts/subpath.ts apps/playground tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs scripts/expected-values.ts tests/rules/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `e9a3162`. Run `git diff e9a3162 -- packages/core scripts/dist-specifiers.ts scripts/subpath.ts apps/playground tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs scripts/expected-values.ts tests/rules/library-conventions.test.ts vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 
@@ -112,3 +112,4 @@ No verifier runs on Solid components, so this is not a proof. The test uses fast
 - A new component: add its entry to `fixtures`; the type checker names each field it needs. A component that another carries needs no more: the fixtures read the carrier from the build. Its parts come from its build. If its root should not take consumer attributes, that breaks the contract in `AGENTS.md`, so change that rule and its check first.
 - A component's root tag or boolean attribute changes: change its entry in `fixtures`.
 - Upgrading Solid or the Solid plugin: change the versions in the catalog in `pnpm-workspace.yaml`, then run the check.
+- Mutation check after editing covered code: copy `packages/core/src/Box.tsx`, make `Box` return `<Root />` without spreading `root`, and run the command. Every check of `Box` must fail, the consumer's class and attributes on its root, its parts, its element props, its style props and its `component` among them. Restore the file and confirm with `cmp`.
