@@ -1,7 +1,7 @@
 import { relative, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { staticStorybookDirectory } from "#/apps/storybook/tests/support/test-servers.ts";
-import { type Step, workflowAt } from "#/tests/support/workflows.ts";
+import { type Step, type Workflow, workflowAt } from "#/tests/support/workflows.ts";
 import { repositoryRoot, workflowFiles } from "#/tests/support/workspace.ts";
 
 const ciWorkflow = ".github/workflows/ci.yml";
@@ -104,14 +104,67 @@ function stringsOf(value: unknown): string[] {
   return [...Object.keys(value), ...Object.values(value).flatMap(stringsOf)];
 }
 
-test(`no workflow reads a secret but ${secretsTheWorkflowsRead.join(", ")}, by name, so no token that could write reaches a job`, () => {
-  const violations = workflowFiles.flatMap((file) =>
-    stringsOf(workflowAt(file))
+const everySecret = "inherit";
+
+function secretsReadIn(workflow: Workflow): string[] {
+  const inherited = Object.entries(workflow.jobs ?? {})
+    .filter(([, job]) => job.secrets === everySecret)
+    .map(([name]) => `the ${name} job hands every secret to the workflow it calls`);
+  return [
+    ...inherited,
+    ...stringsOf(workflow)
       .flatMap((text) => [...text.matchAll(expression)].map(([, inside]) => inside))
       .flatMap((inside) => [...inside.matchAll(secretsContext)])
       .filter(([, name]) => name === undefined || !secretsTheWorkflowsRead.includes(name))
-      .map(([read]) => `${file}: it reads ${read}. Give a job no secret that could write.`),
+      .map(([read]) => `it reads ${read}`),
+  ];
+}
+
+test(`no workflow reads a secret but ${secretsTheWorkflowsRead.join(", ")}, by name, so no token that could write reaches a job`, () => {
+  const violations = workflowFiles.flatMap((file) =>
+    secretsReadIn(workflowAt(file)).map(
+      (read) => `${file}: ${read}. Give a job no secret that could write.`,
+    ),
   );
 
   expect(violations).toEqual([]);
+});
+
+const secretSpellings: [spelling: string, refused: boolean, workflow: Workflow][] = [
+  [
+    "the private-term list by name",
+    false,
+    { jobs: { a: { steps: [{ env: { TERMS: "${{ secrets.SOLIX_PRIVATE_TERMS }}" } }] } } },
+  ],
+  [
+    "another secret by name",
+    true,
+    { jobs: { a: { steps: [{ env: { T: "${{ secrets.TOKEN }}" } }] } } },
+  ],
+  [
+    "every secret at once",
+    true,
+    { jobs: { a: { steps: [{ env: { ALL: "${{ toJSON(secrets) }}" } }] } } },
+  ],
+  [
+    "every secret handed to a called workflow",
+    true,
+    { jobs: { call: { uses: "./.github/workflows/called.yml", secrets: "inherit" } } },
+  ],
+  [
+    "the private-term list handed to a called workflow by name",
+    false,
+    {
+      jobs: {
+        call: {
+          uses: "./.github/workflows/called.yml",
+          secrets: { SOLIX_PRIVATE_TERMS: "${{ secrets.SOLIX_PRIVATE_TERMS }}" },
+        },
+      },
+    },
+  ],
+];
+
+test.for(secretSpellings)("the secrets rule, on %s, refuses it: %s", ([, refused, workflow]) => {
+  expect(secretsReadIn(workflow).length > 0).toBe(refused);
 });
