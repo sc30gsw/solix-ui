@@ -14,6 +14,7 @@ import { dirname, join } from "node:path";
 import { afterEach, expect, test } from "vite-plus/test";
 import {
   approvedSkills,
+  outsideSkills,
   linkProblems,
   type PackageSkill,
   reviewedHashes,
@@ -187,6 +188,13 @@ test(`in ${skillFolders}, git ignores the approved package skills and tracks eve
         .map(
           ({ name }) =>
             `${directory}/${name}: let pnpm's ${packageSkillIgnoreFile} there ignore it; run vp install and commit that file.`,
+        ),
+      ...outsideSkills()
+        .filter(({ source }) => source !== "package")
+        .filter(({ name }) => !isTracked(name))
+        .map(
+          ({ name, source }) =>
+            `${directory}/${name}: it is a ${source} skill of outsideSkills in scripts/package-skills.ts, so commit it there.`,
         ),
       ...entries
         .filter((entry) => !approved.some(({ name }) => name === entry))

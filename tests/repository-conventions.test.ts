@@ -11,9 +11,8 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { kitInstalls } from "#/scripts/agent-kit.ts";
 import { engineNames } from "#/scripts/browser-engines.mjs";
-import { approvedSkills, frontMatterOf } from "#/scripts/package-skills.ts";
+import { frontMatterOf, outsideSkills } from "#/scripts/package-skills.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   outsideGeneratedOrInstalled,
@@ -44,7 +43,12 @@ const fullHistory = /^\s+fetch-depth: 0$/gm;
 const versionPrefix = /^[\^~]/;
 
 const packageSkillIgnoreFile = ".gitignore";
-const packageSkillEntries = [packageSkillIgnoreFile, ...approvedSkills().map(({ name }) => name)];
+const packageSkillEntries = [
+  packageSkillIgnoreFile,
+  ...outsideSkills()
+    .filter(({ source }) => source === "package")
+    .map(({ name }) => name),
+];
 
 const skillNames = readdirSync(skillsDirectory)
   .filter((name) => !packageSkillEntries.includes(name))
@@ -60,12 +64,9 @@ function skillText(name: string): string {
 }
 
 function vendoredSkills(): string[] {
-  return [
-    ...Object.keys(
-      (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
-    ),
-    ...kitInstalls(repositoryRoot, "skills"),
-  ];
+  return outsideSkills()
+    .filter(({ source }) => source !== "package")
+    .map(({ name }) => name);
 }
 
 function read(path: string): string {

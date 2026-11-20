@@ -18,7 +18,7 @@ import {
   kitSkillSource,
   sharedSkills,
 } from "#/scripts/agent-kit.ts";
-import { approvedSkills } from "#/scripts/package-skills.ts";
+import { approvedSkills, kitSkills } from "#/scripts/package-skills.ts";
 import { workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
@@ -124,4 +124,8 @@ test(`${workspaceFile} approves neither skill of solid-js's that the kit's solid
     );
 
   expect(replaced).toEqual([]);
+});
+
+test("kitSkills in scripts/package-skills.ts names exactly the skills the kit ships", () => {
+  expect([...kitSkills].sort()).toEqual(kitInstalls(repositoryRoot, "skills").sort());
 });
