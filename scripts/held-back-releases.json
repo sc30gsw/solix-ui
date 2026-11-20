@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "name": "@solidjs/signals",
+    "reason": "The packages of a Solid release move together, and @solidjs/compiler has no 2.0.3, so every Solid package stays on 2.0.2, the newest release all four share.",
+    "liftWhen": "@solidjs/compiler publishes 2.0.3 or later and it is old enough to install."
+  },
+  {
+    "name": "@solidjs/web",
+    "reason": "The packages of a Solid release move together, and @solidjs/compiler has no 2.0.3, so every Solid package stays on 2.0.2, the newest release all four share.",
+    "liftWhen": "@solidjs/compiler publishes 2.0.3 or later and it is old enough to install."
+  },
+  {
+    "name": "solid-js",
+    "reason": "The packages of a Solid release move together, and @solidjs/compiler has no 2.0.3, so every Solid package stays on 2.0.2, the newest release all four share.",
+    "liftWhen": "@solidjs/compiler publishes 2.0.3 or later and it is old enough to install."
+  }
+]
