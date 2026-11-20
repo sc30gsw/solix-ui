@@ -181,3 +181,12 @@ test("rewriteCatalog leaves the file as it was when it cannot find an entry's li
     expect(readFileSync(join(checkout, workspaceFile), "utf8")).toBe(lines.join("\n"));
   }
 });
+
+test("vp run verify first checks the lockfile against the release age, without installing, so a younger release an install let in fails before a commit and in CI", () => {
+  const { scripts } = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+
+  expect(scripts["check:lockfile"]).toBe("pnpm install --frozen-lockfile --lockfile-only");
+  expect(scripts.verify?.split(" && ")[0]).toBe("vp run check:lockfile");
+});
