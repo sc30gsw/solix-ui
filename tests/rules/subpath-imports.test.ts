@@ -163,3 +163,26 @@ test(`a file outside its package keeps its relative specifier, because Node refu
     },
   );
 });
+
+test("a specifier that an ambient module declaration of its package declares, such as a module a Vite plugin serves, reaches no file, so the rule neither rewrites it nor reports it unresolved, while a path no declaration holds still is", async () => {
+  await inTemporaryTree(
+    {
+      "package.json": JSON.stringify({ name: "served", type: "module" }),
+      "src/served.d.ts": 'declare module "virtual:served" {\n  export const served: number;\n}\n',
+      "src/uses-it.ts": 'import { served } from "virtual:served";\nexport { served };\n',
+      "src/uses-nothing.ts": 'import { missing } from "virtual:missing";\nexport { missing };\n',
+    },
+    (root) => {
+      const references = moduleReferences(filesTheRuleCovers(root));
+      const named = (found: readonly ModuleReference[]) =>
+        found.map(({ file, specifier }) => `${relative(root, file)} ${specifier}`).toSorted();
+
+      expect(named(references)).toEqual([
+        "src/uses-it.ts virtual:served",
+        "src/uses-nothing.ts virtual:missing",
+      ]);
+      expect(misspelt(references, root)).toEqual([]);
+      expect(named(unresolvedPaths(references))).toEqual(["src/uses-nothing.ts virtual:missing"]);
+    },
+  );
+});

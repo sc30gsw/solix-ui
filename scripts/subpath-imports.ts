@@ -36,6 +36,7 @@ export type ModuleReference = {
   start: number;
   end: number;
   reached: string | undefined;
+  declaredAsAModule: boolean;
 };
 
 export type Misspelt = ModuleReference & { wanted: string };
@@ -65,6 +66,7 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
         const specifier = moduleSpecifierOf(node);
         if (!specifier || !ts.isStringLiteralLikeNode(specifier)) return [];
         const declaration = symbolOf(program, specifier)?.declarations?.[0]?.resolve();
+        const declaredAsAModule = declaration !== undefined && ts.isModuleDeclaration(declaration);
         return [
           {
             file,
@@ -73,9 +75,12 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
             specifier: specifier.text,
             start: specifier.getStart(),
             end: specifier.end,
-            reached: declaration
-              ? realpathSync(fileOf(declaration))
-              : resolvedByNode(file, specifier.text),
+            reached: declaredAsAModule
+              ? undefined
+              : declaration
+                ? realpathSync(fileOf(declaration))
+                : resolvedByNode(file, specifier.text),
+            declaredAsAModule,
           },
         ];
       });
@@ -87,7 +92,8 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
 
 export function unresolvedPaths(references: readonly ModuleReference[]): ModuleReference[] {
   return references.filter(
-    ({ reached, specifier }) => reached === undefined && !namesAPackage(specifier),
+    ({ reached, specifier, declaredAsAModule }) =>
+      reached === undefined && !declaredAsAModule && !namesAPackage(specifier),
   );
 }
 
