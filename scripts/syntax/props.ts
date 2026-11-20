@@ -6,16 +6,30 @@ import {
   type Type,
 } from "typescript/unstable/sync";
 import * as ts from "#/scripts/syntax/ast.ts";
-import { isPackageFile, symbolOf } from "#/scripts/syntax/checker.ts";
+import {
+  declarationsOfSymbol,
+  isPackageFile,
+  symbolOf,
+  unionMembersOf,
+} from "#/scripts/syntax/checker.ts";
 import type { Program } from "#/scripts/syntax/program.ts";
-import { descendants, findAncestor, staticPropertyName } from "#/scripts/syntax/walk.ts";
+import { descendants, enclosingFunctionName, findAncestor } from "#/scripts/syntax/walk.ts";
+
+export type Option = string | number | boolean;
 
 export type Control =
   | { readonly type: "boolean" | "text" | "number" | "object" }
   | { readonly type: "select"; readonly options: readonly Option[] }
   | { readonly type: false };
 
-export type Option = string | number | boolean;
+export type MemberKind =
+  | "literal"
+  | "suggested"
+  | "text"
+  | "number"
+  | "object"
+  | "function"
+  | "absent";
 
 export type ComponentProp = {
   readonly name: string;
@@ -23,7 +37,8 @@ export type ComponentProp = {
   readonly type: string;
   readonly required: boolean;
   readonly declaredBy: string;
-  readonly declarations: readonly string[];
+  readonly declarations: readonly ts.Node[];
+  readonly kinds: ReadonlySet<MemberKind>;
   readonly description: string;
   readonly values?: readonly Option[];
   readonly defaultValue?: string;
@@ -31,30 +46,22 @@ export type ComponentProp = {
 
 export type Fallback = { readonly owner: string | undefined; readonly value: string };
 
-export type Fallbacks = ReadonlyMap<string, readonly Fallback[]>;
+export type Fallbacks = ReadonlyMap<ts.Node, readonly Fallback[]>;
 
-const docComment = /\/\*\*([\s\S]*?)\*\/\s*$/;
-const docCommentLineStart = /^\s*\*? ?/;
-const docTag = /^@/;
+export type PropsOptions = {
+  readonly fallbacks?: Fallbacks;
+  readonly describe?: (declarations: readonly ts.Node[]) => string;
+  readonly defaults?: ReadonlyMap<ts.Node, string>;
+};
+
+type Member = { kind: "literal"; value: Option } | { kind: Exclude<MemberKind, "literal"> };
+
+type Chosen = { readonly control: Control; readonly values?: readonly Option[] };
+
+const whitespace = /\s+/;
 const literalTypes = TypeFlags.StringLiteral | TypeFlags.NumberLiteral | TypeFlags.BooleanLiteral;
-const propertyRow = { property: "property", scale: "scale", aliasOf: "aliasOf" } as const;
 const absent = TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void;
 const stringLike = TypeFlags.String | TypeFlags.TemplateLiteral | TypeFlags.StringMapping;
-
-type Member =
-  | { kind: "literal"; value: Option }
-  | { kind: "suggested" | "text" | "number" | "object" | "function" | "absent" };
-
-function declarationsOfSymbol(symbol: CheckerSymbol): ts.Node[] {
-  return (symbol.declarations ?? []).flatMap((handle) => {
-    const declaration = handle.resolve();
-    return declaration ? [declaration] : [];
-  });
-}
-
-function unionMembers(type: Type): readonly Type[] {
-  return (type.isUnionType() ? type.getTypes() : undefined) ?? [type];
-}
 
 function constrained(program: Program, type: Type): Type {
   if ((type.flags & TypeFlags.TypeParameter) === 0) return type;
@@ -82,7 +89,7 @@ function isStringLike(type: Type): boolean {
 
 function memberOf(program: Program, type: Type): Member[] {
   const part = constrained(program, type);
-  if (part !== type) return unionMembers(part).flatMap((member) => memberOf(program, member));
+  if (part !== type) return unionMembersOf(part).flatMap((member) => memberOf(program, member));
   if ((part.flags & absent) !== 0 || (part.flags & TypeFlags.Never) !== 0) {
     return [{ kind: "absent" }];
   }
@@ -107,71 +114,29 @@ function isCallable(program: Program, type: Type): boolean {
   return program.checker.getSignaturesOfType(type, SignatureKind.Call).length > 0;
 }
 
-function controlOf(members: readonly Member[]): Control {
+function oneLine(text: string): string {
+  return text.split(whitespace).filter(Boolean).join(" ");
+}
+
+function chosenFor(members: readonly Member[]): Chosen {
   const options = members.flatMap((member) => (member.kind === "literal" ? [member.value] : []));
   const has = (...kinds: Member["kind"][]) => members.some(({ kind }) => kinds.includes(kind));
   const closed = options.length > 0 && !has("text", "number");
-  const bothBooleans = options.length === 2 && options.includes(true) && options.includes(false);
-  if (closed && bothBooleans && !has("suggested")) return { type: "boolean" };
-  if (closed) return { type: "select", options };
-  if (has("suggested", "text")) return { type: "text" };
-  if (has("number")) return { type: "number" };
-  if (has("object")) return { type: "object" };
-  return { type: false };
-}
-
-function valuesOf(members: readonly Member[]): readonly Option[] | undefined {
-  const options = members.flatMap((member) => (member.kind === "literal" ? [member.value] : []));
-  const open = members.some(({ kind }) => ["suggested", "text", "number"].includes(kind));
   const onlyBooleans = options.every((option) => typeof option === "boolean");
-  return options.length > 1 && !open && !onlyBooleans ? options : undefined;
-}
-
-export function declarationKey(declaration: ts.Node): string {
-  return `${declaration.getSourceFile().fileName}:${declaration.pos}`;
-}
-
-function rowField(row: ts.ObjectLiteralExpression, field: string): string | undefined {
-  for (const property of row.properties) {
-    if (!ts.isPropertyAssignment(property) || staticPropertyName(property) !== field) continue;
-    return ts.isStringLiteral(property.initializer) ? property.initializer.text : undefined;
+  const bothBooleans = options.length === 2 && onlyBooleans;
+  if (closed && bothBooleans && !has("suggested")) return { control: { type: "boolean" } };
+  if (closed) {
+    const whole = !has("suggested") && !onlyBooleans && options.length > 1;
+    return { control: { type: "select", options }, ...(whole ? { values: options } : {}) };
   }
-  return undefined;
-}
-
-function rowDescriptionOf(declaration: ts.Node): string {
-  if (!ts.isPropertyAssignment(declaration)) return "";
-  const row = declaration.initializer;
-  if (!ts.isObjectLiteralExpression(row)) return "";
-  const property = rowField(row, propertyRow.property);
-  const scale = rowField(row, propertyRow.scale);
-  const aliasOf = rowField(row, propertyRow.aliasOf);
-  if (aliasOf !== undefined) return `The same as \`${aliasOf}\`.`;
-  if (property === undefined) return "";
-  return scale === undefined
-    ? `Sets the CSS \`${property}\`.`
-    : `Sets the CSS \`${property}\`, where a key of the \`${scale}\` scale names its token.`;
-}
-
-function descriptionOf(declaration: ts.Node): string {
-  const source = declaration.getSourceFile();
-  const comment = docComment.exec(source.text.slice(declaration.pos, declaration.getStart(source)));
-  if (!comment) return rowDescriptionOf(declaration);
-  const lines = comment[1].split("\n").map((line) => line.replace(docCommentLineStart, "").trim());
-  const tagAt = lines.findIndex((line) => docTag.test(line));
-  return (tagAt === -1 ? lines : lines.slice(0, tagAt)).filter(Boolean).join(" ");
-}
-
-function topLevelFunctionNameOf(node: ts.Node): string | undefined {
-  const owner = findAncestor(
-    node,
-    (ancestor) => ts.isFunctionDeclaration(ancestor) && ts.isSourceFile(ancestor.parent),
-  );
-  return owner && ts.isFunctionDeclaration(owner) ? owner.name?.text : undefined;
+  if (has("suggested", "text")) return { control: { type: "text" } };
+  if (has("number")) return { control: { type: "number" } };
+  if (has("object")) return { control: { type: "object" } };
+  return { control: { type: false } };
 }
 
 export function fallbacksIn(program: Program, sources: readonly ts.SourceFile[]): Fallbacks {
-  const found = new Map<string, Fallback[]>();
+  const found = new Map<ts.Node, Fallback[]>();
   for (const node of sources.flatMap((source) => descendants(source))) {
     if (
       !ts.isBinaryExpression(node) ||
@@ -182,14 +147,12 @@ export function fallbacksIn(program: Program, sources: readonly ts.SourceFile[])
     }
     const fallback = program.checker.getTypeAtLocation(node.right);
     if (!fallback || (fallback.flags & literalTypes) === 0) continue;
-    const owner = topLevelFunctionNameOf(node);
-    const prop = symbolOf(program, node.left.name);
-    for (const declaration of prop ? declarationsOfSymbol(prop) : []) {
-      const key = declarationKey(declaration);
-      found.set(key, [
-        ...(found.get(key) ?? []),
-        { owner, value: program.checker.typeToString(fallback) },
-      ]);
+    const given = {
+      owner: enclosingFunctionName(node),
+      value: program.checker.typeToString(fallback),
+    };
+    for (const declaration of declarationsOfSymbol(symbolOf(program, node.left.name))) {
+      found.set(declaration, [...(found.get(declaration) ?? []), given]);
     }
   }
   return found;
@@ -219,30 +182,33 @@ function ownerName(declaration: ts.Node): string {
 function propOf(
   program: Program,
   symbol: CheckerSymbol,
-  fallbacks: Fallbacks,
-  component: string | undefined,
+  component: string,
+  { fallbacks = new Map(), describe = () => "", defaults = new Map() }: PropsOptions,
 ): ComponentProp | undefined {
-  const ownDeclarations = declarationsOfSymbol(symbol).filter(
+  const declarations = declarationsOfSymbol(symbol).filter(
     (declaration) => !isPackageFile(declaration.getSourceFile().fileName),
   );
   const declared = program.checker.getTypeOfSymbol(symbol);
-  if (ownDeclarations.length === 0 || !declared) return undefined;
-  const members = unionMembers(declared).flatMap((member) => memberOf(program, member));
+  if (declarations.length === 0 || !declared) return undefined;
+  const members = unionMembersOf(declared).flatMap((member) => memberOf(program, member));
   if (members.every((member) => member.kind === "absent")) return undefined;
   const present = program.checker.getNonNullableType(declared) ?? declared;
-  const declarations = ownDeclarations.map(declarationKey);
-  const values = valuesOf(members);
-  const defaultValue = declarations
-    .map((key) => defaultOf(fallbacks.get(key) ?? [], component))
-    .find(Boolean);
+  const { control, values } = chosenFor(members);
+  const defaultValue =
+    declarations.map((declaration) => defaults.get(declaration)).find(Boolean) ??
+    declarations
+      .map((declaration) => defaultOf(fallbacks.get(declaration) ?? [], component))
+      .find(Boolean);
   return {
     name: symbol.name,
-    control: controlOf(members),
+    control,
     type: program.checker.typeToString(constrained(program, present)),
     required: (symbol.flags & SymbolFlags.Optional) === 0,
-    declaredBy: ownerName(ownDeclarations[0]),
+    declaredBy: ownerName(declarations[0]),
     declarations,
-    description: ownDeclarations.map(descriptionOf).find(Boolean) ?? "",
+    kinds: new Set(members.map(({ kind }) => kind)),
+    description:
+      oneLine(program.checker.getDocumentationCommentOfSymbol(symbol)) || describe(declarations),
     ...(values === undefined ? {} : { values }),
     ...(defaultValue === undefined ? {} : { defaultValue }),
   };
@@ -251,7 +217,7 @@ function propOf(
 export function propsOfComponent(
   program: Program,
   name: ts.Identifier,
-  fallbacks: Fallbacks = new Map(),
+  options: PropsOptions = {},
 ): ComponentProp[] {
   const component = symbolOf(program, name);
   const type = component && program.checker.getTypeOfSymbol(component);
@@ -263,7 +229,7 @@ export function propsOfComponent(
     if (!props) continue;
     for (const symbol of program.checker.getPropertiesOfType(props)) {
       if (found.has(symbol.name)) continue;
-      const prop = propOf(program, symbol, fallbacks, component.name);
+      const prop = propOf(program, symbol, component.name, options);
       if (prop) found.set(prop.name, prop);
     }
   }

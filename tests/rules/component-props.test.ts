@@ -6,6 +6,7 @@ import {
   libraryComponentProps,
 } from "#/scripts/component-props.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
+import { openSpecProgram } from "#/apps/storybook/tests/support/component-spec.ts";
 import { virtualFile } from "#/scripts/syntax.ts";
 
 const probe = `import type { JSX } from "@solidjs/web";
@@ -94,7 +95,9 @@ export { Stateful };
 `;
 
 test("a prop carries its doc comment as its description, the literal its component falls back to with ?? as its default, every value of a closed union, whether the props every element component shares declare it, and whether it is behaviour: a callback, either prop of a value and its default, or a boolean of a component that has either", () => {
-  const [props] = Object.values(componentPropsOf(virtualFile(statefulProbe, ".tsx")));
+  const { program, components } = openSpecProgram([], virtualFile(statefulProbe, ".tsx"));
+  program.dispose();
+  const [{ props }] = components;
   const own = props.filter(({ common }) => !common);
   const facts = Object.fromEntries(
     own.map(({ name, description, defaultValue, values, behaviour }) => [

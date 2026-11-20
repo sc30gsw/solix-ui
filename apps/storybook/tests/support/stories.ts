@@ -39,6 +39,18 @@ export function storyFileOf({ importPath }: StoryIndexEntry): string {
   return relative(repositoryRoot, resolve(importPath));
 }
 
+export type IndexedStoryFile = { readonly file: string; readonly stories: ReadonlySet<string> };
+
+export async function indexedStoryFiles(
+  configDir: string = storybookConfigDirectory,
+): Promise<IndexedStoryFile[]> {
+  const byFile = Map.groupBy(await storyIndex(configDir), storyFileOf);
+  return [...byFile].map(([file, entries]) => ({
+    file,
+    stories: new Set(entries.flatMap(({ exportName }) => exportName ?? [])),
+  }));
+}
+
 export function storiesProjectIn(engine: string, server: StoriesServer): string {
   return `${server.project} (${engine})`;
 }

@@ -6,7 +6,7 @@ import {
   forgetComponentProps,
   libraryComponentProps,
   libraryEntry,
-  sourcesOfTheLibrary,
+  librarySources,
 } from "#/scripts/component-props.ts";
 import { insideOf } from "#/scripts/subpath.ts";
 import { storybookAppManifest } from "#/scripts/release-sources.ts";
@@ -35,7 +35,7 @@ export const libraryModule = "@solix/core";
 const resolvedStoryControlsModule = `\0${storyControlsModule}`;
 const storybookManifest = join(repositoryRoot, storybookAppManifest);
 
-export function storyControlOf({ control }: ComponentProp): StoryControl {
+function storyControlOf({ control }: ComponentProp): StoryControl {
   if (control.type === false) return { control: false };
   if (control.type === "select") return { control: { type: "select" }, options: control.options };
   return { control: { type: control.type } };
@@ -94,7 +94,7 @@ export function storyControls(entry: string = libraryEntry): Plugin {
       const library = await this.resolve(libraryModule, storybookManifest);
       if (!library)
         throw new Error(`${storybookManifest}: ${libraryModule} does not resolve here.`);
-      for (const source of sourcesOfTheLibrary(entry)) this.addWatchFile(source);
+      for (const source of librarySources(entry)) this.addWatchFile(source);
       return storyControlsSource(library.id, entry);
     },
     watchChange(id) {

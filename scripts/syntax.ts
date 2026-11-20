@@ -4,6 +4,8 @@ export {
   aliasDeclarationsReturnedBy,
   assertedType,
   calledDeclaration,
+  declarationsOfSymbol,
+  hasCallSignature,
   constructedClass,
   constructorClasses,
   contextualAliases,
@@ -71,11 +73,12 @@ export {
   type ImportedName,
 } from "#/scripts/syntax/walk.ts";
 export {
-  declarationKey,
   fallbacksIn,
   propsOfComponent,
   type ComponentProp,
   type Fallbacks,
+  type MemberKind,
+  type PropsOptions,
   type Control,
   type Option,
 } from "#/scripts/syntax/props.ts";

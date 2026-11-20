@@ -1,117 +1,113 @@
 import { join } from "node:path";
-import type { StoryIndexEntry } from "storybook/internal/types";
-import { beforeAll, expect, test } from "vite-plus/test";
-import { type LibraryProp, libraryComponentProps } from "../../../scripts/component-props.ts";
+import { afterAll, beforeAll, expect, test } from "vite-plus/test";
 import { repositoryRoot } from "../../../scripts/repository.ts";
-import { type StoryUse, storyUses } from "../../../scripts/story-usage.ts";
-import { library } from "../../../packages/core/tests/built-library.ts";
-import { propShownByEveryValueOf } from "#/every-value.tsx";
-import { storyFileOf, storyIndex } from "#/tests/support/stories.ts";
+import type { Program } from "../../../scripts/syntax.ts";
+import {
+  openSpecProgram,
+  type SpecComponent,
+  type SpecProp,
+} from "#/tests/support/component-spec.ts";
+import { indexedStoryFiles } from "#/tests/support/stories.ts";
+import { everyValueFile, type StoryFileUse, storyFileUse } from "#/tests/support/story-usage.ts";
 
-type StoryModule = { readonly default: { readonly component?: unknown } } & Readonly<
-  Record<string, object | undefined>
->;
-type IndexedFile = {
-  readonly file: string;
-  readonly component: string | undefined;
-  readonly module: StoryModule;
-  readonly uses: readonly StoryUse[];
+type Holder = { readonly kind: "component"; readonly name: string } | { readonly kind: "shared" };
+type Held = {
+  readonly holder: Holder;
+  readonly prop: SpecProp;
+  readonly files: readonly StoryFileUse[];
 };
 
-const sharedStories = "apps/storybook/src/CommonProps.stories.tsx";
-const builtByName: Record<string, unknown> = library;
+const storyControlsDeclarations = join(repositoryRoot, "apps/storybook/story-controls.d.ts");
 const indexTimeout = 120_000;
-let indexed: IndexedFile[] = [];
+let program: Program | undefined;
+let components: SpecComponent[] = [];
+let uses: StoryFileUse[] = [];
 
 beforeAll(async () => {
-  const files = [
-    ...new Set((await storyIndex()).map((entry: StoryIndexEntry) => storyFileOf(entry))),
-  ];
-  const uses = storyUses(files.map((file) => join(repositoryRoot, file)));
-  indexed = await Promise.all(
-    files.map(async (file) => {
-      const module = (await import(join(repositoryRoot, file))) as StoryModule;
-      return {
-        file,
-        module,
-        component: Object.keys(libraryComponentProps()).find(
-          (name) => builtByName[name] === module.default.component,
-        ),
-        uses: uses[join(repositoryRoot, file)] ?? [],
-      };
-    }),
+  const indexed = await indexedStoryFiles();
+  const files = indexed.map(({ file }) => join(repositoryRoot, file));
+  ({ program, components } = openSpecProgram([
+    ...files,
+    storyControlsDeclarations,
+    everyValueFile,
+  ]));
+  const opened = program;
+  uses = indexed.map(({ file, stories }) =>
+    storyFileUse(opened, join(repositoryRoot, file), stories),
   );
 }, indexTimeout);
 
-function eachProp(
-  keep: (prop: LibraryProp) => boolean,
-): { component: string; prop: LibraryProp; files: IndexedFile[] }[] {
-  const shared = indexed.filter(({ file }) => file === sharedStories);
-  const commonSeen = new Set<string>();
-  return Object.entries(libraryComponentProps()).flatMap(([component, props]) =>
-    props.filter(keep).flatMap((prop) => {
+afterAll(() => program?.dispose());
+
+function filesOf(component: SpecComponent): StoryFileUse[] {
+  return uses.filter((use) =>
+    use.component.some((declaration) => component.declarations.includes(declaration)),
+  );
+}
+
+function held(keep: (prop: SpecProp) => boolean): Held[] {
+  const shared = new Set<string>();
+  return components.flatMap((component) =>
+    component.props.filter(keep).flatMap((prop): Held[] => {
       if (!prop.common) {
-        return [{ component, prop, files: indexed.filter((file) => file.component === component) }];
+        return [
+          { holder: { kind: "component", name: component.name }, prop, files: filesOf(component) },
+        ];
       }
-      if (commonSeen.has(prop.name)) return [];
-      commonSeen.add(prop.name);
-      return [{ component: "the shared stories", prop, files: shared }];
+      if (shared.has(prop.name)) return [];
+      shared.add(prop.name);
+      return [{ holder: { kind: "shared" }, prop, files: uses }];
     }),
   );
 }
 
-function whereToShow(component: string): string {
-  return component === "the shared stories"
-    ? `${sharedStories}, which shows the props every element component shares once`
-    : `a story file of ${component}`;
+function named({ holder, prop }: Held): string {
+  return holder.kind === "component"
+    ? `${holder.name}'s prop ${prop.name}`
+    : `the shared prop ${prop.name}`;
 }
 
-test(`every own prop of every component is used by a story of that component, and every prop the element components share by a story of ${sharedStories}, as an arg, an attribute on the component or a value everyValueOf shows`, () => {
-  const unused = eachProp(() => true)
-    .filter(({ prop, files }) =>
-      files.every(({ uses }) => uses.every(({ props }) => !props.includes(prop.name))),
-    )
-    .map(
-      ({ component, prop }) =>
-        `${component === "the shared stories" ? "A shared" : component}: no story uses the prop ${prop.name}. Use it in ${whereToShow(component)}.`,
-    );
+function where({ holder }: Held): string {
+  return holder.kind === "component" ? `a story file of ${holder.name}` : "any story file";
+}
 
+test("every own prop of every component is used by an indexed story of that component, and every prop the element components share by an indexed story anywhere: as an arg its render passes to the component, an attribute or children on the component, or a value everyValueOf shows", () => {
+  const unused = held(() => true)
+    .filter(({ prop, files }) =>
+      files.every(({ stories }) => stories.every(({ props }) => !props.has(prop.name))),
+    )
+    .map((entry) => `No story uses ${named(entry)}. Use it in ${where(entry)}.`);
+
+  expect(uses.flatMap(({ problems }) => problems)).toEqual([]);
   expect(unused).toEqual([]);
-  expect(indexed.some(({ file }) => file === sharedStories)).toBe(true);
 });
 
-test("every prop whose type is a closed union of literals has a story made by everyValueOf that shows each of its values side by side", () => {
-  const unshown = eachProp(({ values }) => values !== undefined)
+test("every prop whose type is a closed union of literals is shown whole by an indexed story made by everyValueOf from its file's own meta", () => {
+  const unshown = held(({ values }) => values !== undefined)
     .filter(({ prop, files }) =>
-      files.every(({ module }) =>
-        Object.values(module).every(
-          (story) =>
-            typeof story !== "object" ||
-            story === null ||
-            propShownByEveryValueOf(story) !== prop.name,
-        ),
-      ),
+      files.every(({ stories }) => stories.every(({ shows }) => shows !== prop.name)),
     )
     .map(
-      ({ component, prop }) =>
-        `${component === "the shared stories" ? "A shared" : component}: no story shows every value of ${prop.name} (${(prop.values ?? []).map(String).join(", ")}). Export everyValueOf(meta, "${prop.name}") from "#/every-value.tsx" in ${whereToShow(component)}.`,
+      (entry) =>
+        `No story shows every value of ${named(entry)} (${(entry.prop.values ?? []).join(", ")}). Export everyValueOf(meta, "${entry.prop.name}") from "#/every-value.tsx" in ${where(entry)}.`,
     );
 
   expect(unshown).toEqual([]);
 });
 
-test("every prop with behaviour, which its type tells (a callback, either prop of a value and its default, or a boolean of a component that has one of those or a required boolean), is set by a story that has a play function", () => {
-  const unplayed = eachProp(({ behaviour }) => behaviour)
+test("every prop with behaviour, which its type tells, is set by an indexed story whose play function is a function", () => {
+  const behaviour = held(({ behaviour }) => behaviour);
+  const unplayed = behaviour
     .filter(({ prop, files }) =>
-      files.every(({ uses }) =>
-        uses.every(({ props, played }) => !played || !props.includes(prop.name)),
+      files.every(({ stories }) =>
+        stories.every(({ props, played }) => !played || !props.has(prop.name)),
       ),
     )
     .map(
-      ({ component, prop }) =>
-        `${component}: no story with a play function sets the prop ${prop.name}. Set it in a story of ${component} whose play function checks what it does.`,
+      (entry) =>
+        `No story with a play function sets ${named(entry)}. Set it in ${where(entry)} whose play function checks what it does.`,
     );
 
-  expect(eachProp(({ behaviour }) => behaviour).length).toBeGreaterThan(0);
+  expect(behaviour.length).toBeGreaterThan(0);
   expect(unplayed).toEqual([]);
 });

@@ -4,46 +4,43 @@ import { repositoryRoot } from "#/scripts/repository.ts";
 import {
   aliasDeclarationsOfTypeAt,
   aliasDeclarationsReturnedBy,
+  calledDeclaration,
   type ComponentProp,
+  declarationsOfSymbol,
   descendants,
   fallbacksIn,
-  nameOf,
   openProgram,
   type Program,
   propsOfComponent,
   rereadFiles,
+  staticPropertyName,
   symbolOf,
   ts,
   virtualFile,
 } from "#/scripts/syntax.ts";
 
-export type { ComponentProp, Control, Option } from "#/scripts/syntax.ts";
+export type { ComponentProp, Control, MemberKind, Option } from "#/scripts/syntax.ts";
 
-export type LibraryProp = ComponentProp & {
-  readonly common: boolean;
-  readonly behaviour: boolean;
+export type LibraryComponent = {
+  readonly name: string;
+  readonly declarations: readonly ts.Node[];
+  readonly props: readonly ComponentProp[];
 };
 
-export type ComponentProps = Readonly<Record<string, readonly LibraryProp[]>>;
+export type ComponentProps = Readonly<Record<string, readonly ComponentProp[]>>;
 
 export const libraryEntry = join(repositoryRoot, "packages/core/src/index.ts");
-const sharedPropTypes = join(repositoryRoot, "packages/core/src/parts.ts");
-const commonPropsSource = `import type { JSX } from "@solidjs/web";
-import type { ElementProps } from ${JSON.stringify(sharedPropTypes)};
-
-function Common(props: ElementProps<"div", { root: object }>): JSX.Element {
-  return <div />;
-}
-
-export { Common };
-`;
-const uncontrolledPrefix = "default";
-const colorOptionProp = "color";
-const variantProp = "variant";
-const colorOptionDefault = "default";
-
-const librarySources = "**/*.{ts,tsx}";
+export const sharedPropTypes = join(repositoryRoot, "packages/core/src/parts.ts");
+const colorTypes = join(repositoryRoot, "packages/core/src/colors.ts");
+const librarySourcePattern = "**/*.{ts,tsx}";
 const jsxElementSource = "export const jsxElement = <></>;\n";
+const partsFactory = "createParts";
+const colorOption = "color";
+const colorOptionDefault = "default";
+const colorPropsType = "ColorProps";
+const variantProp = "variant";
+const row = { property: "property", kind: "kind", scale: "scale", aliasOf: "aliasOf" } as const;
+const lengthRow = "length";
 
 function namedValueExports(source: ts.SourceFile): ts.Identifier[] {
   return source.statements.flatMap((statement) =>
@@ -88,83 +85,118 @@ export function exportsReturningAJsxElement(
   );
 }
 
-export function openLibraryProgram(entry: string = libraryEntry): {
-  program: Program;
-  elementFile: string;
-  commonFile: string;
-} {
-  const elementFile = virtualFile(jsxElementSource, ".tsx");
-  const commonFile = virtualFile(commonPropsSource, ".tsx");
-  return { program: openProgram([entry, elementFile, commonFile]), elementFile, commonFile };
+export function librarySources(entry: string = libraryEntry): string[] {
+  const directory = dirname(entry);
+  const found = globSync(librarySourcePattern, { cwd: directory }).map((file) =>
+    join(directory, file),
+  );
+  return [...new Set([entry, ...found])];
 }
 
-function defaultVariantOf(program: Program, component: ts.Identifier): string | undefined {
-  const declaration = symbolOf(program, component)?.declarations?.[0]?.resolve();
-  if (!declaration) return undefined;
-  for (const node of descendants(declaration.getSourceFile())) {
-    if (!ts.isPropertyAssignment(node) || nameOf(node) !== colorOptionProp) continue;
-    const option = program.checker.getTypeAtLocation(node.initializer);
-    const fallback = option && program.checker.getPropertyOfType(option, colorOptionDefault);
-    const type = fallback && program.checker.getTypeOfSymbol(fallback);
-    if (type?.isStringLiteralType()) return program.checker.typeToString(type);
+export function openLibraryProgram(
+  entry: string = libraryEntry,
+  files: readonly string[] = [],
+): { program: Program; elementFile: string } {
+  const elementFile = virtualFile(jsxElementSource, ".tsx");
+  return { program: openProgram([entry, elementFile, ...files]), elementFile };
+}
+
+function rowField(literal: ts.ObjectLiteralExpression, field: string): string | undefined {
+  for (const property of literal.properties) {
+    if (!ts.isPropertyAssignment(property) || staticPropertyName(property) !== field) continue;
+    return ts.isStringLiteral(property.initializer) ? property.initializer.text : undefined;
   }
   return undefined;
 }
 
-function controlledPairOf(name: string, names: ReadonlySet<string>): boolean {
-  const uncontrolled = `${uncontrolledPrefix}${name.charAt(0).toUpperCase()}${name.slice(1)}`;
-  const controlled = name.startsWith(uncontrolledPrefix)
-    ? `${name.charAt(uncontrolledPrefix.length).toLowerCase()}${name.slice(uncontrolledPrefix.length + 1)}`
-    : undefined;
-  return names.has(uncontrolled) || (controlled !== undefined && names.has(controlled));
+function rowDescription(declarations: readonly ts.Node[]): string {
+  const [declaration] = declarations;
+  if (!declaration || !ts.isPropertyAssignment(declaration)) return "";
+  const literal = declaration.initializer;
+  if (!ts.isObjectLiteralExpression(literal)) return "";
+  const aliasOf = rowField(literal, row.aliasOf);
+  if (aliasOf !== undefined) return `The same as \`${aliasOf}\`.`;
+  const property = rowField(literal, row.property);
+  if (property === undefined) return "";
+  const scale = rowField(literal, row.scale);
+  const length = rowField(literal, row.kind) === lengthRow;
+  const takes = [
+    ...(scale === undefined ? [] : [`a key of the \`${scale}\` scale`]),
+    ...(length
+      ? ["a number of pixels", "any CSS length"]
+      : scale === undefined
+        ? []
+        : ["any value the property takes"]),
+  ];
+  const listed =
+    takes.length > 1 ? `${takes.slice(0, -1).join(", ")} or ${takes.at(-1)}` : takes.join("");
+  return takes.length === 0
+    ? `Sets the CSS \`${property}\`.`
+    : `Sets the CSS \`${property}\`: ${listed}.`;
 }
 
-function libraryPropsOf(
-  props: readonly ComponentProp[],
-  common: ReadonlySet<string>,
-  defaultVariant: string | undefined,
-): LibraryProp[] {
-  const names = new Set(props.map(({ name }) => name));
-  const drivesState = (prop: ComponentProp) =>
-    prop.control.type === false || controlledPairOf(prop.name, names);
-  const stateful = props.some(drivesState);
-  return props.map((prop) => {
-    const shared = prop.declarations.some((key) => common.has(key));
-    return {
-      ...prop,
-      ...(prop.name === variantProp && defaultVariant !== undefined
-        ? { defaultValue: defaultVariant }
-        : {}),
-      common: shared,
-      behaviour:
-        drivesState(prop) ||
-        (!shared && prop.control.type === "boolean" && (stateful || prop.required)),
-    };
-  });
+function declarationsOfVariant(program: Program): ts.Node[] {
+  const source = program.sourceFile(colorTypes);
+  const alias = source?.statements.find(
+    (statement) => ts.isTypeAliasDeclaration(statement) && statement.name.text === colorPropsType,
+  );
+  if (!alias || !ts.isTypeAliasDeclaration(alias) || !ts.isTypeLiteralNode(alias.type)) return [];
+  return alias.type.members.filter((member) => staticPropertyName(member) === variantProp);
+}
+
+function isPartsFactory(declaration: ts.Node | undefined): boolean {
+  return (
+    declaration !== undefined &&
+    ts.isFunctionDeclaration(declaration) &&
+    declaration.name?.text === partsFactory &&
+    declaration.getSourceFile().fileName === sharedPropTypes
+  );
+}
+
+function defaultsOf(program: Program, component: ts.Identifier): Map<ts.Node, string> {
+  const implementations = declarationsOfSymbol(symbolOf(program, component)).filter(
+    (declaration) => ts.isFunctionDeclaration(declaration) && declaration.body !== undefined,
+  );
+  for (const call of implementations.flatMap((implementation) => descendants(implementation))) {
+    if (!ts.isCallExpression(call) || !isPartsFactory(calledDeclaration(program, call))) continue;
+    const options = call.arguments[3];
+    if (!options || !ts.isObjectLiteralExpression(options)) continue;
+    const color = options.properties.find(
+      (property) => staticPropertyName(property) === colorOption,
+    );
+    const option = color && program.checker.getTypeAtLocation(color);
+    const fallback = option && program.checker.getPropertyOfType(option, colorOptionDefault);
+    const type = fallback && program.checker.getTypeOfSymbol(fallback);
+    if (!type?.isStringLiteralType()) continue;
+    const value = program.checker.typeToString(type);
+    return new Map(declarationsOfVariant(program).map((declaration) => [declaration, value]));
+  }
+  return new Map();
+}
+
+export function componentsIn(
+  program: Program,
+  elementFile: string,
+  entry: string = libraryEntry,
+): LibraryComponent[] {
+  const sources = librarySources(entry).flatMap((file) => program.sourceFile(file) ?? []);
+  const fallbacks = fallbacksIn(program, sources);
+  return exportsReturningAJsxElement(program, elementFile, entry).map((name) => ({
+    name: name.text,
+    declarations: declarationsOfSymbol(symbolOf(program, name)),
+    props: propsOfComponent(program, name, {
+      fallbacks,
+      describe: rowDescription,
+      defaults: defaultsOf(program, name),
+    }),
+  }));
 }
 
 export function componentPropsOf(entry: string): ComponentProps {
-  const { program, elementFile, commonFile } = openLibraryProgram(entry);
+  const { program, elementFile } = openLibraryProgram(entry);
   try {
-    const sources = [...new Set([entry, ...sourcesOfTheLibrary(entry)])].flatMap((file) => {
-      const source = program.sourceFile(file);
-      return source ? [source] : [];
-    });
-    const fallbacks = fallbacksIn(program, sources);
-    const common = new Set(
-      exportsReturningAJsxElement(program, elementFile, commonFile).flatMap((name) =>
-        propsOfComponent(program, name).flatMap(({ declarations }) => declarations),
-      ),
-    );
     return Object.fromEntries(
-      exportsReturningAJsxElement(program, elementFile, entry).map((name) => [
-        name.text,
-        libraryPropsOf(
-          propsOfComponent(program, name, fallbacks),
-          common,
-          defaultVariantOf(program, name),
-        ),
-      ]),
+      componentsIn(program, elementFile, entry).map(({ name, props }) => [name, props]),
     );
   } finally {
     program.dispose();
@@ -179,12 +211,8 @@ export function libraryComponentProps(entry: string = libraryEntry): ComponentPr
   return props;
 }
 
-export function sourcesOfTheLibrary(entry: string = libraryEntry): string[] {
-  const directory = dirname(entry);
-  return globSync(librarySources, { cwd: directory }).map((file) => join(directory, file));
-}
-
 export function forgetComponentProps(changed: readonly string[]): void {
+  if (resolved.size === 0) return;
   resolved.clear();
   rereadFiles(changed);
 }
