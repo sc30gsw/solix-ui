@@ -9,6 +9,7 @@ import {
 } from "#/packages/core/src/color-table.ts";
 import {
   calledDeclaration,
+  declarationsOf,
   descendants,
   fileOf,
   openProgram,
@@ -38,40 +39,49 @@ function colourIn(token: string, scheme: (typeof schemes)[number]): Oklch | unde
   return value === undefined ? undefined : parsedOklch(value);
 }
 
+function lineOf(file: string, source: ts.SourceFile, node: ts.Node): string {
+  return `${relative(repositoryRoot, file)}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
+}
+
+function declaresTheThemedKey(declaration: ts.Node): boolean {
+  return (
+    relative(repositoryRoot, fileOf(declaration)) === themeFile &&
+    ts.isPropertySignatureDeclaration(declaration) &&
+    ts.isIdentifier(declaration.name) &&
+    declaration.name.text === themedKey
+  );
+}
+
+function isThemeMaker(node: ts.CallExpression): boolean {
+  const called = calledDeclaration(program, node);
+  return (
+    called !== undefined &&
+    ts.isFunctionDeclaration(called) &&
+    called.name?.text === themeMaker &&
+    relative(repositoryRoot, fileOf(called)) === themeFile
+  );
+}
+
 function themesMadeIn(file: string): Chosen[] {
   const source = program.sourceFile(file);
   if (!source) throw new Error(`${relative(repositoryRoot, file)}: TypeScript could not read it.`);
-  return descendants(source).flatMap((node) => {
-    if (!ts.isCallExpression(node)) return [];
-    const called = calledDeclaration(program, node);
-    if (
-      called === undefined ||
-      !ts.isFunctionDeclaration(called) ||
-      called.name?.text !== themeMaker ||
-      relative(repositoryRoot, fileOf(called)) !== themeFile
-    ) {
-      return [];
+  return descendants(source).flatMap((node): Chosen[] => {
+    if (ts.isCallExpression(node) && isThemeMaker(node)) {
+      const [theme] = node.arguments;
+      return theme === undefined || !ts.isObjectLiteralExpression(theme)
+        ? [{ where: lineOf(file, source, node), written: theme }]
+        : [];
     }
-    const where = `${relative(repositoryRoot, file)}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
-    const [theme] = node.arguments;
-    if (theme === undefined || !ts.isObjectLiteralExpression(theme)) {
-      return [{ where, written: theme }];
-    }
-    const chosen = theme.properties.find(
-      (property) =>
-        ts.isPropertyAssignment(property) &&
-        ts.isIdentifier(property.name) &&
-        property.name.text === themedKey,
-    );
-    return chosen === undefined || !ts.isPropertyAssignment(chosen)
-      ? []
-      : [{ where, written: chosen.initializer }];
+    return ts.isPropertyAssignment(node) &&
+      declarationsOf(program, node.name).some(declaresTheThemedKey)
+      ? [{ where: lineOf(file, source, node), written: node.initializer }]
+      : [];
   });
 }
 
 const chosen = appSources.flatMap(themesMadeIn);
 
-test("every primaryColor a demo in apps gives createTheme is a palette whose solid shade meets 3:1 against the page in both schemes, since the library promises contrast only for its default primary", () => {
+test("every primaryColor a demo in apps writes in a theme, given to createTheme or straight to a provider's theme, is a palette whose solid shade meets 3:1 against the page in both schemes, since the library promises contrast only for its default primary", () => {
   const violations = chosen.flatMap(({ where, written }) => {
     const names = stringsIn(program, written);
     if (names.length === 0) {
