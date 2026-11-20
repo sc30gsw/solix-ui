@@ -21,6 +21,7 @@ import {
   shadeProperty,
   shades,
   shadeSource,
+  slotDefaults,
   contrastLuminance,
   luminanceWeights,
   namedPalettes,
@@ -121,11 +122,11 @@ test("every rule of the colours layer, the first sub-layer of the library's, but
   ).toEqual([]);
 });
 
-test("the primary's StyleX tokens declare exactly the shades shadeSource names for the primary, in the order of the shades, each pointing at the primary palette's token", () => {
-  expect(tokenValues(primaryColorsFile)).toEqual(primaryPointed);
-  expect(Object.keys(tokenValues(primaryColorsFile))).toEqual(
-    shades.map((shade) => shadeSource(primaryName, shade)),
+test("the primary's StyleX constants name exactly the shades, in their order, each reading the token shadeSource names for the primary, so colorRules alone gives the primary a value", () => {
+  expect(tokenValues(primaryColorsFile)).toEqual(
+    Object.fromEntries(shades.map((shade) => [shade, `var(${shadeSource(primaryName, shade)})`])),
   );
+  expect(Object.keys(tokenValues(primaryColorsFile))).toEqual([...shades]);
 });
 
 test.each(named)(
@@ -137,7 +138,7 @@ test.each(named)(
   },
 );
 
-test("the primary's tokens point at the primary palette's in the colours layer, on :root and on every element with a colour scheme, and elsewhere only in StyleX's defaults on :root, with the same values", () => {
+test("the primary's tokens point at the primary palette's only in the colours layer, on :root and on every element with a colour scheme, and the variant slots get their defaults only from the colour class there, so no later layer resets them at :root", () => {
   const pointing = rules
     .filter(({ declarations }) => paletteToken(primaryName, "6") in declarations)
     .map(({ selector, declarations, layers }) => ({
@@ -146,21 +147,25 @@ test("the primary's tokens point at the primary palette's in the colours layer, 
       declarations,
     }));
 
-  expect(pointing).toEqual([
-    { selector: ":root", inColors: true, declarations: primaryPointed },
-    { selector: ":root", inColors: false, declarations: primaryPointed },
-  ]);
+  expect(pointing).toEqual([{ selector: ":root", inColors: true, declarations: primaryPointed }]);
   expect(colourRules.filter(({ selector }) => selector === primaryRoots)).toHaveLength(1);
+  expect(
+    rules
+      .filter(({ declarations }) => slots.some((slot) => slot in declarations))
+      .filter(({ layers }) => !layers.includes(colorLayer))
+      .map(({ selector }) => selector),
+  ).toEqual([]);
 });
 
-test("an element with a colour class resets every slot to the default variant-colors.stylex.ts writes for it, so a variant the table does not hold falls back to the default variant and a custom variant that sets only its background and colour hovers on its background with no border", () => {
+test("an element with a colour class resets every slot to its default in slotDefaults, which variant-colors.stylex.ts only names, so a variant the table does not hold falls back to the default variant and a custom variant that sets only its background and colour hovers on its background with no border", () => {
   const reset = ruleFor(`.${colorClass}`);
 
   const written = tokenValues(variantColorsFile);
 
   expect(Object.keys(reset)).toEqual(slots);
-  expect(reset).toEqual(written);
-  expect(written["--solixc-variant-hover"]).toBe("var(--solixc-variant-background)");
+  expect(reset).toEqual(slotDefaults);
+  expect(Object.values(written)).toEqual(slots.map((slot) => `var(${slot})`));
+  expect(reset["--solixc-variant-hover"]).toBe("var(--solixc-variant-background)");
   expect(valuesOf(rootOf({ variant: "nonsense" }), variantAttribute)).toEqual(["filled"]);
 });
 
