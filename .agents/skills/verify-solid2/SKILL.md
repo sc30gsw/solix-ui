@@ -26,7 +26,7 @@ It does if it edits any of these:
 | `pnpm-workspace.yaml` | The catalog pins `solid2-agent-kit`, whose gate and doctor these are, and the Solid packages, and `overrides` removes every package the doctor bans but `react` from any install. |
 | `.agents/skills/solid-2` | The kit's skill, whose "Review checklist" section the review walks. |
 
-Last confirmed against commit `c35b6ab`. Run `git diff c35b6ab -- packages apps scripts tests package.json tsconfig.base.json tsconfig.json vite.config.ts pnpm-workspace.yaml .agents/skills/solid-2`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `292a5ad`. Run `git diff 292a5ad -- packages apps scripts tests package.json tsconfig.base.json tsconfig.json vite.config.ts pnpm-workspace.yaml .agents/skills/solid-2`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 
