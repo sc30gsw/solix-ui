@@ -13,7 +13,7 @@ import {
   parseText,
   parseWithoutLibrariesOrImports,
   sharedSettings,
-  typeCheckedWithScripts,
+  typeCheckedProjects,
   staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
@@ -29,14 +29,15 @@ import {
   type Dependent,
   type Installed,
   type Manifest,
+  installedDependencies,
   installedVersions,
   libraryNames,
+  ownLibraryPeerRange,
+  runtimeVersions,
   libraryPackages,
   listed,
   outsideGeneratedOrInstalled,
   packages,
-  primitivesDirectory,
-  primitivesPackage,
   repositoryRoot,
   rootManifest,
   scriptFiles,
@@ -59,11 +60,6 @@ const vitePlusCommandFor: Record<string, string> = {
 };
 
 const projectLicence = "MIT";
-const frameworkPeers = ["solid-js", "@solidjs/web", "@stylexjs/stylex"];
-const allowedForPrimitives = ["solid-js"];
-const allowedForComponents = [...frameworkPeers, primitivesPackage.manifest.name ?? ""];
-const ownLibraryPeerRange = "workspace:^";
-const ownLibraryLink = "workspace:*";
 const catalogReference = "catalog:";
 const webStandardsOnly =
   "A library is built on web standards: it names Solid, StyleX and the primitives package as peers, and has a runtime dependency only where the owner decided on one. Use a platform feature or a fallback written in this repository, or record the decision in that list with its reason.";
@@ -81,6 +77,7 @@ const typeScriptProjectOpener = "scripts/syntax/program.ts";
 const sharedSettingsFile = "tsconfig.base.json";
 const optionsOfTheParseOnlyProject = ["allowJs", "noLib", "noResolve"];
 const optionsOfTheTypeCheckedProject = ["allowJs"];
+const optionsOfTheProjectWithNodeTypes = ["allowJs", "types"];
 const pnpmSettingsReader = "scripts/pnpm-settings.ts";
 const jobHeader = /^ {2}[\w-]+:$/;
 const jobTimeout = /^ {4}timeout-minutes: \d+$/;
@@ -95,19 +92,11 @@ const dependencyLists = [
   "optionalDependencies",
 ] as const;
 
-function runtimeVersions(manifest: Manifest): Record<string, string> {
-  return { ...manifest.optionalDependencies, ...manifest.dependencies };
-}
-
 function runtimeDependencies(manifest: Manifest): string[] {
   const bundled = [manifest.bundledDependencies, manifest.bundleDependencies].flatMap((names) =>
     Array.isArray(names) ? names : [],
   );
   return [...new Set([...Object.keys(runtimeVersions(manifest)), ...bundled])];
-}
-
-function installedDependencies(manifest: Manifest): [string, string][] {
-  return Object.entries({ ...runtimeVersions(manifest), ...manifest.devDependencies });
 }
 
 function lowestMajorOf(range: string): number | undefined {
@@ -219,7 +208,7 @@ function hasProperty(name: string): (property: ts.ObjectLiteralElementLike) => b
   return (property) => staticPropertyName(property) === name;
 }
 
-test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFile} and sets no option it sets, the type-checked project adds ${optionsOfTheTypeCheckedProject.join(", ")}, and the parse-only project adds ${optionsOfTheParseOnlyProject.join(", ")}`, () => {
+test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFile} and sets no option it sets, the type-checked project adds ${optionsOfTheTypeCheckedProject.join(", ")}, the one with Node's types adds ${optionsOfTheProjectWithNodeTypes.join(" and ")} naming node, and the parse-only project adds ${optionsOfTheParseOnlyProject.join(", ")}`, () => {
   const source = parse(join(repositoryRoot, typeScriptProjectOpener));
   const nodes = descendants(source);
   const settingsWritten = nodes
@@ -244,13 +233,18 @@ test(`every project ${typeScriptProjectOpener} opens extends ${sharedSettingsFil
   expect(withoutTheSharedSettings.map((settings) => settings.getText())).toEqual([]);
   expect(optionsOfEachProject).toEqual([
     "parseWithoutLibrariesOrImports",
-    "typeCheckedWithScripts",
+    "typeCheckedProjects[project]",
   ]);
   expect(Object.keys(parseWithoutLibrariesOrImports)).toEqual(optionsOfTheParseOnlyProject);
-  expect(Object.keys(typeCheckedWithScripts)).toEqual(optionsOfTheTypeCheckedProject);
+  expect(Object.keys(typeCheckedProjects)).toEqual(["scripts", "withNodeTypes"]);
+  expect(Object.keys(typeCheckedProjects.scripts)).toEqual(optionsOfTheTypeCheckedProject);
+  expect(Object.keys(typeCheckedProjects.withNodeTypes)).toEqual(optionsOfTheProjectWithNodeTypes);
+  expect(typeCheckedProjects.withNodeTypes.types).toEqual(["node"]);
   expect([
     ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, parseWithoutLibrariesOrImports),
-    ...optionsTheSharedSettingsOwn(typeScriptProjectOpener, typeCheckedWithScripts),
+    ...Object.values(typeCheckedProjects).flatMap((settings) =>
+      optionsTheSharedSettingsOwn(typeScriptProjectOpener, settings),
+    ),
   ]).toEqual([]);
 });
 
@@ -357,51 +351,6 @@ test(`a library has no runtime dependency, in any list that installs with it, bu
   expect(problems([withB({ dependencies: { b: "workspace:*" } }), own], [entry], {})).toEqual([
     expect.stringContaining("It is a library of this repository"),
   ]);
-});
-
-test("a library names as a peer, or as a library of this repository in any dependency list, only what its kind allows", () => {
-  const violations = libraryPackages.flatMap(({ path, directory, manifest }) => {
-    const [kind, allowed] =
-      directory === primitivesDirectory
-        ? ["the primitives package", allowedForPrimitives]
-        : ["a component library", allowedForComponents];
-    const named = [
-      ...Object.keys(manifest.peerDependencies ?? {}),
-      ...installedDependencies(manifest)
-        .map(([name]) => name)
-        .filter((name) => libraryNames.includes(name)),
-    ];
-    return [...new Set(named)]
-      .filter((name) => !allowed.includes(name))
-      .map(
-        (name) =>
-          `${path}: package "${manifest.name}" names "${name}", which ${kind} may not. It may name only ${allowed.join(", ")}.`,
-      );
-  });
-
-  expect(libraryPackages.length).toBeGreaterThan(1);
-  expect(violations).toEqual([]);
-});
-
-test("a library names another library of this repository as a workspace:^ peer, linked as a workspace:* devDependency", () => {
-  const violations = libraryPackages.flatMap(({ path, manifest }) =>
-    Object.entries(manifest.peerDependencies ?? {})
-      .filter(([name]) => libraryNames.includes(name))
-      .flatMap(([name, range]) => [
-        ...(range === ownLibraryPeerRange
-          ? []
-          : [
-              `${path}: write the peer "${name}" as "${ownLibraryPeerRange}", so publishing pins the version this workspace builds against.`,
-            ]),
-        ...(manifest.devDependencies?.[name] === ownLibraryLink
-          ? []
-          : [
-              `${path}: add "${name}": "${ownLibraryLink}" to devDependencies, so the workspace links the library it names as a peer.`,
-            ]),
-      ]),
-  );
-
-  expect(violations).toEqual([]);
 });
 
 function lineOf(source: ts.SourceFile, position: number): number {

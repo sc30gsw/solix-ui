@@ -1,8 +1,10 @@
+import { basename } from "node:path";
 import { commentsIn, exportsOf, type ts } from "#/scripts/syntax.ts";
 import {
   at,
-  exportedFunction,
-  functionNameFor,
+  constantsModule,
+  exportedFunctions,
+  isNamedFor,
   type Module,
   type PrimitiveRule,
   publicModules,
@@ -22,22 +24,32 @@ function hasADocComment(module: Module, fn: ts.Node): boolean {
 
 const publicExports: Rule = (library) => [
   ...publicModules(library).flatMap((module) => {
-    const expected = functionNameFor(module.file);
     const { functions, others } = exportsOf(module.source);
-    return functions.join() === expected && others.length === 0
+    return functions.length === 1 &&
+      functions.every((name) => isNamedFor(module.file, name)) &&
+      others.length === 0
       ? []
       : [
-          `${at(module)}: export exactly one function, ${expected}, named for the file, and types (found: ${[...functions, ...others].join(", ") || "nothing"}). Give a second function its own file, or name the file internal-<topic>.ts if no consumer should import it.`,
+          `${at(module)}: export exactly one function named for the file, whose name in kebab-case, with an acronym as one word and a digit after a lowercase letter starting a word, is ${basename(module.file, ".ts")}, and types (found: ${[...functions, ...others].join(", ") || "nothing"}). Give a second function its own file, or name the file internal-<topic>.ts if no consumer should import it.`,
         ];
   }),
   ...publicModules(library).flatMap((module) => {
-    const fn = exportedFunction(module);
+    const fn = exportedFunctions(module).first;
     return !fn || hasADocComment(module, fn)
       ? []
       : [
-          `${at(module, fn)}: write a doc comment directly above ${functionNameFor(module.file)}, above its first overload if it has any, since a consumer reads it where they call the function.`,
+          `${at(module, fn)}: write a doc comment directly above ${fn.name.text}, above its first overload if it has any, since a consumer reads it where they call the function.`,
         ];
   }),
+  ...library.modules
+    .filter(({ file }) => file === constantsModule)
+    .flatMap((module) => {
+      const { functions, types } = exportsOf(module.source);
+      return [...functions, ...types].map(
+        (name) =>
+          `${at(module)}: export only constants from ${constantsModule}, not ${name}. Give a function its own module, and a type a place in ${typesModule}.`,
+      );
+    }),
   ...library.modules
     .filter(({ file }) => file === typesModule)
     .flatMap((module) => {
@@ -50,6 +62,6 @@ const publicExports: Rule = (library) => [
 
 export const publicExportsRule: PrimitiveRule = {
   description:
-    "every public module exports one function, named for the file, with a doc comment directly above it, and its types, and types.ts exports only types",
+    "every public module exports one function, named for the file, with a doc comment directly above it, and its types, constants.ts exports only constants, and types.ts exports only types",
   rule: publicExports,
 };

@@ -1,10 +1,10 @@
 import { join, relative } from "node:path";
 import type { TestProject } from "vite-plus/test/node";
 import { repositoryRoot } from "#/scripts/repository.ts";
-import { localUrl, startServer } from "#/tests/support/server-process.ts";
+import { startServer } from "#/tests/support/server-process.ts";
 
 const playgroundDirectory = join(repositoryRoot, "apps/playground");
-const playgroundPort = 4319;
+const unservedUrl = "http://playground-did-not-start.invalid/";
 
 export type TestFilesOfEachProject = Readonly<Record<string, readonly string[]>>;
 
@@ -13,6 +13,8 @@ export type RunSettings = {
   env: Record<string, string>;
   provided: Record<string, unknown>;
   groupOrder: number;
+  globalSetup: string[];
+  browser: { enabled: boolean; screenshotFailures: boolean };
 };
 
 declare module "vite-plus/test" {
@@ -39,6 +41,11 @@ function runSettingsOfEachProject(project: TestProject): Record<string, RunSetti
         ),
         provided: { ...config.provide },
         groupOrder: config.sequence.groupOrder,
+        globalSetup: [config.globalSetup].flat().map((file) => relative(repositoryRoot, file)),
+        browser: {
+          enabled: config.browser.enabled,
+          screenshotFailures: config.browser.screenshotFailures,
+        },
       },
     ]),
   );
@@ -53,14 +60,13 @@ async function testFilesOfEachProject(project: TestProject): Promise<Record<stri
   return listed;
 }
 
-export async function setup(project: TestProject): Promise<() => void> {
+export async function setup(project: TestProject): Promise<() => Promise<void>> {
   project.provide("testFilesOfEachProject", await testFilesOfEachProject(project));
   project.provide("runTestNamePattern", patternOf(project.vitest.config.testNamePattern));
   project.provide("runSettingsOfEachProject", runSettingsOfEachProject(project));
   try {
     const playground = await startServer({
       directory: playgroundDirectory,
-      port: playgroundPort,
       command: ["node", "dist/server/node.js"],
     });
     project.provide("playgroundUrl", playground.url);
@@ -69,7 +75,7 @@ export async function setup(project: TestProject): Promise<() => void> {
     process.stderr.write(
       `The playground did not start, so every test that opens it fails. The tests that need no page still run and say what they find.\n${String(error)}`,
     );
-    project.provide("playgroundUrl", localUrl(playgroundPort));
-    return () => undefined;
+    project.provide("playgroundUrl", unservedUrl);
+    return async () => undefined;
   }
 }

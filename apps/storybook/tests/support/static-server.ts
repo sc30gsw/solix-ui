@@ -2,8 +2,7 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { afterAll, beforeAll } from "vite-plus/test";
-import { localUrl } from "../../../../tests/support/server-process.ts";
-import { closed, listening } from "#/tests/support/listening.ts";
+import { closed, type Listening, listening, urlOnceListening } from "#/tests/support/listening.ts";
 
 const contentTypes: Readonly<Record<string, string>> = {
   ".html": "text/html",
@@ -16,7 +15,8 @@ const contentTypes: Readonly<Record<string, string>> = {
   ".woff2": "font/woff2",
 };
 
-export function serveDirectory(root: string, port: number): string {
+export function serveDirectory(root: string): Listening {
+  let url: string | undefined;
   const server = createServer((request, response) => {
     const path = normalize(decodeURIComponent(new URL(request.url ?? "/", "http://host").pathname));
     const file = join(root, path.endsWith("/") ? `${path}index.html` : path);
@@ -30,8 +30,14 @@ export function serveDirectory(root: string, port: number): string {
     createReadStream(file).pipe(response);
   });
 
-  beforeAll(() => listening(server, port));
+  beforeAll(async () => {
+    url = await listening(server);
+  });
   afterAll(() => closed(server));
 
-  return localUrl(port);
+  return {
+    get url() {
+      return urlOnceListening(url);
+    },
+  };
 }

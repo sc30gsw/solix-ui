@@ -1,6 +1,6 @@
 ---
 name: verify-modal-protocol
-description: Checks that the Modal's open and closed state stays in agreement with the user's actions, for generated sequences of presses, keys and typing and not only the sequences the app journeys use, and that its light-dismiss fallback works alone. Use when a change edits Modal, light-dismiss, how the app wires `opened` and `onClose`, or Solid, the Solid plugin or Playwright.
+description: Checks that the Modal's open and closed state stays in agreement with the user's actions, for generated sequences of presses, keys and typing and not only the sequences the playground's other tests use, and that its light-dismiss fallback works alone. Use when a change edits Modal, light-dismiss, how the app wires `opened` and `onClose`, or Solid, the Solid plugin or Playwright.
 ---
 
 # Verify the modal protocol
@@ -30,7 +30,7 @@ It does if it edits any of these:
 | `vite.config.ts` | It sets the test include globs and the global setup. |
 | `playwright`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `b2ab141`. Run `git diff b2ab141 -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `bf74dd4`. Run `git diff bf74dd4 -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 
@@ -58,7 +58,7 @@ No model checker runs on a Solid component, so this is not a proof. The test use
 - Touch, the mobile back gesture, and Escape pressed while a field inside the dialog consumes it.
 - Focus returning to the button that opened the dialog. Safari does not focus a button on press, so the check does not require it.
 - Whether the fallback runs in Safari. The fallback test removes the native feature in whichever engine runs it. Only a run on `webkit` shows that Safari takes the fallback path.
-- What the dialog looks like. `.agents/skills/verify-playground/features/modal.md` covers that.
+- What the dialog looks like. `apps/storybook/src/Modal.stories.tsx` shows it to a person, and no check compares its look until Storybook's screenshot comparisons land.
 
 ## Reading a failure
 

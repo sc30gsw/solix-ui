@@ -9,11 +9,10 @@ import { inEveryEngine } from "../../../tests/support/served-app.ts";
 import { childRunMargin, runVp } from "#/tests/support/child-runs.ts";
 import { serveDirectory } from "#/tests/support/static-server.ts";
 import { collectTelemetry, telemetryUrlVariable } from "#/tests/support/telemetry-collector.ts";
-import { interfaceTelemetryPort, staticStorybookPort } from "#/tests/support/test-servers.ts";
+import { staticStorybookDirectory } from "#/tests/support/test-servers.ts";
 
 const staticBuildScript = "build-storybook";
 const scriptsRunUnderTheCollector = [staticBuildScript];
-const staticBuild = join(import.meta.dirname, "../dist");
 const buildTimeout = 300_000;
 const interfaceTimeout = 90_000;
 const panelTimeout = 60_000;
@@ -26,13 +25,13 @@ const storyWithATextArg = "button--default";
 const textArg = "children";
 const typedArg = "Saved again";
 
-const telemetry = collectTelemetry(interfaceTelemetryPort);
-const url = serveDirectory(staticBuild, staticStorybookPort);
+const telemetry = collectTelemetry();
+const site = serveDirectory(staticStorybookDirectory);
 let build: { exitCode: number | null; output: string } = { exitCode: null, output: "" };
 let stories: StoryIndexEntry[] = [];
 
 function builtStories(): StoryIndexEntry[] {
-  const index = JSON.parse(readFileSync(join(staticBuild, "index.json"), "utf8")) as {
+  const index = JSON.parse(readFileSync(join(staticStorybookDirectory, "index.json"), "utf8")) as {
     entries: Record<string, StoryIndexEntry>;
   };
   return Object.values(index.entries).filter(({ type }) => type === "story");
@@ -93,7 +92,7 @@ function checkTheInterface(
         if (message.type() === "error") consoleErrors.push(message.text());
       });
       page.on("pageerror", (error) => consoleErrors.push(String(error)));
-      await page.goto(url, { waitUntil: "load" });
+      await page.goto(site.url, { waitUntil: "load" });
     }, interfaceTimeout);
 
     afterAll(async () => {
@@ -153,7 +152,7 @@ function checkTheInterface(
     test(
       "a story's text arg changed through the controls panel reaches the preview",
       async () => {
-        await page.goto(`${url}?path=/story/${storyWithATextArg}`, { waitUntil: "load" });
+        await page.goto(`${site.url}?path=/story/${storyWithATextArg}`, { waitUntil: "load" });
         await page.getByRole("tab", { name: /controls/i }).click();
         const control = page.locator(`#control-${textArg}`);
         await control.fill("");

@@ -141,8 +141,16 @@ export const handWrittenTabs: NamedTabs[] = [
   { list: inAShadowRoot, tabs: named(tabNames.inAShadowRoot) },
 ];
 
-export function tabNamesOf(list: string): string[] {
-  const found = [...tabsSetups, ...handWrittenTabs].find((setup) => setup.list === list);
+function listNamed<Setup extends NamedTabs>(lists: readonly Setup[], list: string): Setup {
+  const found = lists.find((setup) => setup.list === list);
   if (!found) throw new Error(`${list}: the playground names no list of tabs so.`);
-  return found.tabs.map(({ name }) => name);
+  return found;
+}
+
+export function setupOf(list: string): TabsSetup {
+  return listNamed(tabsSetups, list);
+}
+
+export function tabNamesOf(list: string): string[] {
+  return listNamed([...tabsSetups, ...handWrittenTabs], list).tabs.map(({ name }) => name);
 }

@@ -1,10 +1,14 @@
-import { type ChildProcess, spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Browser } from "playwright";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import { installedVp } from "../../../scripts/repository";
+import {
+  type RunningServer,
+  startServer,
+  viteOnAFreePort,
+} from "../../../tests/support/server-process";
 import { opened } from "#/tests/support/opening.ts";
 import { account, optional, panelOf, tabNamed, tabNames } from "#/tests/support/tabs.ts";
 
@@ -12,8 +16,6 @@ const { overview, security } = tabNames.account;
 const { notes } = tabNames.optional;
 
 const appDirectory = join(import.meta.dirname, "..");
-const port = 4320;
-const url = `http://127.0.0.1:${port}/`;
 
 type UpstreamException = {
   code: string;
@@ -34,39 +36,24 @@ function isCoveredBy(exception: UpstreamException, diagnostic: string): boolean 
   );
 }
 
-let devServer: ChildProcess | undefined;
-
-async function serverAnswers(): Promise<boolean> {
-  try {
-    return (await fetch(url)).ok;
-  } catch {
-    return false;
-  }
-}
-
-function stopServerAndItsChildren(): void {
-  if (devServer?.pid !== undefined) process.kill(-devServer.pid);
-}
+let devServer: RunningServer | undefined;
 
 beforeAll(async () => {
-  expect(
-    await serverAnswers(),
-    `port ${port} already answers, so this run would test a server it did not start. Stop the process that holds the port.`,
-  ).toBe(false);
-  devServer = spawn(
-    installedVp,
-    ["dev", "--force", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
-    {
-      cwd: appDirectory,
-      env: { ...process.env, NODE_ENV: "development" },
-      stdio: "ignore",
-      detached: true,
-    },
-  );
-  await vi.waitUntil(serverAnswers, { timeout: 20_000 });
+  devServer = await startServer({
+    directory: appDirectory,
+    command: [installedVp, "dev", "--force", ...viteOnAFreePort],
+    environment: { NODE_ENV: "development" },
+  });
 });
 
-afterAll(stopServerAndItsChildren);
+afterAll(async () => {
+  await devServer?.stop();
+});
+
+function devUrl(): string {
+  if (devServer === undefined) throw new Error("The development server did not start.");
+  return devServer.url;
+}
 
 describe.each(enginesToVerify())("in %s", (engine) => {
   let browser: Browser;
@@ -82,7 +69,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     });
     page.on("pageerror", (error) => diagnostics.push(String(error)));
 
-    await opened(page, url, "hydrated");
+    await opened(page, devUrl(), "hydrated");
     const summary = page.locator("summary").filter({ hasText: "Toggle" });
     const content = page.getByText("Hidden content");
     await summary.click();

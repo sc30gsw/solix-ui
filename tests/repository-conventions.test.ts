@@ -197,7 +197,7 @@ test("every name a verification skill's covered-code cell gives after a source f
 
 test("every verification skill says which commit it was last confirmed against", () => {
   const violations = skillNames
-    .filter((name) => name.startsWith("verify-") && name !== "verify-playground")
+    .filter((name) => name.startsWith("verify-"))
     .filter(
       (name) =>
         !/Last confirmed against commit `[0-9a-f]{7,40}`/.test(
@@ -429,16 +429,18 @@ test("every check in the repository runs through vp run verify, before a commit,
     "vp run check:private-terms",
     "vp test",
   ]);
-  expect(read(".vite-hooks/pre-commit").trim()).toBe("vp staged && vp run verify");
-  expect(read(".vite-hooks/pre-merge-commit").trim()).toBe("vp run verify");
+  expect(read(".vite-hooks/pre-commit").trim()).toBe(
+    "node scripts/check-working-tree.ts && vp staged --no-stash && node scripts/check-working-tree.ts && vp run verify",
+  );
+  expect(read(".vite-hooks/pre-merge-commit").trim()).toBe(
+    "node scripts/check-working-tree.ts && vp run verify",
+  );
   const everyEngine = `playwright install --with-deps ${engineNames.join(" ")}`;
   for (const file of workflowFiles) {
     const workflow = read(file);
     const installs = workflow.split("\n").filter((line) => line.includes("playwright install"));
-    if (/vp run (verify|evidence)/.test(workflow)) {
-      expect(installs.length, `${file} installs the browser engines`).toBeGreaterThan(0);
-    }
     if (/vp run verify/.test(workflow)) {
+      expect(installs.length, `${file} installs the browser engines`).toBeGreaterThan(0);
       expect(workflow, `${file} gives verify the private-term list`).toMatch(
         verifyWithPrivateTerms,
       );

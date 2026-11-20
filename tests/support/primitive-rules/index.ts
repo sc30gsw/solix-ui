@@ -33,30 +33,35 @@ import { sourceFileKindsRule } from "#/tests/support/primitive-rules/source-file
 import { styleAndClassWritesRule } from "#/tests/support/primitive-rules/style-and-class-writes.ts";
 import { testsNamedForModulesRule } from "#/tests/support/primitive-rules/tests-named-for-modules.ts";
 
+import { libraryKinds, type LibraryKind, type RuleSet } from "#/tests/support/workspace.ts";
+
 export { loadLibrary, publicModules } from "#/tests/support/primitive-rules/library.ts";
 
-export const primitiveRules = {
+const sharedRules = {
   sourceFileKinds: sourceFileKindsRule,
   publicExports: publicExportsRule,
   barrelOrder: barrelOrderRule,
-  serverEffects: serverEffectsRule,
   serverBranches: serverBranchesRule,
   moduleState: moduleStateRule,
   readOnceArguments: readOnceArgumentsRule,
   argumentReads: argumentReadsRule,
+  browserGlobalReads: browserGlobalReadsRule,
+  caughtErrors: caughtErrorsRule,
+  instanceofChecks: instanceofChecksRule,
+} satisfies Record<string, PrimitiveRule>;
+
+const primitivesOnlyRules = {
+  serverEffects: serverEffectsRule,
   styleAndClassWrites: styleAndClassWritesRule,
   elementAttachments: elementAttachmentsRule,
   browserValues: browserValuesRule,
   browserValueAssertions: browserValueAssertionsRule,
   hydrationPolicy: hydrationPolicyRule,
-  browserGlobalReads: browserGlobalReadsRule,
   commandKinds: commandKindsRule,
   liveOptions: liveOptionsRule,
   listenerRoles: listenerRolesRule,
   eventHandlerProperties: eventHandlerPropertiesRule,
   observerConstruction: observerConstructionRule,
-  caughtErrors: caughtErrorsRule,
-  instanceofChecks: instanceofChecksRule,
   focusMoves: focusMovesRule,
   testsNamedForModules: testsNamedForModulesRule,
   modelTests: modelTestsRule,
@@ -66,4 +71,20 @@ export const primitiveRules = {
   serverRenderTest: serverRenderTestRule,
 } satisfies Record<string, PrimitiveRule>;
 
+export const primitiveRules = { ...sharedRules, ...primitivesOnlyRules };
+
 export type PrimitiveRuleName = keyof typeof primitiveRules;
+
+function namesOf(rules: Partial<Record<PrimitiveRuleName, PrimitiveRule>>): PrimitiveRuleName[] {
+  return Object.keys(primitiveRules).filter((name): name is PrimitiveRuleName => name in rules);
+}
+
+const rulesOfSet: Readonly<Record<RuleSet, readonly PrimitiveRuleName[]>> = {
+  every: namesOf(primitiveRules),
+  shared: namesOf(sharedRules),
+  none: [],
+};
+
+export function rulesOfKind(kind: LibraryKind): readonly PrimitiveRuleName[] {
+  return rulesOfSet[libraryKinds[kind].rules];
+}
