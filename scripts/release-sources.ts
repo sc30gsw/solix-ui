@@ -37,10 +37,46 @@ export function heldBackEntries(): HeldBack[] {
   return JSON.parse(readFileSync(join(repositoryRoot, heldBackFile), "utf8"));
 }
 
-async function fetched(url: string): Promise<unknown> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`${url} answered ${response.status}`);
-  return response.json();
+const fetchTimeoutMs = 30_000;
+
+class SourceFailure extends Error {}
+
+function whyItFailed(error: unknown, timeoutMs: number): string {
+  if (error instanceof SourceFailure) return error.message;
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return `no answer within ${timeoutMs} ms`;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : "";
+  return cause === "" ? message : `${message} (${cause})`;
+}
+
+async function tried(url: string, timeoutMs: number): Promise<unknown> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!response.ok) throw new SourceFailure(`answered ${response.status}`);
+  const body = await response.text();
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new SourceFailure(`answered ${response.status} with a body that is not JSON`);
+  }
+}
+
+export async function fetchedJson(url: string, timeoutMs = fetchTimeoutMs): Promise<unknown> {
+  try {
+    return await tried(url, timeoutMs);
+  } catch {
+    try {
+      return await tried(url, timeoutMs);
+    } catch (error) {
+      throw new Error(
+        `${url}: ${whyItFailed(error, timeoutMs)}, on the first try and on the retry.`,
+        {
+          cause: error,
+        },
+      );
+    }
+  }
 }
 
 export async function registryDocuments(
@@ -50,12 +86,12 @@ export async function registryDocuments(
     await Promise.all(
       unique(names).map(async (name) => [
         name,
-        (await fetched(`${registry}/${name.replace("/", "%2f")}`)) as RegistryDocument,
+        (await fetchedJson(`${registry}/${name.replace("/", "%2f")}`)) as RegistryDocument,
       ]),
     ),
   );
 }
 
 export async function nodeReleases(): Promise<NodeRelease[]> {
-  return (await fetched(nodeIndex)) as NodeRelease[];
+  return (await fetchedJson(nodeIndex)) as NodeRelease[];
 }
