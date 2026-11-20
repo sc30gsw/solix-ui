@@ -28,9 +28,10 @@ import {
   type VariantRow,
   writtenColor,
 } from "#/src/color-table.ts";
+import { colorSchemeAttribute } from "#/src/color-schemes.ts";
 
 const theColor = `var(${colorProperty})`;
-const schemeRoots = ":root,[data-color-scheme]";
+const schemeRoots = `:root,[${colorSchemeAttribute}]`;
 
 export function contrastingText(colour: string): string {
   const { r, g, b } = luminanceWeights;
