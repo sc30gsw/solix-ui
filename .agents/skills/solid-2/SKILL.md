@@ -1,0 +1,2626 @@
+---
+name: solid-2
+description: Write correct Solid 2.0 code (components, signals, stores, effects, async, JSX). Use whenever creating or editing .tsx files, reviewing UI code, or answering questions about Solid in this repo. Solid 2.0 is NOT React and NOT Solid 1.x — this skill prevents both classes of mistakes.
+---
+
+# Writing Solid 2.0
+
+This project uses Solid 2.0 (`solid-js` 2.x) with `@solidjs/web`. The hard rules are
+installed by solid2-agent-kit as an always-applied rules file (`.cursor/rules/solid-2.mdc`
+for Cursor; a managed block in `CLAUDE.md` for Claude Code). This skill adds the mental
+model, decision tables, and canonical patterns. When an API is in doubt, verify against the
+official docs — see [Checking the official docs](#checking-the-official-docs).
+
+## The one difference everything follows from
+
+React re-runs component functions to compute the next UI. **Solid runs a component function
+once, at mount.** After that, signals and stores notify only the computations and JSX
+expressions that read them. There is no re-render, no reconciliation of component output,
+no snapshot props, no stale closures, no dependency arrays.
+
+Practical consequences:
+
+- Values must travel as **accessors (functions)**, not as extracted values. Extracting a
+  value at component-body top level freezes it forever.
+- The component body is **untracked**. Tracking scopes are: JSX expressions, `createMemo`
+  compute, `createEffect` compute (first argument), and boundary children.
+- Event handlers run untracked: they always read current values and never subscribe.
+- Object identity is stable: handlers, context values, and props objects are created once.
+  `useCallback` / `useMemo`-for-identity / `React.memo` have no purpose here.
+
+## Decision tables
+
+### Where does state live?
+
+| Situation | Use |
+|---|---|
+| Scalar local state (count, open/closed, text input) | `createSignal(value)` in the component |
+| Object/array state where parts update independently (forms, lists, nested data) | `createStore(value)` — property-level subscriptions |
+| Object that is replaced wholesale (fetch response, selected item, `User \| null`) | `createSignal(objectValue)` |
+| Value derived from other reactive values | plain function `() => ...` (never a signal synced by an effect) |
+| Expensive derivation, multiple consumers, or equality boundary needed | `createMemo(() => ...)` |
+| Follows a prop but user can locally override; prop change resets | writable derivation: `createSignal(() => props.value)` / `createStore(() => props.value, fallback)` — a write lands at once and the function receives it as `prev` (the draft on a store) on re-run; honoring `prev` keeps the edit across source changes <!-- upstream:derived-write-prev --> |
+| Shared by a subtree, independent per provider instance | signal/store created inside a provider component, passed via context |
+| App-wide state (theme, session, cart, locale) | the same provider, placed at the root of `App` — not a module-level signal/store (under SSR one module instance serves every request) |
+| Constants (a category list, a formatter, the `createContext` call) | module scope |
+| Tentative value during a mutation | `createOptimistic` / `createOptimisticStore` + `action` |
+| Values pushed by an external subscription (websocket, reactive client) | async iterable returned from a memo — `from(source)` adapts a callback subscription, an Observable, or an AsyncIterable <!-- upstream:from-source-adapts --> (or function-form `createStore` for keyed reconciliation) — never `{ data, error }` signal pairs |
+
+### Should this be an effect?
+
+Most React `useEffect` code should NOT become `createEffect`:
+
+| React habit | Solid 2 |
+|---|---|
+| Compute a rendered value in an effect | plain function or `createMemo` |
+| Fetch data in an effect, copy into state | `createMemo(async () => ...)` + `<Loading>` |
+| React to a user interaction | do the work in the event handler or an `action` |
+| Sync one state into another | delete the second state; derive it |
+| Reset/clear state when another reactive value changes | writable derivation: `createSignal(() => { source(); return initial; })` — not an effect calling the setter |
+| Push a settled reactive value into a non-Solid system (DOM API, third-party widget, analytics, subscription) | `createEffect(compute, apply)` — this is the only real use |
+| One-time setup after mount (`onMount`) | `onSettled(() => { ...; return cleanup })` |
+| Measure DOM / observe size after paint | ref **directive factory** + `onSettled` (writes a *new* input; not an effect that copies state) |
+
+### Composition, code-splitting, SSR
+
+| Situation | Use |
+|---|---|
+| Wrapper that only renders its children | `{props.children}` — no helper |
+| Inspect, count, or iterate children | `children(() => props.children)` then `.toArray()` |
+| Code-split a component | `lazy(() => import("./X"))` read under `<Loading>` |
+| Named export from a lazy module | `lazy(() => import("./pages"), { export: "About" })` |
+| Pick a component/tag from reactive state | `dynamic(() => ...)` from `@solidjs/web` (stable identity; `<Dynamic>` is deprecated) <!-- upstream:dynamic-deprecated --> — `dynamicComponent(() => ...)` from `solid-js` when the source only answers with a component, never a tag <!-- upstream:dynamic-component-export --> |
+| Overlay / modal | `<Portal>` — hoist async reads *above* the portal (reads inside start on the client) |
+| Async value used several layers down | Create the memo high; pass `value={memo()}` through intermediates (they do not wait); put `<Loading>` around the leaf read |
+| Nested child with its own fetch | Leave it nested — it runs in parallel. Sequential only when the second call needs the first response (`fetchAuthor(story().authorId)`) |
+| Browser-only widget (charts, maps, `window`) | `clientOnly(() => import("./Chart"))` from `@solidjs/web` (`{ lazy: true }` defers the import until first render; `{ export: "Chart" }` for a named export). Placeholder: `<Chart fallback={<Skeleton />} />` — SSR renders the fallback; a `<Loading>` around it leaves the server HTML empty |
+| Browser-only *value* (`localStorage`, viewport size) | `createMemo(..., { ssrSource: "client" })` — per-value policy at the data source, no component split (`"hybrid"` only to keep consuming an async-iterable source after hydration <!-- upstream:ssr-source-hybrid-stream -->) |
+| Server vs browser code path | `isServer` / `isDev` from `@solidjs/web` (build-time constants), not `typeof window` — never to choose markup (`{isServer ? <A /> : <B />}` is a hydration mismatch; use `clientOnly` / `ssrSource`) |
+| SSR-stable `id` / `for` / `aria-*` pairing | `createUniqueId()` |
+
+## Canonical patterns
+
+### Component with local state and derived value
+
+```tsx
+import { createSignal } from 'solid-js';
+
+function Counter() {
+  const [count, setCount] = createSignal(0);
+  const doubled = () => count() * 2; // derivation: a function, not a memo, not an effect
+
+  return (
+    <button onClick={() => setCount((c) => c + 1)}>
+      {count()} x 2 = {doubled()}
+    </button>
+  );
+}
+```
+
+### Props: read late, never destructure
+
+```tsx
+// CORRECT — reads happen inside JSX (a tracking scope)
+function Greeting(props: { name: string; punctuation?: string }) {
+  return <p>Hello, {props.name}{props.punctuation ?? '.'}</p>;
+}
+
+// WRONG — reads the getter once at setup; never updates again
+function Greeting({ name }: { name: string }) { /* ... */ }
+```
+
+To give a derived prop a local name, name the *function* (or `createMemo` if expensive):
+
+```tsx
+const full = () => `${props.first} ${props.last}`;
+```
+
+To merge defaults or split props reactively use `merge` / `omit` from `solid-js`
+(replacements for Solid 1.x `mergeProps` / `splitProps`). `merge` is like
+`Object.assign`: an explicit `undefined` **overrides** the previous source.
+Omitted keys still fall through, so `merge({ type: "button" }, props)` is the
+usual defaults pattern. That is not Solid 1 `mergeProps`, which ignored
+`undefined`. Forwarding leftover props: `const rest = omit(props, "label")` then
+`<input {...rest} />`; a predicate hides keys by rule without enumerating first
+(`omit(props, (key) => key.startsWith("data-"))`). `const rest = { ...props }` compiles
+and then never updates. Both helpers return **read-only live views** (since
+2.0.0-rc.9 for every input, plain objects included): assigning onto the result is a
+silent no-op, and `{ ...merged }` is an own object that carries no sources. <!-- upstream:merge-omit-readonly -->
+
+### Store updates (draft mutation)
+
+```tsx
+import { createStore } from 'solid-js';
+
+const [profile, setProfile] = createStore({ name: 'Ada', role: 'Engineer' });
+
+setProfile((draft) => {
+  draft.name = 'Grace'; // only readers of .name re-run
+});
+```
+
+The setter callback is a **synchronous transaction** — the draft closes when it
+returns. `setProfile(async (draft) => { draft.name = await load(); })` used to commit
+only the writes before the first `await` and silently drop the rest; since
+2.0.0-rc.9 it throws `[ASYNC_STORE_SETTER]` in dev (`solid2-kit check` flags it too). <!-- upstream:async-store-setter-throws -->
+Await outside, then write synchronously (inside an `action`, `yield` first):
+
+```tsx
+// WRONG — the draft is already closed when the await resumes
+setProfile(async (draft) => { draft.name = await fetchName(); });
+
+// CORRECT
+const name = await fetchName();
+setProfile((draft) => { draft.name = name; });
+```
+
+A signal may hold a promise, so `setSignal` has no such rule. A store setter called
+at component-body top level is a write in an owned scope — dev throws
+`[REACTIVE_WRITE_IN_OWNED_SCOPE]` (rc.9 closed the exemption store writes had) <!-- upstream:store-write-owned-scope --> — so
+seed the shape through the `createStore` argument or a derivation.
+
+**The store itself is read-only; only the draft writes.** An assignment or mutating
+call on the store proxy outside a setter is *ignored* — no throw, the value does not
+change, and TypeScript accepts it (`Store<T>` is `T`). Since 2.0.0-rc.17 dev warns
+`[STORE_WRITE_OUTSIDE_SETTER]` once per store object and key (a later delete of a key
+already reported is not reported again; the operation is only in the event's `data`);
+production stays silent
+<!-- upstream:store-write-outside-setter -->. This is the
+MobX / Vue / Solid 1 `createMutable` reflex:
+
+```tsx
+// WRONG — all ignored (dev: [STORE_WRITE_OUTSIDE_SETTER])
+todos.push(todo);
+state.count++;
+todo.done = !todo.done;
+
+// CORRECT
+setTodos((draft) => { draft.push(todo); });
+setState((draft) => { draft.count++; });
+setTodos((draft) => {
+  const row = draft.find((t) => t.id === id);
+  if (row) row.done = !row.done;
+});
+```
+
+A draft write that descends into a value that is **another store still loading
+its first answer** is dropped: the draft's base would be that store's contents,
+which do not exist yet (its seed is never shown), and the first answer replaces
+the write when it lands — the outer store keeps following the inner one. Since
+2.0.0 dev warns `[STORE_WRITE_THROUGH_LOADING]`; production drops the write
+silently <!-- upstream:store-write-through-loading -->. Write after the inner
+store loads, or replace the whole value (`setOuter((s) => { s.child = next; })`).
+
+Plain objects and arrays are proxied; `Map`, `Set`, and `Date` are stored as they are.
+`draft.selected.add(id)` inside a setter mutates the `Set` but notifies nobody. Keep a
+set of ids as `Record<string, true>` (`draft.selected[id] = true` /
+`delete draft.selected[id]`, both tracked) or an array, or assign a new instance
+(`draft.tags = new Set([...draft.tags, tag])`) so the property itself changes.
+
+**External collections enter stores through reconciliation, never wholesale assignment.**
+`draft.todos = serverTodos` renders correctly but replaces every object identity — all
+subscribers under the path re-run and row identity is lost. In order of preference:
+
+1. Function-form `createStore(() => source, fallback)` or `createProjection` — reconcile
+   automatically (keyed by `"id"`), surviving items keep proxy identity.
+2. Manual merge: `setTodos(reconcile(fresh, 'id'))`, or on a nested slot
+   `setState((draft) => { reconcile(fresh, 'id')(draft.todos); })`. Positional data
+   (fixed-shape dashboards): `reconcile(next, null)`.
+
+Plain non-reactive view for logging/serialization: `snapshot(store)`. It is not a copy —
+subtrees with no pending changes are the store's own objects, so mutating the snapshot
+(or letting a library `sort()` it) changes the store with no notification. Edit
+`structuredClone(snapshot(store))` instead.
+Subscribe an effect compute to every nested change: `deep(store)`.
+
+### Children: pass through, or resolve with `children()`
+
+Most wrappers just render `props.children`. Use the `children` helper only when
+the component must **inspect or iterate** them. It returns an accessor with
+`.toArray()`. The helper call belongs in the component body; the read of
+`props.children` is inside the accessor (a tracking scope), so this is not a
+setup-time snapshot. Do not assign `const kids = props.children` and do not
+treat resolved children as a reactive data list for `<For>` —
+render `{resolved.toArray()}`, not `<For each={resolved()}>`:
+
+```tsx
+import { children, type ParentProps } from 'solid-js';
+
+function Stack(props: ParentProps) {
+  const resolved = children(() => props.children);
+  return <div class="stack">{resolved.toArray()}</div>;
+}
+```
+
+### Code-splitting: `lazy` + `<Loading>`
+
+```tsx
+import { lazy, Loading } from 'solid-js';
+
+const Profile = lazy(() => import('./Profile'));
+const About = lazy(() => import('./pages'), { export: 'About' });
+
+<Loading fallback={<Spinner />}>
+  <Profile id="42" />
+</Loading>
+
+<button type="button" onMouseEnter={() => Profile.preload()}>Open profile</button>
+```
+
+Never `React.lazy` / `<Suspense>`. The lazy component suspends through
+`<Loading>` on first render; `.preload()` starts the import early. Named
+exports must use `{ export: "About" }` — a `.then((m) => ({ default: m.About }))`
+wrapper hydrates incorrectly (the name is not a call-site literal). A module that is
+not a component (a route table, a parser) takes `lazyModule(() => import("./x"))` from
+`solid-js`: call it (or `.preload()`) for the cached promise, `.peek()` for the module
+once it has landed (`undefined` before that, and on the client after a hydration
+miss). A server render that reads `.peek()` registers the module by id so the client
+has it before hydration, holding the shell while it loads; `.preload()` on the server
+only hints assets.
+
+### Dynamic component: `dynamic()` (canonical)
+
+```tsx
+import { createSignal, type Component } from 'solid-js';
+import { dynamic } from '@solidjs/web';
+
+const Compact: Component<{ value: string }> = (props) => <span>{props.value}</span>;
+const Detailed: Component<{ value: string }> = (props) => <strong>{props.value}</strong>;
+
+const [detailed, setDetailed] = createSignal(false);
+const Result = dynamic(() => (detailed() ? Detailed : Compact));
+
+<Result value="Current result" />
+```
+
+`dynamic()` returns a **stable** component whose source can be a component, an
+intrinsic tag name, a promise, or empty. An async source (a promise, or a `live()`
+server-component iterable) may resolve to a server component or a tag name; a promise
+of a *client* component function is a dev error on the server
+(`[DYNAMIC_ASYNC_COMPONENT]`) — resolve the async upstream, or `lazy()` for code.
+Prefer it over swapping a component
+variable in JSX (`const View = tab() ? A : B` freezes the choice at setup).
+`<Dynamic component={...}>` is the same primitive with a worse shape (the tag travels
+in the props bag, so every instance merges and omits it and rebuilds a factory) and
+is **deprecated** since 2.0.0-rc.9 — `@deprecated` in the types, no runtime warning,
+still shipped in 2.0. <!-- upstream:dynamic-deprecated --> Hoist a `dynamic()` per component instance (or per module for a
+constant tag) instead.
+
+When the source only ever answers with a component — never a tag name — use
+`dynamicComponent()` from `solid-js` instead (`@solidjs/web` re-exports it): same
+contract and hydration shape minus the tag arm, so
+a tag name is a compile error and a page whose only dynamic mounts are components
+retains no element runtime (`createElement` / `spread` / the namespace tables). It
+is the documented way to mount a server component: `dynamicComponent(() =>
+getStory(props.id))`. <!-- upstream:dynamic-component-export -->
+
+### Two-phase effect (imperative boundary only)
+
+```tsx
+import { createEffect } from 'solid-js';
+
+createEffect(
+  () => props.roomId,          // compute: ALL reactive reads here; return value feeds apply
+  (roomId) => {                // apply: untracked imperative work
+    const connection = chat.connect(roomId);
+    return () => connection.close(); // cleanup before next run / on disposal
+  },
+);
+```
+
+`apply` returns a cleanup function or nothing — write it with a **block body**. An
+expression-bodied arrow returns whatever the expression evaluates to: an assignment
+(`(t) => (document.title = t)`) returns the string, and a setter (`(v) => setDraft(v)`)
+returns the value it set. Dev throws `effect callback returned an invalid cleanup value`,
+production throws a `TypeError` on the next run, and both halt the whole
+reactive system (`[REACTIVITY_HALTED]`). TypeScript reports it as TS2345; a JS project
+gets no warning. The cleanup of an effect is the `apply` return value — `onCleanup`
+inside `apply` has no owner and never runs (`[NO_OWNER_CLEANUP]`). The two-phase
+signature itself is enforced: `createEffect(compute)` with no apply function throws
+`[MISSING_EFFECT_FN]` in dev <!-- upstream:missing-effect-fn --> (prod dies on the same call with an uncoded
+`TypeError`).
+
+**Effects never compare.** `apply` runs on every re-run of `compute`, whether or not the
+computed value changed; there is no `equals` on an effect. When equal results should skip
+the imperative work, read a `createMemo` (the equality boundary) in `compute`.
+
+```tsx
+// WRONG — returns the assigned string; halts reactivity (dev: first run, prod: next run)
+createEffect(() => title(), (t) => (document.title = t));
+
+// CORRECT
+createEffect(() => title(), (t) => {
+  document.title = t;
+});
+```
+
+Reads inside `apply` do not track. Extract every needed reactive value in `compute`
+(e.g. `() => ({ name: user.name, role: user.role })`). Passing a store proxy into `apply`
+and reading `user.name` there *runs once* and never retriggers. Compute-phase errors can be
+intercepted with the bundle form `createEffect(compute, { effect, error })`. Skip the
+initial run with `{ defer: true }` — the `on(deps, fn, { defer: true })` replacement;
+the effect first runs on the next change.
+
+When the side effect should fire **once per arming** rather than on every change —
+"run this the first time the value crosses the threshold" — use `createReaction(fn)`
+from `solid-js`: it returns a tracker; `fn` runs once after a source read inside a
+`track(() => …)` call changes, then stays silent until the tracker is called again
+(re-arm from inside `fn` to keep listening). Nothing runs at creation, and changes
+made while unarmed are ignored. <!-- upstream:create-reaction -->
+
+A two-phase effect whose apply only calls a local signal setter is "state + effect" in
+disguise — formally legal Solid 2, still rule 4 (`solid2-kit check` flags it). The reset
+form of a writable derivation replaces it, and moves the source read to the read site
+(under that site's boundaries) instead of an effect compute:
+
+```tsx
+// WRONG — signal synced by an effect; organizer() errors bypass the read site's <Errored>
+const [signInError, setSignInError] = createSignal<string | null>(null);
+createEffect(
+  () => organizer(),
+  (id) => {
+    if (id !== null) setSignInError(null);
+  },
+);
+
+// CORRECT — writable derivation: resets when organizer() changes; the setter still works
+const [signInError, setSignInError] = createSignal<string | null>(() => {
+  organizer();
+  return null;
+});
+```
+
+The writable form spells exactly this: derive from the source, allow a local
+override, reset when the source changes. The mechanics: a write lands at once,
+and on the next source change the function re-runs receiving the write as `prev`
+(a store receives it as the draft). A function that ignores `prev` resets — this
+pattern — and also discards a write staged in the same update as a source change;
+one that honors `prev` can keep the local value. <!-- upstream:derived-write-prev -->
+(React needs `useState(props.x)` plus a
+`previousX` comparison reset during render for the same behavior.)
+
+### Async data — fetch high, block low
+
+Creating and reading an async value are the same as sync. **Consuming** (the
+await) is a DX choice; **blocking** (the boundary) is a UX choice. Solid
+unwelds them: where you create the memo is performance, where `<Loading>`
+wraps the *read* is design, and neither is an architecture decision. JSX
+component props are lazy (**passing isn't reading**), so intermediates do
+not wait. Nested components mount immediately — they do not suspend — so
+their fetches run in parallel. Making a value remote should touch the memo
+and the boundary, not every file on the path, and should not change prop
+types to `Promise<User>` or `Accessor<User>`.
+
+```tsx
+import { Errored, Loading, createMemo, createSignal, isPending } from 'solid-js';
+
+function App() {
+  const [selectedId, setSelectedId] = createSignal(1);
+  const story = createMemo(() => fetchStory(selectedId()));
+
+  return (
+    <Errored fallback={(error, reset) => <ErrorFallback error={error} reset={reset} />}>
+      <StoryList selectedId={selectedId()} onSelect={setSelectedId} />
+      <main class={{ pending: isPending(selectedId) }}>
+        <Loading fallback={<DetailSkeleton />}>
+          <StoryDetail story={story()} storyId={selectedId()} />
+        </Loading>
+      </main>
+    </Errored>
+  );
+}
+
+function StoryDetail(props: { story: Story; storyId: number }) {
+  const byline = createMemo(() => `${props.story.author} · ${props.story.points} points`);
+  return (
+    <article class={{ stale: isPending(() => props.story) }}>
+      <h1>{props.story.title}</h1>
+      <p>{byline()}</p>
+      <Comments storyId={props.storyId} />
+    </article>
+  );
+}
+```
+
+`story()` is a `Story`, not `Story | undefined` — if the computation is running,
+the value is there. No `?.`, no `!`. `<StoryDetail story={story()} />` is the
+correct colorless form: the prop expression is a getter, so `StoryDetail` (and
+every layout in between) renders immediately. The wait happens when
+`props.story.title` is read, under that `<Loading>`.
+
+```tsx
+// WRONG — extracting at the parent is a real read; child's <Loading> never sees it
+const current = story();
+return <StoryDetail story={current} />;
+
+// WRONG — Promise / Accessor types on the path. Making story remote is not a
+// type change for StoryLayout / StoryDetail.
+function StoryDetail(props: { story: Promise<Story> }) { /* ... */ }
+function StoryDetail(props: { story: Accessor<Story> }) { /* ... */ }
+
+// Fine — pass the memo itself only when the child must refresh() that source.
+// isPending / latest are questions: they work on the value prop too.
+return <StoryDetail story={story} />;
+```
+
+- The `<Loading>` boundary must be an owner ancestor of the **read**, not of
+  where the memo was created, and not of page chrome (header/nav) that should stay mounted.
+  Lifting the fetch does **not** mean lifting the boundary — that is consume glued
+  back onto block. After first paint the
+  boundary keeps settled content during refetch; `isPending(results)` (pass the accessor,
+  not `isPending(results())`) is the indicator. Add `on={query()}` (a tracked **read** —
+  the accessor `on={query}` reads nothing) only when that change of subject should put the
+  fallback back on screen. `on` is a dependency list, not a compared key: its value is
+  irrelevant, several inputs go in as `on={[query(), page()]}`, and a change to anything it
+  reads re-arms the boundary. <!-- upstream:loading-on-dependency-list --> `[LOADING_ON_OUTSIDE_HOLD]` in dev means the same data is
+  also read outside the boundary, so the fallback can never show — move that read under it.
+  Do not use `isPending` as the first-load spinner.
+- **Nesting is not a waterfall.** `Comments` above fetches in parallel with `story`
+  because it reads `props.storyId` (already known), not `props.story`. Passing
+  `storyId={props.story.id}` *would* wait on the story fetch — that is a real data
+  dependency, same as `createMemo(() => fetchAuthor(story().authorId))`. Components
+  do not suspend; they run once. Only the expressions that read wait, so a parent
+  JSX read does not delay a child that does not need that value.
+- `isPending` is a **per-expression question**, not state and not a global spinner.
+  Ask it anywhere: on the async source (`isPending(results)`), below it
+  (`isPending(() => props.story)`), on a derived memo (`isPending(byline)`), or
+  *above* the fetch but below the write (`isPending(selectedId)`), even when the
+  fetch lives in a child. You do not need to pass the memo accessor just to ask.
+  Granularity is the expression: `isPending(() => item.quantity)` (paired with
+  `affects(item, "quantity")`) or `isPending(() => todos.length)` dims only what
+  that read depends on. A hold with no feedback at all is `[SILENT_HOLD]` under
+  attribution — always pair a held write with one of these questions, an
+  optimistic value, or `affects()`. `affects` keys address store leaves only:
+  `affects(accessor, "quantity")` throws `[INVALID_AFFECTS_TARGET]` in dev
+  <!-- upstream:invalid-affects-target --> — the keyed form needs a store (or store row); a bare accessor takes no key.
+- Default navigation **holds**. `selectedId()` and the old story stay put until
+  the new answer lands, so the highlight never points at the wrong content.
+  `latest(selectedId)` is the opt-in when the design wants the highlight to move
+  on click. Pair `class={{ pending: isPending(selectedId) }}` with a short CSS
+  `transition-delay` so fast swaps do not flash. Inputs that feed a request follow
+  the same rule: bind `value={latest(query)}` so a controlled search box reflects
+  keystrokes while its write is held (an uncontrolled input needs nothing).
+  When one write in a handler must *not* join the hold — closing a menu before
+  `props.onSelect` starts a navigation — defer just that write with
+  `onFlush(() => setOpen(false))` (since 2.0.0-rc.19): it runs once right after the
+  pending flush as its own update, instead of flushing early
+  <!-- upstream:on-flush -->. It belongs in event handlers and effect callbacks; in a
+  component body or computation dev warns `ON_FLUSH_IN_OWNED_SCOPE`.
+- Read every reactive input **before the first `await`** in an async computation. A read
+  after `await` does not subscribe (dev reports `[UNTRACKED_READ_AFTER_AWAIT]` on V8 —
+  Chromium, Node, Deno, Bun); production can sit pending with no retry.
+- An async memo returns **data**, never rendered output. On the server, a memo (or async
+  iterable source) landing on JSX, a component result, or a `<Loading>`/`<Errored>`
+  boundary cannot serialize for hydration: since 2.0.0-rc.19 the memo rejects with
+  `ASYNC_MEMO_ELEMENT` and the nearest `<Errored>` contains it like any render error
+  <!-- upstream:async-memo-element -->. Render the JSX from the data the memo returns.
+- `<Errored>` function fallbacks receive an error **accessor** and a `reset` callback:
+  `fallback={(error, reset) => ...}`. The boundary **heals** when the source succeeds
+  again (refresh, live reconnect, input change) — it is graph status, not a terminal
+  React ErrorBoundary. `reset` retries the collected *data sources*, not a UI remount.
+- Refetch: `refresh(results)`. `refresh` takes a source accessor or a refreshable
+  store only — anything else (a plain function included) throws `[INVALID_REFRESH_TARGET]`
+  in dev <!-- upstream:invalid-refresh-target -->, and prod silently accepts it. In-flight indicator: `isPending(results)` (or
+  `isPending(() => results())`). Freshest in-flight value for a preview:
+  `latest(results)`. `latest` is not a null-safe probe: before the source's first value
+  it throws `NotReadyError` in every scope (since 2.0.0-rc.9 also in event handlers and
+  imperative code, which used to receive `undefined`) <!-- upstream:latest-throws-unsettled -->. A write is visible to `latest()` /
+  `isPending()` only from the flush that carries it — `flush()` first when a test reads
+  its own write through them. Do not start `fetch` at component-body top level.
+- Coordinate sibling `<Loading>` reveal with `<Reveal>` (`order="sequential"` default,
+  or `"together"` / `"natural"`). `collapsed` (sequential only) suppresses tail
+  skeletons past the frontier so the page does not stack fallbacks as popcorn.
+
+**Never hand-roll these states.** No `[loading, setLoading]` signal, no
+`data() === undefined` branch, no `{ data, error }` signal pair — those are React/Solid 1.x
+reflexes that bypass the async model and `solid2-kit check` flags them. If a value is async,
+make it an async computation and read it under boundaries. Refetching is `refresh(source)`
+(typically as the last step of a mutation `action`, or a reload button) — never a
+counter/version signal read inside the computation to force re-runs; input-driven refetch is
+already automatic. No request counters or `AbortController`s for dedup/cancellation
+either — superseded answers are dropped automatically and settled content holds;
+debounce at the event handler (`onInput={debounce(...)}`), never as an effect copying
+one signal into another. And throw unusable responses instead of returning
+`{ success: false }` objects checked at every read — failures travel to `<Errored>`
+like values.
+
+**Normalize thrown values once.** Thrown values are `unknown` in JavaScript, so define one
+shared `ErrorFallback` component per app — extract the message via `instanceof Error`, wire
+`reset` to a Retry affordance — and pass it to every `<Errored fallback>`, instead of
+repeating `String(error())` at each boundary:
+
+```tsx
+<Errored fallback={(error, reset) => <ErrorFallback error={error} reset={reset} />}>
+```
+
+**Report boundary-caught errors through the error hooks, not from the fallback.** An
+error an `<Errored>` collected never reaches `window.onerror`; a `captureException`
+call inside `fallback` is a side effect in render that fires on every re-render of the
+fallback. Since 2.0.0-rc.9 the runtime has a seam for exactly this failure, called
+once per error object (on the server: once per error object, per `kind`, per request)
+with where it was thrown (`ownerPath`) and where it was met (`boundaryPath`):
+
+```ts
+import { configureClientErrors } from 'solid-js';
+import { configureServerErrors } from '@solidjs/web';
+
+configureClientErrors({
+  onError: (error, { ownerPath, boundaryPath }) => report(error, { ownerPath, boundaryPath }),
+});
+// server side (SSR renders and server functions); runs inside the request scope, so
+// getRequestEvent() works here. Return nothing, or a reference the user can quote —
+// NEVER the error itself: the return value replaces the sanitized value on the wire
+configureServerErrors({
+  onError(error, { kind, handling, ownerPath, boundaryPath, functionId, direct }) {
+    const ref = report(error, { site: `${kind}/${handling}`, ownerPath, boundaryPath, functionId, direct });
+    return new Error(`Something went wrong (ref ${ref})`);
+  },
+});
+```
+
+**The server hook's return value goes on the wire.** What the client normally receives
+is the runtime's sanitized value (a generic `Error` outside the dev build). Returning
+the error object hands its `message`, stack, and whatever secret they carry to the
+browser. `kind`/`handling` name the road: `render` / `fallback` (an `<Errored>`
+rendered), `render` / `client` (a `<Loading>` fragment rejected, client re-renders),
+`render` / `failed` (request fails; return ignored), `render` / `serialize` (a
+hydration value would not serialize), `server-function` / `thrown` (`direct: true` for
+an in-process call during SSR), `server-function` / `channel` (a rejection or throw
+escaping through the result graph — a promise, an iterable, or a stream — after the
+head committed), and `request` / `failed` — a failure outside render and server
+functions (middleware, request setup) reported via
+`reportRequestFailure(error, event)` from `@solidjs/web`. A synchronous throw out of
+`renderToString` / `renderToStream`'s first pass is reported `render` / `failed`
+before rethrow. <!-- upstream:report-request-failure --> A monitoring SDK's `init()` that
+registers this hook must load before the server graph — put it in the plugin's
+`start: { serverSetup: "./src/instrument.ts" }`, not at the top of an entry (see
+[Production observability](#production-observability-the-observe-build)).
+
+`render` / `hydrate` accept a per-root `onError` that wins over the ambient hook —
+`render(() => <App />, root, undefined, { onError })` (options are the 4th argument; a
+3rd-argument object is taken as `init` and the hook is silently not installed) and
+`hydrate(() => <App />, root, { onError })`.
+Uncaught errors (`REACTIVITY_HALTED`) go to the platform's `reportError`, which every
+monitor already listens on — do not report them twice. `renderToStream` /
+`renderToString`'s `onError` option *is* the per-render server hook: it now hears every
+handled failure, so filter on `context.handling === "failed"` when only request-failing
+errors matter (the rc.8 one-argument form keeps working). <!-- upstream:render-onerror-handled -->
+
+### Streams and subscriptions (websockets, reactive clients)
+
+Push-based sources integrate by returning an **async iterable** from a computation — reads
+then suspend to `<Loading>` until the first value, later pushes update the settled value,
+and thrown errors reach `<Errored>`. Integration layers should return a plain accessor, not
+`{ data, error }` signals.
+
+For a callback subscription, an Observable, or an existing AsyncIterable, the adapter is
+built in: `from(source)` returns the async iterable a computation consumes —
+`createMemo(() => from(source))` <!-- upstream:from-source-adapts -->. Read the inputs that
+choose the source before calling it, so a change re-runs the memo, closes the old source,
+and opens the new one <!-- upstream:from-source-adapts -->. The hand-rolled form below remains for what `from` does not fit —
+an event stream where every message matters (keep a queue instead of conflating to the
+latest), or a subscribe signature that is not `(next, error, complete) => unsubscribe`:
+
+```tsx
+import { createMemo, onCleanup } from 'solid-js';
+
+function createSubscriptionQuery<A, T>(
+  args: () => A,
+  subscribe: (args: A, next: (value: T) => void, fail: (error: unknown) => void) => () => void,
+  name: string,
+) {
+  return createMemo(() => {
+    const resolved = args(); // tracked, and read before any await: a change re-subscribes
+    let current: T | undefined;
+    let version = 0;
+    let failure: unknown;
+    let disposed = false;
+    let wake = () => {};
+    const unsubscribe = subscribe(
+      resolved,
+      (value) => { current = value; version += 1; failure = undefined; wake(); },
+      (error) => { failure = error; wake(); },
+    );
+    // Inside a computation, onCleanup runs before the next run and on disposal.
+    onCleanup(() => { disposed = true; unsubscribe(); wake(); });
+
+    return (async function* () {
+      let seen = 0;
+      while (!disposed) {
+        if (failure !== undefined) throw failure;
+        if (version > seen) { seen = version; yield current as T; continue; }
+        await new Promise<void>((resolve) => { wake = resolve; });
+      }
+    })();
+  }, { name }); // e.g. `query:${functionName}` — attribution tables name rows by it
+}
+```
+
+Open the subscription **inside the compute**, not around the memo. Then a change of
+`args` closes the old subscription and opens the new one, `refresh(query)` and
+`<Errored>`'s `reset` re-run the compute into a fresh subscription with the failure
+cleared (a subscription opened outside the memo keeps its failure, so a retry never
+recovers), and unmounting the owner closes it. Results that are snapshots (query
+results) conflate to the latest value, as above; an event stream where every message
+matters keeps a queue instead. A memo's compute runs **when it is created**, not on
+first read (only `{ lazy: true }` defers it, and that also tears the memo down whenever
+nothing observes it), so a subscription memo created in a provider connects even if
+nothing reads it — resolve the client inside the compute and return a never-settling
+iterable when there is none, rather than constructing it at module scope.
+
+Identity-like subscriptions (the session, the current user) are app-wide state
+(rule 11): create them **once**, in a provider at the root. One per page is torn down
+on unmount and re-opened on mount, so every navigation starts with a fallback for one
+round trip, and a page query that waits on it behind its own boundary is a sequential
+pair — `[ASYNC_WATERFALL]` under attribution.
+
+Clients that share one subscription per query-and-args and hand its current value to
+every new subscriber (Convex, most reactive database clients) prefetch by subscribing
+**early**: in the route's `preload` on link intent (`preloadLinks: intentPreload()` on
+the router — without a strategy nothing preloads on hover <!-- upstream:preload-links-opt-in -->), held open for a short grace period
+(seconds) and released at once on error, so a hover while signed out leaves no failure
+for the page to inherit. Skip `intent === "initial"` there — on the first match the page
+subscribes on mount anyway, and an identity-gated read would run before the session is
+restored. Nothing is cached outside the client; the page's own subscription is the only
+one left when the hold expires.
+
+Server-function `live()` sources are the same shape (async iterable → memo). Connection
+state is `source.onstatus` (`"connected"` / `"reconnecting"` / `"closed"`), not a field
+in the yielded value — see [Server functions](#server-functions--use-server).
+
+### Mutations: `action` + optimistic state
+
+The synchronous mutation *is* the prediction. Optimistic UI is not a second copy of
+state — it is an overlay the graph discards when the action settles (pass or fail).
+There is no rollback to write. Put in-flight affordances on the record
+(`pending?: boolean`); they vanish with the overlay.
+
+Minimal shape — the durable value derives from `fn`, optimistic writes overlay it,
+and `refresh` re-runs the derivation so the store reconciles against the server
+(no separate `getMessages()` call):
+
+```tsx
+import { action, createOptimisticStore, refresh } from 'solid-js';
+
+function createMessages() { // call from a component — not module scope (SSR shares modules)
+  const [messages, setMessages] = createOptimisticStore(() => getMessages(), []);
+
+  const addMessage = action(function* (message: Message) {
+    setMessages((m) => { m.push(message); });
+    yield saveMessage(message);
+    refresh(messages);
+  });
+  return [messages, { addMessage }] as const;
+}
+```
+
+Mutate the draft (`m.push(message)`), never spread-rebuild (`[...m, message]`) —
+stores track writes finely, so only the changed part updates. When the action
+settles, the overlay is discarded and the refreshed server data is authoritative;
+if it agrees with the prediction, reconciliation finds no differences and nothing
+re-renders. Derived reconciliation keys by `"id"` by default — pass `{ key: ... }`
+only when the identity field differs.
+
+Layered form, when per-row UI must survive overlay discard (a recoverable error
+with Retry on that row only):
+
+```tsx
+import { action, createOptimisticStore, refresh } from 'solid-js';
+
+type Todo = { id: string; title: string; completed: boolean; pending?: boolean; error?: { completed: boolean } };
+
+function createTodos() { // call from a component — not module scope (SSR shares modules)
+  const errors = new Map<string, { completed: boolean }>();
+  const [todos, setTodos] = createOptimisticStore<Todo[]>(async () => {
+    const current = await api.list();
+    return current.map((todo) => {
+      const error = errors.get(todo.id);
+      return error ? { ...todo, error } : todo;
+    });
+  }, []);
+
+  const toggleTodo = action(function* (id: string, completed: boolean) {
+    setTodos((draft) => {
+      const todo = draft.find((row) => row.id === id);
+      if (!todo) return;
+      todo.completed = completed;
+      todo.pending = true;
+    });
+    try {
+      yield api.toggle(id, completed);
+      errors.delete(id);
+    } catch {
+      errors.set(id, { completed });
+    } finally {
+      refresh(todos);
+    }
+  });
+  return [todos, { toggleTodo }] as const;
+}
+```
+
+Three layers, in this order: durable source → ephemeral UI that must survive
+overlay discard (the `errors` map, folded in the projection) → optimistic overlay
+(`pending`, the predicted `completed`). Consumers read one store. Catch
+*expected* mutation failures in the action, because nothing else will show them:
+an error that escapes an action discards its optimistic writes and rejects the
+promise the call returned — it never reaches `<Errored>`, which catches failing
+reads and renders only (projection and render errors still reach the boundary).
+Uncaught, the UI silently reverts and the rejection is unhandled. Put expected
+failures in the errors map or a toast inside the action, and `.catch` the call in
+the handler for the rest:
+
+```tsx
+<button
+  type="button"
+  onClick={() => {
+    removeTodo(todo.id).catch(() => showToast('Could not delete'));
+  }}
+>
+  Delete
+</button>
+```
+
+Going from a client store to the server is **additive**: same `setTodos`
+calls, wrap each mutation in `action`, swap in the **function form**
+`createOptimisticStore(() => api.list(), [])` (with `refresh` after the `yield`) and a
+file of server functions. Do not rewrite `App.tsx` with loading/error branches,
+and do not snapshot-the-cache / write-a-prediction / restore-on-error. A cache
+library is not the productionizing step — the sync mutation already was the
+prediction. (Router `query` or `@tanstack/solid-query` remain valid when the
+project already uses them; they are not required to "make it real". Solid 2's
+TanStack Query is `@tanstack/solid-query@rc` (6.x) — npm `latest` is the Solid 1 5.x line.)
+Optimistic rows stay interactive — a not-yet-acked todo can still
+be toggled. Do not disable the control until confirmation, and do not mutex
+rapid clicks; `action` is the transaction (no half-mutation, no interleaved
+list). An in-flight action does not freeze unrelated writes. Collecting failed
+actions to replay is a design choice, not something the runtime requires.
+
+Ordinary signal/store writes inside an action are held until it settles. Never call
+`flush()` inside an action. Invoke actions from handlers, not from component/computation bodies (dev warns
+`[ACTION_CALLED_IN_OWNED_SCOPE]` <!-- upstream:action-in-owned-scope -->).
+Do not set a `submitted` signal and watch it from an effect — that work belongs in the
+handler or the `action`.
+
+**The value form has no durable layer.** `createOptimisticStore([])` (or
+`createOptimistic(value)`) is a pure overlay: writes inside an action vanish when it
+settles, and writes outside an action do not stick. Copying the reference example
+`createOptimisticStore<Todo[]>([])` and writing the saved row after the `yield`
+leaves an empty list once the action settles, with no warning. <!-- upstream:optimistic-value-overlay --> Durable data comes
+from the function form — `createOptimisticStore(() => api.list(), [])` refreshed
+after the `yield`, or `createOptimisticStore(() => base.todos, [])` over a separate
+`createStore` that the action writes the confirmed value into. Keep the value form for
+in-flight flags. A write against a function-form source whose first answer has not
+landed yet is not guessed at all — dev warns `[OPTIMISTIC_WRITE_BEFORE_LOAD]`
+<!-- upstream:optimistic-write-before-load -->; let the first answer land before writing.
+A write against a source that *has* answered but is loading a new answer (an
+input changed) is the opposite case: the guess is made, composed on the previous
+answer, and the new answer replaces it when it lands — since 2.0.0 dev warns
+`[OPTIMISTIC_WRITE_WHILE_LOADING]` once per source
+<!-- upstream:optimistic-write-while-loading -->. Render the control inside the
+source's `<Loading>`, disable it while the source is pending, or keep the
+pending change in a separate list until the new answer lands.
+
+`createOptimistic` / `createOptimisticStore` are for a tentative value during an
+active mutation, not a local editing session (use a writable derivation or a plain
+store for that). A whole-form `createOptimistic(false)` saving flag is fine; prefer
+`pending` on the record when the affordance is per item. The overlay is
+discarded when the action settles — the confirmed store is the truth. Wrapping
+the same store in server functions does not change that; do not add
+snapshot/restore.
+
+**`yield`, not a bare `await`, is the transaction boundary.** `await api.save()` then
+`setTodos(...)` *runs*, but the write commits immediately — it is not held as an
+overlay. Either `yield saveTodo(todo)` or, when you need a typed result, `const saved = await api.save(); yield; setTodos(...)`.
+Write the body as a generator — `function*` or `async function*`, never a plain
+`async (...) =>` — because only `yield` re-enters the transaction: the runtime has no
+hook into a plain `await` continuation, so even inside `async function*` an `await`
+leaves the transaction until the next `yield` (`solid2-kit check` flags the
+non-generator form). The bare `yield` must also come before anything that **creates a
+reader** — `until()`, `latest()`, a memo or effect, a mount — not only before writes:
+the expression of the next `yield` is evaluated in the post-`await` continuation, so
+`await save(); yield until(...)` builds the predicate's reader outside the transaction.
+Write `await save(); yield; yield until(...)`.
+
+When confirmation arrives outside the response — a fire-and-forget transport echoed
+back on a live source — hold the action open with `yield until(predicate, { timeout })`:
+
+```tsx
+const send = action(function* (text: string) {
+  const clientId = crypto.randomUUID();
+  setMessages((m) => { m.push({ clientId, text, pending: true }); });
+  yield socket.send({ clientId, text });
+  yield until(() => messages.some((m) => m.clientId === clientId), { timeout: 10_000 });
+});
+```
+
+The predicate reads authoritative state, so the optimistic row cannot satisfy it;
+only the echo can. Timeout rejects with `TimeoutError` (strongly recommended on
+droppable transports; abort via `signal`). Outside actions, `await until(() => user())`
+waits for a value before continuing.
+
+The same hold applies when the mutation *does* answer but the value is read through a
+`live()` source. A live source updates only through its open stream — it takes no part
+in revalidation or single-flight mutation data — so the mutation's response and the
+stream's echo race. Settle on `yield saveBid(...)` alone and the overlay is discarded
+first: the old bid flashes back until the stream catches up.
+
+```tsx
+import { action, createOptimisticStore, until } from 'solid-js';
+import { liveAuction, saveBid } from '../data/auction';
+
+function Auction(props: { id: string }) {
+  const [auction, setAuction] = createOptimisticStore(() => liveAuction(props.id), { highBid: 0 });
+
+  const bid = action(function* (amount: number) {
+    setAuction((a) => { a.highBid = amount; });                    // overlay
+    yield saveBid(props.id, amount);                                 // the write goes up
+    yield until(() => auction.highBid >= amount, { timeout: 10_000 }); // hold for the echo
+  });
+
+  return <button onClick={() => bid(auction.highBid + 1)}>Bid {auction.highBid + 1}</button>;
+}
+```
+
+Do not `refresh(auction)` in place of `until`: on a store derived from a live source it
+re-runs the derivation — the current stream is closed and `liveAuction()` opens a new
+connection. That costs a reconnect per mutation and hides the flash only when the new
+connection's first value already includes the write; when the read side lags the write,
+the old value still flashes back before the echo. Reactive clients whose
+subscriptions already carry the write when the mutation resolves (e.g. Convex) need
+neither. The server side of `liveAuction` / `saveBid` is in
+[Server functions](#server-functions--use-server).
+
+Navigation-shaped updates do **not** need core `action`. A plain setter is enough:
+reads pull the async, and downstream async computeds hold previous values until the
+new ones are ready (`isPending` / `latest`). Reach for `action` from `solid-js` only
+when writes happen *after* async work. Router form `action` from `@solidjs/router` is
+a different API (URL + POST) — see [App stack](#app-stack-only-if-the-project-has-these-packages).
+
+### Lists: `<For>` child signatures per keying mode
+
+```tsx
+// Default (keyed by item reference): item is the RAW value, index is an accessor
+<For each={todos()}>{(todo, index) => <Row todo={todo} n={index()} />}</For>
+
+// Key function: BOTH are accessors
+<For each={todos()} keyed={(todo) => todo.id}>{(todo) => <Row todo={todo()} />}</For>
+
+// Positional (Solid 1.x <Index>): item is an accessor, index is a plain number
+<For each={cells()} keyed={false}>{(cell, i) => <Cell value={cell()} at={i} />}</For>
+```
+
+Choosing the keying mode:
+
+| Where the rows come from | Mode |
+|---|---|
+| Server/refetched data — fetch results, subscription payloads (fresh object references on every update) | **key function on a stable id** (`keyed={(item) => item.id}`) — reference keying would recreate every row on each update |
+| Local array whose item identities are stable (e.g. store rows, static lists) | default (item reference) |
+| Fixed positions where only contents change | `keyed={false}` |
+
+Never `{todos().map((t) => <Row todo={t} />)}` and never `<For each={todos().map(...)}>`.
+The `.map` form *renders*; it just rebuilds every row. `children().toArray().map` is
+fine — those nodes are already resolved.
+
+Join and narrow **upstream of the list**, not per row. A row that narrows its own
+lookup — `<For each={layout().cards}>{(card) => <Show when={byKey().get(card().key)}>…}` —
+makes every row a reactive source of the list's insert effect (one per row; a plain
+element or component row costs none), so every row change re-runs one effect that
+tracks the whole list. Nothing flags it below 2000 rows: `[WIDE_SCOPE_DEPS]` skips that
+insert pass by design (and defaults to 200 sources), and only the always-on
+`[HUGE_FAN_IN]` reports it, from 2000 — so this is a review rule, not something a
+diagnostics gate catches. <!-- upstream:per-row-show-insert-sources --> Build the joined
+rows in one memo and iterate those; `flatMap` drops the misses without a `!`:
+
+```tsx
+const cards = createMemo(() => {
+  const byKey = new Map(props.matches.map((m) => [m.key, m]));
+  return layout().cards.flatMap((card) => {
+    const match = byKey.get(card.key);
+    return match === undefined ? [] : [{ card, match }];
+  });
+}, { name: "cards" });
+
+<For each={cards()} keyed={(row) => row.card.key}>
+  {(row) => <MatchCard match={row().match} x={row().card.x} />}
+</For>
+```
+
+`<Repeat from={start()} count={20}>{(index) => ...}</Repeat>` renders by absolute index with
+no array diffing — use for fixed slot counts and virtual scrolling windows.
+
+### Conditionals
+
+Ternaries work and are reactive, but **when the truthy branch reads the tested value, use
+`<Show>`**: its function child receives a narrowed accessor, so no non-null assertion is
+needed. Never write `value()!` to narrow by hand (`solid2-kit check` flags it):
+
+```tsx
+// WRONG — hand narrowing with a non-null assertion
+{error() ? <p>{error()!.message}</p> : <TaskList />}
+
+// CORRECT — Show narrows; fallback holds the other branch
+<Show when={error()} fallback={<TaskList />}>
+  {(err) => <p>{err().message}</p>}
+</Show>
+```
+
+```tsx
+<Show when={user()} fallback={<SignIn />}>
+  {(currentUser) => <Profile user={currentUser()} />} {/* narrowed ACCESSOR */}
+</Show>
+```
+
+Plain ternaries remain fine when no narrowing is involved (`{open() ? <A /> : <B />}`).
+
+Default `Show` keeps children mounted across truthy changes. Add `keyed` to remount when the
+value's identity changes (child then receives the raw value, like React's `key` reset).
+Prefer the default; use `keyed` only when internal state must reset. Multi-branch:
+`<Switch>` / `<Match>` — **first truthy `<Match>` wins**; later matches are skipped,
+even if they are also truthy.
+
+Components must **return once**: never early-return based on a reactive value — the branch
+is picked at setup and frozen. Early returns on non-reactive values (build-time config, a
+missing environment variable) are fine.
+
+### Input filtering (inputs do not rewind)
+
+React's controlled inputs force the DOM back to the state value on every re-render, so
+"ignore invalid keystrokes" works by simply not updating state. Solid has no re-render:
+`value={v()}` writes the DOM only when `v` changes, so rejected characters **stay visible**
+unless you rewind the DOM yourself:
+
+```tsx
+<input
+  value={v()}
+  onInput={(event) => {
+    if (/^\d*$/.test(event.currentTarget.value)) setV(event.currentTarget.value);
+    else event.currentTarget.value = v(); // reject: explicit write-back
+  }}
+/>
+```
+
+The opposite mistake is binding a **committed** value with no per-keystroke write —
+`value={props.name} onChange={commit}`, the React "controlled by the saved value" shape.
+The `value` binding re-runs whenever anything its template expression reads changes
+(the prop, a store row, a `class` that shares the template), and re-writes the committed
+value over text the user typed but has not committed yet. Since 2.0.0-rc.17 dev reports
+`[UNCOMMITTED_INPUT_OVERWRITTEN]` with the element and the bound value
+<!-- upstream:uncommitted-input-overwritten -->. Three repairs, in order of preference:
+
+```tsx
+// 1. a draft signal written per keystroke; resets when the committed value changes
+const [draft, setDraft] = createSignal(() => props.name);
+<input value={draft()} onInput={(e) => setDraft(e.currentTarget.value)} onChange={() => props.onCommit(draft())} />
+
+// 2. uncontrolled: the DOM owns the text, the prop only seeds it
+<input defaultValue={props.name} onChange={(e) => props.onCommit(e.currentTarget.value)} />
+
+// 3. explicit write-back when the field must follow an external value exactly
+```
+
+`equals: false` on the committed signal makes it worse, not better — a source firing with
+an equal value is one of the three causes the warning names, beside another binding in the
+same template changing and a spread re-running — and a `createEffect` that copies the prop into the field is rule 4 again.
+
+### Context
+
+```tsx
+import { createContext, createSignal, useContext } from 'solid-js';
+import type { Accessor, ParentProps, Setter } from 'solid-js';
+
+type Theme = 'light' | 'dark';
+
+const ThemeContext = createContext<{ theme: Accessor<Theme>; setTheme: Setter<Theme> }>();
+
+function ThemeProvider(props: ParentProps) {
+  const [theme, setTheme] = createSignal<Theme>('light');
+  return <ThemeContext value={{ theme, setTheme }}>{props.children}</ThemeContext>;
+}
+
+function ThemeButton() {
+  const { theme, setTheme } = useContext(ThemeContext); // destructuring here is FINE
+  return <button onClick={() => setTheme('dark')}>{theme()}</button>;
+}
+```
+
+Pass accessors/setters/stores through context — never `value={theme()}` (a dead snapshot).
+No `useMemo` for the value object, no context splitting: the object is created once and
+fine-grained updates flow through the signals inside it.
+
+**`undefined` means "not provided".** `createContext<T>()` and `createContext(undefined)`
+are the same default-less context, and a provider whose `value` is `undefined`
+(`<ThemeContext value={maybeTheme()}>` while the memo has no value yet) counts as no
+provider: `useContext` below it throws `ContextNotFoundError`, whose message points at
+`createContext<T | null>(null)`. An intentionally optional payload is modelled with
+`null` — `createContext<Session | null>(null)` and `value={session() ?? null}` — so the
+read distinguishes "no session" from "no provider" <!-- upstream:context-undefined-unprovided -->.
+
+**App-wide state is the same provider, placed at the root of `App`** — not a
+module-level signal or store. Module scope is for constants and the `createContext`
+call itself:
+
+```tsx
+import { createContext, createStore, useContext, type ParentProps } from 'solid-js';
+
+type CartItem = { id: string; quantity: number };
+
+// WRONG under SSR — one store for every request the server ever handles
+// export const [cart, setCart] = createStore({ items: [] as CartItem[] });
+
+// CORRECT — one store per provider instance: per tab in the browser, per request on the server
+function createCart() {
+  const [cart, setCart] = createStore({ items: [] as CartItem[] });
+  return { cart, setCart };
+}
+
+const CartContext = createContext<ReturnType<typeof createCart>>();
+
+export function CartProvider(props: ParentProps) {
+  return <CartContext value={createCart()}>{props.children}</CartContext>;
+}
+
+export function useCart() {
+  return useContext(CartContext); // throws ContextNotFoundError outside CartProvider
+}
+
+// App: <CartProvider><ThemeProvider>{/* router / pages */}</ThemeProvider></CartProvider>
+```
+
+Module state has no owner (nothing disposes it), and under `ssr: true` the server
+loads the module once and serves every request from it: `createStore(value)` on the
+server is the plain object, so one visitor's writes render into the next visitor's
+HTML (`[SERVER_WRITE]`). A module-level store derived from a server function fails
+sooner — `Cannot call server function outside of a request` while the module loads.
+In a client-only build a module-level store is one per tab and works, which is why it
+looks fine until `ssr: true` is turned on; the provider costs nothing extra and
+survives that change.
+
+### Refs
+
+```tsx
+import { onSettled, type Ref } from 'solid-js';
+
+function listen(type: string, handler: EventListener, options?: AddEventListenerOptions) {
+  let element: HTMLElement | undefined;
+  onSettled(() => {
+    const target = element;
+    if (!target) return;
+    target.addEventListener(type, handler, options);
+    return () => target.removeEventListener(type, handler, options);
+  });
+  return (next: HTMLElement) => { element = next; };
+}
+
+function SearchField(props: { ref?: Ref<HTMLInputElement>; onInput: EventListener }) {
+  let input!: HTMLInputElement;
+  return (
+    <>
+      <input
+        ref={[props.ref, (el) => (input = el), listen('input', props.onInput, { passive: true })]}
+        type="search"
+      />
+      <button type="button" onClick={() => input.select()}>Select</button>
+    </>
+  );
+}
+```
+
+Ref arrays flatten recursively; each callback runs in order. No `forwardRef` needed.
+
+**Ref callbacks run untracked, without an owner, and before the element is attached.**
+The node exists but `el.isConnected` is `false` and it has no layout yet — measuring,
+focusing or scrolling in a ref callback reads zeros; do that in `onSettled`, which fires
+after the tree is in the document. Their return values are
+ignored — do not create effects, memos, or `onCleanup` inside the callback, and
+do not `return () => cleanup`. Put owned setup in a **directive factory** (like
+`listen` above) and return only the element callback. Use this for
+`ResizeObserver`, third-party widgets, and native listener options (`capture` /
+`passive`) — Solid event props do not take those options.
+
+### `onSettled` — one-time setup, restricted scope
+
+`onSettled` is the `onMount` replacement, and its callback is a **restricted scope**:
+`onCleanup` throws there (`[CLEANUP_IN_FORBIDDEN_SCOPE]`), creating a memo or effect
+throws (`[PRIMITIVE_IN_FORBIDDEN_SCOPE]`), and so does `flush()` — each halts the
+reactive system in dev. Return the cleanup; create effects and memos in the component
+body, next to the `onSettled` call, not inside it. A pending async read inside the
+callback warns `[PENDING_ASYNC_FORBIDDEN_SCOPE]` <!-- upstream:pending-async-forbidden-scope --> — the callback is not a
+computation, so nothing re-runs it when the answer lands. Register `onSettled` in the
+body, not out-of-band after an `await`: a cleanup returned from an unowned registration
+warns `[SETTLED_CLEANUP_UNOWNED]` <!-- upstream:settled-cleanup-unowned --> and never runs.
+
+```tsx
+// WRONG — the mechanical 1.x port of onMount + onCleanup
+onSettled(() => {
+  const id = setInterval(tick, 1000);
+  onCleanup(() => clearInterval(id));
+});
+
+// CORRECT
+onSettled(() => {
+  const id = setInterval(tick, 1000);
+  return () => clearInterval(id);
+});
+```
+
+Effect callbacks follow the same shape: return the cleanup from `apply` (an
+`onCleanup` there never runs), and `flush()` inside one is a no-op
+(`[FLUSH_IN_EFFECT_CALLBACK]`). Creating a memo, an effect, or a root inside `apply`
+throws in dev (`[PRIMITIVE_IN_EFFECT_CALLBACK]` — the effect phase has no owner to
+dispose them; `runWithOwner(null, …)` does not lift it): create them in the
+component body or the compute phase, or attach them to an owner captured with
+`getOwner()` in the body via `runWithOwner(owner, …)`.
+<!-- upstream:primitive-in-effect-callback -->
+
+`createOwner` is not public API: since rc.21 it is typed only through
+`solid-js/internal`, as a runtime export kept for the renderers
+<!-- upstream:create-owner-internal -->. Host a scope with `createRoot()` and pass its `dispose` argument
+around as a plain function (a detached `owner.dispose` is a method and throws unbound
+<!-- upstream:ownerless-and-disposed -->); re-enter the scope with `runWithOwner(owner, …)`.
+
+### Per-value SSR policy: `ssrSource`
+
+`clientOnly` splits a *component*; `ssrSource` keeps one *value* off the server,
+decided at the data source. `createMemo`, function-form `createSignal`, and derived
+stores (`createStore(fn, seed)`, `createProjection`, `createOptimisticStore(fn, seed)`)
+all accept `ssrSource: "server" | "hybrid" | "client"`:
+
+```tsx
+import { Loading, createMemo } from 'solid-js';
+
+function DraftPreview(props: { documentId: string }) {
+  const draft = createMemo(
+    () => localStorage.getItem(`draft:${props.documentId}`),
+    { ssrSource: 'client' },
+  );
+
+  return (
+    <section>
+      <h2>Saved draft</h2>
+      <Loading fallback={<p>Checking for a saved draft...</p>}>
+        <p>{draft() ?? 'No saved draft.'}</p>
+      </Loading>
+    </section>
+  );
+}
+```
+
+| Policy | Meaning | Use when |
+|---|---|---|
+| `"server"` (default) | Client adopts the serialized server value; compute does not re-run | Compute is deterministic from server-available inputs |
+| `"hybrid"` | Client adopts the serialized value, then — for an async-iterable source — continues the stream on the client; for a sync or promise compute it is identical to `"server"` (no re-run) <!-- upstream:ssr-source-hybrid-stream --> | A stream (`live()`, a subscription) the client should keep consuming after hydration |
+| `"client"` | Server value skipped; compute runs after hydration as if first-mounted | Serialization is meaningless (`localStorage`, viewport), or server data mixes with a browser-only input |
+
+With `"client"`, the bare form suspends on the server and the nearest `<Loading>`
+fallback renders into the HTML; a declared first value (`loadingValue` on
+signal-family sources, `seedLoadingValue: true` on store-family sources) renders
+provisional data with no boundary involvement instead. Filling the value in from
+an `onSettled` callback remains a valid alternative; `NoHydration` / `Hydration`
+split hydration *ownership* instead and do not express this policy.
+
+## Scheduling and tests
+
+Signal/store writes outside a synchronous flush scope are **staged**; the reactive queue
+commits on the next microtask. Event handlers need nothing. Tests must flush:
+
+```ts
+setCount(2);
+flush();
+expect(count()).toBe(2);
+```
+
+Wait for an async expression to settle in tests: `await resolve(() => value())`.
+`flush()` only drains staged **synchronous** writes — it is not a stand-in for waiting
+on a pending resource. `onSettled` is also a **single** fire (untracked): it is not
+`onMount` that re-runs, and it is not an effect. Run tests in dev mode first — Solid 2 emits diagnostics for top-level reactive reads,
+writes from owned scopes, and async reads outside `<Loading>`. Fix them; don't suppress.
+A read at component-body top level reports `[STRICT_READ_UNTRACKED]` naming the
+component — move the read into JSX, a memo, or an effect compute.
+
+Component tests use `@solidjs/testing-library@next` (1.x; npm `latest` is the Solid 1
+0.8 line). Pass a **function** to `render` so
+the tree has an owner, and `flush()` after interactions that stage writes:
+
+```tsx
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { flush } from 'solid-js';
+import { afterEach, expect, test } from 'vitest';
+
+afterEach(cleanup);
+
+test('increments on click', () => {
+  const { getByRole } = render(() => <Counter />);
+  const button = getByRole('button');
+  fireEvent.click(button);
+  flush();
+  expect(button).toHaveTextContent('Clicks: 1');
+});
+```
+
+Primitive tests write **outside** the root callback — a write inside `createRoot((dispose)
+=> { …; setA(2); })` is `[REACTIVE_WRITE_IN_OWNED_SCOPE]` in dev. Return the handles, then
+write and `flush()`: `const { setA, b, dispose } = createRoot((dispose) => { …; return
+{ setA, b, dispose }; }); setA(2); flush();`. A hook that reads context runs under
+`renderHook(useCart, { wrapper: CartProvider })`. A routed component gets a router built in
+the test — `createRouter({ routes, history: memoryHistory("/orders/42") })` — because
+Testing Library's `render(…, { location })` is typed but not implemented (1.0.0-rc.2). <!-- upstream:testing-library-location -->
+
+An end-to-end test that must wait for hydration of an SSR page waits on a marker set from
+`onHydrationEnd` (`solid-js`, `@experimental`), registered while hydration is running:
+after `hydrate()` in an authored entry, or — under `start: true`, where the plugin
+generates the entry and calls `hydrate()` after importing `App` — from the `App`
+component body (`if (!isServer) onHydrationEnd(() => { document.documentElement.dataset.hydrated = ""; });`;
+the server version also runs the callback, where `document` does not exist). Registered
+at `App.tsx` module scope it runs before hydration starts, in the next microtask, ahead
+of the streamed boundaries it was meant to wait for. It fires when
+the hydration phase ends — including when a module preload failed and the markup was left
+non-interactive — so it is a test-tooling marker, never a branch for what the app renders
+(`isHydrating()` / `onSettled` own that). Outside hydration it runs in the next microtask.
+<!-- upstream:hydration-end-experimental -->
+
+`jsxImportSource` for tests and app code is `"@solidjs/web"`, not `"solid-js"`.
+Vite plugin is `@solidjs/vite-plugin`, not `vite-plugin-solid`.
+
+To turn those dev diagnostics into a hard gate on every test, capture them per test
+with `@solidjs/diagnostics` — see
+[Gating every test on diagnostics](#gating-every-test-on-diagnostics). Patching
+`console.warn` sees only what the console reporter prints, and none of the
+attribution-tier findings or the hold tables.
+
+### Dev diagnostics and attribution
+
+Solid ships **three builds** of every runtime package, selected by export condition:
+
+| Build | Condition | Carries | `OBSERVE` | `DEV` |
+|---|---|---|---|---|
+| prod | default | the runtime + the two error hooks | `undefined` | `undefined` |
+| observe | `observe` | prod + records channel, diagnostics channel, attribution slot, server trace slot; no console output, no checks | object | `undefined` |
+| dev | `development` | observe + the development checks and the console reporter; unminified | object | object |
+
+`vite dev` is **always the dev build** (the `development` condition wins), so everything
+below works there with no configuration. The observe build is a *production* opt-in —
+see [Production observability](#production-observability-the-observe-build) — not a
+dev setting. Diagnostics come in two layers: **findings** (facts about a render, present
+in observe and dev) and **checks** (dev-only guidance printed by the console reporter).
+Always-on dev checks include misplaced reads
+(`[STRICT_READ_UNTRACKED]`, `[PENDING_ASYNC_UNTRACKED_READ]`, `[UNTRACKED_READ_AFTER_AWAIT]`
+for a first read made after an `await` in an async compute — V8 engines only), misplaced writes
+(`[REACTIVE_WRITE_IN_OWNED_SCOPE]` — since rc.9 also for store setters called in a
+component or root body <!-- upstream:store-write-owned-scope -->, `[ASYNC_STORE_SETTER]` for a store setter callback that returns
+a promise <!-- upstream:async-store-setter-throws -->, `[FLUSH_IN_ACTION]`,
+`[ACTION_CALLED_IN_OWNED_SCOPE]` for an `action()` invoked from a component body or
+computation <!-- upstream:action-in-owned-scope -->, `[SERVER_WRITE]`,
+and since rc.17 `[STORE_WRITE_OUTSIDE_SETTER]` for a write to the store proxy itself
+<!-- upstream:store-write-outside-setter -->), misplaced bindings
+(`[UNCOMMITTED_INPUT_OVERWRITTEN]` — a `value` / `checked` binding re-applied its
+committed value over uncommitted user input <!-- upstream:uncommitted-input-overwritten -->),
+`[ASYNC_OUTSIDE_LOADING_BOUNDARY]` when a tracked read has no boundary above it,
+`[LOADING_ON_OUTSIDE_HOLD]` when a `<Loading on>` boundary's data is also read outside it,
+`[LOADING_ON_ACCESSOR]` when a `<Loading on>` receives a function instead of the value
+(the boundary never calls it, so it never re-arms; since rc.20) <!-- upstream:loading-on-accessor -->, and
+since rc.21 `[CAUGHT_REACTIVE_READ]` when a computation catches a reactive read's throw
+itself and completes with a value — the catch masks the load or hides the error from the
+boundaries <!-- upstream:caught-reactive-read -->. Ownerless creation warns rather than throws: `[NO_OWNER_EFFECT]`
+for an effect created outside any root or component, `[NO_OWNER_BOUNDARY]` for a
+boundary invoked outside a reactive context, and `[RUN_WITH_DISPOSED_OWNER]` for
+`runWithOwner` on a disposed owner <!-- upstream:ownerless-and-disposed --> — none of them is ever disposed.
+Each entry carries a stable `[CODE]`, what the runtime observed, an owner chain
+(`in <App> › <Cart> › <LineItem>`), and — since rc.16, under `vite dev` — an
+`at src/Cart.tsx:12:5` line naming where the scope was created (the compiler's
+`sourceNames.locations`; the same `loc` sits on every artifact event)
+<!-- upstream:source-names-locations -->; never silence a code before understanding it.
+Since rc.9 the server render reports on the same channel with the same owner chains:
+`[SSR_RENDER_ERROR_CONTAINED]` (a boundary routed a render error; `ownerPath` is where
+it was thrown, `boundaryPath` where it was met) <!-- upstream:ssr-render-error-contained -->, `[SERVER_ERROR_SANITIZED]` (the original
+behind a production-sanitized error, from a server function or an SSR render),
+`[SSR_CLIENT_CONTENT_MASKED]` (client-only content that surfaced only after a real
+server wait — the wait was wasted), `[SSR_BOUNDARY_WATERFALL]` (sequential waits inside
+one server `<Loading>` boundary), `[SSR_UNDECLARED_LIVE_SOURCE]` (an async iterable
+still pumping into a document render — declare it `live()`), `[SSR_LIVE_HOLE_LATCHED]`
+(a live markup hole or attribute stopped updating: re-running it created an async scope
+— a memo over a fetch inside the hole's expression — or called a slot, so it keeps the
+markup it last sent; create async sources in the component body), and
+`[REVEAL_IN_RENDER_TO_STRING]`.
+Hydration has a render check of its own since 2.0.0: `[INVALID_HTML_NESTING]`,
+when a hydrating insert claims an element the browser's parser rebuilt —
+invalid nesting across a component boundary (`<div>` in `<p>` or `<a>` in
+`<a>`, where the parser moves the inner element out of its parent; `<tr>`
+directly in `<table>`, where it inserts the `<tbody>` the template lacks;
+the compiler rejects it inside one template, so it almost always spans a
+boundary)
+<!-- upstream:invalid-html-nesting -->. Hydration keeps the parser's tree, so
+the page differs from a client render and the moved node cannot be updated
+through its template parent: change the outer element, move the inner element
+out, or write the wrapper the parser expects (`<tbody>` around the rows).
+For the repair behind any code, read the `reactivity-diagnostics` skill Solid ships
+in the repo (`node_modules/solid-js/skills/reactivity-diagnostics/SKILL.md`) — every
+code maps to what the runtime observed and what to change.
+
+Cost and responsiveness findings need the opt-in attribution engine, which records
+every scope that re-ran, what changed to cause it, and how long it took. Since
+`solid-js` 2.0.0-rc.8 the engine lives behind its own subpath — `DEV.attribution`
+no longer exists <!-- upstream:dev-attribution-removed --> (it is a type error; `DEV` holds only devtools hooks, graph
+traversal, and console reporting). `OBSERVE` is the public observability surface on
+the observe and dev builds — `OBSERVE.records`, `OBSERVE.diagnostics`,
+`OBSERVE.exclude` / `OBSERVE.include`, `OBSERVE.ownerPath`, `OBSERVE.server.trace` are
+for app and tool code; only the `OBSERVE.attribution` slot (`withInteraction` /
+`withOrigin`) belongs to engines, routers, and devtools. Since 2.0.0-rc.9 the folds,
+queries, and formatters are **named exports** of that subpath, not methods of
+`attribution` (`attribution.why` / `.costs` / `.feedback` / `.subscriptions` / `.format`
+are type errors) <!-- upstream:attribution-named-exports -->; `attribution` keeps `enable` (a hold on the one shared engine — it
+returns the release), `disable` (full teardown), `markFlight`, and one ring-buffer reader,
+`attribution.history(type)` (`"rerun"` / `"hold"` / `"waterfall"` / `"navigation"` /
+`"interaction"`). Live records — the engine's included — arrive on
+`OBSERVE.records.subscribe(type, (event, live) => …)`; `attribution.subscribe` and the
+`holds()` / `waterfalls()` / `navigations()` / `interactions()` methods are gone since
+2.0.0-rc.10. <!-- upstream:attribution-history-records -->
+
+```ts
+import { attribution, formatRerun, why } from 'solid-js/attribution';
+import { isDev } from '@solidjs/web';
+
+if (isDev) attribution.enable({ log: false });
+// reproduce the interaction, then ask why a scope ran:
+for (const event of why(total)) {
+  console.log(formatRerun(event));
+}
+```
+
+`enable()` pretty-prints every re-run's why-chain to the console by default
+(`log: true`); pass `{ log: false }` when you only want the coded findings and plan
+to query the tables yourself. Name the scopes you intend to interrogate
+(`createMemo(..., { name: "total" })`) — chains refer to nodes by name, and
+anonymous nodes print as `computed` / `effect` / `signal`; component labels
+(`<Checkout>`) are always present under `vite dev` and survive minification only with
+the compiler's `sourceNames` option (components, binding effects, primitives — the Vite
+plugin turns it on under `vite dev` and `observe: true`; `componentNames` was its rc.9 name
+and is rejected now) <!-- upstream:source-names-option -->. Its `locations` kind (rc.16)
+adds `file:line:col` to every name — `createComponent(Home, props, "Home", "src/App.tsx:12:5")`,
+`{ name, loc }` on primitives — which is what the `at …` line in a diagnostic and
+`event.loc` in an artifact print; the plugin turns it on under `vite dev` only, and an
+observe build opts in with `sourceNames: { locations: true }` (paths relative to the
+compiler's `root`) <!-- upstream:source-names-locations -->. On the
+**prod build** the import resolves to an inert same-surface twin whose `enable()` is a
+no-op, so the import can stay in the code. On the **observe build** it is the real
+engine and an unguarded `enable()` records in production — keep the `isDev` guard
+unless recording in production is the intent. The split is pay-for-use: importing
+`costs` or `feedback` is what turns their tables on, so a records-only consumer
+(`OBSERVE.records.subscribe("rerun", …)`) ships neither.
+
+While attribution is enabled, Solid also warns on its own about over-subscription,
+chained async waterfalls (`[ASYNC_WATERFALL]`), memos whose fresh-but-equal output
+never settles (`[UNSTABLE_MEMO_OUTPUT]`), effects that relay state
+(`[EFFECT_RELAY_TEAR]`) or feed their own inputs (`[EFFECT_WRITES_OWN_SOURCE]`),
+immutable updates inside stores (`[IMMUTABLE_UPDATE_IN_STORE]` — mutate the draft),
+row-rebuilding lists (`[UNSTABLE_LIST_IDENTITY]` — key by id or reconcile into a
+store), and silent holds (`[SILENT_HOLD]` — a write held on async work with no
+`isPending()` / `latest()` reader, optimistic value, `affects()` mark, or effect that
+ran while held; info from 100ms, warning from 200ms, tunable via
+`enable({ holds: { infoMs, warnMs } })`). A hold that *was* acknowledged but still ran
+long is `[LONG_HOLD]` (info from 500ms, warning from 1000ms;
+`enable({ longHolds: { infoMs, warnMs } })`) — the suggestion is a `<Loading on={...}>`
+boundary, never removing the hold. Beside them: `[UNTRACKED_ASYNC_HANDLER]` (an `async`
+handler that awaits with no write before the `await` and no `action` — no hold exists, so
+the click looks dead; make it an `action`, or write a `createOptimistic(false)` flag
+first), `[ABANDONED_FLIGHTS]` (a source re-asked on every keystroke, answers thrown away
+— debounce at the handler), `[STACKED_HOLDS]` (repeated clicks piling into one hold),
+`[FALLBACK_FLASH]` (a fallback shown under 150ms), `[WASTED_RECOMPUTE]` (a scope whose
+runs mostly compared equal — narrow its reads upstream), `[GRAPH_GROWTH]` (the graph grows
+on every visit to a route — an undisposed root or subscription), `[HOT_SCOPE_FANOUT]`
+(many scopes hot from one root cause), and `[OPTIMISTIC_REVERTED]`
+(info: a guess the screen showed was replaced). `costs()` and `feedback()` (named imports)
+rank the session worst-first; `attribution.history("hold")` / `("waterfall")` /
+`("navigation")` / `("interaction")` hold the fact tables behind the verdicts (each hold
+carries its `silent` / `long` verdict). <!-- upstream:attribution-history-records -->
+`subscriptions(scope)` (named import) lists a scope's current dependencies to compare
+against what it uses.
+
+For regression tests, `@solidjs/diagnostics` turns the same channels into assertions:
+
+```ts
+import '@solidjs/diagnostics/vitest'; // registers the matchers (or list it in vitest `setupFiles`)
+import { captureArtifact } from '@solidjs/diagnostics';
+
+const { artifact } = await captureArtifact(() => {
+  fireEvent.click(getByRole('button', { name: 'Add' }));
+  flush();
+}, { scenario: 'add-item' });
+
+expect(artifact).toHaveNoDiagnostics();
+expect(artifact).toHaveNoSilentHolds();
+```
+
+`toHaveNoDiagnostics` fails on every captured finding, `info` ones included
+(`[FALLBACK_FLASH]`, `[OPTIMISTIC_REVERTED]`, …) — its `allow` list names codes to
+tolerate;
+`toStayWithinRerunBudget` / `toHaveNoWaste` catch recompute regressions. The
+`agent-loops` skill the package ships
+(`node_modules/@solidjs/diagnostics/skills/agent-loops/SKILL.md`) documents the agent
+verification loops: capture until the channel is quiet, scenario budgets as the
+definition of done, and hold/latency gates. See the debugging-reactivity guide in
+[references/official-docs.md](references/official-docs.md).
+
+### Gating every test on diagnostics
+
+Solid grades its findings `info` / `warn` / `error` and offers no switch to escalate
+them, so "diagnostics are errors" is enforced in tests. The shape that holds up is a
+setup file that wraps **every** test body in one capture, so a test written by someone
+who never heard of the engine is gated anyway:
+
+```ts
+// src/test-setup.ts — listed in the vitest project's `setupFiles`
+import { afterEach, beforeEach } from 'vitest';
+import { flush } from 'solid-js';
+import { captureArtifact, expectNoDiagnostics, expectNoSilentHolds } from '@solidjs/diagnostics';
+
+let end: (() => void) | undefined;
+let capture: ReturnType<typeof captureArtifact<void>> | undefined;
+export const roots: (() => void)[] = []; // a `mount()` helper pushes each render's dispose
+
+beforeEach((context) => {
+  if (capture) throw new Error('tests under the gate must run sequentially');
+  capture = captureArtifact<void>(() => new Promise<void>((resolve) => { end = resolve; }), {
+    scenario: context.task.name,
+    attribution: { hotTime: false, fallbackFlashes: false }, // wall-clock: see below
+  });
+});
+
+afterEach(async () => {
+  for (const dispose of roots.splice(0).reverse()) dispose();
+  flush();
+  end?.();
+  const pending = capture;
+  capture = undefined;
+  if (pending === undefined) throw new Error('this test ran outside the gate');
+  const { artifact } = await pending; // close the capture before asserting anything
+  expectNoDiagnostics(artifact);
+  expectNoSilentHolds(artifact);
+});
+```
+
+What the shape has to get right:
+
+- **A DOM environment** (`happy-dom` / `jsdom`) for every reactive test, `.test.ts`
+  included — set `test.environment` yourself; the Vite plugin does not set it, so a
+  config without one runs under Vitest's default `node`. There the export conditions select Solid's
+  **server build**: writes are inert (`[SERVER_WRITE]`), effects never run, and the
+  attribution tables stay empty — a green test that proves nothing. Components that only
+  exist in the server build (a `<html>` document shell) get their own `node` project
+  rendered with `renderToString`, outside the gate.
+- **No HMR transform in the test project**: `solid({ refresh: { disabled: true } })`.
+  The refresh transform wraps every component declaration in a memo, so the graph
+  under test is not the graph production ships, and tests have no HMR to serve. (The
+  wrappers are marked as plumbing, so the engine does not count them as sources.)
+  <!-- upstream:per-row-show-insert-sources -->
+- **Two assertions, not one.** `[SILENT_HOLD]` is emitted only once a hold outlasts
+  `holds.infoMs` (100ms), so a shorter unacknowledged hold is recorded and coded
+  nowhere; `expectNoSilentHolds` asks the hold table, where no threshold applies.
+- **Wall-clock checks off where the clock means nothing.** `hotTime`'s 8ms budget is
+  half a real browser frame; an emulated DOM spends more than that rendering a page, and
+  a loaded runner several times more, so the failure names an innocent component.
+  `[FALLBACK_FLASH]` measures backend latency, and a fake that settles at once flashes
+  every fallback. Keep the count-based and structural checks (holds, waterfalls, list
+  identity, wide scopes); measure time in a real browser.
+- **Sequential tests only.** The diagnostics channel and the engine are process-global,
+  so under `test.concurrent` one test's finding lands in another's artifact — refuse the
+  overlap rather than blame the wrong test.
+- **Dispose what the test mounted** before the capture closes. A root left alive re-runs
+  on later writes, and its finding fails whichever test is open then.
+- **Settle deferred work** (`await resolve(...)`, `flush()`) before the body returns: an
+  un-awaited timer or promise lands in the next test's capture, or in none. Module scope
+  runs before the first capture opens — keep fixtures there, never a render.
+- **The app's own `attribution.enable()` stands down under a harness**
+  (`if (import.meta.env.VITEST) return;`, and in the browser gate's mode). A hold taken
+  while the engine is enabled opens a fresh window over `history()` / `costs()` /
+  `feedback()`, which erases what the capture recorded so far, and options combine by
+  the most demanding value per key, so the app's default hold re-arms every threshold
+  the gate turned off. <!-- upstream:attribution-hold-window -->
+- **A test whose subject is a finding requires it** (`expectDiagnostic(artifact, code)`
+  and then `allow` it), so the test fails when it stops provoking the code instead of
+  decaying into a mute. Never `allow` a finding about real code.
+- **Fixtures above the threshold** for scale-dependent codes. `[WIDE_SCOPE_DEPS]` fires
+  at 200 dependencies by default, `[HUGE_FAN_OUT]` / `[HUGE_FAN_IN]` and
+  `[HOT_SCOPE_RERUNS]` at their own counts, so a fixture of three rows cannot falsify a
+  per-row cost. When a gate is meant to catch one, give it a fixture past the code's
+  threshold (or a lower threshold in the capture's `attribution` options) and check it
+  fails with the defect re-injected. A per-row cost in a list's own insert pass is
+  outside `[WIDE_SCOPE_DEPS]` entirely (see [Lists](#lists-for-child-signatures-per-keying-mode)).
+
+An emulated DOM cannot see everything, so keep one **real-browser gate** for the main
+path: `captureBrowserArtifact(page, interact, { scenario })` from
+`@solidjs/diagnostics/playwright` drives the same capture through the bridge the Vite
+plugin injects into `vite dev`, and returns the same artifact, so one verdict function
+judges both. Serve that dev server in a dedicated mode with `refresh: { disabled: true }`
+and `performanceTracks: false`: the tracks paint every record from inside the scopes the
+engine times, enough to push a page's first render past the 8ms `[HOT_SCOPE_TIME]`
+budget. The wall-clock thresholds mean something there — except `fallbackFlashes`
+against a backend on loopback.
+
+### Development loop: self-diagnose before finishing
+
+Enable observability in development **by default** and lean on it. The dev build
+already prints every check; the attribution engine is the part you turn on. Run the
+loop whenever a change touches **stores, lists, async computations, actions, or
+effects** — a pure markup or styling change does not need it.
+
+1. **Dev console is clean.** Reproduce the change in `vite dev`; zero `[CODE]` entries
+   is the bar (`[STRICT_READ_UNTRACKED]`, `[REACTIVE_WRITE_IN_OWNED_SCOPE]`,
+   `[ASYNC_STORE_SETTER]`, `[ASYNC_OUTSIDE_LOADING_BOUNDARY]`, …). Fix, do not silence.
+2. **Name the scopes you changed** (`createMemo(fn, { name: "total" })`,
+   `createStore(v, { name: "cart" })`) so chains and tables refer to them by name.
+3. **Record the interaction and ask.** First choice — no app code — is the diagnostics
+   endpoint: with `@solidjs/diagnostics` in `devDependencies` at the same version as
+   `solid-js` (npm `latest` can lag; `solid2-kit doctor` flags an older one), the Vite plugin's
+   `diagnostics` option (auto-on when the package is declared; dev server only, never
+   under vitest, `vite build`, or preview) injects the capture bridge and serves
+   `/__solid/diagnostics`. `begin` enables attribution with `log: false` for the
+   session; `end` disables it and returns the artifact (`diagnostics`,
+   `attribution.{reruns, costs, holds, feedback}`, `records`):
+
+   ```sh
+   curl -X POST localhost:5173/__solid/diagnostics -d '{"method":"begin"}'
+   # ... perform the interaction in the browser ...
+   curl -X POST localhost:5173/__solid/diagnostics -d '{"method":"whyDidRun","params":{"name":"total"}}'
+   curl -X POST localhost:5173/__solid/diagnostics -d '{"method":"costs"}'
+   curl -X POST localhost:5173/__solid/diagnostics -d '{"method":"end"}'   # holds + feedback tables are in the result
+   ```
+
+   `GET` the endpoint for status and the method list (`begin` / `end` / `active` /
+   `whyDidRun` / `costs` — `feedback` and `holds` come back from `end`). With several
+   open tabs the first responder wins, so keep one page under test. Without
+   `@solidjs/diagnostics`, the in-code alternative is an `isDev`-guarded
+   `attribution.enable({ log: false })` in the client entry, then `why(scope)` /
+   `costs()` / `feedback()` from the console or a scratch effect — never `log: true`
+   left on (one collapsed `[why-run]` group per re-run) and never unguarded (on the
+   observe build it records in production). Under `vite dev` the plugin also paints the
+   same records as tracks in the Chrome Performance panel (`performanceTracks`, on by
+   default; `false` opts out) — record there when a timeline reads better than tables.
+   The six attribution cost checks (`hotRuns`, `hotTime`, `wideDeps`, `unstableMemos`,
+   `fanOut`, `wastedRecompute`) are opt-in there: `performanceTracks: { attribution:
+   { checks: true } }` (or `enablePerformanceTracks({ attribution: { checks: true } })`,
+   or your own `attribution.enable()` hold — the diagnostics-session path above already
+   turns them on). <!-- upstream:perf-tracks-cost-checks -->
+4. **Read the verdicts, then the tables.** Fix every coded warning the session raised
+   (`[SILENT_HOLD]`, `[IMMUTABLE_UPDATE_IN_STORE]`, `[UNSTABLE_LIST_IDENTITY]`,
+   `[EFFECT_RELAY_TEAR]`, `[EFFECT_WRITES_OWN_SOURCE]`, `[ASYNC_WATERFALL]`,
+   `[HOT_SCOPE_RERUNS]`, `[WASTED_RECOMPUTE]`, `[ABANDONED_FLIGHTS]`,
+   `[UNTRACKED_ASYNC_HANDLER]`). Then `costs().scopes` (self time, `wastedMs` for runs whose
+   result did not change), `costs().writes` (root writes by downstream work),
+   `feedback().sources` / `.interactions` / `.flights` / `.fallbacks` (silent holds,
+   held time per interaction, abandoned requests, fallback flashes). A scope that
+   re-runs more than its inputs change is a `why(scope)` question — the chain names the
+   write, the changed dependency, and the time.
+5. **Make it a test when it is worth keeping**: `captureArtifact` +
+   `toHaveNoDiagnostics()` / `toHaveNoSilentHolds()` / `toStayWithinRerunBudget(n,
+   { scope })` is the definition of done for the scenario you just tuned.
+
+The bundled `agent-loops` skill (`node_modules/@solidjs/diagnostics/skills/agent-loops/SKILL.md`)
+is the long form of this loop; `solid2-kit init` prints the devDependency note when it
+runs in a project.
+
+### Production observability: the observe build
+
+Everything above is the dev build. Records, traces, and attribution in **production**
+need the observe build, opted into per project — and it changes nothing under `vite dev`:
+
+```ts
+// vite.config.ts
+import solid from '@solidjs/vite-plugin';
+
+export default { plugins: [solid({ ssr: true, observe: true })] };
+```
+
+`observe: true` adds the `observe` condition to every environment (client and server,
+`vite build` and preview) and turns on the compiler's `sourceNames` option (components,
+binding effects, and primitives) so `ownerPath` / `boundaryPath` name components instead
+of `computed` <!-- upstream:source-names-option -->; source *locations* stay off in that
+build (names only) unless `sourceNames: { locations: true }` is passed — they cost bundle
+bytes and expose file paths, so opt in when the monitoring tool consumes `loc`
+<!-- upstream:source-names-locations -->. Without the plugin, set `resolve.conditions` (or `node --conditions=observe`
+for an unbundled server) and `sourceNames` yourself. Cost in Solid's size suite: ~16.8 KB against ~15.3 KB brotli
+for a small client app; importing the attribution engine on top raises the cap to
+~27 KB (a separate entry — an observe build that never imports it never ships it). The
+two error hooks are **not** part of this: they fire on every build, prod included, only
+the paths are `undefined` there. `enablePerformanceTracks()` from
+`@solidjs/web/performance-tracks` paints the records on the Chrome Performance panel in
+production too (observe build; a no-op on the prod build).
+
+- **Instrumentation order.** A monitoring SDK's `init()` (and `configureServerErrors`)
+  must run before the modules it patches load. `import "./instrument"` at the top of an
+  entry does not achieve that in ESM (static imports are hoisted in dependency order);
+  the plugin's `start: { serverSetup: "./src/instrument.ts" }` awaits that server-only
+  module before anything else in the server graph — the `node` entry too:
+  `dist/server/node.js` awaits `./server.js` (which awaits the
+  setup module) and then loads `node-runtime.js`, so deploy both files. The option was
+  renamed from `start.instrument` between vite-plugin next.52 and next.57 — the plugin
+  throws on the old key <!-- upstream:start-server-setup -->. The sibling seam
+  `start: { serverRenderSetup: "./src/render-setup.ts" }` runs per request immediately
+  before SSR — `(event, App) => Component | void` — for integrations that must prepare
+  a per-request app instance before the render. Failures the
+  handler contains itself reach the hook as `{ kind: "request", handling: "failed" }`.
+  The client-side counterpart is `start: { clientSetup: "./src/client-setup.ts" }`: a
+  browser module run (and awaited, top-level `await` allowed) before `hydrate` / `render`,
+  for a client SDK's `init()` or `enableRichArguments()`; it conflicts with an authored
+  `entry-client.tsx`, which already owns that order.
+- **Tracing.** The server continues an incoming W3C `traceparent` or originates one;
+  `getTraceContext()` from `@solidjs/web` reads it during the request (in-process
+  server-function calls included) — forward it downstream with
+  `headers: { ...getTraceContext()?.entries }`. The browser is told which trace the page
+  belongs to on `Server-Timing` and `<meta>` tags, but only when the incoming trace was
+  sampled or a provider answered; a page with no tracing tool sees no wire change. On
+  the observe build a tracing SDK supplies the trace with
+  `OBSERVE?.server.trace.provide((request) => ({ traceId, spanId, entries }))`, once per
+  request. Do not write middleware to inject trace headers.
+- **Records.** `OBSERVE?.records.subscribe(type, (event, live) => …)` delivers one plain
+  record per `"render"` (a server render: `mode`, `shellMs`, `durationMs`, `boundaries`,
+  `outcome`, the matched `route`), `"boundary"` (a `<Loading>` that waited on the server),
+  `"invocation"` (server-function execution), `"request"` / `"call"` (a server-function
+  call from the page, at send and at settle — `call` shares `id` with its invocation),
+  `"frame"` (produced / applied), and `"recovery"` (a boundary the client re-rendered
+  after a server failure); the attribution engine's own records (`"rerun"`, `"hold"`,
+  `"interaction"`, `"navigation"`, …) ride the same channel while it is enabled. Records are
+  serializable data; live handles (request, args, the error as thrown) ride in the
+  second argument. Listeners run synchronously inside the runtime, **must not write
+  signals**, and should subscribe from a module that loads before the app.
+- **Interactions.** `attribution.enable()` (keep the release it returns) then
+  `OBSERVE?.records.subscribe("interaction", (event) => …)` <!-- upstream:attribution-history-records --> says what each click waited on
+  (`event.settledMs`, `event.holds[].blockers`, `event.holds[].holdMs`); a hold nothing acknowledged
+  is the dead click. The fold tables stay separate imports.
+- **What leaves the process.** Beyond names, four record fields carry page data —
+  `target` (element as `tag#id "text"`, 30 chars), `prev` / `value` previews (40 chars),
+  navigation `to` / `from` / `params`, and `data.error` on server render findings. The
+  engine's `values` option governs the first three at the source — `"full"` (the dev
+  default), `"labels"` (no previews; element text only on buttons and links), `"none"`
+  (the observe-build default) — so an exporter on the observe build passes its level
+  explicitly (`attribution.enable({ values: "labels" })`) and decides what to do with the
+  rest. A tool that renders inside the app it watches
+  (devtools panel) marks its root with `OBSERVE?.exclude(getOwner()!)` inside its
+  `createRoot` so its own effects and stores never become findings (`OBSERVE?.include(owner)`
+  re-admits the app's root under an excluded shell); do not route its
+  writes through `runWithOwner` (that is a write in an owned scope).
+
+## Client mode: no server HTML, no hydration reflexes
+
+The `@solidjs/vite-plugin` default (client mode, the `bare` tier) serves an empty-body
+shell and mounts with `render()`. Nothing is server-rendered and nothing hydrates, so
+**React's hydration-mismatch playbook does not transfer**: do not start signals with a
+"server-safe" initial value and adopt `localStorage` / `matchMedia` after mount, do not
+two-pass render, and there is no `suppressHydrationWarning`. Read client sources directly
+when creating state — `createSignal(storedPreference())` is correct in client mode. A
+deferred "safe" initial value is worse than unnecessary: if anything persists the value
+(an effect writing `localStorage`), the placeholder **overwrites the user's stored
+preference** before the real value is adopted. Mismatch only becomes a concept in
+start/SSR mode, where `hydrate()` mounts onto server HTML — and the Solid answer there is
+`isServer` / `clientOnly` / per-value `ssrSource`, still not React-style deferred adoption.
+
+## App stack (only if the project has these packages)
+
+This kit's always-applied rules cover `solid-js` + `@solidjs/web` TSX. Official
+Solid 2 docs also describe optional app layers. **If those packages are in the
+project, use them — do not invent Next.js, React Router, SolidStart 1.x, or
+Solid Router 0.x/1.x stand-ins.** Patterns below; fetch the matching pages from
+[references/official-docs.md](references/official-docs.md).
+
+### Compiler / packages
+
+```json
+{ "compilerOptions": { "jsx": "preserve", "jsxImportSource": "@solidjs/web" } }
+```
+
+`solid-js` does **not** export a `JSX` namespace — `import type { JSX } from "solid-js"`
+is a type error (TS2305) <!-- upstream:jsx-namespace-absent -->. Markup types are `JSX.Element` from `@solidjs/web` (the
+docs' choice; it also admits DOM nodes) or the renderer-neutral `Element` from `solid-js`
+(`children?: Element`), alongside `Component` / `ParentProps` / `Accessor` / `Setter`.
+Import the latter as `import type { Element as SolidElement } from "solid-js"` in any file
+that also uses DOM elements — unaliased, it shadows the DOM `Element`
+(`el.getBoundingClientRect()` becomes TS2339). DOM-specific `JSX` types
+(`JSX.IntrinsicElements`, `JSX.CSSProperties`) and `ComponentProps` come from
+`@solidjs/web`. Vite: `import solid from "@solidjs/vite-plugin"`
+with `start: true` / `ssr: true` / `serverFunctions: true` only when the
+project already uses start mode. Tiers are `bare` → `basic` (router) →
+`fullstack` (SSR + server functions); do not jump a tier without cause.
+Under `start: true` the plugin owns entries and the build — write `src/App.tsx`, not
+SolidStart-style `entry-client.tsx` / `entry-server.tsx` (authored ones replace the
+generated entries) or a hand-written `index.html`. The document shell (`<html lang>`,
+favicon, fallback `<title>`) is an optional `src/Document.tsx` default export that renders
+`<HydrationScript />` in `<head>` and `<body>{props.children}</body>`; `App` never renders
+`<html>`.
+
+### Solid Router 2 — `createRouter`, not JSX `<Route>`
+
+```tsx
+import { Loading, lazy } from 'solid-js';
+import { createRouter } from '@solidjs/router';
+
+export const Router = createRouter({
+  routes: [
+    { path: '/', component: lazy(() => import('./pages/Home')) },
+    { path: '/about', component: lazy(() => import('./pages/About')) },
+    { path: '*404', component: lazy(() => import('./pages/NotFound')) },
+  ],
+});
+export const { paths } = Router;
+
+export default function App() {
+  return (
+    <Router>
+      {(props) => (
+        <>
+          <a href={Router.paths}>Home</a>
+          <Loading fallback={<p>Loading…</p>}>
+            <main>{props.children}</main>
+          </Loading>
+        </>
+      )}
+    </Router>
+  );
+}
+```
+
+The `<Loading>` covers the first load of the lazy pages (and lets SSR stream the shell);
+later navigations hold the current page while the next one loads (links get
+`data-pending` when the router is created with `links: pendingLinks`
+<!-- upstream:pending-links-opt-in -->). Create the instance at **module scope**. Nested layouts are `children` arrays
+on the route objects, not nested `<Route>` / nested routers. Solid Router does
+**not** support nested `<Router>` instances — compose one route tree (or a lazy
+`children` thunk). Navigate with
+plain `<a href={Router.paths.about}>` (or `useNavigate`); there is no `<A>` /
+`<Navigate>` / `<HashRouter>` / `<FileRoutes />`. Do not assign
+`window.location.href` or call `history.pushState` for in-app navigation.
+Session location is `useLocation` / `useParams`,
+not `Router.paths`. `useMatch(() => "/docs/:page")` tests a pattern against the
+current pathname without a route existing for it — the memo answers the match (params
+typed from the pattern) or nothing; that is the breadcrumb / section-highlight read
+<!-- upstream:router-use-match -->.
+
+**Route `preload` starts reads; the page reads them in a memo.** `preload` runs when
+the route matches (and ahead of a click under a `preloadLinks` strategy <!-- upstream:preload-links-opt-in -->), so it should kick off the query and return
+nothing; the component reads the same query through a memo that tracks the params:
+
+```tsx
+// src/data/products.ts
+import { query } from '@solidjs/router';
+
+export const getProduct = query(async (id: string) => {
+  const response = await fetch(`/api/products/${id}`);
+  return (await response.json()) as Product;
+}, 'product');
+
+// src/router.ts — defineRoute types params from the path (params.id: string)
+import { lazy } from 'solid-js';
+import { createRouter, defineRoute } from '@solidjs/router';
+import { getProduct } from './data/products';
+
+export const Router = createRouter({
+  routes: [
+    defineRoute({
+      path: '/products/:id',
+      preload: ({ params }) => void getProduct(params.id),
+      component: lazy(() => import('./pages/Product')),
+    }),
+  ],
+});
+
+// src/pages/Product.tsx
+import { createMemo } from 'solid-js';
+import type { RouteProps } from '@solidjs/router';
+import { getProduct } from '../data/products';
+
+export default function ProductPage(props: RouteProps<'/products/:id'>) {
+  const product = createMemo(() => getProduct(props.params.id));
+  return <h1>{product().name}</h1>;
+}
+```
+
+Do not return the data from `preload` and render `props.data` (the Remix-loader
+shape): `props.data` is whatever `preload` returned when the route first matched, so
+navigating `/products/mug` → `/products/bowl` keeps showing the mug, and an `async`
+preload makes it a Promise (`props.data.name` is TS2339). Return a value only for
+data that stays fixed while the route is matched. The factory `preload` on
+`createRouter` runs once per mount/request; its result is the root render prop's
+`props.data`. Plain route objects type `params` as an open record (`string |
+undefined` per key) — wrap a route in `defineRoute` when `preload` or the component
+needs `params.id: string`.
+
+Link warming is **opt-in**: `createRouter({ routes, preloadLinks: intentPreload() })`
+warms a link's route code and runs its `preload` on hover (after a short delay), focus
+and touch. Without `preloadLinks` nothing preloads ahead of the click. The other
+strategies, all from `@solidjs/router` and combinable as an array: `tapPreload()`
+(pointerdown), `viewportPreload()` and `eagerPreload()` (code only by default, for links
+marked `preload="viewport"` / `preload="eager"`, or every link with `{ all: true }`).
+`preload="false"` on an anchor opts that link out of every strategy — the **string**:
+the types also accept `preload={false}`, but a `false` attribute is removed, so that link
+is still preloaded. `usePreloadRoute()` warms a route by hand (code only;
+`{ preloadData: true }` also runs its `preload`). A boolean `preloadLinks` (the old
+on/off switch) is a type error, and at runtime it only warns in dev and preloads
+nothing. <!-- upstream:preload-links-opt-in --> Intent values are `"initial"` /
+`"navigate"` / `"native"` / `"preload"`. One router per app.
+
+Link state needs no component code: the router sets `aria-current="page"` (same path
+and same query — parameter order and hash aside), `data-active` (exact or descendant
+on the path only — the `/` link is active only on exact match), and, with the opt-in
+`createRouter({ links: pendingLinks })` plugin, `data-pending` (in-flight navigation
+target) on the anchors it handles; style them in CSS. The plugin is also a *reader* of
+the in-flight navigation: without it, or a `useLinkState().pending` / `isPending` read of
+the location somewhere on screen, nothing reads it, so every navigation that waits on a
+lazy page or its first data is an unacknowledged hold (`[SILENT_HOLD]` past 100ms,
+shorter ones only in `toHaveNoSilentHolds`). Create the router with
+`links: pendingLinks` by default, even when no stylesheet uses `data-pending` yet. <!-- upstream:pending-links-opt-in --> Highlight nav links on
+`data-active`, not `aria-current`: a nav link to `/products` is not current on
+`/products?page=2`. An `aria-current` you write
+yourself is yours — the router only manages the attribute on links where it set it.
+For non-anchors, or state needed in JSX, `useLinkState(() => href,
+{ end })` returns the same three as accessors (`active` / `current` / `pending` —
+`pending` works without the plugin); `useIsRouting()` is the page-level pending
+flag for progress bars. Hand-rolled
+`location.pathname === ...` comparisons are the wrong tool.
+<!-- upstream:pending-links-opt-in -->
+
+Build URLs from `paths`: static segments are properties (`Router.paths.about`, never
+`Router.paths.about()`), parameterized segments are calls (`paths.products(id)`),
+followed by an optional search object and hash (`paths.search({ q, page }, "results")`).
+Nodes stringify in `href` / `navigate()` / `redirect()`, so call with no arguments
+only when an API insists on a plain string.
+
+Search params are the home for shareable state (filter, sort, page): `const [search,
+setSearch] = useSearchParams()` — the setter merges and navigates without scrolling;
+`""` / `undefined` / `null` removes a key. For typed values, put a synchronous
+Standard Schema on the route's `search` field and pass the path node:
+`useSearchParams(Router.paths.search)` (async schemas throw; a failing schema leaves
+the raw strings rather than throwing). Query values are strings, so coerce in the schema —
+`page: v.optional(v.pipe(v.unknown(), v.transform(Number)), 1)`; a plain `v.number()`
+rejects every value and hands back the string, still typed `number`.
+
+**`formAction` and core `action` are different things.** Core `action` from `solid-js` is
+a generator transaction (optimistic writes that span an async gap). Router `formAction`
+from `@solidjs/router` is a URL-addressable POST mutation (`useSubmissions`,
+`<form action={save} method="post">`). The router's `action` / `Action` exports are
+deprecated aliases of `formAction` / `FormAction` since 2.0.0-next.41 — dev warns on the
+first call, and `solid2-kit check` flags the import — so a router `action` import is
+always the stale spelling, never the core primitive <!-- upstream:router-action-deprecated -->.
+
+```tsx
+import { formAction } from '@solidjs/router';
+import { redirect } from '@solidjs/web';
+
+const save = formAction(async (form: FormData) => {
+  await saveProfile(form);
+  return redirect('/account');
+}, 'update-profile');
+
+<form action={save} method="post">
+  <input name="displayName" />
+  <button type="submit">Save</button>
+</form>
+```
+
+Only POST forms are accepted. Bind extra args with `.with(id)` (they go in the
+action URL). `onSubmit={(e) => { e.preventDefault(); fetch(...) }}` *runs* and
+drops the no-JS form fallback. `useAction` is deprecated (next.41, dev warns) and has
+no replacement because it needs none: **single flight is the router's.** A mounted
+router intercepts every server-function call — from a handler, a core `action`, a memo
+— and applies the response's `revalidate` keys, `redirect()` / `reload()` and flight
+data, so outside a form you call the server function (or a core `action` around it)
+directly. The router treats **every POST server-function call as a mutation**: with no
+`revalidate` keys on the response the server re-collects the current page's reads into
+the flight and the client revalidates every query; a POST that changed nothing returns
+`respond(value, { revalidate: "" })`; reads stay exempt through `query()` (which
+switches the function to GET) or `GET(fn)`; `createRouter({ routes, singleFlight: false })` opts the app
+out <!-- upstream:router-post-mutation -->. Route params arrive **decoded**
+(`/users/%E7%8C%AB` gives `params.id === "猫"`, and `Router.paths` encodes on the way
+out), and `useInRouter()` answers whether a router is mounted — for a component shared
+between routed and unrouted trees.
+Optimistic rows for a router form keep the `<form>` and add no core `action`: read the
+list `query` with `createOptimisticStore(() => getList(), [])` and register
+`save.onSubmit((form) => setList((d) => { d.push({ …, pending: true }); }))` in the
+component — the hook runs inside the action's transaction, so the row is an overlay,
+replaced on settle by the revalidated `query` (a plain server-function read is not
+revalidated, so the row just disappears).
+`useSubmissions` keeps only completions with a result or error; observe void and
+redirect completions with `save.onSettled(hook)`.
+
+Validated forms come in three passes sharing one HTML shape. Pass 1 (above) posts
+uncontrolled inputs with browser `required` / `pattern` — it works with no JavaScript.
+Pass 2 validates on the server, where the user cannot bypass it:
+
+```ts
+import { redirect, respond } from '@solidjs/web';
+import * as v from 'valibot';
+
+const Address = v.object({
+  postalCode: v.pipe(v.string(), v.regex(/^[0-9]{5}$/, 'Enter a five-digit postal code')),
+});
+export type AddressIssues = Partial<Record<'postalCode', string>>;
+
+export async function saveAddress(form: FormData) {
+  'use server';
+  const parsed = v.safeParse(Address, Object.fromEntries(form));
+  if (!parsed.success) {
+    const issues: AddressIssues = {};
+    for (const issue of parsed.issues) {
+      const field = issue.path?.[0]?.key as keyof AddressIssues | undefined;
+      if (field && !issues[field]) issues[field] = issue.message;
+    }
+    throw respond({ issues }, { status: 400 });
+  }
+  await database.addresses.save(parsed.output);
+  return redirect('/checkout/shipping');
+}
+```
+
+Keep server functions in `src/data/`, not under `src/routes` (with method discovery
+on, a `.ts` file there is an API route). `throw respond(...)` is intentional control
+flow — the status and value survive production sanitization, unlike a plain thrown
+`Error`. Pass 3 renders the messages inline from the recorded submission:
+
+```tsx
+import { formAction, useSubmissions } from '@solidjs/router';
+
+const submitAddress = formAction(saveAddress);
+const submissions = useSubmissions(submitAddress);
+const issues = () => (submissions.at(-1)?.error as { issues?: AddressIssues } | undefined)?.issues ?? {};
+
+<Show when={issues().postalCode}>{(message) => <p role="alert">{message()}</p>}</Show>
+```
+
+`issues()` is a plain derived function; `aria-invalid` on the input, `role="alert"`
+on the message. Redirect outcomes do not stay in the list; the no-JS outcome arrives
+via flash cookie as the same submission shape. Pending state is CSS on the automatic
+attribute — `form[aria-busy] button[type="submit"] { opacity: .6 }` — no component
+code. `submission.clear()` on dismiss/resubmit only, never from an effect (errors
+would flash and vanish). Live per-keystroke validation is a controlled input plus a
+memo message (`aria-live="polite"`), keeping `name` so `FormData` still works; leave
+the rest uncontrolled.
+
+**`query` is the read cache** (optional, only with the router). Wrap a read,
+give it a stable name, and consume it through a Solid async primitive:
+
+```tsx
+import { createMemo } from 'solid-js';
+import { query, revalidate } from '@solidjs/router';
+
+export const getUser = query(async (id: string) => {
+  const response = await fetch(`/api/users/${id}`);
+  return response.json();
+}, 'users');
+
+const user = createMemo(() => getUser(params.id));
+// after a mutation:
+revalidate(getUser.key);
+revalidate(getUser.keyFor('42'));
+```
+
+A bare `createMemo(async () => fetchUser(id()))` still works; it just has no
+shared cache, no preload reuse, and no `revalidate`. Do not wrap mutations in
+`query` — wrapping an undeclared server function makes it GET. `query.get(key)`
+throws if there is no entry; `query.set` does not accept a promise. Cache is
+request-scoped on the server and application-scoped in the browser. After a
+router mutation, `revalidate(...)` — not core `refresh()`, and not
+`reload()` (that is a *server-function return* that asks the integration to
+refresh cached data: `return reload({ revalidate: "todos" })`). `live()` sources
+update through the open stream; do not `revalidate` them. Replace SolidStart /
+Router 0.x leftovers: no `createAsync`, `useSubmission` (singular), `cache()`,
+router `json()`, or `<FileRoutes />` (`fileRoutes(pageRoutes)` from `@solidjs/router/fs`
+over `pageRoutes` from `virtual:file-routes` instead).
+
+### Server functions — `"use server"`
+
+```ts
+export async function findUser(id: string) {
+  'use server';
+  // validate `id`; read identity from getRequestEvent(), never from arguments
+  return database.users.find(id);
+}
+```
+
+A function-level server function cannot close over component locals — pass
+values as arguments. Treat every argument as untrusted — TypeScript does not
+cross the HTTP boundary, so do not invent tRPC / RPC type-gen;
+validate inside the function (a parse in the function body is that
+validation, not an RPC schema across the wire). Checks belong in the body: HTTP dispatch
+calls a function-level `"use server"` body directly, so a HOF around it (`withAuth(fn)`,
+`validated(schema, fn)`) runs for in-process calls and is skipped for `curl` — an auth
+bypass. A wrapper inside a file-level `"use server"` module (`export const x =
+withAccount(async …)`) is what gets registered and does run. Arguments are capped at 1 MiB
+by default (413 beyond; the host's `bodySizeLimit`) — upload large files to a signed URL.
+Never hand a server function point-free to a library callback (`mutationFn: renameUser`,
+`onClick={deleteTodo}`): every argument the callback receives (a context object, the
+event) is sent over the wire — wrap it in an arrow that passes only the data. These functions *are* the RPC — do not add an
+API-route file (or a Next `route.ts`) just to wrap `db.todos.insert`. API
+routes are for real HTTP endpoints (webhooks, third-party POST), not for the
+app's own RPC. Read trusted identity
+from `getRequestEvent()`, never from a caller-supplied user id. During SSR the same
+reference runs in-process (no HTTP); in the browser it is HTTP. Anything
+referenced only inside the `"use server"` body (db client, secrets) never
+reaches the client — the directive is the privacy boundary. Mutations that should
+revalidate: `redirect` / `reload` from `@solidjs/web` (see the server-function
+guides).
+
+**`redirect()` / `reload()` are signals for an integration, not navigation.** Solid
+Router's `formAction` / `query` apply them (navigate, revalidate), a no-JS form post
+follows the 302, and since router 2.0.0-next.41 the mounted router's single-flight hook
+applies them on *any* server-function call made while it is mounted (the call then
+resolves to `null`). Without a mounted router a caller — a core `action`, an event
+handler, a plain `createMemo(() => listOrders())` — receives the raw `Response` as the
+resolved value: no navigation happens, and the type still claims your data. Either way
+the caller never gets its data, so the redirect guard belongs to routed apps:
+
+```ts
+import { getRequestEvent, redirect, respond } from '@solidjs/web';
+
+// a routed app (router formAction/query, or any call under a mounted router): it navigates to /sign-in
+export async function listOrders() {
+  'use server';
+  const userId = getRequestEvent()?.locals.userId;
+  if (!userId) throw redirect('/sign-in');
+  return database.orders.forUser(userId);
+}
+
+// no router in the project (core action + server functions): reject instead
+export async function listMyOrders() {
+  'use server';
+  const userId = getRequestEvent()?.locals.userId;
+  if (!userId) throw respond(null, { status: 401 });
+  return database.orders.forUser(userId);
+}
+```
+
+Without the router, fail with `throw respond(..., { status })` (the call rejects and
+`<Errored>` / the action's `catch` sees it), or return a value and navigate in the
+caller. Return a redirect when it is the successful outcome, throw it for an early
+exit. `redirect()` and `respond()` accept the same `revalidate`
+option as `reload()` when the mutation also changes location or returns a value;
+`revalidate: REVALIDATE_ALL` (`"*"`, from `@solidjs/web`) declares every cache entry
+stale, distinct from omitting it (the host's default) and from `[]` (nothing). After a router/server mutation do **not** follow with a client `fetch`
+to "refresh the page" — `reload` / `revalidate` (and the router's single-flight
+response) close that loop. For 404 during SSR: `httpStatus(404)` from `@solidjs/web`.
+`throw new Error("…")` is stripped to `"Internal Server Error"` in production —
+on the server-function wire **and**, since 2.0.0-rc.9, on every SSR road a failure
+takes (an `<Errored>` fallback rendered on the server, a rejected async source
+serialized into the stream, a `<Loading>` fragment's rejection), so `err().message`
+in a fallback reads the generic message in a production server render. <!-- upstream:ssr-error-sanitized --> Use
+`throw markSafeError(...)` or `throw respond(..., { status })` for intentional
+client-facing failures — a *returned* `respond()` resolves the call whatever its
+status, so `return respond({ error }, { status: 400 })` reads as success to the UI,
+`useSubmissions`, and the optimistic overlay. Do not `return Response.json(...)` from
+`"use server"` — that is HTTP-handler control flow; `return respond(value, { status: 201 })`
+is success metadata a scripted caller unwraps. Arguments are JSON: send `Date` / `Map` /
+`Set` as ISO strings / arrays (they throw otherwise; one `File` / `Blob` / `FormData`
+argument travels natively). `enableRichArguments()` from
+`@solidjs/web/server-functions/rich-args` (at `src/App.tsx` module scope) lifts that. Its
+import failed `vite build` in rc.9 (`"./client" is not exported`); that is fixed since
+2.0.0-rc.10, so a `resolve: { dedupe: ["@solidjs/web"] }` workaround left in a Vite config
+is no longer needed (the plugin dedupes the runtime packages itself under `vite dev`). <!-- upstream:rich-args-vite-build https://github.com/solidjs/solid/issues/3627 -->
+`GET()` is only for idempotent reads (URLs leak into logs/history);
+import it from `@solidjs/web/server-functions`, never `@solidjs/start`.
+Reads are function calls too: `GET(async (id) => { "use server"; ... })` is invoked
+as `await getUser(id)` — Solid owns the endpoint, serialization, and decoding, the
+database access stays on the server, and argument/return types flow to the caller.
+The HTTP method mirrors the operation (reads GET, mutations POST); when encoded
+arguments would exceed the URL limit the client falls back to a read-only POST.
+Cache GET reads with HTTP, not a hand-rolled Solid cache: responses default to
+`Cache-Control: no-store`, so supply the policy via `respond()` — the caller still
+receives the value; headers ride the transport.
+
+```ts
+import { respond } from '@solidjs/web';
+import { GET } from '@solidjs/web/server-functions';
+
+export const fetchStory = GET(async (id: number) => {
+  'use server';
+  const story = await db.stories.find(id);
+  return respond(story, {
+    headers: { 'cache-control': 'public, max-age=60, s-maxage=300' },
+  });
+});
+```
+
+A value that changes over time is `live(fn)`. Since 2.0.0-rc.17 `live()` **implies
+`GET`**: a function not already declared `GET` is wrapped at runtime, so the stream has a
+cacheable URL and is never mistaken for a mutation (the router's single flight treats
+every POST call as one). `live(GET(fn))` is the same declaration spelled out — keep
+`live()` outermost when you write both <!-- upstream:live-implies-get -->. A server
+component rendered into a document that reads an *undeclared* async iterable still
+producing after 5s is `[SSR_UNDECLARED_LIVE_SOURCE]` in dev — declare it `live()` (the
+document takes the first value and closes it; the client connects after hydration) or
+bound the source. `broadcast(fn)` is `live()` for one answer shared across
+every viewer — the server runs the generator once per argument set instead of once per
+connection. In a router app, `liveQuery(fn, "key")` from `@solidjs/router` declares
+the `live()` server function itself and keeps one connection per key, shared by every
+consumer — when several components need the same stream, declare it once with
+`liveQuery` instead of hoisting a hand-rolled `live()` declaration and sharing code
+<!-- upstream:router-live-query -->.
+
+```ts
+// src/data/auction.ts
+import { live } from '@solidjs/web/server-functions';
+
+export const liveAuction = live(async function* (id: string) {
+  'use server';
+  yield await db.auctions.find(id); // current state first, from storage
+  for await (const _change of db.auctions.subscribe(id)) {
+    yield await db.auctions.find(id);
+  }
+});
+
+export async function saveBid(id: string, amount: number) {
+  'use server';
+  await db.bids.place(id, amount);
+}
+```
+
+A plain `async function*` server function (no `live()`) is a different tool: an
+**event sequence** on one connection, consumed with `for await` and accumulated. When
+that connection drops, the iteration ends with an error and nothing reopens it; ending
+the iteration in the browser aborts the request and fires the server's
+`request.signal`. Use it for an order's status history; use `live()` when each value
+replaces the previous one.
+
+`live()` yields **current state** (each yield replaces the last); do not treat
+it as an append-only event log. A reconnect calls the function again and its first
+yield replaces the stale answer, so read that first value from the state mutations write
+to (database, shared server state) — not from generator locals or per-connection memory. Until the first yield it is unsettled
+(`<Loading>`), same as a Promise; later yields are updates — the fallback does
+not return.
+Wire status is a side channel on the **iterable the `live()` call returns**,
+not a field in the value and not a property of the memo:
+
+```ts
+const source = stockPrice("ACME");
+source.onstatus = (next) => setStatus(next);
+const price = createMemo(() => source);
+```
+
+Do not yield `{ price, connected: true }`. After the first successful connection,
+transient failures retry with exponential backoff; a 4xx is a definite rejection.
+There is no subscription API and no store wiring to configure. For a reactive
+argument, call `live()` inside the memo so the input is tracked:
+`createMemo(() => stockPrice(props.symbol))`. Every reader of that memo shares
+one connection — hoist it instead of calling `live()` at each site. Do not
+subscribe/unsubscribe in the component around `live()`. The `live()` generator
+may still subscribe to an upstream source.
+
+**The graph continues across the wire.** An in-flight Promise serializes as a
+Promise and resolves in the client graph as it settles — including before the
+bundle has loaded. A `live()` source sends its first value in the HTML then
+picks up the stream. Do not refetch in `onSettled` / `hydrate` to "load for the
+client", and do not delay `renderToStream` to preserve visual order — `<Reveal>`
+controls when content *appears*, while HTML still ships as soon as it is ready.
+With the router's single-flight integration, a mutation response can seed the
+destination route's preloads; that is the refresh, not a follow-up `fetch`.
+When the app has a server bundle (`ssr` or server functions), production is
+`handleRequest(request)` from the built `dist/server/server.js` (or that
+module's Fetchable default `fetch`) — not an import from `solid-js`. Cloudflare /
+Netlify / Nitro Vite plugins adopt that handler — do not write a Solid adapter,
+a custom Worker, or a Netlify Function. For Node, set `start: { node: true }` and run
+`node dist/server/node.js` (serves `dist/client`, reads `PORT` / `HOST`); inside an
+existing Express / Fastify app, mount the `listener` that file exports — do not
+hand-write a Node↔web bridge (`node dist/server/server.js` starts nothing: it is the
+handler module). Client-only `start: true` is still static `dist/client`
+— there is no handler to wrap. Request middleware is the Vite option
+`start: { middleware: "./src/middleware.ts" }`, not Express `app.use`: its default
+export is `(event, next) => Response` (type `StartMiddleware` from
+`@solidjs/vite-plugin`), or an array of them. The request is `event.request`; `next()`
+takes no arguments — assign `event.request` first to substitute it, and set per-request
+render inputs (`event.nonce`, `event.renderMode`) before calling it. A `(request, next)`
+middleware written from older examples receives the event as `request`.
+<!-- upstream:start-middleware-event --> Server functions that return components
+(`serverFunctions: { components: true }`) are experimental preview — do not use
+them unless the project already has that flag on.
+
+Unscripted (no-JS) POST forms go through a router form action —
+`const save = formAction(createTodo, "create-todo")` from `@solidjs/router`, then
+`<form action={save} method="post">` — not a client `preventDefault` + `fetch`, not a
+hand-built `/_server/` URL, and not `action={createTodo.url}`: a bare `"use server"`
+function keeps its declared function type, so `.url` is a type error (TS2339) even
+though it exists at runtime (and `serverFunctionActionUrl(createTodo)` is TS2345).
+The post arrives as one `FormData` argument, so the function behind `action={save}`
+takes `(form: FormData)` and parses and validates the fields inside; any other
+signature makes `action={save}` a type error (TS2322). Bind leading JSON-safe
+arguments with `action={save.with(id)}` for `(id: string, form: FormData)`; a function
+that already has a typed signature gets a separate `FormData` server function that
+parses and calls it.
+`.url` is typed only on `GET()` / `live()` references, which makes it the address of a
+`method="get"` search form (`action={searchProducts.url}`; the function receives the
+fields as `URLSearchParams`). GET forms are only for idempotent search — do not use a
+GET form for a mutation.
+
+### Document head — no MetaProvider
+
+```tsx
+import { Title, Link, Meta } from '@solidjs/meta';
+
+<Title>Page title</Title>
+<Meta name="description" content="..." />
+```
+
+Solid Meta 1.x has **no provider**. Render tags anywhere; later wins, unmount
+restores. `useHead` from `@solidjs/web` is the lower-level registry — prefer
+`<Title>` / `<Meta>` / `<Script>` (JSON-LD) for application metadata. Several
+tags that should swap as one unit belong in `<Head>`. A static `<title>`
+in the document shell is the fallback when no `<Title>` is mounted; do not
+hardcode a second `<meta name="description">` (the registry leaves foreign tags
+alone, so both would coexist). Do not hardcode a second `<title>` in the document shell.
+
+## These still run — write the other form
+
+Official docs (and the compiler) allow several of these. They are the wrong
+tool: they snapshot, drop subscriptions, or rebuild work Solid already knows
+how to reuse. Prefer the form on the right.
+
+| Compiles / renders | Write this |
+|---|---|
+| `{todos().map((t) => <Row todo={t} />)}` | `<For each={todos()} keyed={(t) => t.id}>` |
+| `<For each={todos().map(t => t)}>` | derive first, then `<For each={visible()}>` |
+| `class={`btn ${on() ? "on" : ""}`}` / `clsx("btn", on() && "on")` / `.filter(Boolean).join(" ")` | `class={["btn", { on: on() }]}` |
+| `style={{ width: 80 }}` (no unit) | `style={{ width: `${80}px` }}` |
+| `const rest = { ...props }` | `const rest = omit(props, "label")` |
+| `const user = createMemo(async () => { await fetch(...); return id(); })` | read `id()` **before** `await` |
+| `action(async function* () { await save(); setX(v); })` | `yield save()` or `await save(); yield; setX(v)` |
+| `action(async (item) => { ... })` with core `action` from `solid-js` | `action(function* (item) { ...; yield ...; ... })` — only a generator re-enters the transaction (`solid2-kit check` flags this). Router `formAction` from `@solidjs/router` is the one that takes `async (form) => ...` |
+| `todos()` on a store | `todos.length` / `todo.title` (property reads) |
+| `todos.push(x)` / `state.count++` / `todo.done = !todo.done` on the store itself | `setTodos((draft) => { draft.push(x); })` — writes to the store proxy outside a setter are ignored (no error, tsc passes; dev warns `[STORE_WRITE_OUTSIDE_SETTER]` since rc.17 <!-- upstream:store-write-outside-setter -->) |
+| `createStore({ selected: new Set<string>() })` + `draft.selected.add(id)` | `selected: {} as Record<string, true>` + `draft.selected[id] = true` / `delete draft.selected[id]`, or `draft.selected = new Set([...draft.selected, id])` — `Map` / `Set` / `Date` are stored as-is, not tracked |
+| `draft.todos = fresh` (wholesale fresh-tree assignment) | `reconcile(fresh, "id")`, or function-form `createStore` / `createProjection` (auto-keyed by `"id"`). Removal via `setTodos((t) => t.filter(...))` is fine — survivors keep identity |
+| `createEffect(() => user, (u) => { log(u.name); })` | `createEffect(() => user.name, (name) => { log(name); })` |
+| `createEffect(() => title(), (t) => (document.title = t))` / `(v) => setX(v)` | `(t) => { document.title = t; }` — apply returns a cleanup or nothing; any other return value halts reactivity. An apply that only calls a local setter is rule 4 even with braces (`solid2-kit check` flags it): use a (writable) derivation |
+| `<Loading fallback={<PageSkeleton />}>{/* header + data */}</Loading>` | wrap only the data slot; chrome stays outside |
+| `<Loading on={id} fallback={...}>` (the accessor), or `` on={`${a()}/${b()}`} `` to key several inputs | `on={id()}` / `on={[a(), b()]}` — `on` is a tracked dependency list, not a compared key: a bare accessor is never read (`solid2-kit check` flags it; dev warns `[LOADING_ON_ACCESSOR]` since rc.20 <!-- upstream:loading-on-accessor -->), and an array is the several-inputs form <!-- upstream:loading-on-dependency-list --> |
+| `setCount(count() + 1)` when writes can batch | `setCount((c) => c + 1)` |
+| `setHandler(fn)` to store a function | `setHandler(() => fn)` (otherwise `fn` is an updater) |
+| `{user() ? <P user={user()!} /> : <SignIn />}` | `<Show when={user()}>{(u) => <P user={u()} />}</Show>` |
+| `const u = user(); return <Child user={u} />` / `user: Promise<User>` / `user: Accessor<User>` as the default | `<Child user={user()} />` and `{props.user.name}` under `<Loading>` — types stay `User`. Pass the memo itself only when the child must `refresh()` that source. `isPending(() => props.user)` works on the value |
+| `lazy(() => import("./p").then((m) => ({ default: m.About })))` | `lazy(() => import("./p"), { export: "About" })` |
+| `dangerouslySetInnerHTML={{ __html }}` | `innerHTML={html()}` (sanitized); never with JSX children |
+| `onClick={setCount}` | `onClick={() => setCount((c) => c + 1)}` |
+| `onclick={fn}` / `onmouseover={fn}` (lowercase handlers) | `onClick={fn}` — a lowercase `on*` name is a plain attribute (dev warns `[LOWERCASE_EVENT_ATTRIBUTE]`), not an event <!-- upstream:lowercase-event-attribute --> |
+| `on:click={fn}` / `use:tooltip` / `attr:title` / `classList={{ on: x() }}` on a native element | `onClick`, a ref callback from a directive factory, `title`, `class={["btn", { on: x() }]}` — the 1.x forms are compile errors since rc.17 (`prop:` remains) <!-- upstream:removed-attribute-compile-error --> |
+| `value={props.name} onChange={(e) => props.onCommit(e.currentTarget.value)}` (bound to the committed value, no per-edit write) | a draft signal `createSignal(() => props.name)` written from `onInput`, or `defaultValue={props.name}` — the binding re-applies the committed value over uncommitted typing (`[UNCOMMITTED_INPUT_OVERWRITTEN]`); `equals: false` is one of its causes, not a fix <!-- upstream:uncommitted-input-overwritten --> |
+| `useDeferredValue(query())` / `startTransition(() => setQuery(q))` for an expensive derivation | `const rows = createDeferred(() => filter(all(), query()))` — an async memo that lags but never leads its inputs; `isPending(rows)` while it catches up. Unrelated to the 1.x `createDeferred(source, { timeoutMs })` <!-- upstream:create-deferred-export --> |
+| `event.target.value` | `event.currentTarget.value` |
+| `createContext(emptyStore)` for reactive state | `createContext<Todos>()` — dummy defaults silently no-op |
+| `createContext<Session | undefined>(undefined)` + `value={session()}` for an optional payload | `createContext<Session | null>(null)` + `value={session() ?? null}` — `undefined` means *not provided*: a provider whose value is `undefined` counts as none and the read throws `ContextNotFoundError` <!-- upstream:context-undefined-unprovided --> |
+| `<For keyed={(t) => t.id}>{(todo) => todo.title}` | `todo().title` — key-function items are accessors |
+| `{list().length ? <For each={list()}> : <Empty />}` | `<For each={list()} fallback={<Empty />}>` |
+| `<For each={rows.slice(from, from + n)}>` | `<Repeat from={from()} count={n}>` |
+| `{count() && <Badge />}` | `<Show when={count()}>` — `0` must not render as text |
+| `throw new Error("expired")` from a server function (prod) | `throw markSafeError(...)` or `throw respond(body, { status })` |
+| `const r = await api.x(); if (!r.ok) ...` result-object checks at every read | throw unusable responses; contain each region with `<Errored>` |
+| `GET(async (id) => { "use server"; await db.delete(id) })` | mutations stay on POST; `GET()` is for idempotent reads |
+| `live()` yields as an event log to append | each yield **replaces** the current answer; yield current state first, read from the state mutations write to — a reconnect calls the function again, so generator locals or per-connection memory are not the source |
+| `GET(live(async function* () { ... }))` | `live(async function* () { ... })` — `live()` implies `GET` since rc.17 (`live(GET(fn))` is the same; `live()` outermost) <!-- upstream:live-implies-get --> |
+| a plain `async function*` `"use server"` stream for a value that must survive a dropped connection | `live()` — a plain stream is an event sequence on one connection (`for await`, accumulate); nothing reopens it when it drops |
+| `yield saveBid(...)` then `refresh(auction)` on a store derived from `live()` | `yield saveBid(...); yield until(() => auction.highBid >= amount, { timeout })` — `live()` is outside revalidation/single-flight; `refresh` re-runs the derivation (closes the stream, calls the source again): a reconnect per mutation, and the old value still flashes back whenever the new first value predates the write |
+| `<article innerHTML={html()}>…children…</article>` | `innerHTML` **or** children, not both |
+| `fallback={(error) => <p>{error.message}</p>}` | `error` is an accessor: `error().message` (or `String(error())`) |
+| `import { action } from "solid-js"` on a `<form>` | `import { formAction } from "@solidjs/router"` + `<form action={save} method="post">` (core `action` is a generator transaction, not a form URL) |
+| `import { action, useAction } from "@solidjs/router"` | `formAction` (`action` / `Action` are deprecated aliases since next.41, dev warns; `solid2-kit check` flags them); `useAction` is deprecated with no replacement — call the server function directly, the mounted router applies its revalidation and redirect <!-- upstream:router-action-deprecated --> |
+| `async function markRead(id) { "use server"; … }` called from a handler, no `revalidate` anywhere | fine — the mounted router treats every POST call as a mutation and revalidates the page's queries; a POST that changed nothing returns `respond(value, { revalidate: "" })`, reads go through `query()` / `GET()`, and `createRouter({ routes, singleFlight: false })` opts out <!-- upstream:router-post-mutation --> |
+| `createMemo(async () => fetchUser(id()))` when `@solidjs/router` is present | `query(fetchUser, "users")` + `createMemo(() => getUser(id()))`; after mutations `revalidate(getUser.key)`, not core `refresh()` |
+| `onSubmit={(e) => { e.preventDefault(); fetch(...) }}` for a router/server action | `<form action={save} method="post">` (POST only; `.with(id)` binds args into the URL); outside a form, call the server function directly |
+| `query(saveUser, "users")` wrapping a mutation | don't wrap mutations in `query` — an undeclared server function becomes GET |
+| `render(<App />, root)` / Testing Library `render(<Counter />)` | `render(() => <App />, root)` — pass a function so Solid creates the root first |
+| `render` onto SSR HTML / `hydrate` into an empty node | `hydrate(() => <App />, root)` when HTML already exists; `render` for an empty mount |
+| `renderToString(() => <App />)` for an async or lazy-route tree | `await renderToStream(() => <App />)` (one consumer: `pipe` / `pipeTo` / `readable`). String render emits `<Loading>` fallbacks |
+| `clientOnly(() => import("./Map"))` for a rarely shown widget | same + `{ lazy: true }` so the import waits until first render (default starts at declaration) |
+| `<NoHydration><Chart /></NoHydration>` to skip SSR of a widget | `clientOnly(() => import("./Chart"))` — `NoHydration`/`Hydration` split ownership, they do not choose visible content |
+| `clientOnly` split (or `isServer` branch) for one browser-only *value* | `createMemo(() => localStorage.getItem(k), { ssrSource: "client" })` — `"hybrid"` only to keep consuming an async-iterable source after hydration <!-- upstream:ssr-source-hybrid-stream --> |
+| `await flush()` / `flush()` to wait on a pending memo | `await resolve(() => value())` (or Testing Library async queries); `flush()` only drains staged *sync* writes |
+| `action(function* () { setX(v); })` around a navigation-shaped setter | plain setter; async computeds hold previous values. Core `action` only when writes happen *after* async work |
+| `export const [cart, setCart] = createStore(...)` for app-wide state | `createCart()` called by a `CartProvider` at the root of `App`, read with `useCart()` over `createContext<T>()` — module state has no owner and, under SSR, one instance serves every request (`[SERVER_WRITE]`). Module scope is for constants and `createContext` |
+| `import { GET } from "@solidjs/start"` / `createAsync` / `useSubmission` / `<FileRoutes />` / `"use client"` | `GET` from `@solidjs/web/server-functions`; `createMemo(() => getUser(id()))`; `useSubmissions`; `fileRoutes(pageRoutes)`; Solid has no `"use client"` |
+| `<Show keyed when={user()}>` by default | default `Show` (keeps children mounted); `keyed` only when internal state must reset |
+| overlapping truthy `<Match>`es all expected to render | first truthy `<Match>` wins; later matches are skipped |
+| missing `<HydrationScript />` / one script for many roots | once, before app markup, when the app owns the document; distinct `renderId` per extra root |
+| `Router.paths` as the current URL | `useLocation` / `useParams` |
+| `preload: async ({ params }) => getProduct(params.id)` + `props.data.name` in the page | `preload: ({ params }) => void getProduct(params.id)` + `createMemo(() => getProduct(props.params.id))` — `props.data` is captured once when the route matches (stale on param change; a Promise for async preloads) |
+| `query.get(key)` with no guaranteed entry; `query.set(key, promise)` | `query.get` throws if missing; `query.set` does not accept a promise |
+| `onCleanup(() => ...)` in a component body | `onSettled(() => { ...; return cleanup })` — `onCleanup` is for custom primitives |
+| `onSettled` with reactive reads expecting re-runs | each call is a **single** fire; reads are untracked. Ongoing work is `createEffect`, created in the component body |
+| `onSettled(() => { const id = setInterval(tick, 1000); onCleanup(() => clearInterval(id)); })` | `onSettled(() => { const id = setInterval(tick, 1000); return () => clearInterval(id); })` — `onCleanup`, `createMemo` / `createEffect`, and `flush()` throw inside the callback |
+| `<Router>` nested inside `<Router>` | one instance; nest `children` arrays (or a lazy children thunk) |
+| `const View = tab() ? A : B; return <View />` | `const View = dynamic(() => (tab() ? A : B))` — the ternary at setup freezes the choice |
+| `<For each={resolved()}>` after `children()` | `{resolved.toArray()}` — resolved children are not a reactive data list |
+| `<input onChange={...}>` for keystrokes | `onInput` — native `onChange` is blur/commit |
+| debounce as an effect copying one signal into another | debounce at the handler: `onInput={debounce((e) => setQuery(e.currentTarget.value), 150)}` |
+| `value={query()}` on a search box whose writes feed a request | `value={latest(query)}` so keystrokes show while the write is held (uncontrolled needs nothing) |
+| `createOptimistic` for a local edit draft | writable derivation / plain store. Optimistic is for an in-flight mutation |
+| `createMemo(async fn, { loadingValue })` / `{ seedLoadingValue: true }` as the default first-flight UI | `<Loading>` for first flight; those options are escape hatches (store projections use `seedLoadingValue`) |
+| `setSubmitted(true)` + an effect that watches it | do the work in the handler or an `action` |
+| `findUser(userId)` with the id from the client as identity | `const userId = getRequestEvent()?.locals.userId; if (!userId) throw respond(null, { status: 401 });` (`throw redirect("/sign-in")` in a routed app) |
+| `action={"/_server/" + id}` / `action={createTodo.url}` on a POST form | a router form action: `const save = formAction(createTodo, "create-todo")` + `<form action={save} method="post">` over a `(form: FormData)` server function (other signatures are TS2322) — `.url` on a bare `"use server"` function is TS2339; it is typed only on `GET()` / `live()` references (GET search forms) |
+| `<form method="get" action={update.url}>` for a mutation | GET forms only for idempotent search; mutations are POST |
+| `window.location.href = ...` / `history.pushState` | `useNavigate()` or `<a href={Router.paths...}>` |
+| `class={{ active: location.pathname === "/about" }}` hand-rolled link state | CSS on `aria-current` / `data-active` (+ `data-pending` via `links: pendingLinks`); `useLinkState` in JSX, `useIsRouting()` for progress bars <!-- upstream:pending-links-opt-in --> |
+| `createRouter({ routes, preloadLinks: true })` (or `false`) | `preloadLinks: intentPreload()` for hover/focus/touch warming; omit the option for none — it takes strategies and a boolean preloads nothing <!-- upstream:preload-links-opt-in --> |
+| `<a href={...} preload={false}>` to skip warming one link | `preload="false"` (the string) — a `false` attribute is removed, so the link is still preloaded <!-- upstream:preload-links-opt-in --> |
+| `new URLSearchParams(location.search)` hand-rolled query parsing | `useSearchParams()` (setter merges, no scroll); typed via a route `search` schema + `useSearchParams(Router.paths.search)` |
+| `Router.paths.about()` / string-concatenated URLs | static nodes are properties (`Router.paths.about`); calls bind params, then search object and hash |
+| `httpStatus(404)` in a click handler | call it bare in the component / error-fallback body (a scope declaration, not a mutation) |
+| `try { user() } catch (e) { /* NotReadyError */ }` | `<Loading>` — app code should not catch `NotReadyError` |
+| `{latest(() => results())}` as the visible list | settled read + `isPending()` for the indicator; `latest` is for previews |
+| `selectedId={latest(selectedId)}` as the default highlight | `selectedId={selectedId()}` so highlight and content stay consistent; `latest` only when the highlight should move first |
+| `isPending` on a root/global pending signal, or wrapping the whole shell | ask the question at the design site (dimmed list, disabled button, pane). It works on the source, a derived prop, or the write |
+| `<Loading>` glued to the `createMemo` (consume + block in one place) | fetch high, block low — the boundary wraps the read, not the creation |
+| `class={{ pending: isPending(id) }}` flashing on every navigation | same class + a short CSS `transition-delay` so only slow swaps show |
+| `<Comments />` nested under `{story().title}` assumed to waterfall | both mount immediately and fetch in parallel if the child reads an already-known id; a real waterfall is `createMemo(() => fetchAuthor(story().authorId))` or `storyId={props.story.id}` |
+| `<Errored>` as a terminal ErrorBoundary; `reset={() => location.reload()}` | the boundary heals when the source succeeds again; `reset` retries collected *sources*, not a UI remount |
+| `<Errored>` around a list expected to catch a toggle/save failure | an error thrown out of an `action` never reaches `<Errored>` — it reverts the overlay and rejects the call's promise. Catch expected failures in the `action` (row errors in a map the projection folds in, which survives overlay discard; otherwise a toast) and `.catch` the call in the handler |
+| `yield { ...tick, connected: true }` from `live()` | yield the value; wire status is `source.onstatus` (`"connected"` / `"reconnecting"` / `"closed"`) |
+| sibling `<Loading>` fallbacks stacking as popcorn | `<Reveal collapsed>` (sequential default) suppresses tail skeletons past the frontier |
+| in-memory cache around a GET server function | `return respond(value, { headers: { "cache-control": "..." } })` — metadata rides HTTP, the value rides the graph |
+| `story()?.title` / treating `story()` as `Story \| undefined` | `{story().title}` under `<Loading>` — if the computation is running, the value is there |
+| `typeof window !== "undefined"` | `isServer` / `isDev` from `@solidjs/web` |
+| `Object.assign({}, props)` / expecting `merge` to skip `undefined` like 1.x `mergeProps` | `omit` / `merge` — explicit `undefined` **overrides** (Object.assign) |
+| `isPending(user())` / `latest(user())` | `isPending(user)` / `latest(user)` — pass the accessor (or `() => user()`). Calling it first evaluates the read before the helper runs |
+| `isPending(...)` as the first-load spinner | `<Loading>` owns first flight; `isPending` is the *refetch* indicator after a settled answer exists |
+| `<For each={rows()}>{(row) => <Show when={byKey().get(row().key)}>…</Show>}</For>` (narrowing per row) | join in one memo upstream and iterate the joined rows (`flatMap` drops misses) — a per-row `<Show>` makes every row a source of the list's insert effect, which no diagnostic flags below `[HUGE_FAN_IN]`'s 2000 <!-- upstream:per-row-show-insert-sources --> |
+| a subscription opened beside `createMemo(() => iterate())` instead of inside its compute | open it inside the compute with `onCleanup` there — args changes re-subscribe, `refresh` / `reset` retry with a fresh subscription, unmount closes it |
+| a held write with no feedback anywhere | pair it with `isPending()` / `latest()` / an optimistic value / `affects()` — otherwise dev + attribution reports `[SILENT_HOLD]` |
+| `refresh(getUser.key)` / `revalidate(user)` / `return refresh()` from `"use server"` | three APIs: core `refresh(source)` reruns a reactive source; router `revalidate(getUser.key)` invalidates the query cache; `return reload({ revalidate: "todos" })` asks the integration to refresh cached data |
+| `return redirect(...)` as the only redirect shape | guards `throw redirect("/sign-in")`; `redirect()` / `respond()` take `revalidate` too when the mutation also moves or returns a value |
+| `throw redirect("/sign-in")` / `return reload(...)` in a function called directly (core `action`, handler, plain memo) in an app with no router | Solid Router `formAction` / `query`, no-JS form posts, and a mounted router's single-flight hook (any call, since next.41; the call resolves to `null`) apply them — with no router a direct caller resolves to the raw `Response`, typed as your data. There: `throw respond(null, { status: 401 })` or return a value and navigate in the caller |
+| `submission.clear()` from an effect | on dismiss/resubmit only — from an effect, errors flash and vanish |
+| `revalidate(liveSource)` | `live()` updates through the open stream; do not revalidate it |
+| `refresh(user)` without `affects` when the reload should look pending | pair `affects(user)` with `refresh(user)` — a bare `refresh` re-asks quietly |
+| `<Dynamic component={tab() ? A : B} />` | `const View = dynamic(() => (tab() ? A : B))` — `<Dynamic>` is deprecated (rc.9); `dynamic()` hoists the factory and keeps identity stable <!-- upstream:dynamic-deprecated --> |
+| `setStore(async (draft) => { draft.x = await load(); })` | `const x = await load(); setStore((draft) => { draft.x = x; })` — the setter is a synchronous transaction; dev throws `[ASYNC_STORE_SETTER]` <!-- upstream:async-store-setter-throws --> |
+| `setStore((d) => { d.items = seed; })` in a component body | seed through `createStore(seed)` / `createStore(() => props.items, fallback)` — a body-level store write is `[REACTIVE_WRITE_IN_OWNED_SCOPE]` <!-- upstream:store-write-owned-scope --> |
+| `const saved = await api.save(); yield until(() => ...)` | `await api.save(); yield; yield until(() => ...)` — a bare `yield` re-enters the transaction before any reader is created, not only before writes |
+| `fallback={(err) => { captureException(err()); return <Fallback />; }}` | `configureClientErrors({ onError })` from `solid-js` (or per root `render(fn, root, undefined, { onError })`), `configureServerErrors({ onError })` from `@solidjs/web` — once per error (server: per error, kind and request), with `ownerPath` / `boundaryPath` |
+| `latest(user) ?? placeholder` in a handler as a null-safe read | `latest()` throws `NotReadyError` before the first value in every scope; read settled values under `<Loading>`, or `await until(() => user())` <!-- upstream:latest-throws-unsettled --> |
+| `attribution.why(total)` / `attribution.format(e)` / `attribution.costs()` | named imports from `solid-js/attribution`: `why(total)`, `formatRerun(e)`, `costs()`, `feedback()`, `subscriptions(scope)` (rc.9) <!-- upstream:attribution-named-exports --> |
+| `attribution.enable()` unguarded in app code, or `enable()` with the default `log: true` left on | `if (isDev) attribution.enable({ log: false })` — on the observe build an unguarded `enable()` records in production; prefer the `/__solid/diagnostics` session (`begin` enables, `end` disables) so app code carries nothing |
+| `solid({ observe: true })` added "to see diagnostics in dev" | `vite dev` is always the dev build; `observe: true` is the production-observability opt-in (observe condition + `sourceNames` for `vite build`/preview <!-- upstream:source-names-option -->) |
+| `configureServerErrors({ onError: (e) => { report(e); return e; } })` | return nothing or a reference (`new Error(\`ref ${id}\`)`) — the return value replaces the sanitized wire value; the error itself leaks message/stack/secrets |
+| `import "./instrument"` at the top of the server entry for a monitoring SDK | `start: { serverSetup: "./src/instrument.ts" }` — ESM hoists static imports in dependency order, so the entry's own deps load first (the `node` entry wraps it too: deploy `node.js` with `server.js`; the pre-rename spelling `start.instrument` throws in the plugin). Browser-side init before `hydrate` / `render` is `start: { clientSetup: "./src/client-setup.ts" }` |
+| Express/middleware injecting `traceparent` / trace headers into responses | the runtime carries a sampled or provided trace on `Server-Timing` + `<meta>`; forward downstream with `getTraceContext()?.entries`; SDKs use `OBSERVE?.server.trace.provide` |
+| `OBSERVE.records.subscribe("call", (e) => setStats(...))` | listeners run synchronously inside the runtime and must not write signals; collect into a plain buffer and drain from outside |
+| `import { storePath } from "solid-js"` | gone from `solid-js` (rc.9); write draft setters `setState((d) => { d.user.name = "Grace"; })` <!-- upstream:store-path-removed --> |
+| `<meta name="description" content="...">` hardcoded in the document shell | `<Meta>` from `@solidjs/meta`. A static `<title>` is the fallback; other hardcoded tags coexist with the registry |
+| `useHead({ tag: "meta", ... })` for ordinary page tags | `<Title>` / `<Meta>` / `<Script>` (JSON-LD). `useHead` is the lower-level registry |
+| two `<Meta property="og:image">` meant as one replacement set | wrap them in `<Head>` — a later group replaces the earlier set as one unit |
+| `createRoot(() => ...)` inside a component | let `render` / the component owner own the scope. `createRoot` is for tests, libraries, and non-render entry points |
+| `JSON.stringify(store)` / `structuredClone(store)` | `snapshot(store)` — proxies throw or leak reactivity |
+| `import { env } from "virtual:env/client"` (or `import.meta.env`) for a signing secret | `import { env } from "virtual:env/server"` — client map values are public |
+| `renderToStream(...).pipe(res)` and also `.readable` / `await` on the same result | exactly one consumer: `pipe` / `pipeTo` / `readable` / await |
+| `return Response.json(user, { status: 201 })` from `"use server"` | `return respond(user, { status: 201 })` — scripted callers receive `user`, not a `Response` |
+| `<Portal>{user().name}</Portal>` for an async read | hoist the read above the portal (children start on the client); async UI inside one wants its own `<Loading>` |
+| a client history adapter to pick the SSR location | `<Router url={request.url}>` (or the request event). Client adapters do not select the server URL |
+| `fetch('/api')` at component-body top level | `createMemo(async () => { ... fetch ... })` under `<Loading>` — a top-level fetch runs once at mount and is not a reactive source |
+| `<input type="checkbox" value={on()} />` | `checked={on()}` for the toggle; `value="string"` only when grouping radios or listing submitted values |
+| `createMemo(() => { void save(); return x(); })` / an effect that calls an action | invoke actions from handlers, not from memos or effects |
+| `createSignal(props.value)` / `createStore(props.items)` | `createSignal(() => props.value)` / `createStore(() => props.items, fallback)` — a bare `props.x` at setup is a snapshot. That form resets on every prop change; an intentional one-time read (an `initialCount` prop) is `createSignal(untrack(() => props.initialCount))` |
+| `createRenderEffect` / `createTrackedEffect` as the default effect | two-phase `createEffect(compute, apply)`; `createTrackedEffect` is `@deprecated` (rc.9) <!-- upstream:tracked-effect-deprecated --> |
+| `createEffect(() => source(), () => setError(null))` to reset a signal | `createSignal(() => { source(); return null; })` — the writable derivation resets on change; a sole-setter apply is rule 4 |
+| a "server-safe" initial value adopted after mount (React hydration-mismatch fix) | client mode mounts with `render()` into an empty body — no hydration, no mismatch; read `localStorage` / `matchMedia` directly at signal creation |
+| rewrite `App.tsx` with loading/error branches, or snapshot/restore, when the list moves to the server | same `setTodos`; wrap mutations in `action`; swap in function-form `createOptimisticStore(() => api.list(), [])` + a server-functions file. The overlay is discarded; the confirmed store is the truth |
+| `createOptimisticStore<Todo[]>([])` holding the list, saved rows written after `yield` | `createOptimisticStore(() => api.list(), [])` + `refresh(todos)` (or a function form over a separate `createStore`) — the value form is a pure overlay: action writes vanish on settle <!-- upstream:optimistic-value-overlay --> |
+| disable an optimistic row until ack, or mutex rapid clicks / freeze unrelated writes | keep the control enabled; `action` is the transaction. An in-flight action does not freeze other writes. Failed-action replay is optional |
+| tRPC / RPC type-gen around `"use server"` | TypeScript does not cross HTTP — validate inside the function. Locals only the body reads (db, secrets) stay off the client |
+| `src/routes/api/todos.ts` (or a Next `route.ts`) wrapping `db.todos.insert` | `"use server"` *is* the RPC. API routes are for real HTTP endpoints (webhooks), not the app's own mutations |
+| router/server mutation, then `fetch` / `onSettled` / `hydrate` to refresh the page | `reload` / `revalidate` / single-flight (the mutation response can seed destination preloads). In-flight Promises serialize as Promises; `live()` continues from HTML |
+| delay `renderToStream` so HTML arrives in visual order | stream as soon as ready; `<Reveal collapsed>` controls when content *appears* |
+| subscribe/unsubscribe in the component around `live()` | `createMemo(() => stockPrice(props.symbol))` — hoist that memo to share one connection. `onstatus` is on the iterable the `live()` call returns, not on the memo. Until the first yield, `<Loading>`; later yields are updates |
+| a Solid adapter / custom Worker / Express bridge, or `entry-client.tsx` under `start: true` | With a server bundle: `handleRequest` from `dist/server/server.js` / Fetchable `fetch`; platform plugins adopt it. Node: `start: { node: true }` → `node dist/server/node.js` (its `listener` for an existing Express / Fastify app). Client-only start: static `dist/client`. Middleware is `start: { middleware: "..." }`, not Express `app.use` |
+| `createMemo(async () => (await props.story).author)` | `createMemo(() => props.story.author)` — a derivation over an async value becomes async; no await, no Promise type |
+| return a component from `"use server"` / flip `serverFunctions.components` | experimental preview — do not enable unless the project already has that flag |
+
+```tsx
+// WRONG — post-await read never subscribes; production can hang pending
+const user = createMemo(async () => {
+  const response = await fetch('/api/me');
+  const extra = flag(); // too late
+  return { ...(await response.json()), extra };
+});
+
+// CORRECT
+const user = createMemo(async () => {
+  const extra = flag();
+  const response = await fetch('/api/me');
+  return { ...(await response.json()), extra };
+});
+```
+
+```tsx
+// WRONG — rest is a plain object snapshot
+function Field(props: { label: string; class?: string }) {
+  const rest = { ...props };
+  return <label>{props.label}<input {...rest} /></label>;
+}
+
+// CORRECT
+function Field(props: { label: string; class?: string }) {
+  const rest = omit(props, 'label');
+  return <label>{props.label}<input {...rest} /></label>;
+}
+```
+
+```tsx
+// WRONG — extracting at the parent is a real read; child's <Loading> never sees it
+function Page() {
+  const user = createMemo(async () => (await fetch('/api/me')).json());
+  const current = user();
+  return <Profile user={current} />;
+}
+
+// CORRECT — JSX props are lazy (passing isn't reading); types stay User
+function Profile(props: { user: User }) {
+  return (
+    <Loading fallback={<p>Loading…</p>}>
+      <h1>{props.user.name}</h1>
+    </Loading>
+  );
+}
+function Page() {
+  const user = createMemo(async () => (await fetch('/api/me')).json());
+  return <Profile user={user()} />;
+}
+```
+
+```tsx
+// WRONG — two different `action`s; the core one is not a form URL
+import { action } from 'solid-js';
+const save = action(async function* (form: FormData) {
+  yield persist(form);
+});
+<form onSubmit={(e) => { e.preventDefault(); void save(new FormData(e.currentTarget)); }}>
+  <button type="submit">Save</button>
+</form>
+
+// CORRECT — router formAction is POST-addressable (only if `@solidjs/router` is in the project)
+import { formAction } from '@solidjs/router';
+const save = formAction(async (form: FormData) => persist(form), 'save');
+<form action={save} method="post">
+  <button type="submit">Save</button>
+</form>
+```
+
+```tsx
+// WRONG — evaluating JSX before the root exists
+import { render } from '@solidjs/web';
+render(<App />, document.getElementById('app')!);
+
+// CORRECT
+render(() => <App />, document.getElementById('app')!);
+```
+
+```tsx
+// WRONG — user() runs before isPending, so the helper never sees the accessor
+<article aria-busy={isPending(user())}>{user().name}</article>
+
+// CORRECT — pass the accessor (or () => user()); <Loading> still owns first flight
+<Loading fallback={<p>Loading…</p>}>
+  <article aria-busy={isPending(user) ? 'true' : 'false'}>{user().name}</article>
+</Loading>
+```
+
+```tsx
+// WRONG — tab() is read once at setup; View never changes
+const View = tab() ? Detailed : Compact;
+return <View value="now" />;
+
+// CORRECT
+const View = dynamic(() => (tab() ? Detailed : Compact));
+return <View value="now" />;
+```
+
+## Checking the official docs
+
+Solid 2.0 docs: https://docs.solidjs.com/ — the canonical site serves every
+page as plain markdown, and its index and corpus fetch cleanly:
+
+- Index of all pages: `https://docs.solidjs.com/llms.txt`
+- Single-file corpus: `https://docs.solidjs.com/llms-full.txt`
+- Any single page: the canonical host challenges some non-browser clients on
+  per-page routes, so fetch pages from the mirror of the same content —
+  append `.md`, e.g. `https://v2-rebuild--solid-docs-v2.netlify.app/reference/solid-js/reactivity/create-signal.md`
+
+A curated URL list is in [references/official-docs.md](references/official-docs.md).
+Every diagnostic code has its own page under `reference/solid-js/diagnostics/<code-kebab>.md`
+(the console footer links it on a code's first report).
+
+**Never** consult Solid 1.x sources (the 1.x docs, pre-2.0 tutorials, old Stack Overflow).
+Solid 2.0 is a breaking rewrite; 1.x answers are wrong here. The banned-API table is in the
+always-applied rules installed alongside this skill.
+
+## Review checklist (before finishing any TSX change)
+
+- [ ] No props destructuring; no `props.` at component-body top level.
+- [ ] Every reactive read (`signal()`, `props.x`, `store.x`) sits in JSX, a memo, an effect
+      compute, or a boundary — not the component body.
+- [ ] No signal-synced-by-effect; derived values are functions or memos. Reset-on-change
+      is a writable derivation (`createSignal(() => { source(); return initial; })`), not
+      an effect calling the setter.
+- [ ] Event handlers wrap setters (`onClick={() => setX(...)}`), use `currentTarget`,
+      and `onInput` for keystrokes. Debounce at the handler, never as an effect copying
+      signals. `innerHTML` is sanitized and not mixed with children.
+- [ ] Async memos are passed as values (`user={user()}`); JSX props are lazy.
+      Types stay `User` — not `Promise<User>` / `Accessor<User>`. `<Loading>` wraps
+      the *read*, not the memo, not chrome. Extracting `const u = user()` at the
+      parent is the read that throws. Nested child fetches run in parallel
+      (components do not suspend); a real waterfall is `fetchB(a().id)`.
+      `isPending` is per-expression (`isPending(() => props.story)` works);
+      `latest(selectedId)` is opt-in, not the default highlight. Inputs feeding a request
+      bind `latest(query)`; failures throw to `<Errored>`, never `{ success: false }`
+      result objects checked at every read.
+- [ ] Lists via `<For>` (server/refetched rows keyed by stable id), conditionals via
+      ternary/`<Show>`; no `{list().map(...)}` in JSX; no `key` props (except
+      `@solidjs/meta` tags); no `value()!`.
+- [ ] Effects are two-phase and only at imperative boundaries; apply does not read stores.
+- [ ] Async reads sit under `<Loading>` (the data slot, not chrome); errors under `<Errored>`.
+      Reactive inputs of an async memo are read before the first `await`. No hand-rolled
+      `loading`/`error` signals or `=== undefined` readiness branches. First load is
+      `<Loading>`; refetch indicator is `isPending(user)` (the accessor, not `user()`)
+      or `isPending(selectedId)` when the write is the question. `<Errored>` heals
+      when the source succeeds; `reset` retries sources, not a UI remount. Mutation
+      failures never reach `<Errored>` (an escaping error reverts the overlay and
+      rejects the call): catch them in the action/projection, and `.catch` the call
+      in the handler. Error monitoring goes through `configureClientErrors` /
+      `configureServerErrors` (or `render(fn, root, undefined, { onError })`), never a side effect in
+      the fallback. Core `refresh(source)`, router `revalidate(key)`, and `return reload(...)` are
+      different APIs — do not mix them. Client → server is additive (same
+      setters + `action` + server functions): do not rewrite App with
+      loading/error branches, disable optimistic rows until ack, or refetch in
+      `hydrate` / `onSettled`. HTTP does not enforce TypeScript — validate
+      inside `"use server"`; do not invent tRPC. `live()` owns the client connection,
+      is declared `live(fn)` (it implies `GET`), and a mutation on a live-read value holds with
+      `yield until(...)` for the echo instead of `refresh()`.
+      A server bundle uses `handleRequest` from `dist/server/server.js`; client-only start
+      is static `dist/client`. Do not delay `renderToStream` for visual order
+      (`<Reveal>` does).
+- [ ] External collections reconcile into stores (function-form `createStore` /
+      `reconcile`), never wholesale draft assignment of a fresh tree
+      (`setTodos((t) => t.filter(...))` for removal is fine — survivors keep identity).
+- [ ] Rest props via `omit`, not `{ ...props }`. Conditional `class` via objects, not string concat.
+- [ ] Input filters write back to the DOM on reject (inputs do not rewind).
+- [ ] No Solid 1.x imports or APIs (`solid-js/store`, `createResource`, `onMount`, `Suspense`, ...).
+      No `JSX` imported from `solid-js` — markup types are `JSX.Element` from
+      `@solidjs/web` or `Element` from `solid-js` (aliased next to DOM code).
+- [ ] Inspect children with `children()`; code-split with `lazy` + `<Loading>`; reactive
+      component choice with `dynamic()`. No `React.lazy`, no effects inside ref callbacks.
+- [ ] Browser-only code uses `isServer` / `clientOnly` (components) / `ssrSource`
+      (values), not `typeof window`.
+      Component teardown is `onSettled` (return cleanup), not `onCleanup`; nothing
+      inside the `onSettled` callback calls `onCleanup`, `flush()`, or creates a
+      memo/effect. Effect `apply` functions have block bodies and return only a
+      cleanup or nothing.
+- [ ] Dev console shows no diagnostics: reads in tracking scopes (no
+      `[STRICT_READ_UNTRACKED]`, no `[UNTRACKED_READ_AFTER_AWAIT]`), store setters synchronous and never called at
+      body level (no `[ASYNC_STORE_SETTER]` <!-- upstream:async-store-setter-throws --> /
+      `[REACTIVE_WRITE_IN_OWNED_SCOPE]` <!-- upstream:store-write-owned-scope -->), held
+      writes paired with `isPending` / `latest` / optimistic values / `affects()`
+      (no `[SILENT_HOLD]`). Attribution-only costs
+      (`[IMMUTABLE_UPDATE_IN_STORE]`, `[UNSTABLE_LIST_IDENTITY]`, `[EFFECT_*]`)
+      checked via the [development loop](#development-loop-self-diagnose-before-finishing)
+      (`/__solid/diagnostics` `begin` → interact → `whyDidRun` / `costs` → `end`, or an
+      `isDev`-guarded `attribution.enable({ log: false })` + `why` / `costs` /
+      `feedback`) whenever the change touched stores, lists, async, actions, or
+      effects. Name interrogated scopes (`{ name: "total" }`). `observe: true` is a
+      production opt-in, not a dev step.
+- [ ] Tests that render run under a DOM environment with the HMR transform off and a
+      per-test capture asserting `expectNoDiagnostics` + `expectNoSilentHolds`; app code
+      does not call `attribution.enable()` under the harness. List rows do not narrow
+      themselves with a per-row `<Show>` (no diagnostic catches it).
+- [ ] If the project has a router: `createRouter({ routes })`, not JSX `<Route>` / `<A>`.
+      One instance, no nested `<Router>`. Navigate with `useNavigate` / `<a href>`, not
+      `window.location`. Router `formAction`/`query` come from `@solidjs/router` (POST forms + cache), not
+      core `action`/`refresh`; router `action` is a deprecated alias of `formAction` and
+      `useAction` is deprecated <!-- upstream:router-action-deprecated --> (single flight is
+      the router's — call server functions directly). Forms: `<form action={save} method="post">`. Core `action`
+      bodies are generators (`function*` / `async function*`) suspending on `yield`,
+      never plain `async` functions. Link state is automatic attributes + CSS
+      (`aria-current` / `data-active`, `data-pending` via `links: pendingLinks`;
+      `useLinkState` / `useIsRouting` in JSX). <!-- upstream:pending-links-opt-in --> Search params via `useSearchParams`. Forms validate on the server
+      (`throw respond({ issues }, { status: 400 })`) with inline errors from
+      `useSubmissions`.
+- [ ] `render(() => <App />, root)` — a function, not `render(<App />)`. `hydrate` when
+      HTML already exists. Stream async/lazy trees (`await renderToStream(...)`) with
+      exactly one consumer (`pipe` / `pipeTo` / `readable`). Snapshot stores with
+      `snapshot(store)`, not `JSON.stringify`. Secrets live in `virtual:env/server`.
+- [ ] `jsxImportSource` is `@solidjs/web`; Vite plugin is `@solidjs/vite-plugin`.
+      No `@solidjs/start`, `vinxi`, `"use client"`, or Next.js imports.
+- [ ] Single return per component; no early returns on reactive conditions.
+- [ ] `solid2-kit check` and the project's typecheck pass; `solid2-kit doctor` too if
+      `package.json`, tsconfig, or root config files changed.

@@ -10,6 +10,7 @@ import {
   tabsSetups,
   vertical,
 } from "#/src/sections/tabs-setups.ts";
+import { type DocumentSnapshot, snapshotOfDocument } from "#/tests/support/opening.ts";
 import type { RovingList } from "#/tests/support/roving-list-model.ts";
 
 export {
@@ -138,6 +139,11 @@ export type TabsState = {
   tabStops: (string | null)[];
 };
 
+export type TabsReading = TabsState & {
+  active: (string | null)[];
+  ariaSelected: (string | null)[];
+};
+
 export function tabList(page: Page, name: string): Locator {
   return page.getByRole("tablist", { name, exact: true });
 }
@@ -148,52 +154,86 @@ export function tabNamed(page: Page, list: string, name: string): Locator {
     .filter({ has: page.getByText(name, { exact: true }) });
 }
 
+export type TabSnapshot = {
+  text: string;
+  ariaSelected: string | null;
+  dataActive: boolean;
+  focused: boolean;
+  tabIndex: number;
+};
+
+export type PanelSnapshot = { text: string; hidden: HTMLElement["hidden"]; display: string };
+
+export type ListSnapshot = { tabs: TabSnapshot[]; panels: PanelSnapshot[] };
+
+export type TabsSnapshot = { document: DocumentSnapshot; lists: ListSnapshot[] };
+
+function listSnapshots(lists: Element[]): ListSnapshot[] {
+  return lists.map((list) => {
+    const { activeElement } = list.getRootNode() as Document | ShadowRoot;
+    return {
+      tabs: [...list.querySelectorAll<HTMLElement>('[role="tab"]')].map((tab) => ({
+        text: tab.textContent ?? "",
+        ariaSelected: tab.getAttribute("aria-selected"),
+        dataActive: tab.hasAttribute("data-active"),
+        focused: tab === activeElement,
+        tabIndex: tab.tabIndex,
+      })),
+      panels: [
+        ...(list.parentElement?.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]') ?? []),
+      ].map((panel) => ({
+        text: panel.textContent ?? "",
+        hidden: panel.hidden,
+        display: getComputedStyle(panel).display,
+      })),
+    };
+  });
+}
+
+function listsOf(page: Page, list: string): Promise<ListSnapshot[]> {
+  return tabList(page, list).evaluateAll(listSnapshots);
+}
+
+export async function snapshotOf(page: Page, list: string): Promise<TabsSnapshot> {
+  return { lists: await listsOf(page, list), document: await snapshotOfDocument(page) };
+}
+
+export function stateFrom(
+  lists: readonly ListSnapshot[],
+  list: string,
+  names: readonly string[] = tabNamesOf(list),
+): TabsReading {
+  const [found, ...more] = lists;
+  if (found === undefined || more.length > 0) {
+    throw new Error(
+      `${list}: the page renders ${lists.length} lists of tabs by that name, not one.`,
+    );
+  }
+  if (found.tabs.length !== names.length) {
+    throw new Error(
+      `${list}: the page renders ${found.tabs.length} tabs, and the setup names ${names.length}.`,
+    );
+  }
+  const nameAt = (index: number) => names[index] ?? null;
+  const indexesWhere = (holds: (tab: TabSnapshot) => boolean) =>
+    found.tabs.flatMap((tab, index) => (holds(tab) ? [index] : []));
+  return {
+    selected: nameAt(found.tabs.findIndex(({ ariaSelected }) => ariaSelected === "true")),
+    focused: nameAt(found.tabs.findIndex(({ focused }) => focused)),
+    tabStops: indexesWhere(({ tabIndex }) => tabIndex === 0).map(nameAt),
+    shown: found.panels.filter(({ display }) => display !== "none").map(({ text }) => text),
+    active: indexesWhere(({ dataActive }) => dataActive).map(nameAt),
+    ariaSelected: indexesWhere(({ ariaSelected }) => ariaSelected === "true").map(nameAt),
+  };
+}
+
 export async function stateOf(
   page: Page,
   list: string,
   names: readonly string[] = tabNamesOf(list),
 ): Promise<TabsState> {
-  const found = await tabList(page, list).evaluate((node) => {
-    const tabs = [...node.querySelectorAll<HTMLElement>('[role="tab"]')];
-    const root = node.parentElement;
-    const { activeElement } = node.getRootNode() as Document | ShadowRoot;
-    return {
-      count: tabs.length,
-      selected: tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true"),
-      focused: tabs.findIndex((tab) => tab === activeElement),
-      tabStops: tabs.flatMap((tab, index) => (tab.tabIndex === 0 ? [index] : [])),
-      shown: [...(root?.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]') ?? [])]
-        .filter((panel) => getComputedStyle(panel).display !== "none")
-        .map((panel) => panel.textContent ?? ""),
-    };
-  });
-  if (found.count !== names.length) {
-    throw new Error(
-      `${list}: the page renders ${found.count} tabs, and the setup names ${names.length}.`,
-    );
-  }
-  const nameAt = (index: number) => names[index] ?? null;
-  return {
-    selected: nameAt(found.selected),
-    focused: nameAt(found.focused),
-    tabStops: found.tabStops.map(nameAt),
-    shown: found.shown,
-  };
-}
-
-export function activeAndSelected(
-  page: Page,
-  list: string,
-): Promise<{ active: number[]; selected: number[] }> {
-  return tabList(page, list).evaluate((node) => {
-    const tabs = [...node.querySelectorAll('[role="tab"]')];
-    const indexesWhere = (holds: (tab: Element) => boolean) =>
-      tabs.flatMap((tab, index) => (holds(tab) ? [index] : []));
-    return {
-      active: indexesWhere((tab) => tab.hasAttribute("data-active")),
-      selected: indexesWhere((tab) => tab.getAttribute("aria-selected") === "true"),
-    };
-  });
+  const { selected, focused, tabStops, shown } = stateFrom(await listsOf(page, list), list, names);
+  return { selected, focused, tabStops, shown };
 }
 
 export async function clickTab(page: Page, list: string, name: string): Promise<void> {
@@ -201,11 +241,16 @@ export async function clickTab(page: Page, list: string, name: string): Promise<
   const watch = await tab.evaluateHandle((node, types) => {
     const seen: string[] = [];
     let reached = false;
-    const note = ({ type, target }: Event) => {
+    const note = (event: Event) => {
+      const { type, target } = event;
       const onTheTab = target instanceof Node && node.contains(target);
-      const where = target instanceof Element ? `<${target.localName}>` : "no element";
+      const where =
+        target instanceof Element
+          ? `<${target.localName}${target.id ? ` id="${target.id}"` : ""}${target.getAttribute("role") ? ` role="${target.getAttribute("role")}"` : ""}> "${(target.textContent ?? "").trim().slice(0, 30)}"`
+          : "no element";
+      const at = event instanceof MouseEvent ? ` at (${event.clientX}, ${event.clientY})` : "";
       seen.push(
-        `${type} on ${onTheTab ? "the tab" : where} with the page scrolled to ${window.scrollY}`,
+        `${type} on ${onTheTab ? "the tab" : where}${at} with the page scrolled to ${window.scrollY}`,
       );
       reached ||= type === "click" && onTheTab;
     };
