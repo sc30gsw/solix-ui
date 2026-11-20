@@ -34,6 +34,7 @@ import { stylePropClassPrefix } from "#/src/style-prop-table.ts";
 import { colorLayer, libraryLayers } from "#/src/layers.ts";
 import { type ColorProps, resolveColor, type SolixColor } from "#/src/colors.ts";
 import type { createParts, PartsOptions } from "#/src/parts.ts";
+import type * as library from "#/src/index.ts";
 import { stylesheet } from "#/tests/built-library.ts";
 import { layersAround } from "#/tests/cascade-layers.ts";
 import { render } from "#/tests/fixtures.ts";
@@ -589,4 +590,9 @@ test("SolixColor takes a palette, a palette's shade, a CSS colour keyword, a sys
   expectTypeOf<"inherit">().not.toExtend<SolixColor>();
   expectTypeOf<"Red">().not.toExtend<SolixColor>();
   expectTypeOf<"red-6">().not.toExtend<SolixColor>();
+});
+
+test("the package exports ColorProps with its constraint, ColorVariant, and a bare ColorProps offers every variant of the table", () => {
+  expectTypeOf<library.ColorProps>().toEqualTypeOf<library.ColorProps<library.ColorVariant>>();
+  expectTypeOf<library.ColorVariant>().toEqualTypeOf<keyof typeof colorVariantTable>();
 });
