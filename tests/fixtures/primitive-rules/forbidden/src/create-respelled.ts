@@ -1,12 +1,21 @@
 import { createAttachment } from "#/packages/primitives/src/internal-attachment.ts";
 import { browserMethod, lookUp } from "#/packages/primitives/src/internal-browser-api.ts";
 import { observe } from "#/packages/primitives/src/internal-dom-observer.ts";
-import { watchEvents } from "#/packages/primitives/src/internal-listener.ts";
+import { type Listener, watchEvents } from "#/packages/primitives/src/internal-listener.ts";
 import {
+  Field,
   Measurer,
   Runner,
+  Sub,
   topOf,
+  whenHeard,
 } from "#/tests/fixtures/primitive-rules/forbidden/src/internal-position.ts";
+
+type Sizer = { size: (target: HTMLElement) => number };
+
+interface Measure {
+  height(): number;
+}
 
 function visibilityOf(element: HTMLElement): boolean {
   return element.checkVisibility();
@@ -26,6 +35,14 @@ function closureOver(element: HTMLElement): () => number {
 
 function measuredTag(strings: TemplateStringsArray, element: HTMLElement): number {
   return strings.length + element.clientTop;
+}
+
+function notifyNow(heard: Listener<Event>): void {
+  heard(new Event("now"));
+}
+
+function invoke<F extends (event: Event) => void>(fn: F): void {
+  fn(new Event("now"));
 }
 
 /** Holds what the rules forbid. */
@@ -82,6 +99,50 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
       },
     };
     setting.to = 1;
+    const typedHolder: Sizer = { size: (target) => target.scrollWidth + 1 };
+    const typedTable: Record<"a" | "b", (target: HTMLElement) => number> = {
+      a: (target) => target.offsetTop + 1,
+      b: (target) => target.offsetLeft + 1,
+    };
+    const measure: Measure = { height: () => element.clientHeight + 1 };
+    let reassigned: () => number = () => 0;
+    if (element.isConnected) reassigned = () => element.scrollTop + 1;
+    const written: { read?: () => number } = {};
+    written.read = () => element.clientWidth + 1;
+    const readers = [() => element.offsetHeight + 1, () => element.offsetWidth + 1];
+    const iterated: number[] = [];
+    for (const read of readers) iterated.push(read());
+    const mapped = [() => element.scrollHeight + 1, () => element.scrollLeft + 1].map((read) => read());
+    const heightBox = {
+      get height() {
+        return element.clientTop + 1;
+      },
+    };
+    const { height } = heightBox;
+    const spreadBox = {
+      get width() {
+        return element.clientLeft + 1;
+      },
+    };
+    const spread = { ...spreadBox };
+    const binder = { bind: (target: HTMLElement) => target.getClientRects().length + 1 };
+    notifyNow(() => void element.scrollTop);
+    invoke<Listener<Event>>(() => void (element.clientTop + 2));
+    whenHeard(() => void (element.clientLeft + 2));
+    const typedRuns = [
+      typedHolder.size(element),
+      typedTable.a(element),
+      measure.height(),
+      reassigned(),
+      written.read(),
+      iterated,
+      mapped,
+      height,
+      spread,
+      binder.bind(element),
+      new Sub(element),
+      new Field(element),
+    ];
     const ran = [
       reader.size(element),
       destructured(element),
@@ -123,6 +184,7 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
       measured,
       members,
       ran,
+      typedRuns,
     ];
   });
 }

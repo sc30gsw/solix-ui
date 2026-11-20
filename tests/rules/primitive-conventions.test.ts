@@ -240,6 +240,23 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-respelled.ts", "documentElement.clientWidth)()"),
     forbiddenAt("src/create-respelled.ts", "parentElement?.offsetHeight"),
     forbiddenAt("src/create-respelled.ts", "document.body.scrollLeft"),
+    forbiddenAt("src/create-respelled.ts", "=> target.scrollWidth + 1"),
+    forbiddenAt("src/create-respelled.ts", "=> target.offsetTop + 1"),
+    forbiddenAt("src/create-respelled.ts", "=> target.offsetLeft + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.clientHeight + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.scrollTop + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.clientWidth + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetHeight + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetHeight + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.scrollHeight + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.scrollHeight + 1"),
+    forbiddenAt("src/create-respelled.ts", "return element.clientTop + 1"),
+    forbiddenAt("src/create-respelled.ts", "return element.clientLeft + 1"),
+    forbiddenAt("src/create-respelled.ts", "target.getClientRects().length + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.clientTop + 2"),
+    forbiddenAt("src/create-respelled.ts", "element.clientLeft + 2"),
+    forbiddenAt("src/create-respelled.ts", 'heard(new Event("now"))'),
+    forbiddenAt("src/internal-position.ts", "this.width = element.offsetWidth * 2"),
   ],
   caughtErrors: [forbiddenAt("src/create-misbehaving.ts", "} catch {")],
   instanceofChecks: [forbiddenAt("src/create-misbehaving.ts", "instanceof Element")],
@@ -339,7 +356,7 @@ test("the layout-reads rule stops at a function an exemption names, so no read i
       "create-respelled.ts",
     ].sort(),
   );
-  expect(found.at(-1)).toBe(
+  expect(found.find((finding) => finding.startsWith("create-respelled.ts: "))).toBe(
     "create-respelled.ts: handlerFor reads no layout as a primitive goes live, so drop its entry from layoutReadExemptions.",
   );
 });

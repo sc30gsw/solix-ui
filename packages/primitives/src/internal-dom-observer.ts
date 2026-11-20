@@ -20,15 +20,15 @@ type Observer<N extends ObserverName> = {
   disconnect(): void;
 };
 
-type ObserverClass<N extends ObserverName> = new (
-  callback: (entries: Kinds[N]["entry"][], observer: Observer<N>) => void,
-  init?: Kinds[N]["init"],
-) => Observer<N>;
-
 export type ObserverReport<N extends ObserverName> = (
   entries: Kinds[N]["entry"][],
   observer: Observer<N>,
 ) => void;
+
+type ObserverClass<N extends ObserverName> = new (
+  callback: ObserverReport<N>,
+  init?: Kinds[N]["init"],
+) => Observer<N>;
 
 export function observe<N extends ObserverName>(
   name: N,

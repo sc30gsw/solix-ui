@@ -27,3 +27,24 @@ function readTop(element: Element): number {
 }
 
 export { readTop as topOf };
+
+export class Base {
+  readonly width: number;
+
+  constructor(element: HTMLElement) {
+    this.width = element.offsetWidth * 2;
+  }
+}
+
+export class Sub extends Base {}
+
+export class Field extends Base {
+  readonly extra = 1;
+}
+
+type Listener = (event: Event) => void;
+
+export function whenHeard(heard: Listener): Listener {
+  heard(new Event("heard"));
+  return heard;
+}
