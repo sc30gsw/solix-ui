@@ -6,7 +6,7 @@ import {
   applied,
   scrolledDownATallPage,
   stubbedScroll,
-  stylesheetArrivesAndShortens,
+  theEngineScrollsAsAStylesheetShortens,
 } from "#/tests/support/scroll.ts";
 
 afterEach(() => {
@@ -63,11 +63,11 @@ test("disposing the owner before a resize settles clears the timer", async () =>
   await applied();
 });
 
-test("on the real window, a stylesheet that shortens the page after the fold goes live clamps the window's position, the engine fires scroll for that move as for a scroll, and the fold steps to where the position went", async () => {
-  const spacer = scrolledDownATallPage(3000);
+test("on the real window, once the scroll that put the page at 3000 has reported, a stylesheet that shortens the page clamps the window's position, the engine fires scroll for that move, and the fold steps to where the position went", async () => {
+  const spacer = await scrolledDownATallPage(3000);
   const seen = moves();
 
-  stylesheetArrivesAndShortens(spacer);
+  await theEngineScrollsAsAStylesheetShortens(spacer);
   await expect.poll(seen, engineWait).toEqual([{ from: 3000, to: 0 }]);
   expect(window.scrollY).toBe(0);
 });

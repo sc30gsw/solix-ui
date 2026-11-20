@@ -4,8 +4,8 @@ import { mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { nextTask, engineWait } from "#/tests/support/dom.ts";
 import {
   scrolledDownATallPage,
-  stylesheetArrivesAndShortens,
   tallPage,
+  theEngineScrollsAsAStylesheetShortens,
 } from "#/tests/support/scroll.ts";
 
 afterEach(() => {
@@ -22,12 +22,12 @@ test("it reads the window's scroll position at once, and follows it as the windo
   await expect.poll(position, engineWait).toEqual({ x: 0, y: 200 });
 });
 
-test("a stylesheet that shortens the page after it goes live clamps the position, the engine fires scroll for that move, and the position follows", async () => {
-  const spacer = scrolledDownATallPage(3000);
+test("once the scroll that put the page at 3000 has reported, a stylesheet that shortens the page after it goes live clamps the position, the engine fires scroll for that move, and the position follows", async () => {
+  const spacer = await scrolledDownATallPage(3000);
   const [position] = mount(() => createWindowScroll());
 
   expect(position()).toEqual({ x: 0, y: 3000 });
-  stylesheetArrivesAndShortens(spacer);
+  await theEngineScrollsAsAStylesheetShortens(spacer);
   await expect.poll(position, engineWait).toEqual({ x: 0, y: 0 });
 });
 
