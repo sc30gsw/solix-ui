@@ -52,6 +52,24 @@ export function definePropertyRunnerTests(): void {
   );
 
   test(
+    "a run still going when the time runs out ends before the property fails, so it cannot reach the next test",
+    { timeout: shortTimeout, retry: attemptsAfterAStall },
+    async (context) => {
+      const runs = { going: 0 };
+      const counted = fc.asyncProperty(fc.nat(), async () => {
+        runs.going += 1;
+        await delay(runTime);
+        runs.going -= 1;
+      });
+
+      await expect(assertProperty(context, counted, { numRuns: slowRuns })).rejects.toThrow(
+        interruption,
+      );
+      expect(runs.going, "runs still going once the property failed").toBe(0);
+    },
+  );
+
+  test(
     "a second property in the same test gets only the time the test has left",
     { timeout: shortTimeout, retry: attemptsAfterAStall },
     async (context) => {

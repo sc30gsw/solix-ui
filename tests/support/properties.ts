@@ -27,18 +27,54 @@ function timeLimit({ task }: TestContext): fc.Plugin<unknown>[] {
   return [fc.interruptAfterTimeLimit(runsOutAt - Date.now(), { failOnInterrupt: true })];
 }
 
+type Tracked<Ts> = { property: fc.IRawProperty<Ts>; runsEnded: () => Promise<void> };
+
+function isPending(outcome: unknown): outcome is PromiseLike<unknown> {
+  return typeof outcome === "object" && outcome !== null && "then" in outcome;
+}
+
+function trackingItsRuns<Ts>(property: fc.IRawProperty<Ts>): Tracked<Ts> {
+  const going = new Set<PromiseLike<unknown>>();
+  return {
+    property: {
+      isAsync: () => property.isAsync(),
+      generate: (random, runId) => property.generate(random, runId),
+      shrink: (value) => property.shrink(value),
+      run: (value) => {
+        const outcome = property.run(value);
+        if (isPending(outcome)) {
+          going.add(outcome);
+          const ended = () => going.delete(outcome);
+          outcome.then(ended, ended);
+        }
+        return outcome;
+      },
+      runBeforeEach: () => property.runBeforeEach(),
+      runAfterEach: () => property.runAfterEach(),
+    },
+    runsEnded: async () => {
+      await Promise.allSettled(going);
+    },
+  };
+}
+
 export async function assertProperty<Ts>(
   context: TestContext,
   property: fc.IRawProperty<Ts>,
   { numRuns, examples, seed, path, endOnFailure, verbose }: PropertyParameters<Ts> = {},
 ): Promise<void> {
-  await fc.assert(property, {
-    ...(numRuns === undefined ? {} : { numRuns }),
-    ...(examples === undefined ? {} : { examples }),
-    ...(seed === undefined ? {} : { seed }),
-    ...(path === undefined ? {} : { path }),
-    ...(endOnFailure === undefined ? {} : { endOnFailure }),
-    ...(verbose === undefined ? {} : { verbose }),
-    plugins: timeLimit(context),
-  });
+  const tracked = trackingItsRuns(property);
+  try {
+    await fc.assert(tracked.property, {
+      ...(numRuns === undefined ? {} : { numRuns }),
+      ...(examples === undefined ? {} : { examples }),
+      ...(seed === undefined ? {} : { seed }),
+      ...(path === undefined ? {} : { path }),
+      ...(endOnFailure === undefined ? {} : { endOnFailure }),
+      ...(verbose === undefined ? {} : { verbose }),
+      plugins: timeLimit(context),
+    });
+  } finally {
+    await tracked.runsEnded();
+  }
 }
