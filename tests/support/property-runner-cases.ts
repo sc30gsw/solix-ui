@@ -14,6 +14,8 @@ const attemptsAfterAStall = 2;
 const failure =
   /^Property failed after 1 tests\n\{ seed: -?\d+, path: "0(?::\d+)*", endOnFailure: true \}\nCounterexample: \[\d+\]\nShrunk \d+ time\(s\)/;
 const interruption = /^Property interrupted after \d+ tests\n\{ seed: -?\d+ \}/;
+const stillGoing =
+  /^Property interrupted after \d+ tests\n\{ seed: -?\d+ \}[\s\S]*\n1 run of the property was still going when the test's time ran out/;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,6 +68,50 @@ export function definePropertyRunnerTests(): void {
         interruption,
       );
       expect(runs.going, "runs still going once the property failed").toBe(0);
+    },
+  );
+
+  test(
+    "a run still going when the time runs out ends with the property's own hooks, its afterEach included, before the property fails",
+    { timeout: shortTimeout, retry: attemptsAfterAStall },
+    async (context) => {
+      const hooks = { going: 0 };
+      const hooked = fc
+        .asyncProperty(fc.nat(), async () => {
+          await delay(runTime);
+        })
+        .beforeEach(async (previous) => {
+          hooks.going += 1;
+          await previous();
+        })
+        .afterEach(async (previous) => {
+          await delay(runTime);
+          await previous();
+          hooks.going -= 1;
+        });
+
+      await expect(assertProperty(context, hooked, { numRuns: slowRuns })).rejects.toThrow(
+        interruption,
+      );
+      expect(hooks.going, "runs whose hooks were still going once the property failed").toBe(0);
+    },
+  );
+
+  test(
+    "a run that never ends fails the property with its seed and the count of runs still going, before the test's timeout",
+    { timeout: shortTimeout, retry: attemptsAfterAStall },
+    async (context) => {
+      const hang: { release: () => void } = { release: () => undefined };
+      const hung = new Promise<void>((resolve) => {
+        hang.release = resolve;
+      });
+      const hanging = fc.asyncProperty(fc.nat(), async () => {
+        await hung;
+      });
+
+      await expect(assertProperty(context, hanging)).rejects.toThrow(stillGoing);
+      hang.release();
+      await hung;
     },
   );
 
