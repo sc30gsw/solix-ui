@@ -431,6 +431,7 @@ test("every check in the repository runs through vp run verify, before a commit,
   const verify = rootManifest().scripts?.verify ?? "";
 
   expect(verify.split(" && ")).toEqual([
+    "vp run check:lockfile",
     "vp check --deny-warnings",
     "vp run lint:solid",
     "vp run check:private-terms",
