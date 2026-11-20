@@ -1,7 +1,7 @@
 import { createUncontrolled } from "@solix/primitives";
 import * as stylex from "@stylexjs/stylex";
 import { createBehaviour, tabs } from "#/src/headless.ts";
-import { createParts, type ElementProps } from "#/src/parts.ts";
+import { type ControlledProps, createParts, type ElementProps } from "#/src/parts.ts";
 import { stepOverDisabled } from "#/src/step-over-disabled.ts";
 import { TabsContext, type TabsOrientation } from "#/src/tabs-context.ts";
 import { TabsList } from "#/src/TabsList.tsx";
@@ -25,13 +25,7 @@ const styles = stylex.create({
 export type TabsProps = ElementProps<
   "div",
   typeof styles,
-  {
-    /** The selected tab's value, which makes the selection controlled; `null` selects none. */
-    value?: string | null;
-    /** The tab selected at first, while the selection is uncontrolled. */
-    defaultValue?: string | null;
-    /** Called with the new value when the user changes the selection. */
-    onChange?: (value: string | null) => void;
+  ControlledProps<string | null> & {
     /** Lays the tabs out in a row or a column; the arrow keys follow it. */
     orientation?: TabsOrientation;
     /** Lets the arrow keys wrap from the last tab to the first and back. */

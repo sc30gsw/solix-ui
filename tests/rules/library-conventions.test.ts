@@ -44,6 +44,8 @@ const keepOption = "keep";
 const displayPropsRefused = "Partial<Record<DisplayPropName, never>>";
 const colorPropsType = "ColorProps";
 const colorPropsFile = "packages/core/src/colors.ts";
+const controlledPropsType = "ControlledProps";
+const controlledPropsFile = "packages/core/src/parts.ts";
 const colorOption = "color";
 const rootBinding = "root";
 const partBinding = "part";
@@ -245,7 +247,20 @@ function isColorProps(member: ts.TypeNode): boolean {
   );
 }
 
+function controlledPropsLiteral(member: ts.TypeNode): ts.TypeNode | undefined {
+  if (!ts.isTypeReferenceNode(member)) return undefined;
+  const declaration = symbolOf(librarySources, member.typeName)?.declarations?.[0]?.resolve();
+  return declaration !== undefined &&
+    ts.isTypeAliasDeclaration(declaration) &&
+    declaration.name.text === controlledPropsType &&
+    relativePath(fileOf(declaration)) === controlledPropsFile
+    ? declaration.type
+    : undefined;
+}
+
 function typeMembers(type: ts.TypeNode): ts.TypeNode[] {
+  const controlled = controlledPropsLiteral(type);
+  if (controlled) return typeMembers(controlled);
   if (ts.isParenthesizedTypeNode(type)) return typeMembers(type.type);
   if (ts.isIntersectionTypeNode(type) || ts.isUnionTypeNode(type)) {
     return type.types.flatMap(typeMembers);
@@ -308,7 +323,7 @@ function keptOffRootProblems(
   return [
     ...unread.map(
       (member) =>
-        `write ${member} in the own props of ${name}Props as an inline type literal, such as { label: string }, so this check reads each key it declares and requires it off the root. Only ${displayPropsRefused} and ${colorPropsType}, whose members the ${colorOption} option that ${partsHelper} requires for them by type keeps off the root, may stand on their own.`,
+        `write ${member} in the own props of ${name}Props as an inline type literal, such as { label: string }, so this check reads each key it declares and requires it off the root. Only ${displayPropsRefused} and ${colorPropsType}, whose members the ${colorOption} option that ${partsHelper} requires for them by type keeps off the root, may stand on their own, and ${controlledPropsType}, whose keys this check reads from its declaration.`,
     ),
     ...handledByTheComponent
       .filter((prop) => !kept.includes(prop))

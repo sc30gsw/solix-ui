@@ -44,6 +44,15 @@ export const ArrowKeysMoveTheSelection: Story = {
 
 export const Vertical: Story = {
   args: { orientation: "vertical" },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Inbox" }));
+    await userEvent.keyboard("{ArrowDown}");
+    await expect(canvas.getByRole("tab", { name: "Drafts" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(canvas.getByRole("tablist")).toHaveAttribute("aria-orientation", "vertical");
+  },
 };
 
 export const EveryOrientation: Story = everyValueOf(meta, "orientation");

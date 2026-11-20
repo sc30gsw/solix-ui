@@ -6,7 +6,7 @@ import {
   openLibraryProgram,
   sharedPropTypes,
 } from "../../../../scripts/component-props.ts";
-import { type Program, virtualFile } from "../../../../scripts/syntax.ts";
+import { type Program, ts, virtualFile } from "../../../../scripts/syntax.ts";
 
 export type SpecProp = ComponentProp & { readonly common: boolean; readonly behaviour: boolean };
 
@@ -23,29 +23,38 @@ function Common(props: ElementProps<"div", { root: object }>): JSX.Element {
 
 export { Common };
 `;
-const uncontrolledPrefix = "default";
+const controlledPropsType = "ControlledProps";
 
 function isCallable(prop: ComponentProp): boolean {
   return [...prop.kinds].every((kind) => kind === "function" || kind === "absent");
 }
 
-function inAPair(prop: ComponentProp, names: ReadonlySet<string>): boolean {
-  const capitalised = `${prop.name.charAt(0).toUpperCase()}${prop.name.slice(1)}`;
-  const uncontrolled = prop.name.slice(uncontrolledPrefix.length);
-  const controlled = `${uncontrolled.charAt(0).toLowerCase()}${uncontrolled.slice(1)}`;
-  return (
-    names.has(`${uncontrolledPrefix}${capitalised}`) ||
-    (prop.name.startsWith(uncontrolledPrefix) && names.has(controlled))
+function controlledDeclarations(program: Program): Set<ts.Node> {
+  const alias = program
+    .sourceFile(sharedPropTypes)
+    ?.statements.find(
+      (statement) =>
+        ts.isTypeAliasDeclaration(statement) && statement.name.text === controlledPropsType,
+    );
+  return new Set(
+    alias && ts.isTypeAliasDeclaration(alias) && ts.isTypeLiteralNode(alias.type)
+      ? alias.type.members
+      : [],
   );
 }
 
-function specOf(props: readonly ComponentProp[], common: ReadonlySet<unknown>): SpecProp[] {
-  const names = new Set(props.map(({ name }) => name));
-  const drivesState = (prop: ComponentProp) => isCallable(prop) || inAPair(prop, names);
+function specOf(
+  props: readonly ComponentProp[],
+  common: ReadonlySet<ts.Node>,
+  controlled: ReadonlySet<ts.Node>,
+): SpecProp[] {
+  const drivesState = (prop: ComponentProp) =>
+    isCallable(prop) || prop.declarations.some((declaration) => controlled.has(declaration));
   const stateful = props.some(drivesState);
   return props.map((prop) => {
     const shared = prop.declarations.some((declaration) => common.has(declaration));
-    const own = !shared && prop.control.type === "boolean" && (stateful || prop.required);
+    const chosen = prop.control.type === "boolean" || prop.values !== undefined;
+    const own = !shared && chosen && (stateful || prop.required);
     return { ...prop, common: shared, behaviour: drivesState(prop) || own };
   });
 }
@@ -61,9 +70,10 @@ export function openSpecProgram(
   const { program, elementFile } = openLibraryProgram(entry, [commonFile, ...files]);
   const [shared] = componentsIn(program, elementFile, commonFile);
   const common = new Set(shared?.props.flatMap(({ declarations }) => declarations));
+  const controlled = controlledDeclarations(program);
   const components = componentsIn(program, elementFile, entry).map((component) => ({
     ...component,
-    props: specOf(component.props, common),
+    props: specOf(component.props, common, controlled),
   }));
   return { program, components };
 }

@@ -65,23 +65,21 @@ test("a prop's control is a select only for a closed union of literals or litera
 const sharedPropTypes = join(repositoryRoot, "packages/core/src/parts.ts");
 
 const statefulProbe = `import type { JSX } from "@solidjs/web";
-import type { ElementProps } from ${JSON.stringify(sharedPropTypes)};
+import type { ControlledProps, ElementProps } from ${JSON.stringify(sharedPropTypes)};
 
 type StatefulProps = ElementProps<
   "div",
   { root: object },
-  {
+  ControlledProps<string> & {
     /**
      * The tone it speaks in.
      * It never shouts.
      * @see nowhere
      */
     tone?: "calm" | "loud";
-    /** The open value. */
-    value?: string;
-    defaultValue?: string;
-    onChange?: (value: string) => void;
     loop?: boolean;
+    renderTone?: (tone: string) => JSX.Element;
+    label?: string;
   }
 >;
 
@@ -94,7 +92,7 @@ function Stateful(props: StatefulProps): JSX.Element {
 export { Stateful };
 `;
 
-test("a prop carries its doc comment as its description, the literal its component falls back to with ?? as its default, every value of a closed union, whether the props every element component shares declare it, and whether it is behaviour: a callback, either prop of a value and its default, or a boolean of a component that has either", () => {
+test("a prop carries its doc comment as its description, the literal its component falls back to with ?? as its default, every value of a closed union, whether the props every element component shares declare it, and whether it is behaviour: a callback, a prop ControlledProps declares, or an own boolean or closed union of a component that has one of those", () => {
   const { program, components } = openSpecProgram([], virtualFile(statefulProbe, ".tsx"));
   program.dispose();
   const [{ props }] = components;
@@ -110,16 +108,18 @@ test("a prop carries its doc comment as its description, the literal its compone
     expect.arrayContaining(["classes", "styles", "unstyled", "class", "style", "m", "hiddenFrom"]),
   );
   expect(facts).toEqual({
+    value: { description: expect.any(String), behaviour: true },
+    defaultValue: { description: expect.any(String), behaviour: true },
+    onChange: { description: expect.any(String), behaviour: true },
     tone: {
       description: "The tone it speaks in. It never shouts.",
       defaultValue: '"calm"',
       values: ["calm", "loud"],
-      behaviour: false,
+      behaviour: true,
     },
-    value: { description: "The open value.", behaviour: true },
-    defaultValue: { description: "", behaviour: true },
-    onChange: { description: "", behaviour: true },
     loop: { description: "", defaultValue: "true", behaviour: true },
+    renderTone: { description: "", behaviour: true },
+    label: { description: "", behaviour: false },
   });
 });
 

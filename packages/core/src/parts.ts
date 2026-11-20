@@ -27,6 +27,15 @@ export type StylesApiProps<Styles> = {
   unstyled?: boolean;
 };
 
+export type ControlledProps<V> = {
+  /** The current value, which makes the component controlled: it changes only when this does. */
+  value?: V;
+  /** The value at first, while the component keeps its own. */
+  defaultValue?: V;
+  /** Called with the new value when the user changes it. */
+  onChange?: (value: V) => void;
+};
+
 type StylesApiPropKey = keyof StylesApiProps<object>;
 
 const stylesApiProps = { classes: true, styles: true, unstyled: true } satisfies Record<
