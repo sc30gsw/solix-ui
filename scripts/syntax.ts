@@ -73,6 +73,7 @@ export {
   type ImportedName,
 } from "#/scripts/syntax/walk.ts";
 export {
+  declaredDefaultsIn,
   fallbacksIn,
   propsOfComponent,
   type ComponentProp,

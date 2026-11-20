@@ -8,6 +8,7 @@ import {
   type ComponentProp,
   declarationsOfSymbol,
   descendants,
+  declaredDefaultsIn,
   fallbacksIn,
   hasCallSignature,
   openProgram,
@@ -199,13 +200,14 @@ export function componentsIn(
 ): LibraryComponent[] {
   const sources = librarySources(entry).flatMap((file) => program.sourceFile(file) ?? []);
   const fallbacks = fallbacksIn(program, sources);
+  const declared = declaredDefaultsIn(program, sources);
   return exportsReturningAJsxElement(program, elementFile, entry).map((name) => ({
     name: name.text,
     declarations: declarationsOfSymbol(symbolOf(program, name)),
     props: propsOfComponent(program, name, {
       fallbacks,
       describe: rowDescription,
-      defaults: defaultsOf(program, name),
+      defaults: new Map([...declared, ...defaultsOf(program, name)]),
     }),
     staticParts: staticPartsOf(program, name),
   }));

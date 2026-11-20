@@ -41,19 +41,21 @@ export type GroupProps = ElementProps<
     gap?: VariableProp<typeof groupVariables, "group-gap">;
     /** Makes every child grow to an equal share of the row. */
     grow?: boolean;
-    /** With `grow`, keeps each child to its share, so a long child does not push the others out. */
+    /** With `grow`, keeps each child to its share, so a long child does not push the others out; on unless set to `false`. */
     preventGrowOverflow?: boolean;
   }
 >;
+
+const defaults = { preventGrowOverflow: true } satisfies Partial<GroupProps>;
 
 export function Group(props: GroupProps) {
   const resolved = children(() => props.children);
   const present = () => resolved.toArray().filter(rendersSomething);
   const gap = `var(${variableProperty("group-gap")})`;
   const childWidth = () =>
-    props.preventGrowOverflow === false
-      ? "none"
-      : `calc((100% + ${gap}) / ${present().length} - ${gap})`;
+    (props.preventGrowOverflow ?? defaults.preventGrowOverflow)
+      ? `calc((100% + ${gap}) / ${present().length} - ${gap})`
+      : "none";
   const { root } = createParts(groupVariables, styles, props, {
     variables: {
       "group-align": "align",

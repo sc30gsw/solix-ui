@@ -137,14 +137,20 @@ test("every public prop of every component the library exports has a doc comment
   expect([...new Set(undescribed)]).toEqual([]);
 });
 
-test("a default the code reaches through a helper's options type, as ColorSchemeScript's script text does, is still read from the fallback", () => {
-  const props = libraryComponentProps().ColorSchemeScript ?? [];
-  const defaults = Object.fromEntries(props.map(({ name, defaultValue }) => [name, defaultValue]));
+test("a default declared in an object literal that satisfies Partial of a props type is that prop's default, as for ColorSchemeScript, whose script text reads the props through its own options type, and Group, which is on unless set to false", () => {
+  const defaultsOf = (component: string) =>
+    Object.fromEntries(
+      (libraryComponentProps()[component] ?? []).map(({ name, defaultValue }) => [
+        name,
+        defaultValue,
+      ]),
+    );
 
-  expect(defaults).toMatchObject({
-    localStorageKey: expect.any(String),
-    defaultColorScheme: expect.any(String),
+  expect(defaultsOf("ColorSchemeScript")).toMatchObject({
+    localStorageKey: '"solix-color-scheme-value"',
+    defaultColorScheme: '"light"',
   });
+  expect(defaultsOf("Group")).toMatchObject({ preventGrowOverflow: "true" });
 });
 
 const everyValue = join(repositoryRoot, "apps/storybook/every-value.tsx");

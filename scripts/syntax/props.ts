@@ -8,12 +8,19 @@ import {
 import * as ts from "#/scripts/syntax/ast.ts";
 import {
   declarationsOfSymbol,
+  isDefaultLibraryFile,
   isPackageFile,
   symbolOf,
   unionMembersOf,
 } from "#/scripts/syntax/checker.ts";
 import type { Program } from "#/scripts/syntax/program.ts";
-import { descendants, enclosingFunctionName, findAncestor } from "#/scripts/syntax/walk.ts";
+import {
+  descendants,
+  enclosingFunctionName,
+  fileOf,
+  findAncestor,
+  staticPropertyName,
+} from "#/scripts/syntax/walk.ts";
 
 export type Option = string | number | boolean;
 
@@ -155,6 +162,51 @@ export function fallbacksIn(program: Program, sources: readonly ts.SourceFile[])
     };
     for (const declaration of declarationsOfSymbol(symbolOf(program, node.left.name))) {
       found.set(declaration, [...(found.get(declaration) ?? []), given]);
+    }
+  }
+  return found;
+}
+
+const partialType = "Partial";
+
+function isPartialOfTheLibrary(program: Program, type: ts.TypeNode): boolean {
+  if (!ts.isTypeReferenceNode(type) || type.typeArguments?.length !== 1) return false;
+  const declaration = symbolOf(program, type.typeName)?.declarations?.[0]?.resolve();
+  return (
+    declaration !== undefined &&
+    ts.isTypeAliasDeclaration(declaration) &&
+    declaration.name.text === partialType &&
+    isDefaultLibraryFile(fileOf(declaration))
+  );
+}
+
+export function declaredDefaultsIn(
+  program: Program,
+  sources: readonly ts.SourceFile[],
+): Map<ts.Node, string> {
+  const found = new Map<ts.Node, string>();
+  for (const node of sources.flatMap((source) => descendants(source))) {
+    if (
+      !ts.isSatisfiesExpression(node) ||
+      !ts.isObjectLiteralExpression(node.expression) ||
+      !isPartialOfTheLibrary(program, node.type)
+    ) {
+      continue;
+    }
+    const satisfied = program.checker.getTypeAtLocation(node.type);
+    for (const property of node.expression.properties) {
+      const value = ts.isPropertyAssignment(property)
+        ? property.initializer
+        : ts.isShorthandPropertyAssignment(property)
+          ? property.name
+          : undefined;
+      const name = staticPropertyName(property);
+      const given = value && program.checker.getTypeAtLocation(value);
+      const prop = satisfied && name && program.checker.getPropertyOfType(satisfied, name);
+      if (!given || !prop || (given.flags & literalTypes) === 0) continue;
+      for (const declaration of declarationsOfSymbol(prop)) {
+        found.set(declaration, program.checker.typeToString(given));
+      }
     }
   }
   return found;

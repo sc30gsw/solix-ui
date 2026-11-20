@@ -30,8 +30,15 @@ export type ColorSchemeScriptProps = ColorSchemeScriptOptions &
   };
 
 type OptionsAsGiven = {
-  [Key in keyof ColorSchemeScriptOptions]?: Key extends "localStorageKey" ? string : unknown;
+  defaultColorScheme?: unknown;
+  forceColorScheme?: unknown;
+  localStorageKey?: string;
 };
+
+const defaults = {
+  defaultColorScheme,
+  localStorageKey: colorSchemeStorageKey,
+} satisfies Partial<ColorSchemeScriptOptions>;
 
 function inScript(value: unknown): string {
   return JSON.stringify(value).replaceAll("<", "\\u003c");
@@ -42,11 +49,12 @@ export function colorSchemeScriptText(options: OptionsAsGiven): string {
     `document.documentElement.setAttribute(${inScript(colorSchemeAttribute)},${scheme})`;
   if (isColorScheme(options.forceColorScheme))
     return `${setTo(inScript(options.forceColorScheme))};`;
-  const chosen = options.defaultColorScheme ?? defaultColorScheme;
-  const fallback = isColorScheme(chosen) ? chosen : defaultColorScheme;
+  const fallback = isColorScheme(options.defaultColorScheme)
+    ? options.defaultColorScheme
+    : defaults.defaultColorScheme;
   return [
     `(function(){var c=${inScript(fallback)};`,
-    `try{var s=localStorage.getItem(${inScript(options.localStorageKey ?? colorSchemeStorageKey)});`,
+    `try{var s=localStorage.getItem(${inScript(options.localStorageKey ?? defaults.localStorageKey)});`,
     `if(${inScript(colorSchemes)}.indexOf(s)!==-1)c=s}catch(e){}`,
     `try{if(c===${inScript(systemColorScheme)})c=matchMedia(${inScript(prefersColorScheme("dark"))}).matches?`,
     `${inScript(resolvedColorScheme(systemColorScheme, true))}:${inScript(resolvedColorScheme(systemColorScheme, false))}}catch(e){}`,
