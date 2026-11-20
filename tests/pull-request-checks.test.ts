@@ -179,14 +179,13 @@ describe("a fix carries its test", () => {
     ["fix: a", ["src/a.ts", "packages/core/tests/a.test.ts"], false],
     ["fix: a", ["apps/storybook/src/A.stories.tsx"], false],
     ["fix: a", ["tests/support/served-app.ts"], false],
-    ["fix(skills): a", [".agents/skills/verify-playground/scripts/drive.mjs"], false],
     ["feat: a", ["src/a.ts"], false],
     ["docs: fix a typo", ["README.md"], false],
     ['Revert "fix: a"', ["src/a.ts"], false],
     ["fix(tests): a", ["scripts/expected-values.ts"], false],
     [
       "fix(tabs): a",
-      ["packages/core/src/TabsTab.tsx", ".agents/skills/verify-playground/features/tabs-focus.md"],
+      ["packages/core/src/TabsTab.tsx", "apps/playground/tests/support/tabs.ts"],
       false,
     ],
   ])("%j changing %j is flagged: %s", (subject, files, flagged) => {

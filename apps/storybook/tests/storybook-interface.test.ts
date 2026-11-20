@@ -9,10 +9,10 @@ import { inEveryEngine } from "../../../tests/support/served-app.ts";
 import { childRunMargin, runVp } from "#/tests/support/child-runs.ts";
 import { serveDirectory } from "#/tests/support/static-server.ts";
 import { collectTelemetry, telemetryUrlVariable } from "#/tests/support/telemetry-collector.ts";
+import { staticStorybookDirectory } from "#/tests/support/test-servers.ts";
 
 const staticBuildScript = "build-storybook";
 const scriptsRunUnderTheCollector = [staticBuildScript];
-const staticBuild = join(import.meta.dirname, "../dist");
 const buildTimeout = 300_000;
 const interfaceTimeout = 90_000;
 const panelTimeout = 60_000;
@@ -26,12 +26,12 @@ const textArg = "children";
 const typedArg = "Saved again";
 
 const telemetry = collectTelemetry();
-const site = serveDirectory(staticBuild);
+const site = serveDirectory(staticStorybookDirectory);
 let build: { exitCode: number | null; output: string } = { exitCode: null, output: "" };
 let stories: StoryIndexEntry[] = [];
 
 function builtStories(): StoryIndexEntry[] {
-  const index = JSON.parse(readFileSync(join(staticBuild, "index.json"), "utf8")) as {
+  const index = JSON.parse(readFileSync(join(staticStorybookDirectory, "index.json"), "utf8")) as {
     entries: Record<string, StoryIndexEntry>;
   };
   return Object.values(index.entries).filter(({ type }) => type === "story");

@@ -36,3 +36,18 @@ test("every project builds the packages, with no GIT_ variable left, before any 
   expect(Object.keys(settings).length).toBeGreaterThan(0);
   expect(unbuilt).toEqual([]);
 });
+
+test("no browser project saves a screenshot when a test fails: every project whose browser is enabled resolves screenshotFailures to false", () => {
+  const settings = inject("runSettingsOfEachProject");
+  refuseAFilteredRun(Object.keys(settings));
+  const inABrowser = Object.entries(settings).filter(([, { browser }]) => browser.enabled);
+  const screenshotting = inABrowser
+    .filter(([, { browser }]) => browser.screenshotFailures)
+    .map(
+      ([name]) =>
+        `${name}: it saves a screenshot of each failed test. Set screenshotFailures: false in the browser block of scripts/browser-instances.ts; a failure reports values, not pixels.`,
+    );
+
+  expect(inABrowser.length).toBeGreaterThan(0);
+  expect(screenshotting).toEqual([]);
+});

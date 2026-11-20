@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { SolixComputedColorScheme } from "@solix/core";
 
 export type StoriesServer = {
@@ -17,3 +18,4 @@ export const brokenStoriesServer = {
   project: "broken stories",
   colorScheme: "dark",
 } satisfies StoriesServer;
+export const staticStorybookDirectory = join(import.meta.dirname, "../../dist");

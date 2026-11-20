@@ -19,6 +19,12 @@ import {
   ts,
   virtualFile,
 } from "#/scripts/syntax.ts";
+import {
+  allowedCaptureSpellings,
+  captures,
+  capturesIn,
+  refusedCaptureSpellings,
+} from "#/tests/support/image-captures.ts";
 import { definePropertyRunnerTests } from "#/tests/support/property-runner-cases.ts";
 import { located } from "#/tests/support/primitive-rules/library.ts";
 import {
@@ -197,9 +203,20 @@ const spelt = (spellings: Record<string, string>): [string, string][] =>
   Object.entries(spellings).map(([spelling, text]) => [spelling, virtualFile(text, ".ts")]);
 const refused = spelt(refusedSpellings);
 const allowed = spelt(allowedSpellings);
+const spelledWith = (
+  spellings: Record<string, [text: string, extension: string]>,
+): [string, string][] =>
+  Object.entries(spellings).map(([spelling, [text, extension]]) => [
+    spelling,
+    virtualFile(text, extension),
+  ]);
+const refusedCaptures = spelledWith(refusedCaptureSpellings);
+const allowedCaptures = spelledWith(allowedCaptureSpellings);
 
 const program = openProgram(checkedFiles.map((file) => join(repositoryRoot, file)));
-const spellings = openProgram([...refused, ...allowed].map(([, file]) => file));
+const spellings = openProgram(
+  [...refused, ...allowed, ...refusedCaptures, ...allowedCaptures].map(([, file]) => file),
+);
 afterAll(() => {
   program.dispose();
   spellings.dispose();
@@ -234,6 +251,20 @@ test.for(refused)("the rule refuses %s", ([, file]) => {
 
 test.for(allowed)("the rule passes %s", ([, file]) => {
   expect(waysRoundTheRunner(spellings, file)).toEqual([]);
+});
+
+test(`no script file captures an image or a recording through Playwright: it reaches none of ${captures.join(", ")} as a member the type checker resolves, as an option it gives, or by name on a value typed any`, () => {
+  expect(checkedFiles.flatMap((file) => capturesIn(program, join(repositoryRoot, file)))).toEqual(
+    [],
+  );
+});
+
+test.for(refusedCaptures)("the capture rule refuses %s", ([, file]) => {
+  expect(capturesIn(spellings, file)).not.toEqual([]);
+});
+
+test.for(allowedCaptures)("the capture rule passes %s", ([, file]) => {
+  expect(capturesIn(spellings, file)).toEqual([]);
 });
 
 definePropertyRunnerTests();

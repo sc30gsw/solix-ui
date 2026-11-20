@@ -14,6 +14,7 @@ export type RunSettings = {
   provided: Record<string, unknown>;
   groupOrder: number;
   globalSetup: string[];
+  browser: { enabled: boolean; screenshotFailures: boolean };
 };
 
 declare module "vite-plus/test" {
@@ -41,6 +42,10 @@ function runSettingsOfEachProject(project: TestProject): Record<string, RunSetti
         provided: { ...config.provide },
         groupOrder: config.sequence.groupOrder,
         globalSetup: [config.globalSetup].flat().map((file) => relative(repositoryRoot, file)),
+        browser: {
+          enabled: config.browser.enabled,
+          screenshotFailures: config.browser.screenshotFailures,
+        },
       },
     ]),
   );
