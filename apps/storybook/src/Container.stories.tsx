@@ -1,14 +1,16 @@
 import { Container } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Container,
+  argTypes: argTypesOf(Container),
   args: { children: "Content held to the container's width" },
-} satisfies Meta<typeof Container>;
+} satisfies ComponentMeta<typeof Container>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 

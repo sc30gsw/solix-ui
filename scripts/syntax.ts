@@ -70,3 +70,9 @@ export {
   type Import,
   type ImportedName,
 } from "#/scripts/syntax/walk.ts";
+export {
+  propsOfComponent,
+  type ComponentProp,
+  type Control,
+  type Option,
+} from "#/scripts/syntax/props.ts";

@@ -1,15 +1,17 @@
 import { Button, type ButtonProps } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect, fn, spyOn, userEvent } from "storybook/test";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Button,
+  argTypes: argTypesOf(Button),
   args: { children: "Save", onClick: fn() },
-} satisfies Meta<typeof Button>;
+} satisfies ComponentMeta<typeof Button>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 

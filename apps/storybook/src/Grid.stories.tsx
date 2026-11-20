@@ -1,8 +1,10 @@
 import { Grid } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Grid,
+  argTypes: argTypesOf(Grid),
   args: { gap: "md" },
   render: (args) => (
     <Grid {...args}>
@@ -14,11 +16,11 @@ const meta = {
       </Grid.Col>
     </Grid>
   ),
-} satisfies Meta<typeof Grid>;
+} satisfies ComponentMeta<typeof Grid>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 

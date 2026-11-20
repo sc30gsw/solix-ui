@@ -1,8 +1,10 @@
 import { Box, Flex } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Flex,
+  argTypes: argTypesOf(Flex),
   args: { gap: "md", align: "center" },
   render: (args) => (
     <Flex {...args}>
@@ -11,11 +13,11 @@ const meta = {
       <Box>Third</Box>
     </Flex>
   ),
-} satisfies Meta<typeof Flex>;
+} satisfies ComponentMeta<typeof Flex>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Row: Story = {};
 

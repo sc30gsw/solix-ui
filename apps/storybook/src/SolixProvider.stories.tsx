@@ -12,8 +12,9 @@ import {
   type SolixTheme,
 } from "@solix/core";
 import { createEffect, createSignal, Show } from "solid-js";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect, spyOn, userEvent, waitFor } from "storybook/test";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const themedPadding = "3rem";
 const schemeRoot = "Scheme root";
@@ -55,6 +56,7 @@ function schemeOn(element: HTMLElement): string | null {
 
 const meta = {
   component: SolixProvider,
+  argTypes: argTypesOf(SolixProvider),
   args: { theme: createTheme({ spacing: { md: themedPadding } }) },
   beforeEach: () => {
     for (const key of Object.values(storageKeys)) localStorage.removeItem(key);
@@ -67,11 +69,11 @@ const meta = {
       </Box>
     </OnItsOwnElement>
   ),
-} satisfies Meta<typeof SolixProvider>;
+} satisfies ComponentMeta<typeof SolixProvider>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const ThemedSpacing: Story = {
   play: async ({ canvas }) => {

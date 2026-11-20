@@ -1,9 +1,11 @@
 import { Tabs } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect, userEvent } from "storybook/test";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Tabs,
+  argTypes: argTypesOf(Tabs),
   args: { defaultValue: "inbox" },
   render: (args) => (
     <Tabs {...args}>
@@ -19,11 +21,11 @@ const meta = {
       <Tabs.Panel value="sent">Sent panel</Tabs.Panel>
     </Tabs>
   ),
-} satisfies Meta<typeof Tabs>;
+} satisfies ComponentMeta<typeof Tabs>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 

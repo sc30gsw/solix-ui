@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
+import { storyControls } from "#/scripts/story-controls.ts";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
@@ -59,7 +60,7 @@ function withPackagesBuiltFirst<P extends { test?: object }>(project: P) {
 }
 
 export default defineConfig({
-  plugins: lazyPlugins(() => [solid()]),
+  plugins: lazyPlugins(() => [solid(), storyControls()]),
   staged: {
     "*": "vp check --fix",
     "*.{ts,tsx,jsx}": "solid2-kit check",

@@ -1,14 +1,16 @@
 import { Box } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Box,
+  argTypes: argTypesOf(Box),
   args: { children: "Content of a box", p: "md" },
-} satisfies Meta<typeof Box>;
+} satisfies ComponentMeta<typeof Box>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 

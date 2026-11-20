@@ -1,17 +1,19 @@
 import { ColorSchemeScript } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect } from "storybook/test";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const storageKey = "story-color-scheme";
 
 const meta = {
   component: ColorSchemeScript,
+  argTypes: argTypesOf(ColorSchemeScript),
   args: { localStorageKey: storageKey, nonce: "story-nonce" },
-} satisfies Meta<typeof ColorSchemeScript>;
+} satisfies ComponentMeta<typeof ColorSchemeScript>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const NamesItsStorageKey: Story = {
   play: async ({ canvasElement }) => {

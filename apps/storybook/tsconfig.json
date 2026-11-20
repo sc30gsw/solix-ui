@@ -12,6 +12,8 @@
     "vite.config.ts",
     "stories-project.ts",
     "story-color-scheme.ts",
-    "story-color-scheme.setup.ts"
+    "story-color-scheme.setup.ts",
+    "story-controls.d.ts",
+    "story-meta.ts"
   ]
 }

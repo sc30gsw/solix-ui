@@ -17,12 +17,14 @@ import {
   stylePropClass,
   stylePropKeys,
   type StylePropName,
+  type StylePropRows,
   stylePropNames,
   stylePropTable,
   variableClass,
   variableProperty,
   visibilityClass,
   type VisibilityPropName,
+  type VisibilityRows,
   type VisibilityValue,
   visibilityPropNames,
 } from "#/src/style-prop-table.ts";
@@ -128,9 +130,14 @@ export type QueryContainer = {
 
 export type ResolvedVariables = Resolved & { readonly used: readonly Used[] };
 
-export type StyleProps = {
-  [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
-} & { [Name in VisibilityPropName]?: VisibilityValue<Name> | Absent };
+type StylePropsOf<Table extends StylePropRows> = {
+  -readonly [Name in keyof Table]?: StyleProp<ValueOf<RowOf<Name & StylePropName>>>;
+};
+type VisibilityPropsOf<Table extends VisibilityRows> = {
+  -readonly [Name in keyof Table]?: VisibilityValue<Name & VisibilityPropName> | Absent;
+};
+
+export type StyleProps = StylePropsOf<StylePropRows> & VisibilityPropsOf<VisibilityRows>;
 
 export type Resolved = {
   readonly classes: readonly string[];
