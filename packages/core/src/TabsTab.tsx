@@ -12,7 +12,7 @@ const styles = stylex.create({
   root: {
     alignItems: "center",
     backgroundColor: tokens["--solix-color-body"],
-    borderBlockEndColor: primaryColors["--solix-color-primary-6"],
+    borderBlockEndColor: primaryColors["6"],
     borderBlockEndStyle: {
       default: "none",
       "[data-selected]": {
@@ -22,7 +22,7 @@ const styles = stylex.create({
     },
     borderBlockEndWidth: "0.125rem",
     borderBlockStartWidth: 0,
-    borderInlineEndColor: primaryColors["--solix-color-primary-6"],
+    borderInlineEndColor: primaryColors["6"],
     borderInlineEndStyle: {
       default: "none",
       "[data-selected]": {
@@ -34,7 +34,7 @@ const styles = stylex.create({
     borderInlineStartWidth: 0,
     color: {
       default: tokens["--solix-color-text"],
-      "[data-selected]": primaryColors["--solix-color-primary-9"],
+      "[data-selected]": primaryColors["9"],
     },
     cursor: {
       default: "pointer",
@@ -48,7 +48,7 @@ const styles = stylex.create({
       default: 1,
       ":disabled": 0.6,
     },
-    outlineColor: primaryColors["--solix-color-primary-6"],
+    outlineColor: primaryColors["6"],
     outlineOffset: "0.125rem",
     outlineStyle: {
       default: "none",

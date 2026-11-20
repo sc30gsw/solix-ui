@@ -1,5 +1,5 @@
 import { readdirSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
   colorClass,
@@ -55,6 +55,7 @@ const pageBackground = "--solix-color-body";
 const repositoryRoot = join(import.meta.dirname, "../../..");
 const sourceDirectory = dirname(tokensFile);
 const variantColorsFile = join(repositoryRoot, sourceDirectory, "variant-colors.stylex.ts");
+const primaryColorsFile = join(repositoryRoot, sourceDirectory, "primary-colors.stylex.ts");
 
 const remLength = /^\d+(?:\.\d+)?rem$/;
 const schemes = ["light", "dark"] as const;
@@ -162,11 +163,9 @@ function variableIn(root: Block | undefined, value: ts.Expression): Conditional 
   return ts.isPropertyAccessExpression(value) ? root?.properties.get(value.getText()) : undefined;
 }
 
-function tokenReferencedBy(value: ts.Expression | undefined): string | undefined {
-  return value &&
-    ts.isElementAccessExpression(value) &&
-    ts.isStringLiteral(value.argumentExpression) &&
-    value.argumentExpression.text in tokens
+function keyOf(value: ts.Expression): string | undefined {
+  if (ts.isPropertyAccessExpression(value)) return value.name.text;
+  return ts.isElementAccessExpression(value) && ts.isStringLiteral(value.argumentExpression)
     ? value.argumentExpression.text
     : undefined;
 }
@@ -186,14 +185,31 @@ function importedFrom(identifier: ts.Identifier): string | undefined {
     : undefined;
 }
 
+const readProperty = /^var\((--[\w-]+)\)$/;
+
+function constantReadBy(value: ts.Expression, file: string): string | undefined {
+  const key = keyOf(value);
+  if (
+    key === undefined ||
+    !(ts.isPropertyAccessExpression(value) || ts.isElementAccessExpression(value)) ||
+    !ts.isIdentifier(value.expression) ||
+    importedFrom(value.expression) !== file
+  ) {
+    return undefined;
+  }
+  return readProperty.exec(tokenValues(relative(repositoryRoot, file))[key] ?? "")?.[1];
+}
+
+function tokenReferencedBy(value: ts.Expression | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const read = constantReadBy(value, primaryColorsFile);
+  if (read !== undefined) return read;
+  const key = ts.isElementAccessExpression(value) ? keyOf(value) : undefined;
+  return key !== undefined && key in tokens ? key : undefined;
+}
+
 function slotReferencedBy(value: ts.Expression | undefined): string | undefined {
-  return value &&
-    ts.isElementAccessExpression(value) &&
-    ts.isIdentifier(value.expression) &&
-    ts.isStringLiteral(value.argumentExpression) &&
-    importedFrom(value.expression) === variantColorsFile
-    ? value.argumentExpression.text
-    : undefined;
+  return value && constantReadBy(value, variantColorsFile);
 }
 
 function side(

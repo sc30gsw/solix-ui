@@ -1,6 +1,5 @@
 import { cssColorFunctions, isCssColorKeyword } from "#/src/css-colors.ts";
 import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
-import type { variantColors } from "#/src/variant-colors.stylex.ts";
 
 export const palettes = [
   "dark",
@@ -51,10 +50,10 @@ export const slotDefaults = {
   "--solixc-variant-hover": "var(--solixc-variant-background)",
   "--solixc-variant-color": "currentColor",
   "--solixc-variant-border": "transparent",
-} as const satisfies Readonly<Record<VariantSlot, string>>;
+} as const;
 
 type ColourToken = `--solix-color-${string}`;
-type VariantSlot = Extract<keyof typeof variantColors, `--${string}`>;
+type VariantSlot = keyof typeof slotDefaults;
 export const writtenColor = "color";
 
 export type SlotValue = Shade | "transparent" | ColourToken;

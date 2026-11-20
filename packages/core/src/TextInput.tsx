@@ -8,7 +8,7 @@ const styles = stylex.create({
     backgroundColor: tokens["--solix-color-body"],
     borderColor: {
       default: tokens["--solix-color-border"],
-      ":focus-visible": primaryColors["--solix-color-primary-6"],
+      ":focus-visible": primaryColors["6"],
       ":user-invalid": tokens["--solix-color-error"],
     },
     borderRadius: tokens["--solix-radius-md"],
