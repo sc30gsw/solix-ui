@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
@@ -8,6 +8,7 @@ import {
   readFileSync,
   readlinkSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
@@ -35,7 +36,10 @@ const enabledPlugins = {
   "pstack@cursor-plugins": true,
   "modern-web-guidance@googlechrome": true,
 };
-const marketplaces = ["cursor-plugins", "googlechrome"];
+const marketplaces = {
+  "cursor-plugins": { source: { source: "github", repo: "cursor/plugins" } },
+  googlechrome: { source: { source: "github", repo: "GoogleChrome/modern-web-guidance" } },
+};
 const replacedByTheKit = [
   { pack: "solid-js", name: "solid-2.0" },
   { pack: "solid-js", name: "solid-2.0-cheatsheet" },
@@ -106,12 +110,12 @@ test("nothing the kit's installer writes, for Claude Code or Cursor, is in the r
   expect(leftOver).toEqual([]);
 });
 
-test(`${settingsFile} holds only the plugins, their marketplaces and the environment, and so no hook, and enables exactly the plugins this project names, from their marketplaces`, () => {
+test(`${settingsFile} holds only the plugins, their marketplaces and the environment, and so no hook, and enables exactly the plugins this project names, from exactly their marketplaces and sources`, () => {
   const settings = JSON.parse(read(settingsFile));
 
   expect(Object.keys(settings).sort()).toEqual(settingsKeys);
   expect(settings.enabledPlugins).toEqual(enabledPlugins);
-  expect(Object.keys(settings.extraKnownMarketplaces).sort()).toEqual(marketplaces);
+  expect(settings.extraKnownMarketplaces).toEqual(marketplaces);
 });
 
 test(`${workspaceFile} approves neither skill of solid-js's that the kit's solid-2 skill replaces`, () => {
@@ -131,6 +135,25 @@ test("kitSkills in scripts/package-skills.ts names exactly the skills the kit sh
   expect([...kitSkills].sort()).toEqual(kitSkillNames(repositoryRoot).sort());
 });
 
+function committed(root: string): void {
+  for (const args of [
+    ["init", "--quiet"],
+    ["add", "--all"],
+    ["-c", "user.name=test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "a"],
+  ]) {
+    execFileSync("git", args, { cwd: root });
+  }
+}
+
+function formerKitCopy(name: string): Record<string, string> {
+  return { [`${sharedSkills}/${name}/SKILL.md`]: `the kit's ${name}` };
+}
+
+function linkedFromClaude(root: string, name: string): void {
+  mkdirSync(join(root, claudeSkills), { recursive: true });
+  symlinkSync(`../../${sharedSkills}/${name}`, join(root, claudeSkills, name));
+}
+
 function shippedByTheKit(names: readonly string[]): Record<string, string> {
   return Object.fromEntries(
     names.map((name) => [`${kitSkillSource}/${name}/SKILL.md`, `the kit's ${name}`]),
@@ -141,12 +164,12 @@ test(`${copyScript} removes a skill it copied before that the kit no longer ship
   await inTemporaryTree(
     {
       ...shippedByTheKit(["renamed"]),
-      [`${sharedSkills}/former/SKILL.md`]: "the kit's former name",
+      ...formerKitCopy("former"),
       [`${sharedSkills}/own/SKILL.md`]: "the project's own",
     },
     (root) => {
-      mkdirSync(join(root, claudeSkills), { recursive: true });
-      symlinkSync(`../../${sharedSkills}/former`, join(root, claudeSkills, "former"));
+      linkedFromClaude(root, "former");
+      committed(root);
 
       expect(copyKitSkills(root, ["former"])).toEqual(["renamed"]);
       expect(readdirSync(join(root, sharedSkills)).sort()).toEqual(["own", "renamed"]);
@@ -156,6 +179,34 @@ test(`${copyScript} removes a skill it copied before that the kit no longer ship
       );
     },
   );
+});
+
+test(`${copyScript} never removes a folder git does not hold as committed: a former kit copy the project has edited in place, or a new skill under a former kit name`, async () => {
+  await inTemporaryTree({ ...shippedByTheKit(["renamed"]), ...formerKitCopy("former") }, (root) => {
+    linkedFromClaude(root, "former");
+    committed(root);
+    writeFileSync(join(root, sharedSkills, "former/SKILL.md"), "the project's own, uncommitted");
+
+    expect(() => copyKitSkills(root, ["former"])).toThrow(
+      `${sharedSkills}/former: git does not hold it as committed, so it may be the project's.`,
+    );
+    expect(readFileSync(join(root, sharedSkills, "former/SKILL.md"), "utf8")).toBe(
+      "the project's own, uncommitted",
+    );
+    expect(existsSync(join(root, sharedSkills, "renamed"))).toBe(false);
+  });
+  await inTemporaryTree(shippedByTheKit(["renamed"]), (root) => {
+    committed(root);
+    mkdirSync(join(root, sharedSkills, "former"), { recursive: true });
+    writeFileSync(join(root, sharedSkills, "former/SKILL.md"), "the project's new skill");
+
+    expect(() => copyKitSkills(root, ["former"])).toThrow(
+      `${sharedSkills}/former: git does not hold it as committed, so it may be the project's.`,
+    );
+    expect(readFileSync(join(root, sharedSkills, "former/SKILL.md"), "utf8")).toBe(
+      "the project's new skill",
+    );
+  });
 });
 
 test(`${copyScript} refuses a skill the kit ships under the name of a skill the project holds, its own or a package's, and changes nothing`, async () => {

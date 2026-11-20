@@ -10,7 +10,7 @@ import {
   tabsSetups,
   vertical,
 } from "#/src/sections/tabs-setups.ts";
-import { type PageSnapshot, pageSnapshot, type TabSnapshot } from "#/tests/support/opening.ts";
+import { type DocumentSnapshot, snapshotOfDocument } from "#/tests/support/opening.ts";
 import type { RovingList } from "#/tests/support/roving-list-model.ts";
 
 export {
@@ -154,12 +154,51 @@ export function tabNamed(page: Page, list: string, name: string): Locator {
     .filter({ has: page.getByText(name, { exact: true }) });
 }
 
-export function snapshotOf(page: Page, list: string): Promise<PageSnapshot> {
-  return tabList(page, list).evaluateAll(pageSnapshot);
+export type TabSnapshot = {
+  text: string;
+  ariaSelected: string | null;
+  dataActive: boolean;
+  focused: boolean;
+  tabIndex: number;
+};
+
+export type PanelSnapshot = { text: string; hidden: HTMLElement["hidden"]; display: string };
+
+export type ListSnapshot = { tabs: TabSnapshot[]; panels: PanelSnapshot[] };
+
+export type TabsSnapshot = { document: DocumentSnapshot; lists: ListSnapshot[] };
+
+function listSnapshots(lists: Element[]): ListSnapshot[] {
+  return lists.map((list) => {
+    const { activeElement } = list.getRootNode() as Document | ShadowRoot;
+    return {
+      tabs: [...list.querySelectorAll<HTMLElement>('[role="tab"]')].map((tab) => ({
+        text: tab.textContent ?? "",
+        ariaSelected: tab.getAttribute("aria-selected"),
+        dataActive: tab.hasAttribute("data-active"),
+        focused: tab === activeElement,
+        tabIndex: tab.tabIndex,
+      })),
+      panels: [
+        ...(list.parentElement?.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]') ?? []),
+      ].map((panel) => ({
+        text: panel.textContent ?? "",
+        hidden: panel.hidden,
+        display: getComputedStyle(panel).display,
+      })),
+    };
+  });
+}
+
+export async function snapshotOf(page: Page, list: string): Promise<TabsSnapshot> {
+  return {
+    lists: await tabList(page, list).evaluateAll(listSnapshots),
+    document: await snapshotOfDocument(page),
+  };
 }
 
 export function stateFrom(
-  snapshot: PageSnapshot,
+  snapshot: TabsSnapshot,
   list: string,
   names: readonly string[] = tabNamesOf(list),
 ): TabsReading {

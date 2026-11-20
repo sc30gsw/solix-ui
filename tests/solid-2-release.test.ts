@@ -30,7 +30,7 @@ test("the Solid 2 canary takes each Solid package's own newest release old enoug
   });
 });
 
-test("the Solid 2 canary steps a package down while a release another Solid package needs is too young, or its peer range refuses the release taken", () => {
+test("the Solid 2 canary steps a package down while a release it needs is too young, or while its own range refuses the release another Solid package takes", () => {
   const signalsTooYoung = solidLine((version) => `^${version}`, releases);
   signalsTooYoung["solid-js"] = registryDocument([
     ["2.0.0", 20, { dependencies: { "@solidjs/signals": "^2.0.0" } }],
@@ -65,7 +65,7 @@ test("the Solid 2 canary refuses a range it cannot read, fails by name when the 
       now,
     ),
   ).toThrow(
-    "solid-js: no stable Solid 2 release is old enough to install, with every release it lists at an exact version old enough too, and accepted by the ranges of the other Solid packages.",
+    "solid-js: no stable Solid 2 release is old enough to install, with every release it lists at an exact version old enough too, whose own ranges accept the releases the other Solid packages take.",
   );
 });
 
@@ -155,4 +155,31 @@ test("a published version with no publish time stops the canary by name", () => 
       now,
     ),
   ).toThrow("solid-js: the registry gives no publish time for solid-js@2.0.1");
+});
+
+test("the Solid 2 canary stops, naming its assumption, when a Solid package's range refuses another's newest release from above, since stepping the refusing package back cannot help", () => {
+  const exactPeer = solidLine((version) => version, releases);
+  exactPeer["solid-js"] = registryDocument([...releases, ["2.0.2", 2]]);
+
+  expect(() => newestSolidReleases(exactPeer, policy, now)).toThrow(
+    '@solidjs/web@2.0.1: its range "2.0.1" for solid-js refuses solid-js@2.0.2 from above.',
+  );
+});
+
+test("the Solid 2 canary holds a Solid package to each of its ranges for another, dependency, optional and peer alike, and not only to the last list that names it", () => {
+  const twoLists = solidLine(() => "*", releases);
+  twoLists["solid-js"] = registryDocument([
+    ["2.0.0", 20],
+    [
+      "2.0.1",
+      3,
+      {
+        dependencies: { "@solidjs/signals": "^2.0.1" },
+        peerDependencies: { "@solidjs/signals": "^2.0.0" },
+      },
+    ],
+  ]);
+  twoLists["@solidjs/signals"] = registryDocument([["2.0.0", 20]]);
+
+  expect(newestSolidReleases(twoLists, policy, now)["solid-js"]).toBe("2.0.0");
 });

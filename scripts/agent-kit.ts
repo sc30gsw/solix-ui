@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import {
   cpSync,
   lstatSync,
@@ -8,6 +9,7 @@ import {
   symlinkSync,
 } from "node:fs";
 import { join } from "node:path";
+import { folderHash } from "#/scripts/package-skills.ts";
 
 const kitPackage = "node_modules/solid2-agent-kit";
 export const kitBin = `${kitPackage}/bin/solid2-kit.mjs`;
@@ -28,22 +30,26 @@ function present(path: string): boolean {
   return lstatSync(path, { throwIfNoEntry: false }) !== undefined;
 }
 
-function removeCopy(root: string, name: string): void {
-  rmSync(join(root, sharedSkills, name), { recursive: true, force: true });
-  rmSync(join(root, claudeSkills, name), { recursive: true, force: true });
+function heldAsCommitted(root: string, path: string): boolean {
+  const git = (args: string[]) => execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  return (
+    git(["ls-files", "--", path]) !== "" &&
+    git(["status", "--porcelain", "--untracked-files=all", "--", path]) === ""
+  );
 }
 
 export function copyKitSkills(root: string, copiedBefore: readonly string[]): string[] {
   const names = kitSkillNames(root);
+  const shared = (name: string) => `${sharedSkills}/${name}`;
+  const linked = (name: string) => `${claudeSkills}/${name}`;
   const heldByTheProject = names.flatMap((name) => {
-    const shared = join(root, sharedSkills, name);
-    const linked = join(root, claudeSkills, name);
     const ours = copiedBefore.includes(name);
+    const link = join(root, linked(name));
     return [
-      ...(present(shared) && !ours ? [`${sharedSkills}/${name}`] : []),
-      ...(present(linked) &&
-      !(ours && lstatSync(linked).isSymbolicLink() && readlinkSync(linked) === linkTo(name))
-        ? [`${claudeSkills}/${name}`]
+      ...(present(join(root, shared(name))) && !ours ? [shared(name)] : []),
+      ...(present(link) &&
+      !(ours && lstatSync(link).isSymbolicLink() && readlinkSync(link) === linkTo(name))
+        ? [linked(name)]
         : []),
     ];
   });
@@ -54,13 +60,37 @@ export function copyKitSkills(root: string, copiedBefore: readonly string[]): st
         .join("\n"),
     );
   }
-  for (const name of copiedBefore.filter((name) => !names.includes(name))) removeCopy(root, name);
+  const dropped = copiedBefore.filter((name) => !names.includes(name));
+  const changed = names.filter(
+    (name) =>
+      present(join(root, shared(name))) &&
+      folderHash(join(root, shared(name))) !== folderHash(join(root, kitSkillSource, name)),
+  );
+  const removed = [
+    ...dropped.flatMap((name) => [shared(name), linked(name)]),
+    ...changed.map(shared),
+  ];
+  const notCommitted = removed.filter(
+    (path) => present(join(root, path)) && !heldAsCommitted(root, path),
+  );
+  if (notCommitted.length > 0) {
+    throw new Error(
+      notCommitted
+        .map(
+          (path) =>
+            `${path}: git does not hold it as committed, so it may be the project's. Commit it or move it away, then copy again.`,
+        )
+        .join("\n"),
+    );
+  }
+  for (const path of removed) rmSync(join(root, path), { recursive: true, force: true });
   mkdirSync(join(root, sharedSkills), { recursive: true });
   mkdirSync(join(root, claudeSkills), { recursive: true });
   for (const name of names) {
-    removeCopy(root, name);
-    cpSync(join(root, kitSkillSource, name), join(root, sharedSkills, name), { recursive: true });
-    symlinkSync(linkTo(name), join(root, claudeSkills, name));
+    if (!present(join(root, shared(name)))) {
+      cpSync(join(root, kitSkillSource, name), join(root, shared(name)), { recursive: true });
+    }
+    if (!present(join(root, linked(name)))) symlinkSync(linkTo(name), join(root, linked(name)));
   }
   return names;
 }

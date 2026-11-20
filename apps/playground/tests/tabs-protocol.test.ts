@@ -10,10 +10,10 @@ import {
   panelOf,
   snapshotOf,
   stateFrom,
+  type TabsSnapshot,
   tabLists,
   tabNames,
 } from "#/tests/support/tabs.ts";
-import type { PageSnapshot } from "#/tests/support/opening.ts";
 import {
   afterKey,
   afterPressOn,
@@ -48,7 +48,7 @@ async function expectAgreement(model: Model, { page, openedAt }: Real): Promise<
     shown: model.selected === null ? [] : [panelOf(model.selected)],
   };
   const firstPoll = performance.now();
-  let last: PageSnapshot | undefined;
+  let last: TabsSnapshot | undefined;
   try {
     await expect
       .poll(async () => {
@@ -58,7 +58,7 @@ async function expectAgreement(model: Model, { page, openedAt }: Real): Promise<
       .toMatchObject(expected);
   } catch (cause) {
     throw new Error(
-      `${list}: the page does not agree with the model, which expects ${JSON.stringify(expected)}. It first polled ${Math.round(firstPoll - openedAt)} ms after the page was opened, and gave up ${Math.round(performance.now() - firstPoll)} ms later. The page showed ${last === undefined ? "nothing: no snapshot of it came back" : JSON.stringify(last)}.`,
+      `${list}: the page does not agree with the model, which expects ${JSON.stringify(expected)}. It first polled ${Math.round(firstPoll - openedAt)} ms after the page was ready, and gave up ${Math.round(performance.now() - firstPoll)} ms later. The page showed ${last === undefined ? "nothing: no snapshot of it came back" : JSON.stringify(last)}.`,
       { cause },
     );
   }
@@ -251,7 +251,7 @@ inEveryEngine((browser) => {
     );
 
     for (const shown of [
-      "after the page was opened",
+      "after the page was ready",
       "readyState",
       "stylesheets",
       "scrollY",

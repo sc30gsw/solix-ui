@@ -42,49 +42,58 @@ export function exactlyRequiredNames(documents: Documents): string[] {
   );
 }
 
-function publishedOf(documents: Documents, name: string, policy: ReleasePolicy): Published[] {
-  const published = publishedIn(name, documents[name], policy);
-  if (!Array.isArray(published)) throw new Error(`${name}: ${published.why}`);
-  return published;
+function publishedOf(documents: Documents, policy: ReleasePolicy): (name: string) => Published[] {
+  const known = new Map<string, Published[]>();
+  return (name) => {
+    const published = known.get(name) ?? publishedIn(name, documents[name], policy);
+    if (!Array.isArray(published)) throw new Error(`${name}: ${published.why}`);
+    known.set(name, published);
+    return published;
+  };
 }
 
 function candidatesOf(
   documents: Documents,
+  published: (name: string) => Published[],
   name: string,
-  policy: ReleasePolicy,
   now: number,
 ): string[] {
   const oldEnough = (part: Release) =>
-    publishedOf(documents, part.name, policy).some(
+    published(part.name).some(
       (release) => release.version === part.version && release.eligibleAt <= now,
     );
-  return newestFirst(publishedOf(documents, name, policy))
+  return newestFirst(published(name))
     .map(({ version }) => version)
     .filter((version) => isStableOnMajor(version, solidMajor))
     .filter((version) => releaseParts(documents, name, version).every(oldEnough));
 }
 
 export function solidRanges(manifest: VersionManifest | undefined): [string, string][] {
-  return Object.entries({
-    ...manifest?.dependencies,
-    ...manifest?.optionalDependencies,
-    ...manifest?.peerDependencies,
-  }).filter(([other]) => solidPackages.includes(other));
+  return [manifest?.dependencies, manifest?.optionalDependencies, manifest?.peerDependencies]
+    .flatMap((ranges) => Object.entries(ranges ?? {}))
+    .filter(([other]) => solidPackages.includes(other));
 }
 
-function refusesTaken(
+function refusesWhatOthersTake(
   documents: Documents,
   name: string,
-  version: string,
   taken: Record<string, string>,
 ): boolean {
+  const version = taken[name] ?? "";
   return solidRanges(manifestOf(documents, name, version)).some(([other, range]) => {
+    const theirs = taken[other] ?? "";
     if (semver.validRange(range) === null) {
       throw new Error(
         `${name}@${version}: its range "${range}" for ${other} is not a semver range, so nothing tells whether it accepts the ${other} release taken.`,
       );
     }
-    return !semver.satisfies(taken[other] ?? "", range);
+    if (semver.satisfies(theirs, range)) return false;
+    if (semver.gtr(theirs, range)) {
+      throw new Error(
+        `${name}@${version}: its range "${range}" for ${other} refuses ${other}@${theirs} from above. The canary steps back only the package whose own range refuses, which assumes that no Solid package's range for another has an upper bound below that package's newest release. Pick these releases by hand.`,
+      );
+    }
+    return true;
   });
 }
 
@@ -93,23 +102,22 @@ export function newestSolidReleases(
   policy: ReleasePolicy,
   now: number,
 ): Record<string, string> {
+  const published = publishedOf(documents, policy);
   const candidates = Object.fromEntries(
-    solidPackages.map((name) => [name, candidatesOf(documents, name, policy, now)]),
+    solidPackages.map((name) => [name, candidatesOf(documents, published, name, now)]),
   );
-  const taken = (): Record<string, string> =>
-    Object.fromEntries(solidPackages.map((name) => [name, candidates[name]?.[0] ?? ""]));
   for (;;) {
     const exhausted = solidPackages.find((name) => candidates[name]?.length === 0);
     if (exhausted !== undefined) {
       throw new Error(
-        `${exhausted}: no stable Solid ${solidMajor} release is old enough to install, with every release it lists at an exact version old enough too, and accepted by the ranges of the other Solid packages.`,
+        `${exhausted}: no stable Solid ${solidMajor} release is old enough to install, with every release it lists at an exact version old enough too, whose own ranges accept the releases the other Solid packages take.`,
       );
     }
-    const chosen = taken();
-    const refusing = solidPackages.find((name) =>
-      refusesTaken(documents, name, chosen[name] ?? "", chosen),
+    const taken = Object.fromEntries(
+      solidPackages.map((name) => [name, candidates[name]?.[0] ?? ""]),
     );
-    if (refusing === undefined) return chosen;
+    const refusing = solidPackages.find((name) => refusesWhatOthersTake(documents, name, taken));
+    if (refusing === undefined) return taken;
     candidates[refusing]?.shift();
   }
 }

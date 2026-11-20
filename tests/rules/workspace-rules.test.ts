@@ -597,7 +597,7 @@ test("every package on the Solid 2 channel is pinned to a stable Solid 2 release
             .filter(([other, range]) => !semver.satisfies(catalog[other] ?? "", range))
             .map(
               ([other, range]) =>
-                `${name}@${version} asks for ${other} ${range}, and ${workspaceFile} pins ${other} to ${catalog[other] ?? "nothing"}. Run node scripts/solid-2-canary.ts, which steps back a package whose range a newer release would refuse.`,
+                `${name}@${version} asks for ${other} ${range}, and ${workspaceFile} pins ${other} to ${catalog[other] ?? "nothing"}. Run node scripts/solid-2-canary.ts, which steps a package back while its own range refuses the release another Solid package takes.`,
             ),
     ),
     ...solidPackages

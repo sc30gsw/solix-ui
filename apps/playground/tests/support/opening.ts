@@ -84,7 +84,7 @@ export type StylesheetSnapshot = {
   rules: number | "no sheet" | "unreadable";
 };
 
-const outcomesKey = "__stylesheetOutcomes";
+const stylesheetOutcomesKey = "__stylesheetOutcomes";
 
 function watchStylesheetOutcomes(key: string): void {
   const outcomes = new WeakMap<Element, "loaded" | "failed">();
@@ -103,26 +103,15 @@ function watchStylesheetOutcomes(key: string): void {
   }
 }
 
-export type TabSnapshot = {
-  text: string;
-  ariaSelected: string | null;
-  dataActive: boolean;
-  focused: boolean;
-  tabIndex: number;
-};
-
-export type PanelSnapshot = { text: string; hidden: HTMLElement["hidden"]; display: string };
-
-export type PageSnapshot = {
+export type DocumentSnapshot = {
   readyState: DocumentReadyState;
   bodyParsed: boolean;
   scrollY: number;
   stylesheets: StylesheetSnapshot[];
-  lists: { tabs: TabSnapshot[]; panels: PanelSnapshot[] }[];
 };
 
-export function pageSnapshot(lists: Element[]): PageSnapshot {
-  const outcomes: unknown = Reflect.get(window, "__stylesheetOutcomes");
+export function documentSnapshot(outcomesAt: string): DocumentSnapshot {
+  const outcomes: unknown = Reflect.get(window, outcomesAt);
   const outcomeOf = (link: HTMLLinkElement): StylesheetSnapshot["outcome"] =>
     outcomes instanceof WeakMap ? (outcomes.get(link) ?? "pending") : "not watched";
   const rulesOf = (link: HTMLLinkElement): StylesheetSnapshot["rules"] => {
@@ -140,27 +129,11 @@ export function pageSnapshot(lists: Element[]): PageSnapshot {
     stylesheets: [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')].map(
       (link) => ({ href: link.href, outcome: outcomeOf(link), rules: rulesOf(link) }),
     ),
-    lists: lists.map((list) => {
-      const { activeElement } = list.getRootNode() as Document | ShadowRoot;
-      return {
-        tabs: [...list.querySelectorAll<HTMLElement>('[role="tab"]')].map((tab) => ({
-          text: tab.textContent ?? "",
-          ariaSelected: tab.getAttribute("aria-selected"),
-          dataActive: tab.hasAttribute("data-active"),
-          focused: tab === activeElement,
-          tabIndex: tab.tabIndex,
-        })),
-        panels: [
-          ...(list.parentElement?.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]') ??
-            []),
-        ].map((panel) => ({
-          text: panel.textContent ?? "",
-          hidden: panel.hidden,
-          display: getComputedStyle(panel).display,
-        })),
-      };
-    }),
   };
+}
+
+export function snapshotOfDocument(page: Page): Promise<DocumentSnapshot> {
+  return page.evaluate(documentSnapshot, stylesheetOutcomesKey);
 }
 
 export const linksNoStylesheet = "the page links no stylesheet";
@@ -171,7 +144,7 @@ const pollEvery = 25;
 
 type StylesheetsState = "pending" | "settled" | { failure: string };
 
-function stylesheetsState(snapshot: PageSnapshot | undefined): StylesheetsState {
+function stylesheetsState(snapshot: DocumentSnapshot | undefined): StylesheetsState {
   if (snapshot === undefined) return "pending";
   const failed = snapshot.stylesheets.filter(({ outcome }) => outcome === "failed");
   if (failed.length > 0) {
@@ -199,7 +172,6 @@ function stylesheetsState(snapshot: PageSnapshot | undefined): StylesheetsState 
 }
 
 function within<T>(work: Promise<T>, milliseconds: number): Promise<T | undefined> {
-  work.catch(() => undefined);
   return Promise.race([
     work.catch(() => undefined),
     new Promise<undefined>((resolve) => setTimeout(resolve, Math.max(1, milliseconds))),
@@ -210,7 +182,7 @@ const watchedPages = new WeakSet<Page>();
 
 async function watchStylesheets(page: Page): Promise<void> {
   if (watchedPages.has(page)) return;
-  await page.addInitScript(watchStylesheetOutcomes, outcomesKey);
+  await page.addInitScript(watchStylesheetOutcomes, stylesheetOutcomesKey);
   watchedPages.add(page);
 }
 
@@ -220,9 +192,9 @@ async function untilStylesheetsLoaded(
 ): Promise<void> {
   const failure = (why: string) =>
     new Error(`${pageDidNotBecomeReady}: ${why} The page said: ${said.join(" | ") || "nothing"}`);
-  let snapshot: PageSnapshot | undefined;
+  let snapshot: DocumentSnapshot | undefined;
   for (;;) {
-    snapshot = await within(page.evaluate(pageSnapshot, []), deadline - Date.now());
+    snapshot = (await within(snapshotOfDocument(page), deadline - Date.now())) ?? snapshot;
     const state = stylesheetsState(snapshot);
     if (state === "settled") return;
     if (state !== "pending") throw failure(state.failure);

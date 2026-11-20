@@ -5,7 +5,7 @@ import {
   linksNoStylesheet,
   notEveryStylesheetLoaded,
   opened,
-  pageSnapshot,
+  snapshotOfDocument,
   stylesheetDidNotLoad,
   stylesheetUnreadable,
 } from "#/tests/support/opening.ts";
@@ -354,7 +354,7 @@ inEveryEngine((browser) => {
       await opened(page, url, "stylesheetsLoaded");
 
       expect(
-        (await page.evaluate(pageSnapshot, [])).stylesheets.map(
+        (await snapshotOfDocument(page)).stylesheets.map(
           ({ rules }) => typeof rules === "number" && rules > 0,
         ),
       ).toEqual([true]);
@@ -386,7 +386,10 @@ inEveryEngine((browser) => {
         );
 
         expect(await opening).toContain(failure);
-        if (failure === notEveryStylesheetLoaded) expect(await opening).toContain(spokeFirst);
+        if (failure === notEveryStylesheetLoaded) {
+          expect(await opening).toContain(spokeFirst);
+          expect(await opening).toContain(`"href":"${neverSheet}","outcome":"pending"`);
+        }
         expect(performance.now() - started).toBeLessThan(
           failure === notEveryStylesheetLoaded ? stylesheetTimeout * 2 : stylesheetTimeout,
         );
