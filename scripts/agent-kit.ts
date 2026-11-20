@@ -1,7 +1,7 @@
 import { cpSync, mkdirSync, readdirSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 
-export const kitPackage = "node_modules/solid2-agent-kit";
+const kitPackage = "node_modules/solid2-agent-kit";
 export const kitBin = `${kitPackage}/bin/solid2-kit.mjs`;
 export const kitSkillSource = `${kitPackage}/files/skills`;
 export const sharedSkills = ".agents/skills";

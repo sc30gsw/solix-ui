@@ -12,7 +12,7 @@ import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 
 export const reviewedSkillsFile = "scripts/reviewed-skills.json";
-export const skillsLockFile = "skills-lock.json";
+const skillsLockFile = "skills-lock.json";
 export const kitSkills: readonly string[] = ["solid-2"];
 export const skillDirectories = [".agents/skills", ".claude/skills"];
 const skillFile = "SKILL.md";
@@ -26,7 +26,7 @@ export function approvedSkills(): PackageSkill[] {
   );
 }
 
-export type OutsideSkill = { name: string; source: "package" | "vendored" | "kit" };
+type OutsideSkill = { name: string; source: "package" | "vendored" | "kit" };
 
 export function outsideSkills(): OutsideSkill[] {
   const lock: { skills: Record<string, unknown> } = JSON.parse(

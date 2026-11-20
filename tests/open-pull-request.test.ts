@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
-import { kitInstalls, sharedSkills } from "#/scripts/agent-kit.ts";
+import { sharedSkills } from "#/scripts/agent-kit.ts";
+import { kitSkills } from "#/scripts/package-skills.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const openPullRequest = ".agents/skills/open-pull-request/SKILL.md";
@@ -28,10 +29,9 @@ test("step 4 of open-pull-request starts each reviewer from its rubric's path, s
 });
 
 test("review-solid2 reviews the diff against the review checklist of the kit's solid-2 skill, which has one", () => {
-  const kitSkills = kitInstalls(repositoryRoot, "skills").map(
-    (name) => `${sharedSkills}/${name}/SKILL.md`,
-  );
-  const named = kitSkills.filter((path) => read(solidReview).includes(`\`${path}\``));
+  const named = kitSkills
+    .map((name) => `${sharedSkills}/${name}/SKILL.md`)
+    .filter((path) => read(solidReview).includes(`\`${path}\``));
 
   expect(named.length).toBe(1);
   expect(
