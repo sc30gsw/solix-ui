@@ -210,11 +210,11 @@ catalogs:
       specifier: 7.8.0
       version: 7.8.0
     '@ui-sdk/core':
-      specifier: 0.1.0-beta.6
-      version: 0.1.0-beta.6
+      specifier: 0.1.0-beta.13
+      version: 0.1.0-beta.13
     '@ui-sdk/solid':
-      specifier: 0.1.0-beta.6
-      version: 0.1.0-beta.6
+      specifier: 0.1.0-beta.13
+      version: 0.1.0-beta.13
     '@vitest/browser-playwright':
       specifier: 5.1.0
       version: 5.1.0
@@ -454,10 +454,10 @@ importers:
     dependencies:
       '@ui-sdk/core':
         specifier: 'catalog:'
-        version: 0.1.0-beta.6
+        version: 0.1.0-beta.13
       '@ui-sdk/solid':
         specifier: 'catalog:'
-        version: 0.1.0-beta.6(@solidjs/web@2.0.1(solid-js@2.0.1))(@ui-sdk/core@0.1.0-beta.6)(solid-js@2.0.1)
+        version: 0.1.0-beta.13(@solidjs/web@2.0.1(solid-js@2.0.1))(@ui-sdk/core@0.1.0-beta.13)(solid-js@2.0.1)
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
@@ -1759,15 +1759,15 @@ packages:
     resolution: {integrity: sha512-mbCddXd+jm7hfx7w2YU64/Av4/NqqeG3GoRZgxPcgoTxYjhrcfJRw9ULch71SS4G+Q3bOXFhRvPqjguN0Hyp5w==}
     hasBin: true
 
-  '@ui-sdk/core@0.1.0-beta.6':
-    resolution: {integrity: sha512-4JDArOSaTDRArUs+XXojXVNS1kf1D/aOMan6GIp8J9+cwAdijCypbClApS2jBc4SxgZbJCIDHsMlFOIPyEv8+g==}
+  '@ui-sdk/core@0.1.0-beta.13':
+    resolution: {integrity: sha512-URjk9hqdc/cZKDtw6Gb9NqjY48U8l0EgoP4d5ghlooa3av+GrR0iSmsav133UU4oelcuKIO1ZPJ4j7gIPMr1Vg==}
 
-  '@ui-sdk/solid@0.1.0-beta.6':
-    resolution: {integrity: sha512-3sK9ctnOVBMLIgUPcMcaYq7PkGCGBNphRU3MQTNLDQU7KBlUESWfjDfAcwYV8bsV6cMIoltong6VeREK559OOQ==}
+  '@ui-sdk/solid@0.1.0-beta.13':
+    resolution: {integrity: sha512-/YLOk1OGHzRvgVxmMpTXc4OSOCAucTbQ7XElaVAYlvcGqn6F8ALyc39nkcNAroREqyAKzbdxkVtYTLXPOVV13g==}
     peerDependencies:
-      '@solidjs/web': '>=2.0.0-rc.14 <3'
-      '@ui-sdk/core': ^0.1.0-beta.6
-      solid-js: '>=2.0.0-rc.14 <3'
+      '@solidjs/web': ^2.0.0
+      '@ui-sdk/core': ^0.1.0-beta.13
+      solid-js: ^2.0.0
 
   '@vitest/browser-playwright@5.1.0':
     resolution: {integrity: sha512-3PbVvX/KNeUEzUeTTXw5bQDyfJS+WqU/UJ8RNWIojHb0mE6d/IBjuLmt+i7OpJ00tjNWv0O6XBm5ler/tEf3eg==}
@@ -3574,12 +3574,12 @@ snapshots:
     dependencies:
       '@typescript/old': typescript@6.0.3
 
-  '@ui-sdk/core@0.1.0-beta.6': {}
+  '@ui-sdk/core@0.1.0-beta.13': {}
 
-  '@ui-sdk/solid@0.1.0-beta.6(@solidjs/web@2.0.1(solid-js@2.0.1))(@ui-sdk/core@0.1.0-beta.6)(solid-js@2.0.1)':
+  '@ui-sdk/solid@0.1.0-beta.13(@solidjs/web@2.0.1(solid-js@2.0.1))(@ui-sdk/core@0.1.0-beta.13)(solid-js@2.0.1)':
     dependencies:
       '@solidjs/web': 2.0.1(solid-js@2.0.1)
-      '@ui-sdk/core': 0.1.0-beta.6
+      '@ui-sdk/core': 0.1.0-beta.13
       solid-js: 2.0.1
 
   '@vitest/browser-playwright@5.1.0(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(playwright@1.65.1)(vitest@5.1.0)':
