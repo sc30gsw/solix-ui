@@ -183,11 +183,11 @@ catalogs:
       specifier: ^8.0.7
       version: 8.0.7
     '@solidjs/vite-plugin':
-      specifier: 3.0.0
-      version: 3.0.0
+      specifier: 3.0.1
+      version: 3.0.1
     '@solidjs/web':
-      specifier: 2.0.0
-      version: 2.0.0
+      specifier: 2.0.1
+      version: 2.0.1
     '@storybook/addon-a11y':
       specifier: 11.0.0-beta.3
       version: 11.0.0-beta.3
@@ -243,11 +243,11 @@ catalogs:
       specifier: 7.8.6
       version: 7.8.6
     solid-js:
-      specifier: 2.0.0
-      version: 2.0.0
+      specifier: 2.0.1
+      version: 2.0.1
     solid2-agent-kit:
-      specifier: 0.26.1
-      version: 0.26.1
+      specifier: 0.29.0
+      version: 0.29.0
     storybook:
       specifier: 11.0.0-beta.3
       version: 11.0.0-beta.3
@@ -268,8 +268,8 @@ catalogs:
       version: 2.9.1
 
 overrides:
-  '@solidjs/compiler': 2.0.0
-  '@solidjs/signals': 2.0.0
+  '@solidjs/compiler': 2.0.1
+  '@solidjs/signals': 2.0.1
   vite@*: npm:@voidzero-dev/vite-plus-core@8.3.8000
 
 importers:
@@ -278,10 +278,10 @@ importers:
     devDependencies:
       '@solidjs/vite-plugin':
         specifier: 'catalog:'
-        version: 3.0.0(@babel/core@8.1.2)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)
+        version: 3.0.1(@babel/core@8.1.2)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)
       '@solidjs/web':
         specifier: 'catalog:'
-        version: 2.0.0(solid-js@2.0.0)
+        version: 2.0.1(solid-js@2.0.1)
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.6
@@ -314,10 +314,10 @@ importers:
         version: 7.8.6
       solid-js:
         specifier: 'catalog:'
-        version: 2.0.0
+        version: 2.0.1
       solid2-agent-kit:
         specifier: 'catalog:'
-        version: 0.26.1
+        version: 0.29.0
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -332,7 +332,7 @@ importers:
     dependencies:
       '@solidjs/web':
         specifier: 'catalog:'
-        version: 2.0.0(solid-js@2.0.0)
+        version: 2.0.1(solid-js@2.0.1)
       '@solix/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -344,11 +344,11 @@ importers:
         version: 0.19.2
       solid-js:
         specifier: 'catalog:'
-        version: 2.0.0
+        version: 2.0.1
     devDependencies:
       '@solidjs/vite-plugin':
         specifier: 'catalog:'
-        version: 3.0.0(@babel/core@8.1.2)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)
+        version: 3.0.1(@babel/core@8.1.2)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -363,7 +363,7 @@ importers:
     dependencies:
       '@solidjs/web':
         specifier: 'catalog:'
-        version: 2.0.0(solid-js@2.0.0)
+        version: 2.0.1(solid-js@2.0.1)
       '@solix/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -375,11 +375,11 @@ importers:
         version: 0.19.2
       solid-js:
         specifier: 'catalog:'
-        version: 2.0.0
+        version: 2.0.1
     devDependencies:
       '@solidjs/vite-plugin':
         specifier: 'catalog:'
-        version: 3.0.0(@babel/core@8.1.2)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)
+        version: 3.0.1(@babel/core@8.1.2)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)
       '@storybook/addon-a11y':
         specifier: 'catalog:'
         version: 11.0.0-beta.3(storybook@11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1)))
@@ -400,7 +400,7 @@ importers:
         version: 11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1))
       storybook-solidjs-vite:
         specifier: 'catalog:'
-        version: 11.0.0-next-20261105190313(@solidjs/vite-plugin@3.0.0(@babel/core@8.1.2)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0))(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)(storybook@11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1)))(typescript@7.0.2)
+        version: 11.0.0-next-20261105190313(@solidjs/vite-plugin@3.0.1(@babel/core@8.1.2)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1))(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)(storybook@11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1)))(typescript@7.0.2)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -415,7 +415,7 @@ importers:
     dependencies:
       '@solidjs/web':
         specifier: 'catalog:'
-        version: 2.0.0(solid-js@2.0.0)
+        version: 2.0.1(solid-js@2.0.1)
       '@solix/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -424,11 +424,11 @@ importers:
         version: 0.19.2
       solid-js:
         specifier: 'catalog:'
-        version: 2.0.0
+        version: 2.0.1
     devDependencies:
       '@solidjs/vite-plugin':
         specifier: 'catalog:'
-        version: 3.0.0(@babel/core@7.29.13)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)
+        version: 3.0.1(@babel/core@7.29.13)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)
       '@stylexjs/unplugin':
         specifier: 'catalog:'
         version: 0.19.2(unplugin@2.3.11)
@@ -449,7 +449,7 @@ importers:
         version: 0.1.0-beta.6
       '@ui-sdk/solid':
         specifier: 'catalog:'
-        version: 0.1.0-beta.6(@solidjs/web@2.0.0(solid-js@2.0.0))(@ui-sdk/core@0.1.0-beta.6)(solid-js@2.0.0)
+        version: 0.1.0-beta.6(@solidjs/web@2.0.1(solid-js@2.0.1))(@ui-sdk/core@0.1.0-beta.6)(solid-js@2.0.1)
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
@@ -462,7 +462,7 @@ importers:
         version: 8.0.7(@babel/core@8.1.2)
       '@solidjs/web':
         specifier: 'catalog:'
-        version: 2.0.0(solid-js@2.0.0)
+        version: 2.0.1(solid-js@2.0.1)
       '@solix/primitives':
         specifier: workspace:*
         version: link:../primitives
@@ -480,7 +480,7 @@ importers:
         version: 7.2.1
       solid-js:
         specifier: 'catalog:'
-        version: 2.0.0
+        version: 2.0.1
 
   packages/form:
     devDependencies:
@@ -501,7 +501,7 @@ importers:
         version: 8.0.7(@babel/core@8.1.2)
       solid-js:
         specifier: 'catalog:'
-        version: 2.0.0
+        version: 2.0.1
 
 packages:
 
@@ -1425,46 +1425,46 @@ packages:
   '@polka/url@1.0.0-next.29':
     resolution: {integrity: sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww==}
 
-  '@solidjs/compiler-darwin-arm64@2.0.0':
-    resolution: {integrity: sha512-pPHERRXgCcsfCsaC8sgK94uVlp4WGUcHTfMeBiAfme2amQ7vFn7dpjSD3TIVKY4jeYQTKjIKOYP0c5mqIR1LeA==}
+  '@solidjs/compiler-darwin-arm64@2.0.1':
+    resolution: {integrity: sha512-s8zOz+VxiY0fimGPDtq3yV1nya/1ymzt6sQs6PxRo88UmcJ12UliBDx1uIU3zn3YShJRhmn9xZiNIawbzOco9w==}
     cpu: [arm64]
     os: [darwin]
 
-  '@solidjs/compiler-darwin-x64@2.0.0':
-    resolution: {integrity: sha512-Ndwy+pQs8v6BIfaAbQ+weu9HGBTM40HFCyu0XV2qX7U5XC+o+3fc4O6+8ZZyUzl+qvT6XU+wh2bQ6MI2lV+KBQ==}
+  '@solidjs/compiler-darwin-x64@2.0.1':
+    resolution: {integrity: sha512-+2GaMoj6kMpBKeq7JXQtZPYdBpgCGHZxXiwhR7A/TvnU/IQDL7tBwQtOwnBd9gF+mUcy9frOn7a200kXPGS2mw==}
     cpu: [x64]
     os: [darwin]
 
-  '@solidjs/compiler-linux-arm64-gnu@2.0.0':
-    resolution: {integrity: sha512-H/R9SUmuqd4P/IuuXTlRM1LhgUWe2EjLP3iMUo+L4IO1rmOSqfMUZp9h52eQnDsOdoIZCaKsw+b0qC5WooxDlg==}
+  '@solidjs/compiler-linux-arm64-gnu@2.0.1':
+    resolution: {integrity: sha512-UCgV/xT/YFmn500Kam+p9N9bIZMMHjHdGMDKxdfg8goMQZ1AjYsd3Xif4M1BnugTYBLLp/RymSBhU8Ly61vbDQ==}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@solidjs/compiler-linux-x64-gnu@2.0.0':
-    resolution: {integrity: sha512-gafr9+2bP2sv2hRAvDgzab0mpQi4MiyWrie9bfYjadsK7qZKJBeMzEQCLNd4dTYlgirCj6Frzu2pfET7+ZUyNQ==}
+  '@solidjs/compiler-linux-x64-gnu@2.0.1':
+    resolution: {integrity: sha512-+ufnpdsvvjo1nvCy+AfUtCcqKkygirK6beY/jR2T7JL7aeDC1nXeIhbVP1jyNRpA2dh12n3rKSYjl+W0O879ww==}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@solidjs/compiler-wasm32-wasi@2.0.0':
-    resolution: {integrity: sha512-JnF21DJ/jx5fghYKIB6ANihHMM4aWg4JFe5pFLGDvqSeURZJdJGjwyyxOv3siEMUdkBzVGHXotTsviTcRyB5hQ==}
+  '@solidjs/compiler-wasm32-wasi@2.0.1':
+    resolution: {integrity: sha512-FjY9OUbldtN+J40cFqa7my56PeN57RyrSHSQAV9TCVXfomRXuPh/l91oFwy8vDgV6HNUb59QHML19RfSIA1Tnw==}
     engines: {node: '>=14.0.0'}
 
-  '@solidjs/compiler-win32-x64-msvc@2.0.0':
-    resolution: {integrity: sha512-RkiUXt/LmJ1lk1fECa/iDVGCOv3UiwW5ocZgkhpayUviTSrceFjFHhiM9sFXq0at3kHI7Z8awN6zTaF5IStDAQ==}
+  '@solidjs/compiler-win32-x64-msvc@2.0.1':
+    resolution: {integrity: sha512-YHJxc+jTod7V87ftP6i50uTs3a/xMRTWWIWvwSw/oftuWObBbB9n6hfmhDkS1kQF81YcoZK1CwvgP0raAQn+rQ==}
     cpu: [x64]
     os: [win32]
 
-  '@solidjs/compiler@2.0.0':
-    resolution: {integrity: sha512-Spgqz1+eojQ2pDl4yajnajIjX/kSusjTK/6mC6Fm7sAZ3YBI0yP4/epRR1hV08TU3YAH4xLBmZ6wjb1zC134Sw==}
+  '@solidjs/compiler@2.0.1':
+    resolution: {integrity: sha512-MqYP2+kHLKwgBqWu61KBbQnhlQYsIJFX1Y60EmaM5WrVEyGhG1XiIedUnn4Is9UVu7htXx9ta6XROq9gwKbeEA==}
 
-  '@solidjs/signals@2.0.0':
-    resolution: {integrity: sha512-jrcT6XTVvsYRpesRp0At/mSUnsWr6jiprK8C93Oat56B8n7X9BMSe58Rxl6qSZUhBN0L+sxm8GzeO7HdhBXvDw==}
+  '@solidjs/signals@2.0.1':
+    resolution: {integrity: sha512-nTdIk7UgGLwATg0wCT/wH/G62aWYjGol2AnqdrN4qVyV7snYTnYoesgJ/G7xRkO34mAr3tayt0cu1+k/dt0lmA==}
     engines: {node: '>=22.12.0'}
 
-  '@solidjs/vite-plugin@3.0.0':
-    resolution: {integrity: sha512-JXFEewd+vKxbAuqc2+gtf0cnsc4esDq+lax6KKGRvP3D5np49rhF1V6mCLtiOEfeVEcSrBP6MRlArObiTaCQfA==}
+  '@solidjs/vite-plugin@3.0.1':
+    resolution: {integrity: sha512-dyRU4LJXhzEEgtF32AtUdjqaUuMVYTVLQvhYlT6HcYBvf10yIVmKgW9cg42b5YDxkl6BgAJ9o0OjUnAy3qKb9A==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@babel/core': ^7.23.3 || ^8.0.0
@@ -1484,11 +1484,11 @@ packages:
       '@testing-library/jest-dom':
         optional: true
 
-  '@solidjs/web@2.0.0':
-    resolution: {integrity: sha512-R0+JMCD6ukEXaID/sH5PVQe9bCIN9pRzJry+F6Sb6YvtlkAp9DEyVI7AeZYiV0cd6TSL98kpbCyLDiZnaAKGrA==}
+  '@solidjs/web@2.0.1':
+    resolution: {integrity: sha512-o7spK20IEMk0bA+lVeULfTQPD9Oyb/VLS9gv5BNQdHIxFWBRFNlHf1ofF0z9b2uA3pLlRtYh+5/USk3fSTdsjQ==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
-      solid-js: ^2.0.0
+      solid-js: ^2.0.1
 
   '@storybook/addon-a11y@11.0.0-beta.3':
     resolution: {integrity: sha512-QwZCXyvCMQ5yWoBpULxBNXWYHlwEYshfV3PA6AviKtA/h/fkgOLhwnJ0YqmTJhnMnaIGSIA0K4zpiDkfRHIQMA==}
@@ -2392,12 +2392,12 @@ packages:
     resolution: {integrity: sha512-2wcC/oGxHis/BoHkkPwldgiPSYcpZK3JU28WoMVv55yHJgcZ8rlXvuG9iZggz+sU1d4bRgIGASwyWqjxu3FM0g==}
     engines: {node: '>=18'}
 
-  solid-js@2.0.0:
-    resolution: {integrity: sha512-9zN4uH2OQeQAYbF4BmIzoaa+L5Hb8Dp6kkP6ZXobHQ1FZVICdmzREPDVDBJY7umzdAE8D6zbFfWhxGtagkyslA==}
+  solid-js@2.0.1:
+    resolution: {integrity: sha512-5bBwRCblIZ672y2H2aB5KIOfeP/N+acx1YoCjNCWYFc4ZI/Y7y7n/6N1kei8AgWmcJJQ1m5SV90rs3V8CPAnYQ==}
     engines: {node: '>=22.12.0'}
 
-  solid2-agent-kit@0.26.1:
-    resolution: {integrity: sha512-YKWh0M250CLquHuV0thcc0z1WtBsRLkSGOYEQfqr8O5L3uocF2KSBD7rekskUwsZ771NwaUfyDG78CX2WroC2A==}
+  solid2-agent-kit@0.29.0:
+    resolution: {integrity: sha512-e9eDGS7u9fidRDPQmT3qjLNrm6Mnp78YGXYxi3VHyIIVSXUg6DU+F26R/tyiK/R3HuX3omgeC44OyoOhjHTQWA==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -3313,71 +3313,71 @@ snapshots:
 
   '@polka/url@1.0.0-next.29': {}
 
-  '@solidjs/compiler-darwin-arm64@2.0.0':
+  '@solidjs/compiler-darwin-arm64@2.0.1':
     optional: true
 
-  '@solidjs/compiler-darwin-x64@2.0.0':
+  '@solidjs/compiler-darwin-x64@2.0.1':
     optional: true
 
-  '@solidjs/compiler-linux-arm64-gnu@2.0.0':
+  '@solidjs/compiler-linux-arm64-gnu@2.0.1':
     optional: true
 
-  '@solidjs/compiler-linux-x64-gnu@2.0.0':
+  '@solidjs/compiler-linux-x64-gnu@2.0.1':
     optional: true
 
-  '@solidjs/compiler-wasm32-wasi@2.0.0':
+  '@solidjs/compiler-wasm32-wasi@2.0.1':
     dependencies:
       '@emnapi/core': 1.11.3
       '@emnapi/runtime': 1.11.3
       '@napi-rs/wasm-runtime': 1.2.7(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)
     optional: true
 
-  '@solidjs/compiler-win32-x64-msvc@2.0.0':
+  '@solidjs/compiler-win32-x64-msvc@2.0.1':
     optional: true
 
-  '@solidjs/compiler@2.0.0':
+  '@solidjs/compiler@2.0.1':
     optionalDependencies:
-      '@solidjs/compiler-darwin-arm64': 2.0.0
-      '@solidjs/compiler-darwin-x64': 2.0.0
-      '@solidjs/compiler-linux-arm64-gnu': 2.0.0
-      '@solidjs/compiler-linux-x64-gnu': 2.0.0
-      '@solidjs/compiler-wasm32-wasi': 2.0.0
-      '@solidjs/compiler-win32-x64-msvc': 2.0.0
+      '@solidjs/compiler-darwin-arm64': 2.0.1
+      '@solidjs/compiler-darwin-x64': 2.0.1
+      '@solidjs/compiler-linux-arm64-gnu': 2.0.1
+      '@solidjs/compiler-linux-x64-gnu': 2.0.1
+      '@solidjs/compiler-wasm32-wasi': 2.0.1
+      '@solidjs/compiler-win32-x64-msvc': 2.0.1
 
-  '@solidjs/signals@2.0.0': {}
+  '@solidjs/signals@2.0.1': {}
 
-  '@solidjs/vite-plugin@3.0.0(@babel/core@7.29.13)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)':
+  '@solidjs/vite-plugin@3.0.1(@babel/core@7.29.13)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)':
     dependencies:
       '@ampproject/remapping': 2.3.0
-      '@solidjs/compiler': 2.0.0
-      '@solidjs/web': 2.0.0(solid-js@2.0.0)
+      '@solidjs/compiler': 2.0.1
+      '@solidjs/web': 2.0.1(solid-js@2.0.1)
       magic-string: 0.30.21
       merge-anything: 5.1.7
-      solid-js: 2.0.0
+      solid-js: 2.0.1
       vite: '@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1)'
       vitefu: 1.1.3(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))
     optionalDependencies:
       '@babel/core': 7.29.13
 
-  '@solidjs/vite-plugin@3.0.0(@babel/core@8.1.2)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)':
+  '@solidjs/vite-plugin@3.0.1(@babel/core@8.1.2)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)':
     dependencies:
       '@ampproject/remapping': 2.3.0
-      '@solidjs/compiler': 2.0.0
-      '@solidjs/web': 2.0.0(solid-js@2.0.0)
+      '@solidjs/compiler': 2.0.1
+      '@solidjs/web': 2.0.1(solid-js@2.0.1)
       magic-string: 0.30.21
       merge-anything: 5.1.7
-      solid-js: 2.0.0
+      solid-js: 2.0.1
       vite: '@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1)'
       vitefu: 1.1.3(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))
     optionalDependencies:
       '@babel/core': 8.1.2
 
-  '@solidjs/web@2.0.0(solid-js@2.0.0)':
+  '@solidjs/web@2.0.1(solid-js@2.0.1)':
     dependencies:
       csstype: 3.2.3
       seroval: 1.8.1
       seroval-plugins: 1.8.0(seroval@1.8.1)
-      solid-js: 2.0.0
+      solid-js: 2.0.1
 
   '@storybook/addon-a11y@11.0.0-beta.3(storybook@11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1)))':
     dependencies:
@@ -3571,11 +3571,11 @@ snapshots:
 
   '@ui-sdk/core@0.1.0-beta.6': {}
 
-  '@ui-sdk/solid@0.1.0-beta.6(@solidjs/web@2.0.0(solid-js@2.0.0))(@ui-sdk/core@0.1.0-beta.6)(solid-js@2.0.0)':
+  '@ui-sdk/solid@0.1.0-beta.6(@solidjs/web@2.0.1(solid-js@2.0.1))(@ui-sdk/core@0.1.0-beta.6)(solid-js@2.0.1)':
     dependencies:
-      '@solidjs/web': 2.0.0(solid-js@2.0.0)
+      '@solidjs/web': 2.0.1(solid-js@2.0.1)
       '@ui-sdk/core': 0.1.0-beta.6
-      solid-js: 2.0.0
+      solid-js: 2.0.1
 
   '@vitest/browser-playwright@5.1.0(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(playwright@1.65.1)(vitest@5.1.0)':
     dependencies:
@@ -4111,19 +4111,19 @@ snapshots:
       mrmime: 2.0.1
       totalist: 3.0.1
 
-  solid-js@2.0.0:
+  solid-js@2.0.1:
     dependencies:
-      '@solidjs/signals': 2.0.0
+      '@solidjs/signals': 2.0.1
       seroval: 1.8.1
       seroval-plugins: 1.8.0(seroval@1.8.1)
 
-  solid2-agent-kit@0.26.1: {}
+  solid2-agent-kit@0.29.0: {}
 
   source-map-js@1.2.2: {}
 
   std-env@4.3.0: {}
 
-  storybook-solidjs-vite@11.0.0-next-20261105190313(@solidjs/vite-plugin@3.0.0(@babel/core@8.1.2)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0))(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)(storybook@11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1)))(typescript@7.0.2):
+  storybook-solidjs-vite@11.0.0-next-20261105190313(@solidjs/vite-plugin@3.0.1(@babel/core@8.1.2)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1))(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)(storybook@11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1)))(typescript@7.0.2):
     dependencies:
       '@storybook/builder-vite': 11.0.0-beta.3(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(storybook@11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1)))
       '@storybook/global': 5.0.0
@@ -4131,12 +4131,12 @@ snapshots:
       '@volar/language-core': 2.4.31
       '@volar/typescript': 2.4.31(typescript@7.0.2)
       semver: 7.8.6
-      solid-js: 2.0.0
+      solid-js: 2.0.1
       storybook: 11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1))
       vite: '@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1)'
     optionalDependencies:
-      '@solidjs/vite-plugin': 3.0.0(@babel/core@8.1.2)(@solidjs/web@2.0.0(solid-js@2.0.0))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.0)
-      '@solidjs/web': 2.0.0(solid-js@2.0.0)
+      '@solidjs/vite-plugin': 3.0.1(@babel/core@8.1.2)(@solidjs/web@2.0.1(solid-js@2.0.1))(@voidzero-dev/vite-plus-core@8.3.8000(@types/node@26.6.6)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.1)
+      '@solidjs/web': 2.0.1(solid-js@2.0.1)
       typescript: 7.0.2
 
   storybook@11.0.0-beta.3(react@19.3.1)(vite-plus@1.7.0(@types/node@26.6.6)(@vitest/browser-playwright@5.1.0)(@vitest/ui@5.1.0)(esbuild@0.28.2)(playwright@1.65.1)(typescript@7.0.2)(yaml@2.9.1)):
