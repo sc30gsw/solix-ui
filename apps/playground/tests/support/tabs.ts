@@ -196,16 +196,55 @@ export function activeAndSelected(
   });
 }
 
+export async function pageReport(page: Page, list: string): Promise<string> {
+  return tabList(page, list).evaluate((node) => {
+    const root = node.parentElement;
+    const { activeElement } = node.getRootNode() as Document | ShadowRoot;
+    const readable = (link: Element) => {
+      if (!(link instanceof HTMLLinkElement) || link.sheet === null) return false;
+      try {
+        return link.sheet.cssRules.length >= 0;
+      } catch {
+        return false;
+      }
+    };
+    return JSON.stringify({
+      readyState: document.readyState,
+      stylesheetsReadable: [...document.querySelectorAll('link[rel="stylesheet"]')].map(readable),
+      scrollY: window.scrollY,
+      tabs: [...node.querySelectorAll<HTMLElement>('[role="tab"]')].map((tab) => ({
+        text: tab.textContent ?? "",
+        ariaSelected: tab.getAttribute("aria-selected"),
+        dataActive: tab.hasAttribute("data-active"),
+        focused: tab === activeElement,
+        tabIndex: tab.tabIndex,
+      })),
+      panels: [...(root?.querySelectorAll<HTMLElement>(':scope > [role="tabpanel"]') ?? [])].map(
+        (panel) => ({
+          text: (panel.textContent ?? "").slice(0, 40),
+          hidden: panel.hidden,
+          display: getComputedStyle(panel).display,
+        }),
+      ),
+    });
+  });
+}
+
 export async function clickTab(page: Page, list: string, name: string): Promise<void> {
   const tab = tabNamed(page, list, name);
   const watch = await tab.evaluateHandle((node, types) => {
     const seen: string[] = [];
     let reached = false;
-    const note = ({ type, target }: Event) => {
+    const note = (event: Event) => {
+      const { type, target } = event;
       const onTheTab = target instanceof Node && node.contains(target);
-      const where = target instanceof Element ? `<${target.localName}>` : "no element";
+      const where =
+        target instanceof Element
+          ? `<${target.localName}${target.id ? ` id="${target.id}"` : ""}${target.getAttribute("role") ? ` role="${target.getAttribute("role")}"` : ""}> "${(target.textContent ?? "").trim().slice(0, 30)}"`
+          : "no element";
+      const at = event instanceof MouseEvent ? ` at (${event.clientX}, ${event.clientY})` : "";
       seen.push(
-        `${type} on ${onTheTab ? "the tab" : where} with the page scrolled to ${window.scrollY}`,
+        `${type} on ${onTheTab ? "the tab" : where}${at} with the page scrolled to ${window.scrollY}`,
       );
       reached ||= type === "click" && onTheTab;
     };

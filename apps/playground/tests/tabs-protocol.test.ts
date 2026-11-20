@@ -8,6 +8,7 @@ import {
   clickMissedItsTab,
   clickTab,
   optional,
+  pageReport,
   panelOf,
   stateOf,
   tabLists,
@@ -28,6 +29,8 @@ const generatedRuns = 15;
 const longestSequence = 12;
 const generatedSequencesTimeout = 55_000;
 const scrollAwayFromThePointer = 200;
+const notATab = "a tab the list does not have";
+const openedAt = new WeakMap<Page, number>();
 type Model = RovingListState & { list: RovingList };
 type Real = { page: Page };
 
@@ -38,13 +41,22 @@ function become(model: Model, next: RovingListState): void {
 
 async function expectAgreement(model: Model, { page }: Real): Promise<void> {
   const { name: list } = model.list;
-  await expect
-    .poll(() => stateOf(page, list))
-    .toMatchObject({
-      selected: model.selected,
-      focused: model.focused,
-      shown: model.selected === null ? [] : [panelOf(model.selected)],
-    });
+  const expected = {
+    selected: model.selected,
+    focused: model.focused,
+    shown: model.selected === null ? [] : [panelOf(model.selected)],
+  };
+  const firstPoll = performance.now();
+  try {
+    await expect.poll(() => stateOf(page, list)).toMatchObject(expected);
+  } catch (cause) {
+    const sinceOpening = Math.round(firstPoll - (openedAt.get(page) ?? firstPoll));
+    const polled = Math.round(performance.now() - firstPoll);
+    throw new Error(
+      `${list}: the page does not agree with the model, which expects ${JSON.stringify(expected)}. It first polled ${sinceOpening} ms after the page was opened, and gave up ${polled} ms later. The page showed ${await pageReport(page, list)}.`,
+      { cause },
+    );
+  }
   const { active, selected } = await activeAndSelected(page, list);
   expect(
     active,
@@ -123,6 +135,7 @@ function everySequenceAgreesOn(page: Page) {
     fc.constantFrom(...tabLists),
     fc.commands(steps, { maxCommands: longestSequence }),
     async (list, sequence) => {
+      openedAt.set(page, performance.now());
       await opened(page, url, "hydrated");
       const model = atTheStartOf(list);
 
@@ -216,6 +229,36 @@ inEveryEngine((browser) => {
     await expect(failure).rejects.toThrow(/page\.goto/);
     await expect(failure).rejects.not.toThrow(pageDidNotBecomeReady);
 
+    await page.close();
+  });
+
+  test("a disagreement with the model says what the page showed: each tab and panel, the document's state, its stylesheets and its scroll", async () => {
+    const page = await browser().newPage();
+    const [list] = tabLists;
+    if (list === undefined) throw new Error("the playground renders no list of tabs.");
+    const model = atTheStartOf(list);
+    model.focused = notATab;
+    openedAt.set(page, performance.now());
+    await opened(page, url, "hydrated");
+
+    const failure = await expectAgreement(model, { page }).then(
+      () => "",
+      (error: unknown) => String(error),
+    );
+
+    for (const shown of [
+      "after the page was opened",
+      "readyState",
+      "stylesheetsReadable",
+      "scrollY",
+      "ariaSelected",
+      "dataActive",
+      "hidden",
+      "display",
+    ]) {
+      expect(failure).toContain(shown);
+    }
+    expect(failure).toContain(notATab);
     await page.close();
   });
 
