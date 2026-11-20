@@ -3,9 +3,11 @@ import {
   chmodSync,
   cpSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   symlinkSync,
 } from "node:fs";
@@ -18,6 +20,8 @@ import {
   kitInstalls,
   kitNotInstalled,
   kitVersion,
+  claudeSkills,
+  sharedSkills,
   readSettings,
   settingsFile,
   syncAgentKit,
@@ -70,13 +74,26 @@ function filesIn(root: string, directory = ""): string[] {
   });
 }
 
+function contentOf(root: string, path: string): string {
+  const file = join(root, path);
+  const entry = lstatSync(file);
+  if (entry.isSymbolicLink()) return `a link to ${readlinkSync(file)}`;
+  return entry.isDirectory() ? "a directory" : readFileSync(file, "utf8");
+}
+
+function copyInto(root: string, path: string): void {
+  const from = join(repositoryRoot, path);
+  mkdirSync(dirname(join(root, path)), { recursive: true });
+  if (lstatSync(from).isSymbolicLink()) symlinkSync(readlinkSync(from), join(root, path));
+  else cpSync(from, join(root, path), { recursive: true });
+}
+
 function seedCheckout(root: string, paths: readonly string[]): void {
   symlinkSync(join(repositoryRoot, installed), join(root, installed));
   for (const path of [manifest, ...paths].filter((file) =>
     existsSync(join(repositoryRoot, file)),
   )) {
-    mkdirSync(dirname(join(root, path)), { recursive: true });
-    cpSync(join(repositoryRoot, path), join(root, path));
+    copyInto(root, path);
   }
 }
 
@@ -162,16 +179,22 @@ test(`the guidance the kit installs for Claude Code is exactly what ${syncScript
     return filesIn(root).filter((path) => path !== manifest && path !== installed);
   });
   const inKitDirectories = kitInstalls(repositoryRoot, "skills")
-    .map((name) => `.claude/skills/${name}`)
-    .filter((directory) => existsSync(join(repositoryRoot, directory)))
-    .flatMap((directory) => filesIn(repositoryRoot, directory));
+    .flatMap((name) => [`${sharedSkills}/${name}`, `${claudeSkills}/${name}`])
+    .filter((path) => existsSync(join(repositoryRoot, path)))
+    .flatMap((path) =>
+      lstatSync(join(repositoryRoot, path)).isDirectory() ? filesIn(repositoryRoot, path) : [path],
+    );
   const synced = await inTemporaryTree({}, (root) => {
     seedCheckout(root, outputs);
     syncAgentKit(root);
-    return new Map(outputs.map((path) => [path, readFileSync(join(root, path), "utf8")]));
+    return new Map(outputs.map((path) => [path, contentOf(root, path)]));
   });
   const stale = [...new Set([...outputs, ...inKitDirectories])]
-    .filter((path) => !existsSync(join(repositoryRoot, path)) || synced.get(path) !== read(path))
+    .filter(
+      (path) =>
+        !existsSync(join(repositoryRoot, path)) ||
+        synced.get(path) !== contentOf(repositoryRoot, path),
+    )
     .map(
       (path) =>
         `${path}: it is not what node ${syncScript} writes with solid2-agent-kit ${kitVersion(repositoryRoot)}, the release the catalog pins. Run it and commit what it writes; change the kit's guidance only through the kit.`,

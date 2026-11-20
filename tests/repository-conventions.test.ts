@@ -44,7 +44,6 @@ const versionPrefix = /^[\^~]/;
 
 const packageSkillIgnoreFile = ".gitignore";
 const packageSkillEntries = [packageSkillIgnoreFile, ...approvedSkills().map(({ name }) => name)];
-const kitSkillEntries = kitInstalls(repositoryRoot, "skills");
 
 const skillNames = readdirSync(skillsDirectory)
   .filter((name) => !packageSkillEntries.includes(name))
@@ -57,6 +56,15 @@ function escapeForRegExp(text: string): string {
 function skillText(name: string): string {
   const file = join(skillsDirectory, name, "SKILL.md");
   return existsSync(file) ? readFileSync(file, "utf8") : "";
+}
+
+function vendoredSkills(): string[] {
+  return [
+    ...Object.keys(
+      (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
+    ),
+    ...kitInstalls(repositoryRoot, "skills"),
+  ];
 }
 
 function read(path: string): string {
@@ -87,12 +95,7 @@ test("every skill is named for its directory, described, and linked from .claude
     return problems;
   });
   const dangling = readdirSync(linkedSkillsDirectory)
-    .filter(
-      (name) =>
-        !skillNames.includes(name) &&
-        !packageSkillEntries.includes(name) &&
-        !kitSkillEntries.includes(name),
-    )
+    .filter((name) => !skillNames.includes(name) && !packageSkillEntries.includes(name))
     .map((name) => `.claude/skills/${name}: remove it, there is no .agents/skills/${name}.`);
 
   expect(skillNames.length).toBeGreaterThan(0);
@@ -100,9 +103,7 @@ test("every skill is named for its directory, described, and linked from .claude
 });
 
 test("every .agents or .claude path that a project-owned skill names exists", () => {
-  const vendored = Object.keys(
-    (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
-  );
+  const vendored = vendoredSkills();
   const projectOwned = skillNames.filter((name) => !vendored.includes(name));
   const violations = projectOwned.flatMap((name) =>
     [...skillText(name).matchAll(agentPathInBackticks)]
@@ -338,9 +339,7 @@ test("every verification skill was last confirmed against a commit that HEAD con
 });
 
 test("no project-owned skill copies a version from the catalog", () => {
-  const vendored = Object.keys(
-    (JSON.parse(read("skills-lock.json")) as { skills: Record<string, unknown> }).skills,
-  );
+  const vendored = vendoredSkills();
   const versions = Object.entries(pnpmSettings().catalog)
     .filter(([, version]) => !version.includes(":"))
     .map(([name, version]): [string, string] => [name, version.replace(versionPrefix, "")]);

@@ -1,10 +1,20 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
 
 export const kitPackage = "node_modules/solid2-agent-kit";
 export const kitBin = `${kitPackage}/bin/solid2-kit.mjs`;
 export const settingsFile = ".claude/settings.json";
+export const sharedSkills = ".agents/skills";
+export const claudeSkills = ".claude/skills";
 export const syncScript = "scripts/sync-agent-kit.ts";
 export const kitNotInstalled = "The Solid 2 kit is not installed, so its hook does not run.";
 export const kitHookDidNotRun =
@@ -74,5 +84,12 @@ export function syncAgentKit(root: string): string {
     }
   }
   writeFileSync(join(root, settingsFile), `${JSON.stringify(settings, null, 2)}\n`);
+  for (const name of kitInstalls(root, "skills")) {
+    const shared = join(root, sharedSkills, name);
+    rmSync(shared, { recursive: true, force: true });
+    mkdirSync(dirname(shared), { recursive: true });
+    renameSync(join(root, claudeSkills, name), shared);
+    symlinkSync(`../../${sharedSkills}/${name}`, join(root, claudeSkills, name));
+  }
   return sync.stdout;
 }
