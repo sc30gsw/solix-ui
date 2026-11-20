@@ -271,6 +271,14 @@ overrides:
   '@solidjs/compiler': 2.0.1
   '@solidjs/signals': 2.0.1
   vite@*: npm:@voidzero-dev/vite-plus-core@8.3.8000
+  '@solidjs/start': '-'
+  eslint-plugin-solid: '-'
+  next: '-'
+  react-dom: '-'
+  solid-app-router: '-'
+  solid-start: '-'
+  vinxi: '-'
+  vite-plugin-solid: '-'
 
 importers:
 
@@ -2418,15 +2426,12 @@ packages:
       storybook: ^11.0.0-beta.0 || ^11.0.0
       typescript: '*'
       vite: ^6.3.0 || ^7.0.0 || ^8.0.0
-      vite-plugin-solid: ^2.0.0-0 || ^3.0.0-0
     peerDependenciesMeta:
       '@solidjs/vite-plugin':
         optional: true
       '@solidjs/web':
         optional: true
       typescript:
-        optional: true
-      vite-plugin-solid:
         optional: true
 
   storybook@11.0.0-beta.3:

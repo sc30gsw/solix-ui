@@ -43,6 +43,14 @@ overrides:
   "@solidjs/compiler": "catalog:"
   "@solidjs/signals": "catalog:"
   vite@*: "catalog:"
+  "@solidjs/start": "-"
+  eslint-plugin-solid: "-"
+  next: "-"
+  react-dom: "-"
+  solid-app-router: "-"
+  solid-start: "-"
+  vinxi: "-"
+  vite-plugin-solid: "-"
 peerDependencyRules:
   allowAny:
     - vite
