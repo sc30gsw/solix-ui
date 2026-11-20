@@ -20,6 +20,7 @@ export { createColorScheme, createComputedColorScheme } from "#/src/color-scheme
 export { type SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
 export { ColorSchemeScript, type ColorSchemeScriptProps } from "#/src/color-scheme-script.tsx";
 export { colorSchemeAttribute, isColorScheme, type SolixColorScheme } from "#/src/color-schemes.ts";
+export { type ColorVariant } from "#/src/color-table.ts";
 export { type ColorProps, type SolixColor } from "#/src/colors.ts";
 export { type SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 export { createTheme, type SolixTheme } from "#/src/create-theme.ts";

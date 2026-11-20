@@ -24,7 +24,7 @@ export type SolixColor =
   | `#${HexDigit}${HexDigit}${HexDigit}${string}`
   | `${CssColorFunction}(${string})`;
 
-export type ColorProps<Variant extends ColorVariant> = {
+export type ColorProps<Variant extends ColorVariant = ColorVariant> = {
   color?: SolixColor;
   variant?: Variant;
   autoContrast?: boolean;
@@ -35,7 +35,7 @@ export type ColorOption<Variant extends ColorVariant = ColorVariant> = {
   readonly default: NoInfer<Variant>;
 };
 
-export type ColorPropKey = keyof ColorProps<ColorVariant>;
+export type ColorPropKey = keyof ColorProps;
 
 const colorProps = { color: true, variant: true, autoContrast: true } satisfies Record<
   ColorPropKey,
