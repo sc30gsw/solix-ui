@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Locator, Page } from "playwright";
 import postcss from "postcss";
+import { themedSpacing } from "#/apps/playground/src/sections/theme-setups.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 import { type TokenKind, tokenKind, tokenValues } from "#/scripts/tokens.ts";
 
@@ -122,6 +123,7 @@ export async function expectedValues(
     ["partBackground", "color", playgroundValue(":root", "--playground-part-background")],
     ["partText", "color", playgroundValue(":root", "--playground-part-text")],
     ["zero", "margin-top", "0"],
+    ["themedSpacingMd", "padding-top", themedSpacing.md],
   ];
   const rootRule =
     sentinelByName &&

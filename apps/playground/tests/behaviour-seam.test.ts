@@ -1,9 +1,7 @@
 import fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
-import { join } from "node:path";
 import {
   BEHAVIOUR_SDK_LAYER,
-  behaviourSdkHiddenRule,
   LIBRARY_CASCADE_LAYER,
 } from "../../../packages/core/build-pipeline.mjs";
 import { rootPart, stableClass, stylesheet } from "../../../packages/core/tests/built-library";
@@ -14,17 +12,19 @@ import {
   type OpenPage,
   scriptModes,
 } from "#/tests/support/playground.ts";
-import { opened } from "#/tests/support/opening.ts";
+import { pageStyleRules, stylesAddedToThePage } from "#/tests/support/page-styles.ts";
 import {
-  pageStyleRules,
-  type PageStyleRule,
-  stylesAddedToThePage,
-} from "#/tests/support/page-styles.ts";
+  runTimeWrites,
+  writesOfTheLibraryAndTheAppAlone,
+} from "#/tests/support/run-time-writes.ts";
 import {
+  account,
+  clickTab,
   controlled,
   elementsNamedBy,
   generated,
   inAShadowRoot,
+  optional,
   panelOf,
   stateOf,
   tabList,
@@ -36,8 +36,9 @@ import { assertProperty } from "../../../tests/support/properties.ts";
 const url = inject("playgroundUrl");
 const { inbox, drafts, locked } = tabNames.controlled;
 const { near, far } = tabNames.inAShadowRoot;
+const { overview, members, security } = tabNames.account;
+const { notes } = tabNames.optional;
 const generatedRuns = 25;
-const sdkHiddenRule = behaviourSdkHiddenRule(join(import.meta.dirname, "../../../packages/core"));
 const tabValues = fc.uniqueArray(
   fc.oneof(
     fc.string({ minLength: 1 }),
@@ -72,7 +73,7 @@ inEveryEngine((browser) => {
     let onPage: OpenPage;
 
     beforeAll(async () => {
-      onPage = await openPage(browser(), url, { javaScriptEnabled });
+      onPage = await openPage(browser(), url, { javaScriptEnabled }, { sentinels: false });
     });
 
     afterAll(async () => {
@@ -88,46 +89,50 @@ inEveryEngine((browser) => {
       );
     });
 
-    test("before a script runs the page adds no style but the library's own, which it marks, and after it every rule the SDK adds sits in the layer the library's stylesheet orders before its own, among them the hidden rule as the build reads it from the SDK, every rule of a style the library marks names the library's layer, and every important declaration on the page sits in the SDK's layer", async () => {
-      const plain = await browser().newContext({ javaScriptEnabled });
-      const page = await plain.newPage();
-      await opened(page, url, javaScriptEnabled ? "hydrated" : "load");
+    test("before a script runs the page adds no style but the library's own, which it marks, and after it the page holds no rule, style, class or inert element but what the library, the SDK in its own layer, among them the hidden rule as the build reads it from the SDK, and the app give, and the linked stylesheet orders the SDK's layer before the library's", async () => {
+      const { page } = onPage;
       const rules = await pageStyleRules(page);
-      const added = await stylesAddedToThePage(page);
-      await plain.close();
       const linkedLayerOrder = rules
         .filter(
           ({ addedAtRunTime, fromTheLibrary, layers }) =>
             !addedAtRunTime && !fromTheLibrary && layers.length > 0,
         )
         .map(({ layers: [outermost] }) => outermost);
-      const outsideTheSdkLayer = (rule: PageStyleRule) => rule.layers[0] !== BEHAVIOUR_SDK_LAYER;
-      const namesTheLibraryLayer = (rule: PageStyleRule) =>
-        rule.layers.some(
-          (layer) =>
-            layer === LIBRARY_CASCADE_LAYER || layer.startsWith(`${LIBRARY_CASCADE_LAYER}.`),
-        );
 
-      expect(
-        rules
-          .filter((rule) => rule.addedAtRunTime && outsideTheSdkLayer(rule))
-          .map(({ text }) => text),
-      ).toEqual([]);
-      expect(
-        rules
-          .filter((rule) => rule.important.length > 0 && outsideTheSdkLayer(rule))
-          .map(({ text }) => text),
-      ).toEqual([]);
+      expect(await runTimeWrites(page)).toEqual({
+        ...writesOfTheLibraryAndTheAppAlone,
+        theSdkAddedTheHiddenRuleTheBuildReadsFromIt: javaScriptEnabled,
+      });
       expect(rules.filter(({ fromTheLibrary }) => fromTheLibrary)).not.toEqual([]);
-      expect(
-        rules
-          .filter((rule) => rule.fromTheLibrary && !namesTheLibraryLayer(rule))
-          .map(({ text }) => text),
-      ).toEqual([]);
-      expect(added.includes(sdkHiddenRule)).toBe(javaScriptEnabled);
-      expect(javaScriptEnabled ? [] : added).toEqual([]);
+      expect(javaScriptEnabled ? [] : await stylesAddedToThePage(page)).toEqual([]);
       expect([...new Set(linkedLayerOrder)]).toEqual([BEHAVIOUR_SDK_LAYER, LIBRARY_CASCADE_LAYER]);
     });
+  });
+
+  test("after clicks and keys on the tabs, the page still holds no rule, style, class or inert element but what the library, the SDK in its own layer and the app give", async () => {
+    const { page, close } = await openPage(browser(), url, {}, { sentinels: false });
+    try {
+      const landed = (list: string, name: string) =>
+        expect.poll(() => stateOf(page, list)).toMatchObject({ selected: name, focused: name });
+      await clickTab(page, account, overview);
+      await landed(account, overview);
+      for (const [key, name] of [
+        ["ArrowRight", members],
+        ["End", security],
+        ["Home", overview],
+      ] as const) {
+        await page.keyboard.press(key);
+        await landed(account, name);
+      }
+      await clickTab(page, optional, notes);
+      await landed(optional, notes);
+      await clickTab(page, optional, notes);
+      await expect.poll(() => stateOf(page, optional)).toMatchObject({ selected: null });
+
+      expect(await runTimeWrites(page)).toEqual(writesOfTheLibraryAndTheAppAlone);
+    } finally {
+      await close();
+    }
   });
 
   describe("a behaviour component in the hydrated page", () => {
@@ -255,10 +260,6 @@ inEveryEngine((browser) => {
         }),
         { numRuns: generatedRuns, examples: [[["my tab"]]] },
       );
-    });
-
-    test("hydration and every interaction above report no console error or warning", () => {
-      expect(onPage.consoleProblems).toEqual([]);
     });
   });
 });

@@ -23,6 +23,7 @@ export {
   optional,
   panelOf,
   rightToLeft,
+  setupOf,
   tabNames,
   type TabsSetup,
   tabsSetups,

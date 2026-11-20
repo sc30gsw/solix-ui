@@ -89,9 +89,14 @@ async function open(
   const problems: string[] = [];
   page.on("pageerror", (error) => problems.push(String(error)));
   const hydrates = contextOptions.javaScriptEnabled !== false && !blockClient;
-  await opened(page, url, hydrates ? "hydrated" : "load");
+  await opened(page, url, hydrates ? "hydrated" : "load", {
+    reportsToTheConsole: blockClient ? theBlockedClientScript : undefined,
+  });
   return { page, problems, close: () => context.close() };
 }
+
+const theBlockedClientScript =
+  /^error: Failed to load resource\b|^warning: \[JavaScript Warning: "Loading failed for the module with source “[^”]*\/assets\/[^”]*\.js”/;
 
 function attributeOf(page: Page): Promise<string | null> {
   return page.evaluate((name) => document.documentElement.getAttribute(name), ownerAttribute);

@@ -27,11 +27,19 @@ inEveryEngine((browser) => {
       await opened.close();
     });
 
-    test("has the library's border, background and text colour", async () => {
+    test("has the library's border, height, background and text colour", async () => {
       expect(await computed(email, "border-top-color")).toBe(expected("--solix-color-border"));
+      expect(await computed(email, "height")).toBe(expected("--solix-control-height-md"));
       expect(await computed(email, "border-top-left-radius")).toBe(expected("--solix-radius-md"));
       expect(await computed(email, "background-color")).toBe(expected("--solix-color-body"));
       expect(await computed(email, "color")).toBe(expected("--solix-color-text"));
+    });
+
+    test("a consumer's plain class beats the library's background, and the height stays the library's", async () => {
+      const overridden = page.getByRole("textbox", { name: "Overridden input" });
+
+      expect(await computed(overridden, "background-color")).toBe(expected("danger"));
+      expect(await computed(overridden, "height")).toBe(expected("--solix-control-height-md"));
     });
 
     test("shows the error border only after the user has committed an invalid value", async () => {

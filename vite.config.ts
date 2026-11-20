@@ -170,6 +170,7 @@ export default defineConfig({
             ],
             exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules],
             globalSetup: ["tests/support/global-setup.ts"],
+            setupFiles: ["apps/playground/tests/support/console-check.ts"],
           },
         },
         {
