@@ -48,8 +48,13 @@ const fastCheckRunnersOnlyThroughTheWrapper = {
   message: runPropertiesThroughTheWrapper,
 };
 
-function afterTheRules<P extends { test?: object }>(project: P) {
-  return { ...project, test: { ...project.test, sequence: { groupOrder: 1 } } };
+const sequenceGroup = { browser: 1, others: 2, storySpec: 3 } as const;
+
+function inGroup(groupOrder: number) {
+  return <P extends { test?: object }>(project: P) => ({
+    ...project,
+    test: { ...project.test, sequence: { groupOrder } },
+  });
 }
 
 function withPackagesBuiltFirst<P extends { test?: object }>(project: P) {
@@ -159,6 +164,16 @@ export default defineConfig({
           include: [checkerRules],
         },
       },
+      inGroup(sequenceGroup.browser)({
+        extends: true,
+        optimizeDeps: { include: preBundledForBrowserTests },
+        test: {
+          name: "browser",
+          include: [browserTests],
+          api: { port: anyFreePort, strictPort: true },
+          browser: browserInEveryEngine(),
+        },
+      }),
       ...[
         {
           extends: true,
@@ -176,31 +191,20 @@ export default defineConfig({
             setupFiles: ["apps/playground/tests/support/console-check.ts"],
           },
         },
-        {
-          extends: true,
-          optimizeDeps: { include: preBundledForBrowserTests },
-          test: {
-            name: "browser",
-            include: [browserTests],
-            api: { port: anyFreePort, strictPort: true },
-            browser: browserInEveryEngine(),
-          },
-        },
         ...storiesServers.map((server) => ({
           extends: false as const,
           ...storiesProject(server, storybookConfigDirectory, storyRecords),
         })),
-      ].map(afterTheRules),
-      {
+      ].map(inGroup(sequenceGroup.others)),
+      inGroup(sequenceGroup.storySpec)({
         extends: true,
         test: {
           name: "story spec",
           environment: "node",
           include: [storySpec],
           provide: { storyRecords },
-          sequence: { groupOrder: 2 },
         },
-      },
+      }),
     ].map(withPackagesBuiltFirst),
   },
 });

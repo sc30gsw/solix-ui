@@ -51,3 +51,26 @@ test("no browser project saves a screenshot when a test fails: every project who
   expect(inABrowser.length).toBeGreaterThan(0);
   expect(screenshotting).toEqual([]);
 });
+
+const browserProject = "browser";
+
+test(`the ${browserProject} project's instances run in a sequence group no other project shares, so no other project's engines load the machine while its timed properties run`, () => {
+  const settings = inject("runSettingsOfEachProject");
+  refuseAFilteredRun(Object.keys(settings));
+  const isBrowser = (name: string) =>
+    name === browserProject || name.startsWith(`${browserProject} (`);
+  const browserGroups = new Set(
+    Object.entries(settings)
+      .filter(([name]) => isBrowser(name))
+      .map(([, { groupOrder }]) => groupOrder),
+  );
+  const sharing = Object.entries(settings)
+    .filter(([name, { groupOrder }]) => !isBrowser(name) && browserGroups.has(groupOrder))
+    .map(
+      ([name, { groupOrder }]) =>
+        `${name}: it runs in sequence group ${groupOrder} beside the ${browserProject} project. Give the ${browserProject} project a group of its own in vite.config.ts.`,
+    );
+
+  expect(browserGroups.size).toBeGreaterThan(0);
+  expect(sharing).toEqual([]);
+});
