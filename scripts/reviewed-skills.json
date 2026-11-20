@@ -3,8 +3,6 @@
     "server-components": "c4cefe0447f2f552190f92293b766879f4d2d61a2735c7ea70c8a0dd8e7d5045"
   },
   "solid-js": {
-    "reactivity-diagnostics": "33018cf90622590363fa4cd4e394ebc8dc17cbdd3683d2a083bbd8ae25bac015",
-    "solid-2.0": "5c040b3a3ec07f5940c32c73b79eb91f35e8098815475760478d00d33bfda4bc",
-    "solid-2.0-cheatsheet": "759bca8f688bead0010420c1d796f434e0fc6a7382866c367ce20e70b79d3a23"
+    "reactivity-diagnostics": "33018cf90622590363fa4cd4e394ebc8dc17cbdd3683d2a083bbd8ae25bac015"
   }
 }

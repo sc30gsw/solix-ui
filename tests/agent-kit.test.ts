@@ -17,12 +17,15 @@ import {
   kitHookEntries,
   kitInstalls,
   kitNotInstalled,
+  kitPackage,
   kitVersion,
   readSettings,
   settingsFile,
   syncAgentKit,
   syncScript,
 } from "#/scripts/agent-kit.ts";
+import { approvedSkills } from "#/scripts/package-skills.ts";
+import { workspaceFile } from "#/scripts/pnpm-settings.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
@@ -33,6 +36,8 @@ const kitSkill = `.claude/skills/${kitInstalls(repositoryRoot, "skills")[0]}`;
 const manifest = "package.json";
 const reactFixture = "tests/fixtures/agent-kit/react-hook.txt";
 const installed = "node_modules";
+const restatedShare = 0.8;
+const codeName = /`([A-Za-z_$][\w$.]*)/g;
 
 type Run = { status: number | null; stderr: string };
 
@@ -202,4 +207,27 @@ describe("the kit's hooks fail closed", () => {
       expect(runs).toEqual(runs.map(() => ({ status: 0, stderr: `${kitNotInstalled}\n` })));
     });
   });
+});
+
+test(`no package skill that ${workspaceFile} approves restates the kit's solid-2 skill and rules`, () => {
+  const kitText = filesIn(join(repositoryRoot, kitPackage, "files"))
+    .filter((path) => path.endsWith(".md"))
+    .map((path) => readFileSync(join(repositoryRoot, kitPackage, "files", path), "utf8"))
+    .join("\n");
+  const restating = approvedSkills().flatMap(({ pack, name }) => {
+    const text = readFileSync(
+      join(repositoryRoot, installed, pack, "skills", name, "SKILL.md"),
+      "utf8",
+    );
+    const names = [...new Set([...text.matchAll(codeName)].map(([, found]) => found))];
+    const share = names.filter((found) => kitText.includes(found)).length / names.length;
+    return share < restatedShare
+      ? []
+      : [
+          `${pack} ${name}: ${Math.round(share * 100)}% of the code names it writes are in the kit's solid-2 skill and rules, so it restates them. Leave it out of permissions in ${workspaceFile}: the kit's skill is the source.`,
+        ];
+  });
+
+  expect(approvedSkills().length).toBeGreaterThan(0);
+  expect(restating).toEqual([]);
 });
