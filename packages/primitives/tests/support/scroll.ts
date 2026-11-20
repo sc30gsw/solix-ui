@@ -1,7 +1,7 @@
 import fc from "fast-check";
 import { onTestFinished } from "vite-plus/test";
 import { flush } from "#/tests/support/browser-harness.ts";
-import { nextTask } from "#/tests/support/dom.ts";
+import { nextTask, stylesheetArrives } from "#/tests/support/dom.ts";
 import { replaced } from "#/tests/support/replace.ts";
 
 export type ScrollStub = {
@@ -45,4 +45,17 @@ export function tallPage(): HTMLDivElement {
   spacer.style.height = "6000px";
   document.body.append(spacer);
   return spacer;
+}
+
+export function scrolledDownATallPage(y: number): HTMLDivElement {
+  const spacer = tallPage();
+  window.scrollTo({ top: y, behavior: "instant" });
+  return spacer;
+}
+
+const shortenedByTheLateStylesheet = "shortened-by-the-late-stylesheet";
+
+export function stylesheetArrivesAndShortens(spacer: HTMLElement): void {
+  spacer.classList.add(shortenedByTheLateStylesheet);
+  stylesheetArrives(`.${shortenedByTheLateStylesheet} { height: 0 !important; }`);
 }
