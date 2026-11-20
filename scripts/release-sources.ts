@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   prereleasePinsOnlyNamedBy,
   type HeldBack,
   heldBackFile,
+  heldBackFrom,
   type NodeRelease,
   type RegistryDocument,
   type ReleasePolicy,
@@ -34,10 +36,11 @@ export function untilStableMembers(catalog: Record<string, string>): string[] {
 }
 
 export function heldBackEntries(): HeldBack[] {
-  return JSON.parse(readFileSync(join(repositoryRoot, heldBackFile), "utf8"));
+  return heldBackFrom(JSON.parse(readFileSync(join(repositoryRoot, heldBackFile), "utf8")));
 }
 
 const fetchTimeoutMs = 30_000;
+const retryDelayMs = 2_000;
 
 class SourceFailure extends Error {}
 
@@ -62,20 +65,27 @@ async function tried(url: string, timeoutMs: number): Promise<unknown> {
   }
 }
 
-export async function fetchedJson(url: string, timeoutMs = fetchTimeoutMs): Promise<unknown> {
+export async function fetchedJson(
+  url: string,
+  timeoutMs = fetchTimeoutMs,
+  retryAfterMs = retryDelayMs,
+): Promise<unknown> {
+  let first: unknown;
   try {
     return await tried(url, timeoutMs);
-  } catch {
-    try {
-      return await tried(url, timeoutMs);
-    } catch (error) {
-      throw new Error(
-        `${url}: ${whyItFailed(error, timeoutMs)}, on the first try and on the retry.`,
-        {
-          cause: error,
-        },
-      );
-    }
+  } catch (error) {
+    first = error;
+  }
+  await delay(retryAfterMs);
+  try {
+    return await tried(url, timeoutMs);
+  } catch (second) {
+    const [onFirst, onRetry] = [first, second].map((error) => whyItFailed(error, timeoutMs));
+    const said =
+      onFirst === onRetry
+        ? `${onFirst}, on the first try and on the retry`
+        : `${onFirst} on the first try, and ${onRetry} on the retry`;
+    throw new Error(`${url}: ${said}.`, { cause: new AggregateError([first, second]) });
   }
 }
 
@@ -94,4 +104,12 @@ export async function registryDocuments(
 
 export async function nodeReleases(): Promise<NodeRelease[]> {
   return (await fetchedJson(nodeIndex)) as NodeRelease[];
+}
+
+export async function releaseSources(names: readonly string[]): Promise<{
+  documents: Record<string, RegistryDocument>;
+  nodeReleases: NodeRelease[];
+}> {
+  const [documents, releases] = await Promise.all([registryDocuments(names), nodeReleases()]);
+  return { documents, nodeReleases: releases };
 }

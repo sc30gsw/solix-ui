@@ -1,7 +1,8 @@
 import { expect, test } from "vite-plus/test";
 import {
-  pullRequestAdvice,
   compareWithNewest,
+  failureLines,
+  heldBackFrom,
   exactlyRequiredBy,
   type HeldBack,
   heldBackFile,
@@ -81,15 +82,20 @@ const pins = pinsOf(manifest, {
   vite: "npm:@voidzero-dev/vite-plus-core@1.6.0",
 });
 
-function check(
-  options: {
-    pins?: Pin[];
-    documents?: Record<string, RegistryDocument>;
-    nodeReleases?: NodeRelease[];
-    heldBack?: HeldBack[];
-    untilStablePackages?: string[];
-  } = {},
-) {
+type CheckOptions = {
+  pins?: Pin[];
+  documents?: Record<string, RegistryDocument>;
+  nodeReleases?: NodeRelease[];
+  heldBack?: HeldBack[];
+  untilStablePackages?: string[];
+};
+
+function check(options: CheckOptions = {}) {
+  const found = report(options);
+  return { ...found, problems: found.problems.map(({ message }) => message) };
+}
+
+function report(options: CheckOptions = {}) {
   return compareWithNewest({
     pins: options.pins ?? pins,
     documents: options.documents ?? documents,
@@ -435,13 +441,67 @@ test("a hold that names a condition lasts only while that condition is true: whi
   );
 });
 
-test("on a pull request, a failing check says that a pin behind is behind on main too and that its fix is a build(deps) pull request of its own to main; elsewhere it adds nothing", () => {
-  expect(pullRequestAdvice({ eventName: "pull_request", baseRef: "main" })).toEqual([
-    "On a pull request the check reads the registry as it is now, so a pin it names as behind is behind on main too, unless this pull request moved it.",
-    "Move it in a build(deps) pull request of its own to main, or hold it back there with a reason, then merge main into this branch.",
+const conditionedHold: HeldBack = {
+  name: "playwright",
+  reason: "The runner requires playwright-core 1.63.0 exactly.",
+  liftWhen: "the runner the catalog pins no longer requires playwright-core 1.63.0 exactly.",
+  while: { pin: "semver", requiresExactly: { name: "playwright-core", version: "1.63.0" } },
+};
+
+test("each problem has a kind: a pin behind, a pin ahead, a pin whose newest release cannot be told, or a hold", () => {
+  const kinds = (options: CheckOptions) =>
+    Object.fromEntries(
+      report(options).problems.map((problem) => [problem.message.split(":")[0], problem.kind]),
+    );
+
+  expect(kinds({})).toMatchObject({ playwright: "behind" });
+  expect(kinds({ pins: pinsOf(manifest, { semver: "9.0.0" }) })).toMatchObject({
+    semver: "ahead",
+  });
+  expect(kinds({ nodeReleases: [] })).toMatchObject({ [nodePinName]: "unknown" });
+  expect(kinds({ heldBack: [conditionedHold] })).toMatchObject({ playwright: "hold" });
+});
+
+const behind = { kind: "behind", message: "playwright: 1.63.0 is behind 1.65.1." } as const;
+const holdFailed = { kind: "hold", message: "playwright: its hold no longer applies." } as const;
+const onAPullRequest = { GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "release-2" };
+
+test("on a pull request, a failing check with a pin behind says that the pin is behind on the base branch the run names too, and that its fix is a build(deps) pull request of its own to it", () => {
+  expect(failureLines([behind], onAPullRequest)).toEqual([
+    behind.message,
+    "On a pull request the check reads the registry as it is now, so a pin it names as behind is behind on release-2 too, unless this pull request moved it.",
+    "Move it in a build(deps) pull request of its own to release-2, or hold it back there with a reason, then merge release-2 into this branch.",
   ]);
-  expect(pullRequestAdvice({ eventName: "push", baseRef: "" })).toEqual([]);
-  expect(pullRequestAdvice({ eventName: undefined, baseRef: undefined })).toEqual([]);
+  expect(failureLines([behind], { GITHUB_EVENT_NAME: "pull_request" }).join("\n")).toContain(
+    "behind on main too",
+  );
+});
+
+test("a failing check adds no pull-request advice when no pin is behind, or when the run is not a pull request", () => {
+  expect(failureLines([holdFailed], onAPullRequest)).toEqual([holdFailed.message]);
+  expect(failureLines([behind], { ...onAPullRequest, GITHUB_EVENT_NAME: "push" })).toEqual([
+    behind.message,
+  ]);
+  expect(failureLines([behind], {})).toEqual([behind.message]);
+});
+
+test(`${heldBackFile} is read against its type, so an entry of the wrong shape fails by its place and its name`, () => {
+  const entry = { name: "a-package", reason: "Why.", liftWhen: "When." };
+
+  expect(heldBackFrom([entry])).toEqual([entry]);
+  expect(() => heldBackFrom({})).toThrow(`${heldBackFile}: give a list of entries.`);
+  expect(() => heldBackFrom([{ ...entry, while: { pin: "vite-plus" } }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): give while a pin and a requiresExactly with a name and a version.`,
+  );
+  expect(() => heldBackFrom([{ ...entry, reason: 1 }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): give it a name, a reason and a liftWhen, each a string.`,
+  );
+  expect(() => heldBackFrom([{ ...entry, holds: "sideways" }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): holds is "behind" or "ahead".`,
+  );
+  expect(() => heldBackFrom([{ ...entry, whlie: {} }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): it sets whlie; an entry sets only name, reason, liftWhen, holds and while.`,
+  );
 });
 
 test("a held-back entry that holds nothing back, or has no reason or no liftWhen, fails the check", () => {
