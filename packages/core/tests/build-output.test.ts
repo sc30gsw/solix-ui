@@ -344,3 +344,20 @@ test("the stylesheet first ranks the SDK's layer before the library's, and the l
   );
   expect(components && nestedLayerOrder(components).length).toBeGreaterThan(0);
 });
+
+test("no rule outside the colours layer sets a custom property the colours layer sets, so no later layer repeats a default colorRules gives, on :root or on the colour class, and takes it over", () => {
+  const layersSetting = new Map<string, Set<boolean>>();
+  postcss.parse(stylesheet).walkDecls(/^--/, (declaration) => {
+    const inColors = layersAroundDeclaration(declaration).includes(colorLayer);
+    layersSetting.set(
+      declaration.prop,
+      (layersSetting.get(declaration.prop) ?? new Set()).add(inColors),
+    );
+  });
+  const setInColors = [...layersSetting].filter(([, where]) => where.has(true));
+
+  expect(setInColors.length).toBeGreaterThan(0);
+  expect(setInColors.filter(([, where]) => where.has(false)).map(([property]) => property)).toEqual(
+    [],
+  );
+});
