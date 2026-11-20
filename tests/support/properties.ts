@@ -33,13 +33,17 @@ function timeLimit({ task }: TestContext): fc.Plugin<unknown>[] {
   return [fc.interruptAfterTimeLimit(runsOutAt - Date.now(), { failOnInterrupt: true })];
 }
 
-type Attempt = { startedAt: number; going: Set<PromiseLike<unknown>> };
+type Attempt = { key: string; going: Set<PromiseLike<unknown>> };
 
 const attempts = new WeakMap<TestContext["task"], Attempt>();
 
+function attemptKey({ result }: TestContext["task"]): string {
+  return `${result?.repeatCount ?? 0}:${result?.attempts?.length ?? 0}`;
+}
+
 function runsOfThisAttempt(task: TestContext["task"]): Set<PromiseLike<unknown>> | undefined {
   const attempt = attempts.get(task);
-  return attempt?.startedAt === attemptStartedAt(task) ? attempt.going : undefined;
+  return attempt?.key === attemptKey(task) ? attempt.going : undefined;
 }
 
 export function propertyRunsGoing(task: TestContext["task"]): number {
@@ -52,7 +56,7 @@ function isPending(outcome: unknown): outcome is PromiseLike<unknown> {
 
 function tracksEachRun({ task }: TestContext): fc.Plugin<unknown> {
   const going = runsOfThisAttempt(task) ?? new Set<PromiseLike<unknown>>();
-  attempts.set(task, { startedAt: attemptStartedAt(task), going });
+  attempts.set(task, { key: attemptKey(task), going });
   return () => ({
     decorateRun: (nestedRun) => (value) => {
       const outcome = nestedRun(value);

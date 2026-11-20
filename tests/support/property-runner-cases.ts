@@ -25,13 +25,8 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const leftHanging: { release: () => void; promise: Promise<void> } = {
-  release: () => undefined,
-  promise: Promise.resolve(),
-};
-leftHanging.promise = new Promise<void>((resolve) => {
-  leftHanging.release = resolve;
-});
+const leftHanging = Promise.withResolvers<void>();
+const countedInTheFirstAttempt: number[] = [];
 
 const slow = fc.asyncProperty(fc.nat(), async () => {
   await delay(runTime);
@@ -113,22 +108,19 @@ export function definePropertyRunnerTests(): void {
     "a run that never ends fails the property with its seed and the count of runs still going, before the test's timeout",
     { timeout: shortTimeout, retry: attemptsAfterAStall },
     async (context) => {
-      const hang: { release: () => void } = { release: () => undefined };
-      const hung = new Promise<void>((resolve) => {
-        hang.release = resolve;
-      });
+      const hang = Promise.withResolvers<void>();
       const hanging = fc.asyncProperty(fc.nat(), async () => {
-        await hung;
+        await hang.promise;
       });
 
       await expect(assertProperty(context, hanging)).rejects.toThrow(stillGoing);
-      hang.release();
-      await hung;
+      hang.resolve();
+      await hang.promise;
     },
   );
 
   test(
-    "a retry counts only its own runs, so a run the attempt before it left going is not counted again",
+    "an attempt counts the run it leaves going, and a retry counts only its own runs, so that run is not counted again",
     { timeout: shortTimeout, retry: { count: 1 } },
     async (context) => {
       const attemptsBefore = context.task.result?.attempts?.length ?? 0;
@@ -136,11 +128,13 @@ export function definePropertyRunnerTests(): void {
         const hanging = fc.asyncProperty(fc.nat(), async () => {
           await leftHanging.promise;
         });
-        await assertProperty(context, hanging);
-        return;
+        await expect(assertProperty(context, hanging)).rejects.toThrow(stillGoing);
+        countedInTheFirstAttempt.push(propertyRunsGoing(context.task));
+        throw new Error("The first attempt leaves a run going and fails, so the test is retried.");
       }
+      expect(countedInTheFirstAttempt, "runs the first attempt counted").toEqual([1]);
       expect(propertyRunsGoing(context.task), "runs this attempt started").toBe(0);
-      leftHanging.release();
+      leftHanging.resolve();
     },
   );
 
