@@ -1,6 +1,7 @@
 import { Button, type ButtonProps } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
 import { expect, fn, spyOn, userEvent } from "storybook/test";
+import { everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -85,5 +86,18 @@ export const ColorFallsBack: Story = {
         getComputedStyle(canvas.getByRole("button", { name: color })).backgroundColor,
       ).toBe(getComputedStyle(canvas.getByRole("button", { name: notColours[0] })).backgroundColor);
     }
+  },
+};
+
+export const EveryVariant: Story = everyValueOf(meta, "variant");
+
+export const AsALink: Story = {
+  render: () => (
+    <Button component="a" href="#as-a-link">
+      Go
+    </Button>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("link", { name: "Go" })).toHaveAttribute("href", "#as-a-link");
   },
 };

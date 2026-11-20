@@ -17,3 +17,11 @@ export const Default: Story = {};
 export const Inline: Story = {
   args: { inline: true },
 };
+
+export const AsASpan: Story = {
+  render: () => (
+    <Center component="span" inline>
+      Centred in a span
+    </Center>
+  ),
+};

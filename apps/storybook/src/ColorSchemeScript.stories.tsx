@@ -1,6 +1,7 @@
 import { ColorSchemeScript } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
 import { expect } from "storybook/test";
+import { everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const storageKey = "story-color-scheme";
@@ -31,3 +32,14 @@ export const Forced: Story = {
     await expect(script?.textContent).toContain('"dark"');
   },
 };
+
+export const DefaultsToDark: Story = {
+  args: { defaultColorScheme: "dark" },
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector("script")?.textContent).toContain('"dark"');
+  },
+};
+
+export const EveryDefaultColorScheme: Story = everyValueOf(meta, "defaultColorScheme");
+
+export const EveryForcedColorScheme: Story = everyValueOf(meta, "forceColorScheme");

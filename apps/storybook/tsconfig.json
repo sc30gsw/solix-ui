@@ -14,6 +14,7 @@
     "story-color-scheme.ts",
     "story-color-scheme.setup.ts",
     "story-controls.d.ts",
-    "story-meta.ts"
+    "story-meta.ts",
+    "every-value.tsx"
   ]
 }

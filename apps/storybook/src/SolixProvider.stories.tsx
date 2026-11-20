@@ -14,6 +14,7 @@ import {
 import { createEffect, createSignal, Show } from "solid-js";
 import { argTypesOf } from "virtual:story-controls";
 import { expect, spyOn, userEvent, waitFor } from "storybook/test";
+import { everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const themedPadding = "3rem";
@@ -121,7 +122,31 @@ export const PrimaryColorFallsBack: Story = {
 
 export const WithoutCssVariables: Story = {
   args: { withCssVariables: false },
+  play: async ({ canvas }) => {
+    const probe = document.createElement("div");
+    probe.style.paddingTop = themedPadding;
+    document.body.append(probe);
+    const themed = getComputedStyle(probe).paddingTop;
+    probe.remove();
+    await expect(getComputedStyle(canvas.getByTestId("themed")).paddingTop).not.toBe(themed);
+  },
 };
+
+const providerNonce = "provider-nonce";
+
+export const GivesItsNonceToItsStyles: Story = {
+  args: { getStyleNonce: () => providerNonce },
+  play: async ({ canvasElement }) => {
+    const nonces = [...canvasElement.ownerDocument.querySelectorAll("style")].map(
+      (style) => style.nonce,
+    );
+    await expect(nonces).toContain(providerNonce);
+  },
+};
+
+export const EveryDefaultColorScheme: Story = everyValueOf(meta, "defaultColorScheme");
+
+export const EveryForcedColorScheme: Story = everyValueOf(meta, "forceColorScheme");
 
 const unusedManager = localStorageColorSchemeManager({ key: storageKeys.unused });
 

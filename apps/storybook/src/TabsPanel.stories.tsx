@@ -30,3 +30,20 @@ export const Selected: Story = {
     );
   },
 };
+
+export const KeptMountedWhileHidden: Story = {
+  args: { keepMounted: true },
+  render: (args) => (
+    <Tabs defaultValue="security" keepMounted={false}>
+      <Tabs.List aria-label="Account">
+        <Tabs.Tab value="profile">Profile</Tabs.Tab>
+        <Tabs.Tab value="security">Security</Tabs.Tab>
+      </Tabs.List>
+      <Tabs.Panel {...args} />
+      <Tabs.Panel value="security">Security panel</Tabs.Panel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Profile panel")).not.toBeVisible();
+  },
+};

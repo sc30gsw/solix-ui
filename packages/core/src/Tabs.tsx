@@ -40,7 +40,7 @@ export type TabsProps = ElementProps<
     activateTabWithKeyboard?: boolean;
     /** Lets a press on the selected tab deselect it. */
     allowTabDeactivation?: boolean;
-    /** Keeps every panel in the page, hidden, while its tab is not selected. */
+    /** Keeps every panel's content in the page, hidden, while its tab is not selected. */
     keepMounted?: boolean;
   }
 >;

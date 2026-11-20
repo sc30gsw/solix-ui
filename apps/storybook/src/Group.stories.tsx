@@ -1,5 +1,6 @@
 import { Button, Group } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
+import { everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -23,4 +24,10 @@ export const Default: Story = {};
 
 export const Grown: Story = {
   args: { grow: true },
+};
+
+export const EveryWrap: Story = everyValueOf(meta, "wrap");
+
+export const KeptToItsShare: Story = {
+  args: { grow: true, preventGrowOverflow: true, justify: "center", align: "flex-end" },
 };

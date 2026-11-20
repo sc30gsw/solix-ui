@@ -128,15 +128,19 @@ function libraryPropsOf(
   const drivesState = (prop: ComponentProp) =>
     prop.control.type === false || controlledPairOf(prop.name, names);
   const stateful = props.some(drivesState);
-  return props.map((prop) => ({
-    ...prop,
-    ...(prop.name === variantProp && defaultVariant !== undefined
-      ? { defaultValue: defaultVariant }
-      : {}),
-    common: prop.declarations.some((key) => common.has(key)),
-    behaviour:
-      drivesState(prop) || (prop.control.type === "boolean" && (stateful || prop.required)),
-  }));
+  return props.map((prop) => {
+    const shared = prop.declarations.some((key) => common.has(key));
+    return {
+      ...prop,
+      ...(prop.name === variantProp && defaultVariant !== undefined
+        ? { defaultValue: defaultVariant }
+        : {}),
+      common: shared,
+      behaviour:
+        drivesState(prop) ||
+        (!shared && prop.control.type === "boolean" && (stateful || prop.required)),
+    };
+  });
 }
 
 export function componentPropsOf(entry: string): ComponentProps {

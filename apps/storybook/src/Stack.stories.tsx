@@ -24,3 +24,7 @@ export const Default: Story = {};
 export const Centred: Story = {
   args: { align: "center" },
 };
+
+export const PushedToTheEnd: Story = {
+  args: { justify: "flex-end", h: 240 },
+};

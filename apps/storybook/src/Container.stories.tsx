@@ -1,5 +1,6 @@
 import { Container } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
+import { everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -21,3 +22,5 @@ export const Small: Story = {
 export const Fluid: Story = {
   args: { fluid: true },
 };
+
+export const EveryStrategy: Story = everyValueOf(meta, "strategy");

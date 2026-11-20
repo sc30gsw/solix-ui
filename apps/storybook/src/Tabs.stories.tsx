@@ -1,6 +1,7 @@
 import { Tabs } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
-import { expect, userEvent } from "storybook/test";
+import { expect, fn, userEvent } from "storybook/test";
+import { everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -43,4 +44,79 @@ export const ArrowKeysMoveTheSelection: Story = {
 
 export const Vertical: Story = {
   args: { orientation: "vertical" },
+};
+
+export const EveryOrientation: Story = everyValueOf(meta, "orientation");
+
+export const ControlledByItsValue: Story = {
+  args: { value: "drafts", onChange: fn() },
+  play: async ({ args, canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Inbox" }));
+    await expect(args.onChange).toHaveBeenCalledWith("inbox");
+    await expect(canvas.getByRole("tab", { name: "Drafts" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  },
+};
+
+export const WrapsToTheFirstTab: Story = {
+  args: { loop: true },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Drafts" }));
+    await userEvent.keyboard("{ArrowRight}");
+    await expect(canvas.getByRole("tab", { name: "Inbox" })).toHaveFocus();
+  },
+};
+
+export const StopsAtTheLastTabWithoutLoop: Story = {
+  args: { loop: false },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Drafts" }));
+    await userEvent.keyboard("{ArrowRight}");
+    await expect(canvas.getByRole("tab", { name: "Drafts" })).toHaveFocus();
+  },
+};
+
+export const SelectsOnlyOnEnterWithoutActivation: Story = {
+  args: { activateTabWithKeyboard: false },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Inbox" }));
+    await userEvent.keyboard("{ArrowRight}");
+    await expect(canvas.getByRole("tab", { name: "Drafts" })).toHaveFocus();
+    await expect(canvas.getByRole("tab", { name: "Inbox" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await userEvent.keyboard("{Enter}");
+    await expect(canvas.getByRole("tab", { name: "Drafts" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  },
+};
+
+export const DeselectedByAPressOnTheSelectedTab: Story = {
+  args: { allowTabDeactivation: true },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole("tab", { name: "Inbox" }));
+    await expect(canvas.getByRole("tab", { name: "Inbox" })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  },
+};
+
+export const KeepsHiddenPanelsMounted: Story = {
+  args: { keepMounted: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText("Drafts panel")).not.toBeVisible();
+  },
+};
+
+export const UnmountsHiddenPanels: Story = {
+  args: { keepMounted: false },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText("Drafts panel")).toBeNull();
+  },
 };

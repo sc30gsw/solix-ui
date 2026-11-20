@@ -19,7 +19,7 @@ export type TabsPanelProps = ElementProps<
   {
     /** The value of the tab that shows this panel. */
     value: string;
-    /** Keeps the panel in the page, hidden, while its tab is not selected, over the `Tabs`' own. */
+    /** Keeps the panel's content in the page, hidden, while its tab is not selected, even when the `Tabs` drop the others'. */
     keepMounted?: boolean;
   }
 >;

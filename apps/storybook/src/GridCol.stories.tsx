@@ -27,3 +27,7 @@ export const Offset: Story = {
 export const Content: Story = {
   args: { span: "content" },
 };
+
+export const OrderedAndAligned: Story = {
+  args: { order: 2, align: "flex-end" },
+};
