@@ -6,9 +6,9 @@ export const themedByTheProvider = "data-provider-theme";
 
 export const themedSpacing = { md: "2.25rem" } as const;
 
-export const brandSubtree = "brand-green";
+export const brandSubtree = "brand";
 
-export const brandPrimaryColor = "green" satisfies SolixTheme["primaryColor"];
+export const brandPrimaryColor = "grape" satisfies SolixTheme["primaryColor"];
 
 export const themeNames = {
   themed: "Padding the provider's theme sets",
@@ -16,7 +16,7 @@ export const themeNames = {
 };
 
 export const nestedThemes = {
-  outer: { scope: "brand-outer", primaryColor: "green" },
+  outer: { scope: "brand-outer", primaryColor: "teal" },
   inner: { scope: "brand-inner", primaryColor: "red" },
 } as const satisfies Record<string, { scope: string; primaryColor: SolixTheme["primaryColor"] }>;
 

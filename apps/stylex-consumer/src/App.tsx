@@ -15,7 +15,7 @@ const styles = stylex.create({
 });
 
 const brandSubtree = "data-brand";
-const brandTheme = createTheme({ primaryColor: "green" });
+const brandTheme = createTheme({ primaryColor: "grape" });
 
 export function App() {
   return (
