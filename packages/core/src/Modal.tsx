@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { createEffect, createUniqueId, onSettled } from "solid-js";
 import { dismissOnOutsidePress, supportsClosedBy } from "#/src/light-dismiss.ts";
-import { createParts, type ElementProps } from "#/src/parts.ts";
+import { createParts, type ElementProps, type OpenedProps } from "#/src/parts.ts";
 import { type DisplayPropName, displayPropNames } from "#/src/style-prop-table.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
@@ -48,11 +48,9 @@ const styles = stylex.create({
 export type ModalProps = ElementProps<
   "dialog",
   typeof styles,
-  {
+  OpenedProps & {
     /** The dialog's heading, which also gives the dialog its accessible name. */
     label: string;
-    /** Whether the dialog is open; the consumer sets it, and `onClose` says when the user closed it. */
-    opened: boolean;
     open?: never;
   } & Partial<Record<DisplayPropName, never>>
 >;

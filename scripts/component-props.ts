@@ -28,6 +28,7 @@ export type LibraryComponent = {
   readonly declarations: readonly ts.Node[];
   readonly props: readonly ComponentProp[];
   readonly staticParts: readonly string[];
+  readonly partDeclarations: readonly ts.Node[];
 };
 
 export type ComponentProps = Readonly<Record<string, readonly ComponentProp[]>>;
@@ -181,7 +182,7 @@ function defaultsOf(program: Program, component: ts.Identifier): Map<ts.Node, st
   return new Map();
 }
 
-function staticPartsOf(program: Program, component: ts.Identifier): string[] {
+function staticPartMembers(program: Program, component: ts.Identifier) {
   const symbol = symbolOf(program, component);
   const type = symbol && program.checker.getTypeOfSymbol(symbol);
   if (!type) return [];
@@ -189,8 +190,17 @@ function staticPartsOf(program: Program, component: ts.Identifier): string[] {
     .getPropertiesOfType(type)
     .filter((member) =>
       declarationsOfSymbol(member).some((declaration) => hasCallSignature(program, declaration)),
-    )
-    .map((member) => member.name);
+    );
+}
+
+function partDeclarationsOf(program: Program, component: ts.Identifier): ts.Node[] {
+  return staticPartMembers(program, component).flatMap((member) =>
+    declarationsOfSymbol(member).flatMap((declaration) => {
+      const assigned = ts.isBinaryExpression(declaration) ? declaration.right : undefined;
+      const part = assigned && symbolOf(program, assigned);
+      return part ? declarationsOfSymbol(part) : [];
+    }),
+  );
 }
 
 export function componentsIn(
@@ -209,7 +219,8 @@ export function componentsIn(
       describe: rowDescription,
       defaults: new Map([...declared, ...defaultsOf(program, name)]),
     }),
-    staticParts: staticPartsOf(program, name),
+    staticParts: staticPartMembers(program, name).map((member) => member.name),
+    partDeclarations: partDeclarationsOf(program, name),
   }));
 }
 

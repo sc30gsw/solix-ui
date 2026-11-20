@@ -6,14 +6,13 @@ import {
   type ProvidedColorScheme,
 } from "#/src/color-scheme.ts";
 import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
-import { defaultColorScheme, type SolixColorScheme } from "#/src/color-schemes.ts";
-import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
+import { type ColorSchemeOptions, defaultColorScheme } from "#/src/color-schemes.ts";
 import { type SolixTheme, themeStyleSheet } from "#/src/create-theme.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { localStorageColorSchemeManager } from "#/src/local-storage-manager.ts";
 import { type GetStyleNonce, PageNonceContext } from "#/src/run-time-style.ts";
 
-export type SolixProviderProps = {
+export type SolixProviderProps = ColorSchemeOptions & {
   /** The theme whose tokens the provider sets, made with `createTheme`. */
   theme?: SolixTheme;
   /** Gives the Content Security Policy nonce for every style the library adds at run time. */
@@ -24,10 +23,6 @@ export type SolixProviderProps = {
   withCssVariables?: boolean;
   /** Stores the colour scheme the user picks and tells of changes; `localStorage` unless given. */
   colorSchemeManager?: SolixColorSchemeManager;
-  /** The colour scheme while nothing is stored; `auto` follows the system. */
-  defaultColorScheme?: SolixColorScheme;
-  /** Holds the colour scheme to this one, whatever is stored or picked. */
-  forceColorScheme?: SolixComputedColorScheme;
   /** Gives the element that carries the colour scheme; `<html>` unless given. */
   getRootElement?: () => HTMLElement | undefined;
   /** The content that reads the provider's colour scheme and style nonce; the theme reaches whatever `cssVariablesSelector` selects. */

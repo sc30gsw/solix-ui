@@ -206,3 +206,47 @@ function aliasesOrThrow(aliases: ReadonlyMap<string, ts.Node>, name: string): ts
   if (!alias) throw new Error(`${name}: the probe declares no such alias.`);
   return alias;
 }
+
+const inheritingProbe = `import type { JSX } from "@solidjs/web";
+import type { ControlledProps, ElementProps, OpenedProps } from ${JSON.stringify(sharedPropTypes)};
+
+type ToneProps = { tone?: "calm" | "loud" };
+
+function Part(props: ElementProps<"div", { root: object }, { size?: "sm" | "lg" }>): JSX.Element {
+  return <div data-size={props.size} />;
+}
+
+function Owner(props: ElementProps<"div", { root: object }, ControlledProps<string> & ToneProps>): JSX.Element {
+  return <div data-tone={props.tone} />;
+}
+
+Owner.Part = Part;
+
+function Sharer(props: ElementProps<"div", { root: object }, ToneProps & { width?: "narrow" | "wide" }>): JSX.Element {
+  return <div data-tone={props.tone} data-width={props.width} />;
+}
+
+function Dialog(props: ElementProps<"div", { root: object }, OpenedProps & { size?: "sm" | "lg" }>): JSX.Element {
+  return <div data-open={String(props.opened)} data-size={props.size} />;
+}
+
+export { Dialog, Owner, Part, Sharer };
+`;
+
+test("a component is stateful when a prop drives its state, a callback or one that ControlledProps or OpenedProps declares, or when it is a static part of a stateful component; its own closed props are behaviour, and so is any prop whose declaration is behaviour on another component", () => {
+  const { program, components } = openSpecProgram(virtualFile(inheritingProbe, ".tsx"));
+  program.dispose();
+  const behaviour = Object.fromEntries(
+    components.map(({ name, props }) => [
+      name,
+      props.filter((prop) => !prop.common && prop.behaviour).map((prop) => prop.name),
+    ]),
+  );
+
+  expect(behaviour).toEqual({
+    Dialog: ["opened", "size"],
+    Owner: ["value", "defaultValue", "onChange", "tone"],
+    Part: ["size"],
+    Sharer: ["tone"],
+  });
+});

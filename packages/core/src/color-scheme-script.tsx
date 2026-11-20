@@ -2,23 +2,18 @@ import type { JSX } from "@solidjs/web";
 import { omit, useContext } from "solid-js";
 import {
   colorSchemeAttribute,
+  type ColorSchemeOptions,
   colorSchemes,
   defaultColorScheme,
   isColorScheme,
   prefersColorScheme,
   resolvedColorScheme,
-  type SolixColorScheme,
   systemColorScheme,
 } from "#/src/color-schemes.ts";
-import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
 import { PageNonceContext } from "#/src/run-time-style.ts";
 
-export type ColorSchemeScriptOptions = {
-  /** The colour scheme the script sets while nothing is stored; `auto` follows the system. */
-  defaultColorScheme?: SolixColorScheme;
-  /** The colour scheme the script always sets, reading nothing stored. */
-  forceColorScheme?: SolixComputedColorScheme;
+export type ColorSchemeScriptOptions = ColorSchemeOptions & {
   /** The `localStorage` key the stored colour scheme is read from. */
   localStorageKey?: string;
 };

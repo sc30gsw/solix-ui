@@ -36,6 +36,12 @@ export type ControlledProps<V> = {
   onChange?: (value: V) => void;
 };
 
+/** The prop that opens a component the consumer opens and closes, such as a dialog. */
+export type OpenedProps = {
+  /** Whether it is open; the consumer sets it, and `onClose` says when the user closed it. */
+  opened: boolean;
+};
+
 type StylesApiPropKey = keyof StylesApiProps<object>;
 
 const stylesApiProps = { classes: true, styles: true, unstyled: true } satisfies Record<

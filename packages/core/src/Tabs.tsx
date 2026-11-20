@@ -26,6 +26,10 @@ export type TabsProps = ElementProps<
   "div",
   typeof styles,
   ControlledProps<string | null> & {
+    /** The selected tab's value; `null` selects none. */
+    value?: string | null;
+    /** The value of the tab selected at first; `null` selects none. */
+    defaultValue?: string | null;
     /** Lays the tabs out in a row or a column; the arrow keys follow it. */
     orientation?: TabsOrientation;
     /** Lets the arrow keys wrap from the last tab to the first and back. */

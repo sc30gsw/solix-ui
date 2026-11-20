@@ -50,7 +50,7 @@ export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<
   T,
   typeof styles,
   ColorProps<(typeof colorOfButton.variants)[number]> & {
-    /** Its height, padding and font size: a key of the `control-height` scale, a number of pixels or any CSS length. */
+    /** A key of the `control-height` scale sets its height, padding and font size from their scales; a number of pixels or any CSS length sets all three to that length. */
     size?: VariableProp<typeof buttonVariables, "button-height", ScaleValue<"control-height">>;
     /** Its corner radius: a key of the `radius` scale, a number of pixels or any CSS length. */
     radius?: VariableProp<typeof buttonVariables, "button-radius">;
