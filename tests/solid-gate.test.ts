@@ -1,17 +1,15 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
+import { SOURCE_FILE, walk } from "solid2-agent-kit/bin/check.mjs";
 import { expect, test } from "vite-plus/test";
 import { kitBin } from "#/scripts/agent-kit.ts";
+import { rootManifest } from "#/scripts/repository.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const fixtures = "tests/fixtures/solid-gate";
 const lintScript = "lint:solid";
-
-function read(path: string): string {
-  return readFileSync(join(repositoryRoot, path), "utf8");
-}
 
 test.each([["props-destructure.txt", "[props-destructure-body]"]])(
   "the kit's gate fails the component in %s with %s, so lint:solid can fail",
@@ -35,25 +33,24 @@ test.each([["props-destructure.txt", "[props-destructure-body]"]])(
   },
 );
 
-test("lint:solid runs the kit's gate over every tracked source file, those under a dot directory included", () => {
-  const script: unknown = Reflect.get(JSON.parse(read("package.json")).scripts ?? {}, lintScript);
-  const command = typeof script === "string" ? (script.split("&&")[0] ?? "") : "";
+test("lint:solid runs the kit's gate over every tracked source file, those under a dot directory included, as the kit's own walk finds them", () => {
+  const command = rootManifest().scripts?.[lintScript]?.split("&&")[0] ?? "";
   const paths = command
     .trim()
     .split(/\s+/)
     .slice(2)
     .filter((arg) => !arg.startsWith("-"));
-  const walked = (file: string, path: string) =>
-    path === "."
-      ? !file.split("/").some((segment) => segment.startsWith(".") || segment === "node_modules")
-      : file.startsWith(`${path}/`);
+  const walked = new Set(
+    paths.flatMap((path) =>
+      [...walk(join(repositoryRoot, path))].map((file) => relative(repositoryRoot, file)),
+    ),
+  );
   const unchecked = execFileSync("git", ["ls-files", "*.ts", "*.tsx", "*.jsx"], {
     cwd: repositoryRoot,
     encoding: "utf8",
   })
     .split("\n")
-    .filter((file) => file !== "" && !file.endsWith(".d.ts"))
-    .filter((file) => !paths.some((path) => walked(file, path)))
+    .filter((file) => SOURCE_FILE.test(file) && !walked.has(file))
     .map(
       (file) => `${file}: lint:solid does not check it. Name its directory after solid2-kit check.`,
     );

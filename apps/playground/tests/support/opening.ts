@@ -78,19 +78,133 @@ function withWhatThePageSaid(said: string[], cause: unknown): Error {
   return new Error(`${String(cause)} The page said: ${said.join(" | ") || "nothing"}`, { cause });
 }
 
-function everyStylesheetLoaded(): boolean {
-  const readable = (link: Element) => {
-    if (!(link instanceof HTMLLinkElement) || link.sheet === null) return false;
+export type StylesheetSnapshot = {
+  href: string;
+  outcome: "loaded" | "failed" | "pending" | "not watched";
+  rules: number | "no sheet" | "unreadable";
+};
+
+const stylesheetOutcomesKey = "__stylesheetOutcomes";
+
+function watchStylesheetOutcomes(key: string): void {
+  const outcomes = new WeakMap<Element, "loaded" | "failed">();
+  Object.defineProperty(window, key, { value: outcomes });
+  for (const [type, outcome] of [
+    ["load", "loaded"],
+    ["error", "failed"],
+  ] as const) {
+    document.addEventListener(
+      type,
+      ({ target }) => {
+        if (target instanceof HTMLLinkElement) outcomes.set(target, outcome);
+      },
+      true,
+    );
+  }
+}
+
+export type DocumentSnapshot = {
+  readyState: DocumentReadyState;
+  bodyParsed: boolean;
+  scrollY: number;
+  stylesheets: StylesheetSnapshot[];
+};
+
+function documentSnapshot(outcomesAt: string): DocumentSnapshot {
+  const outcomes: unknown = Reflect.get(window, outcomesAt);
+  const outcomeOf = (link: HTMLLinkElement): StylesheetSnapshot["outcome"] =>
+    outcomes instanceof WeakMap ? (outcomes.get(link) ?? "pending") : "not watched";
+  const rulesOf = (link: HTMLLinkElement): StylesheetSnapshot["rules"] => {
+    if (link.sheet === null) return "no sheet";
     try {
-      return link.sheet.cssRules.length >= 0;
+      return link.sheet.cssRules.length;
     } catch {
-      return false;
+      return "unreadable";
     }
   };
-  return (
-    document.body !== null &&
-    [...document.querySelectorAll('link[rel="stylesheet"]')].every(readable)
-  );
+  return {
+    readyState: document.readyState,
+    bodyParsed: document.body !== null,
+    scrollY: window.scrollY,
+    stylesheets: [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')].map(
+      (link) => ({ href: link.href, outcome: outcomeOf(link), rules: rulesOf(link) }),
+    ),
+  };
+}
+
+export function snapshotOfDocument(page: Page): Promise<DocumentSnapshot> {
+  return page.evaluate(documentSnapshot, stylesheetOutcomesKey);
+}
+
+export const linksNoStylesheet = "the page links no stylesheet";
+export const stylesheetDidNotLoad = "a stylesheet did not load";
+export const stylesheetUnreadable = "a stylesheet loaded but cannot be read";
+export const notEveryStylesheetLoaded = "not every stylesheet loaded";
+const pollEvery = 25;
+
+type StylesheetsState = "pending" | "settled" | { failure: string };
+
+function stylesheetsState(snapshot: DocumentSnapshot | undefined): StylesheetsState {
+  if (snapshot === undefined) return "pending";
+  const failed = snapshot.stylesheets.filter(({ outcome }) => outcome === "failed");
+  if (failed.length > 0) {
+    return {
+      failure: `${stylesheetDidNotLoad}: ${failed.map(({ href }) => href).join(", ")} fired its error event.`,
+    };
+  }
+  const unreadable = snapshot.stylesheets.filter(({ rules }) => rules === "unreadable");
+  if (unreadable.length > 0) {
+    return {
+      failure: `${stylesheetUnreadable}, as a sheet from another origin served without CORS cannot, so nothing tells that it styles the page: ${unreadable.map(({ href }) => href).join(", ")}.`,
+    };
+  }
+  if (!snapshot.bodyParsed) return "pending";
+  if (snapshot.stylesheets.length === 0) {
+    return {
+      failure: `${linksNoStylesheet}, so there is none to wait for. Open it until "hydrated", "load" or "commit".`,
+    };
+  }
+  return snapshot.stylesheets.every(
+    ({ outcome, rules }) => outcome === "loaded" && typeof rules === "number",
+  )
+    ? "settled"
+    : "pending";
+}
+
+function within<T>(work: Promise<T>, milliseconds: number): Promise<T | undefined> {
+  return Promise.race([
+    work.catch(() => undefined),
+    new Promise<undefined>((resolve) => setTimeout(resolve, Math.max(1, milliseconds))),
+  ]);
+}
+
+const watchedPages = new WeakSet<Page>();
+
+async function watchStylesheets(page: Page): Promise<void> {
+  if (watchedPages.has(page)) return;
+  await page.addInitScript(watchStylesheetOutcomes, stylesheetOutcomesKey);
+  watchedPages.add(page);
+}
+
+async function untilStylesheetsLoaded(
+  page: Page,
+  { deadline, timeout, said }: { deadline: number; timeout: number; said: readonly string[] },
+): Promise<void> {
+  const failure = (why: string) =>
+    new Error(`${pageDidNotBecomeReady}: ${why} The page said: ${said.join(" | ") || "nothing"}`);
+  let snapshot: DocumentSnapshot | undefined;
+  for (;;) {
+    snapshot = (await within(snapshotOfDocument(page), deadline - Date.now())) ?? snapshot;
+    const state = stylesheetsState(snapshot);
+    if (state === "settled") return;
+    if (state !== "pending") throw failure(state.failure);
+    if (Date.now() >= deadline) {
+      throw failure(
+        `${notEveryStylesheetLoaded} within ${timeout} ms. Its stylesheets were ${JSON.stringify(snapshot?.stylesheets ?? "not read")}.`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollEvery));
+  }
 }
 
 export async function opened(
@@ -104,8 +218,17 @@ export async function opened(
 ): Promise<void> {
   keepListening(page, reportsToTheConsole);
   if (until === "stylesheetsLoaded") {
-    await page.goto(url, { waitUntil: "commit", timeout });
-    await page.waitForFunction(everyStylesheetLoaded, undefined, { timeout });
+    await watchStylesheets(page);
+    const deadline = Date.now() + timeout;
+    const heard = heardFrom(page);
+    try {
+      await page.goto(url, { waitUntil: "commit", timeout }).catch((cause: unknown) => {
+        throw withWhatThePageSaid(heard.said, cause);
+      });
+      await untilStylesheetsLoaded(page, { deadline, timeout, said: heard.said });
+    } finally {
+      heard.stop();
+    }
     return;
   }
   if (until !== "hydrated") {

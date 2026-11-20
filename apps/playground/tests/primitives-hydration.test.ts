@@ -1,7 +1,14 @@
 import type { Browser, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
 import type { BrowserValuePrimitive } from "../../../packages/primitives/fixtures/primitive-kinds";
-import { opened } from "#/tests/support/opening.ts";
+import {
+  linksNoStylesheet,
+  notEveryStylesheetLoaded,
+  opened,
+  snapshotOfDocument,
+  stylesheetDidNotLoad,
+  stylesheetUnreadable,
+} from "#/tests/support/opening.ts";
 import { inEveryEngine, openPage, type OpenPage } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
@@ -9,6 +16,41 @@ const probe = "output[data-hydration-probe]";
 const revealWait = { timeout: 5_000 };
 const headroomCalls = '[data-case-calls="createHeadroom"]';
 const lateStylesheet = 1_500;
+const stylesheetTimeout = 4_000;
+const missingSheet = new URL("/missing.css", url).href;
+const foreignSheet = "http://other.example/sheet.css";
+const neverSheet = new URL("/never.css", url).href;
+const spokeFirst = "the page spoke before its stylesheet arrived";
+const documentWith = (head: string) =>
+  `<!doctype html><html><head><title>A page</title>${head}</head><body><p>A page</p></body></html>`;
+const stylesheetFailures = [
+  {
+    what: "fails at once, saying so, on a page that links no stylesheet",
+    html: documentWith(""),
+    failure: linksNoStylesheet,
+    said: undefined,
+  },
+  {
+    what: "fails at once, naming it, when a stylesheet answers with an error",
+    html: documentWith(`<link rel="stylesheet" href="${missingSheet}">`),
+    failure: stylesheetDidNotLoad,
+    said: /missing\.css|404/,
+  },
+  {
+    what: "fails at once, naming it, when a stylesheet from another origin loads but cannot be read",
+    html: documentWith(`<link rel="stylesheet" href="${foreignSheet}">`),
+    failure: stylesheetUnreadable,
+    said: undefined,
+  },
+  {
+    what: "fails at its timeout with what the page said, when a stylesheet never arrives",
+    html: documentWith(
+      `<script>console.error(${JSON.stringify(spokeFirst)})</script><link rel="stylesheet" href="${neverSheet}">`,
+    ),
+    failure: notEveryStylesheetLoaded,
+    said: new RegExp(spokeFirst),
+  },
+];
 
 type Revealed = { expected: string; restore: () => Promise<unknown> };
 
@@ -312,14 +354,48 @@ inEveryEngine((browser) => {
       await opened(page, url, "stylesheetsLoaded");
 
       expect(
-        await page.evaluate(() =>
-          [...document.querySelectorAll('link[rel="stylesheet"]')].map(
-            (link) => link instanceof HTMLLinkElement && link.sheet !== null,
-          ),
+        (await snapshotOfDocument(page)).stylesheets.map(
+          ({ rules }) => typeof rules === "number" && rules > 0,
         ),
       ).toEqual([true]);
     } finally {
       await context.close();
     }
   });
+
+  for (const { what, html, failure, said } of stylesheetFailures) {
+    test(`opening until stylesheetsLoaded ${what}`, async () => {
+      const context = await browser().newContext();
+      try {
+        const page = await context.newPage();
+        await page.route(url, (route) => route.fulfill({ contentType: "text/html", body: html }));
+        await page.route("**/*.css", async (route) => {
+          if (route.request().url() === missingSheet) await route.fulfill({ status: 404 });
+          else if (route.request().url() === foreignSheet) {
+            await route.fulfill({ contentType: "text/css", body: "p { color: red; }" });
+          } else await new Promise(() => undefined);
+        });
+        const started = performance.now();
+
+        const opening = opened(page, url, "stylesheetsLoaded", {
+          timeout: stylesheetTimeout,
+          reportsToTheConsole: said,
+        }).then(
+          () => "",
+          (error: unknown) => String(error),
+        );
+
+        expect(await opening).toContain(failure);
+        if (failure === notEveryStylesheetLoaded) {
+          expect(await opening).toContain(spokeFirst);
+          expect(await opening).toContain(`"href":"${neverSheet}","outcome":"pending"`);
+        }
+        expect(performance.now() - started).toBeLessThan(
+          failure === notEveryStylesheetLoaded ? stylesheetTimeout * 2 : stylesheetTimeout,
+        );
+      } finally {
+        await context.close();
+      }
+    });
+  }
 });
