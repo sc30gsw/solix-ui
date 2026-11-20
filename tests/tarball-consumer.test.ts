@@ -30,13 +30,18 @@ import {
   sharedSettings,
   ts,
 } from "#/scripts/syntax.ts";
-import { type RunningServer, startServer } from "#/tests/support/server-process.ts";
+import {
+  type RunningServer,
+  startServer,
+  viteOnAFreePort,
+} from "#/tests/support/server-process.ts";
 import {
   type ExportTarget,
   type Manifest,
   componentLibraries,
   installedVersions,
   installedVp,
+  libraryNames,
   libraryPackages,
   packageManagerAnswerTimeout,
   repositoryRoot,
@@ -46,8 +51,7 @@ import {
 const [library] = componentLibraries;
 const libraryName = library.manifest.name ?? "";
 const fixtures = join(repositoryRoot, "tests/fixtures/tarball-consumer");
-const builtServerPort = 4323;
-const developmentServerPort = 4324;
+const formRulesFixture = "form-rules.ts";
 const installAndBuildTimeout = 240_000;
 const packTimeout = packageManagerAnswerTimeout * libraryPackages.length;
 const fromOutsideTheRepository = allowedRuntimeDependencyNames();
@@ -55,21 +59,9 @@ const settingsAConsumerWrites = ["plugins"];
 const subpathImportPrefix = "#";
 const settingsOfAnAppInThisRepository = join(repositoryRoot, "apps/playground/tsconfig.json");
 const [engine] = enginesToVerify();
-const servers: [label: string, port: number, command: string[]][] = [
-  ["the built server in plain Node", builtServerPort, ["node", "dist/server/node.js"]],
-  [
-    "the development server",
-    developmentServerPort,
-    [
-      "node_modules/.bin/vp",
-      "dev",
-      "--host",
-      "127.0.0.1",
-      "--port",
-      String(developmentServerPort),
-      "--strictPort",
-    ],
-  ],
+const servers: [label: string, command: string[]][] = [
+  ["the built server in plain Node", ["node", "dist/server/node.js"]],
+  ["the development server", ["node_modules/.bin/vp", "dev", ...viteOnAFreePort]],
 ];
 
 type Packed = {
@@ -222,6 +214,7 @@ describe("installed into a consumer outside the workspace", () => {
     const versionOf = (name: string) => catalog[name];
     mkdirSync(join(app, "src"));
     copyFileSync(join(fixtures, "vite.config.ts"), join(app, "vite.config.ts"));
+    copyFileSync(join(fixtures, formRulesFixture), join(app, "src", formRulesFixture));
     writeFileSync(
       join(app, "package.json"),
       JSON.stringify({
@@ -271,7 +264,7 @@ describe("installed into a consumer outside the workspace", () => {
     buildWith("TabsApp.tsx");
   }, installAndBuildTimeout);
 
-  test("a consumer that names every library by its packed tarball gets one copy of each, the one the component library resolves as its peer, and gets the SDK as a dependency of the component library, at the version the catalog pins, without listing it", () => {
+  test("a consumer that names every library by its packed tarball gets one copy of each, the one the component library resolves when it names it as a peer, and gets the SDK as a dependency of the component library, at the version the catalog pins, without listing it", () => {
     const installed = (name: string) =>
       JSON.parse(readFileSync(join(besideTheLibrary(), name, "package.json"), "utf8")) as {
         version: string;
@@ -283,12 +276,17 @@ describe("installed into a consumer outside the workspace", () => {
     const { catalog } = pnpmSettings();
 
     const settings = readFileSync(join(app, workspaceFile), "utf8");
-    for (const { manifest } of libraryPackages) {
-      const name = manifest.name ?? "";
+    const resolvedByTheLibrary = libraryNames.filter(
+      (name) => name === libraryName || name in (library.manifest.peerDependencies ?? {}),
+    );
+    for (const name of libraryNames) {
       expect(consumer.dependencies[name], `${name} in the consumer's own manifest`).toMatch(
         /\.tgz$/,
       );
       expect(settings.includes(name), `${name} in the consumer's ${workspaceFile}`).toBe(false);
+    }
+    expect(resolvedByTheLibrary).toContain(libraryName);
+    for (const name of resolvedByTheLibrary) {
       expect(realpathSync(join(besideTheLibrary(), name)), name).toBe(
         realpathSync(join(app, "node_modules", name)),
       );
@@ -385,14 +383,14 @@ describe("installed into a consumer outside the workspace", () => {
     expect(ofTheSdk(clientModules())).not.toEqual([]);
   });
 
-  describe.each(servers)(`served by %s, in ${engine}`, (_, port, command) => {
+  describe.each(servers)(`served by %s, in ${engine}`, (_, command) => {
     let browser: Browser;
     let server: RunningServer;
     let page: Page;
     const problems: string[] = [];
 
     beforeAll(async () => {
-      server = await startServer({ directory: app, port, command });
+      server = await startServer({ directory: app, command });
       browser = await browserType(engine).launch();
       page = await browser.newPage();
       page.on("console", (message) => {
@@ -406,7 +404,7 @@ describe("installed into a consumer outside the workspace", () => {
 
     afterAll(async () => {
       await browser.close();
-      server.stop();
+      await server.stop();
     });
 
     test("the consumer's Tabs arrive rendered, hydrate, and select by click and by arrow key, with no console error or warning", async () => {

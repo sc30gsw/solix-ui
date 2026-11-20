@@ -1,4 +1,4 @@
-import { globSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, expect, test } from "vite-plus/test";
 import {
@@ -19,10 +19,18 @@ import {
   virtualFile,
   ts,
 } from "#/scripts/syntax.ts";
+import { anyFreePort } from "#/tests/support/server-process.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
-const testCode = "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}";
-const testConfig = "vite.config.ts";
+const servedPageSkill = ".agents/skills/verify-served-page";
+const portHolders = [
+  "vite.config.ts",
+  "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}",
+  "apps/*/*.ts",
+  "apps/*/.storybook/*.ts",
+  "apps/*/fixtures/**/*.ts",
+];
+const portTexts = [`${servedPageSkill}/**/*.md`];
 const setupsModules = "apps/playground/src/sections/*-setups.ts";
 const namesObject = /Names$/;
 const letterOrDigit = /[\p{L}\p{N}]/u;
@@ -39,6 +47,14 @@ const navigation = "goto";
 const playwrightPackages = ["playwright", "playwright-core"];
 const portName = /port/i;
 const portNumbers = { lowest: 1024, highest: 65_535 };
+const listenCall = /\blisten$/;
+const portInCode = /127\.0\.0\.1:(\d+)|--port[= ]["'`]?(\d+)|\bPORT[=:]\s*["'`]?(\d+)/g;
+const portInScriptsAndDocs =
+  /(?:127\.0\.0\.1|localhost):(\d+)|--port[= ]["'`]?(\d+)|\bPORT[=:]\s*["'`]?(\d+)|_PORT:-(\d+)/g;
+
+function read(path: string): string {
+  return readFileSync(join(repositoryRoot, path), "utf8");
+}
 
 function namesAPort(name: ts.Node): boolean {
   return portName.test(name.getText());
@@ -49,8 +65,8 @@ function holdsAPort(literal: ts.NumericLiteral): boolean {
   if (!Number.isInteger(value) || value < portNumbers.lowest || value > portNumbers.highest)
     return false;
   const holder = literal.parent;
-  if (ts.isCallExpression(holder) || ts.isNewExpression(holder)) {
-    return holder.arguments?.some((argument) => argument === literal) ?? false;
+  if (ts.isCallExpression(holder)) {
+    return holder.arguments.includes(literal) && listenCall.test(holder.expression.getText());
   }
   if (
     ts.isVariableDeclaration(holder) ||
@@ -73,24 +89,32 @@ function portsIn(source: ts.SourceFile): string[] {
   return [...found];
 }
 
-test("every test server listens on a port of its own", () => {
-  const paths = globSync([testConfig, testCode], { cwd: repositoryRoot }).sort();
-  const sources = parseAll(paths.map((path) => join(repositoryRoot, path)));
-  const ports = paths.flatMap((path, index) =>
-    portsIn(sources[index]).map((port) => ({ path, port })),
-  );
-  const violations = ports.flatMap(({ path, port }, index) =>
-    ports
-      .slice(0, index)
-      .filter((other) => other.port === port)
-      .map((other) => `${path}: port ${port} is already used by ${other.path}; pick a free one.`),
+function portsWrittenIn(text: string, written: RegExp): string[] {
+  return [...text.matchAll(written)]
+    .map((match) => match.slice(1).find((port) => port !== undefined) ?? "")
+    .filter((port) => Number(port) >= portNumbers.lowest);
+}
+
+test("no test server, test configuration or document of the served-page skill names a fixed port: each listens on a port the system gives it, so two runs never meet", () => {
+  const codePaths = globSync(portHolders, { cwd: repositoryRoot }).sort();
+  const sources = parseAll(codePaths.map((path) => join(repositoryRoot, path)));
+  const textPaths = globSync(portTexts, { cwd: repositoryRoot }).sort();
+  const violations = [
+    ...codePaths.flatMap((path, index) => portsIn(sources[index]).map((port) => ({ path, port }))),
+    ...codePaths.flatMap((path) =>
+      portsWrittenIn(read(path), portInCode).map((port) => ({ path, port })),
+    ),
+    ...textPaths.flatMap((path) =>
+      portsWrittenIn(read(path), portInScriptsAndDocs).map((port) => ({ path, port })),
+    ),
+  ].map(
+    ({ path, port }) =>
+      `${path}: port ${port} is fixed. Listen on port ${anyFreePort} through startServer, listening or viteOnAFreePort, and read the port the server got.`,
   );
 
-  expect(
-    ports.length,
-    `${testCode}: no port was found, written as a call argument or as the value of a name that holds "port"`,
-  ).toBeGreaterThan(0);
-  expect(violations).toEqual([]);
+  expect(codePaths.length).toBeGreaterThan(0);
+  expect(textPaths.length).toBeGreaterThan(0);
+  expect([...new Set(violations)]).toEqual([]);
 });
 
 type HeldName = { name: string; module: string };

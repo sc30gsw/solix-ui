@@ -4,12 +4,13 @@ import { join } from "node:path";
 import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
+import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
+import { anyFreePort } from "#/tests/support/server-process.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
-const browserTestServerPort = 4322;
 const checkerRules = "tests/rules/**/*.test.ts";
 const programOpeners = [
   "tests/rules/**",
@@ -45,6 +46,16 @@ const fastCheckRunnersOnlyThroughTheWrapper = {
 
 function afterTheRules<P extends { test?: object }>(project: P) {
   return { ...project, test: { ...project.test, sequence: { groupOrder: 1 } } };
+}
+
+function withPackagesBuiltFirst<P extends { test?: object }>(project: P) {
+  const own: unknown =
+    project.test !== undefined && "globalSetup" in project.test ? project.test.globalSetup : [];
+  const ownSetups = [own].flat().filter((file) => typeof file === "string");
+  const globalSetup = [...packagesBuiltFirst, ...ownSetups].map((file) =>
+    join(import.meta.dirname, file),
+  );
+  return { ...project, test: { ...project.test, globalSetup } };
 }
 
 export default defineConfig({
@@ -138,7 +149,6 @@ export default defineConfig({
           name: "rules",
           environment: "node",
           include: [checkerRules],
-          globalSetup: ["tests/support/git-free-environment.ts", "tests/support/build-packages.ts"],
         },
       },
       ...[
@@ -153,11 +163,7 @@ export default defineConfig({
               "apps/*/tests/**/*.test.{ts,tsx}",
             ],
             exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules],
-            globalSetup: [
-              "tests/support/git-free-environment.ts",
-              "tests/support/build-packages.ts",
-              "tests/support/global-setup.ts",
-            ],
+            globalSetup: ["tests/support/global-setup.ts"],
             setupFiles: ["apps/playground/tests/support/console-check.ts"],
           },
         },
@@ -167,7 +173,7 @@ export default defineConfig({
           test: {
             name: "browser",
             include: [browserTests],
-            api: { port: browserTestServerPort, strictPort: true },
+            api: { port: anyFreePort, strictPort: true },
             browser: browserInEveryEngine(),
           },
         },
@@ -176,6 +182,6 @@ export default defineConfig({
           ...storiesProject(server, storybookConfigDirectory),
         })),
       ].map(afterTheRules),
-    ],
+    ].map(withPackagesBuiltFirst),
   },
 });
