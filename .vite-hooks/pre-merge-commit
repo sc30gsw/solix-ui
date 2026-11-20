@@ -1,1 +1,1 @@
-node scripts/check-working-tree.ts && vp run verify
+node scripts/check-working-tree.ts && merged=$(node scripts/merged-commits.ts) && SOLIX_MERGED_COMMITS="$merged" vp run verify
