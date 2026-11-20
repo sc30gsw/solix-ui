@@ -29,7 +29,8 @@ import {
   expectEveryJobToRunWeeklyAndFailTheRun,
   weeklyWorkflow,
 } from "#/tests/support/weekly-workflow.ts";
-import { gateJobProblems, newestReleasesCheck, workflowAt } from "#/tests/support/workflows.ts";
+import { newestReleasesCheck } from "#/tests/support/release-checks.ts";
+import { gateJobProblems, workflowAt } from "#/tests/support/workflows.ts";
 
 const manifest = { packageManager: "pnpm@12.18.0", engines: { node: "^26.13.1" } };
 
@@ -487,7 +488,7 @@ test("every job of the weekly workflow runs each week and fails the run when it 
   expectEveryJobToRunWeeklyAndFailTheRun();
 });
 
-test("the pins job is a gate job that runs the pin check in exactly one step: it sets only runs-on, timeout-minutes, steps and permissions, which only read, each step sets only uses, with, run and name, the workflow sets nothing that reaches it but its permissions, and it reads no secret", () => {
+test("the pins job is a gate job that runs the pin check: its steps are exactly the checkout, the setup and the check, it sets only runs-on, timeout-minutes, steps and permissions, which only read, its workflow sets only name, on, permissions and jobs, and it reads no secret", () => {
   expect(gateJobProblems(workflowAt(weeklyWorkflow), "pins", newestReleasesCheck)).toEqual([]);
 });
 

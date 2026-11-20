@@ -1,9 +1,9 @@
 import { relative, resolve } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { staticStorybookDirectory } from "#/apps/storybook/tests/support/test-servers.ts";
+import { newestReleasesCheck } from "#/tests/support/release-checks.ts";
 import {
   gateJobProblems,
-  newestReleasesCheck,
   permissionsLeftOut,
   secretsNamedIn,
   type Step,
@@ -190,28 +190,58 @@ function jobsRunningTheNewestCheck(workflow: Workflow): string[] {
 
 function newestCheckProblems(workflow: Workflow): string[] {
   const [name] = jobsRunningTheNewestCheck(workflow);
-  return name === undefined
-    ? [`no job runs ${newestReleasesCheck}.`]
-    : [
-        ...pullRequestTriggerProblems(workflow.on),
-        ...gateJobProblems(workflow, name, newestReleasesCheck),
-      ];
+  if (name === undefined) return [`no job runs ${newestReleasesCheck}.`];
+  const others = Object.keys(workflow.jobs ?? {}).filter((other) => other !== name);
+  return [
+    ...pullRequestTriggerProblems(workflow.on),
+    ...others.map(
+      (other) =>
+        `the workflow of the ${name} job also holds the ${other} job; give the ${name} job a workflow of its own.`,
+    ),
+    ...gateJobProblems(workflow, name, newestReleasesCheck),
+  ];
 }
 
-test(`on every pull request, at its opening, at each push and at its reopening, one job runs ${newestReleasesCheck} in one step and fails the run when the check fails: the pull_request trigger sets only types, the workflow sets nothing that reaches its jobs but its permissions, the job sets only runs-on, timeout-minutes, steps and permissions, which only read, each step sets only uses, with, run and name, and nothing reads a secret`, () => {
-  const found = workflowFiles.flatMap((file) =>
-    jobsRunningTheNewestCheck(workflowAt(file)).map((name) => ({ file, name })),
+function newestCheckProblemsIn(workflows: Record<string, Workflow>): string[] {
+  const found = Object.entries(workflows).flatMap(([file, workflow]) =>
+    jobsRunningTheNewestCheck(workflow).map((name) => ({ file, name })),
   );
-
-  expect(
-    found.map(({ file, name }) => `${file}: ${name}`),
-    `exactly one job of a workflow that runs on ${pullRequestEvent} runs ${newestReleasesCheck}`,
-  ).toHaveLength(1);
+  if (found.length !== 1) {
+    return [
+      `${found.length} jobs of the workflows that run on ${pullRequestEvent} run ${newestReleasesCheck}, not exactly one: ${found.map(({ file, name }) => `${file}: ${name}`).join(", ")}.`,
+    ];
+  }
   const [{ file }] = found;
-  expect(newestCheckProblems(workflowAt(file)), file).toEqual([]);
+  return newestCheckProblems(workflows[file]).map((problem) => `${file}: ${problem}`);
+}
+
+function theWorkflows(): Record<string, Workflow> {
+  return Object.fromEntries(workflowFiles.map((file) => [file, workflowAt(file)]));
+}
+
+test(`on every pull request, at its opening, at each push and at its reopening, one job, in a workflow of its own, runs ${newestReleasesCheck} and fails the run when the check fails: the pull_request trigger sets only types, the workflow sets only name, on, permissions and jobs, the job sets only runs-on, timeout-minutes, steps and permissions, which only read, its steps are exactly the checkout, the setup and the check, setting nothing else but a name, and nothing reads a secret`, () => {
+  expect(newestCheckProblemsIn(theWorkflows())).toEqual([]);
+});
+
+test(`${ciWorkflow}, which holds no gate job, may set concurrency with cancel-in-progress, env, defaults and run-name at the workflow level`, () => {
+  const workflows = theWorkflows();
+  const ci = {
+    ...workflows[ciWorkflow],
+    "run-name": "CI for ${{ github.ref_name }}",
+    concurrency: { group: "ci-${{ github.ref }}", "cancel-in-progress": true },
+    env: { FORCE_COLOR: "1" },
+    defaults: { run: { shell: "bash" } },
+  };
+
+  expect(newestCheckProblemsIn({ ...workflows, [ciWorkflow]: ci })).toEqual([]);
 });
 
 const check = { run: newestReleasesCheck };
+const checkout = { uses: "actions/checkout@v7", with: { "fetch-depth": 0 } };
+const setUpVp = {
+  uses: "voidzero-dev/setup-vp@v1.22.0",
+  with: { "node-version-file": "package.json", cache: true },
+};
 const readOnly = { contents: "read" };
 const gate = { "runs-on": "ubuntu-latest", "timeout-minutes": 10 };
 
@@ -220,14 +250,23 @@ function aWorkflow(changes: {
   workflow?: object;
   job?: object;
   step?: object;
+  steps?: Step[];
 }): Workflow {
   return {
     on: changes.on ?? { pull_request: null },
     permissions: readOnly,
     ...changes.workflow,
-    jobs: { a: { ...gate, ...changes.job, steps: [{ ...check, ...changes.step }] } },
+    jobs: {
+      a: {
+        ...gate,
+        ...changes.job,
+        steps: changes.steps ?? [checkout, setUpVp, { ...check, ...changes.step }],
+      },
+    },
   };
 }
+
+const gateSteps = `actions/checkout with {"fetch-depth":0}, voidzero-dev/setup-vp with {"node-version-file":"package.json","cache":true}, then run ${newestReleasesCheck}, each setting nothing else but a name`;
 
 const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
   [
@@ -247,8 +286,87 @@ const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
   ],
   [
     "the check run twice",
-    { ...aWorkflow({}), jobs: { a: { ...gate, steps: [check, check] } } },
-    `the a job runs ${newestReleasesCheck} in 2 steps, not in exactly one.`,
+    aWorkflow({ steps: [checkout, setUpVp, check, check] }),
+    `the a job has 4 steps, not 3; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "a step before the check that puts a node that exits 0 first on the PATH",
+    aWorkflow({
+      steps: [
+        checkout,
+        setUpVp,
+        {
+          run: 'mkdir -p "$RUNNER_TEMP/bin" && printf \'#!/bin/sh\\nexit 0\\n\' > "$RUNNER_TEMP/bin/node" && chmod +x "$RUNNER_TEMP/bin/node" && echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"',
+        },
+        check,
+      ],
+    }),
+    `the a job has 4 steps, not 3; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "a step before the check that rewrites the check's script",
+    aWorkflow({
+      steps: [
+        checkout,
+        setUpVp,
+        { run: "sed -i '1i process.exit(0);' scripts/check-newest-releases.ts" },
+        check,
+      ],
+    }),
+    `the a job has 4 steps, not 3; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "a check step whose failure is ignored",
+    aWorkflow({ step: { run: `${newestReleasesCheck} || true` } }),
+    `no job runs ${newestReleasesCheck}.`,
+  ],
+  [
+    "the check run before the setup",
+    aWorkflow({ steps: [checkout, check, setUpVp] }),
+    `step 2 of the a job sets run; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "a step before the check that sets NODE_OPTIONS for the steps after it",
+    aWorkflow({
+      steps: [
+        checkout,
+        setUpVp,
+        {
+          run: 'echo "NODE_OPTIONS=--import=data:text/javascript,process.exit(0)" >> "$GITHUB_ENV"',
+        },
+        check,
+      ],
+    }),
+    `the a job has 4 steps, not 3; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "a checkout of the base branch instead of the pull request",
+    aWorkflow({
+      steps: [
+        { ...checkout, with: { ...checkout.with, ref: "${{ github.base_ref }}" } },
+        setUpVp,
+        check,
+      ],
+    }),
+    `step 1 of the a job has with {"fetch-depth":0,"ref":"\${{ github.base_ref }}"}, not {"fetch-depth":0}; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "the setup step left out",
+    aWorkflow({ steps: [checkout, check] }),
+    `the a job has 2 steps, not 3; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "a gate job beside another job in its workflow",
+    {
+      ...aWorkflow({}),
+      jobs: { ...aWorkflow({}).jobs, b: { ...gate, steps: [{ run: "true" }] } },
+    },
+    "the workflow of the a job also holds the b job; give the a job a workflow of its own.",
+  ],
+  [
+    "a run-name",
+    aWorkflow({ workflow: { "run-name": "Check ${{ github.ref_name }}" } }),
+    "the workflow of the a job sets run-name; a gate job's workflow sets only name, on, permissions, jobs.",
   ],
   [
     "a job that runs if always()",
@@ -274,37 +392,40 @@ const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
   ],
   [
     "a job with no timeout",
-    { ...aWorkflow({}), jobs: { a: { "runs-on": "ubuntu-latest", steps: [check] } } },
+    {
+      ...aWorkflow({}),
+      jobs: { a: { "runs-on": "ubuntu-latest", steps: [checkout, setUpVp, check] } },
+    },
     "give the a job timeout-minutes, so a hung step ends.",
   ],
   [
     "a workflow whose default shell runs nothing",
     aWorkflow({ workflow: { defaults: { run: { shell: "true {0}" } } } }),
-    "the workflow sets defaults, which reaches the a job.",
+    "the workflow of the a job sets defaults; a gate job's workflow sets only name, on, permissions, jobs.",
   ],
   [
     "a workflow env that reads the private-term list",
     aWorkflow({ workflow: { env: { T: "${{ secrets.SOLIX_PRIVATE_TERMS }}" } } }),
-    "the workflow sets env, which reaches the a job.",
+    "the workflow of the a job sets env; a gate job's workflow sets only name, on, permissions, jobs.",
   ],
   [
     "a step that may fail",
     aWorkflow({ step: { "continue-on-error": true } }),
-    "step 1 of the a job sets continue-on-error; a gate step sets only uses, with, run, name.",
+    `step 3 of the a job sets continue-on-error; a gate job's steps are exactly ${gateSteps}.`,
   ],
   [
     "a step whose shell runs nothing",
     aWorkflow({ step: { shell: "true {0}" } }),
-    "step 1 of the a job sets shell; a gate step sets only uses, with, run, name.",
+    `step 3 of the a job sets shell; a gate job's steps are exactly ${gateSteps}.`,
   ],
   [
     "a step whose NODE_OPTIONS exits before the check",
     aWorkflow({ step: { env: { NODE_OPTIONS: "--import=data:text/javascript,process.exit(0)" } } }),
-    "step 1 of the a job sets env; a gate step sets only uses, with, run, name.",
+    `step 3 of the a job sets env; a gate job's steps are exactly ${gateSteps}.`,
   ],
   [
     "no permissions written out",
-    { on: { pull_request: null }, jobs: { a: { ...gate, steps: [check] } } },
+    { on: { pull_request: null }, jobs: { a: { ...gate, steps: [checkout, setUpVp, check] } } },
     `the a job is given ${permissionsLeftOut}; a gate job only reads.`,
   ],
   [

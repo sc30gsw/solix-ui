@@ -12,11 +12,12 @@ import {
   revisitsWithoutReasonOrCondition,
 } from "#/scripts/revisits.ts";
 import { roadmapFile } from "#/scripts/roadmap.ts";
-import { expectJobToHaveOneStepRunning } from "#/tests/support/weekly-workflow.ts";
+import { revisitsCheck } from "#/tests/support/release-checks.ts";
+import { weeklyWorkflow } from "#/tests/support/weekly-workflow.ts";
+import { gateJobProblems, workflowAt } from "#/tests/support/workflows.ts";
 
 const fixtureFile = "tests/fixtures/registry/2026-11-16.json";
 const revisitJob = "revisits";
-const revisitCheck = "node scripts/check-revisits.ts";
 const now = Date.parse("2026-11-16T22:39:45Z");
 const policy: ReleasePolicy = { minimumReleaseAgeMinutes: 24 * 60 };
 
@@ -97,8 +98,8 @@ test(`no revisit in ${roadmapFile} is met by the registry fixture in ${fixtureFi
   expect(report.problems).toEqual([]);
 });
 
-test(`the ${revisitJob} job has exactly one step that runs the revisit check, with no if and no continue-on-error`, () => {
-  expectJobToHaveOneStepRunning(revisitJob, revisitCheck);
+test(`the ${revisitJob} job is a gate job that runs the revisit check: its steps are exactly the checkout, the setup and the check, it sets only runs-on, timeout-minutes, steps and permissions, which only read, its workflow sets nothing that reaches it but its permissions, and it reads no secret`, () => {
+  expect(gateJobProblems(workflowAt(weeklyWorkflow), revisitJob, revisitsCheck)).toEqual([]);
 });
 
 test("the revisits read the reason and the condition of each revisit", () => {

@@ -85,11 +85,3 @@ export function expectEveryJobToRunWeeklyAndFailTheRun(): void {
   ).toEqual([]);
   expect(held).toEqual([]);
 }
-
-export function expectJobToHaveOneStepRunning(jobName: string, command: string): void {
-  const steps = (workflow().jobs?.[jobName]?.steps ?? []).filter((step) => step.run === command);
-
-  expect(steps.length).toBe(1);
-  expect(steps[0]).not.toHaveProperty("if");
-  expect(steps[0]).not.toHaveProperty("continue-on-error");
-}
