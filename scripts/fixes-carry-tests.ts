@@ -9,8 +9,6 @@ export const verificationFiles = [
   "apps/storybook/fixtures/**",
   "packages/*/fixtures/**",
   "scripts/expected-values.ts",
-  ".agents/skills/verify-*/scripts/**",
-  ".agents/skills/verify-*/features/**",
 ] as const;
 
 const fixType = /^fix(\([^()]*\))?!?:/;

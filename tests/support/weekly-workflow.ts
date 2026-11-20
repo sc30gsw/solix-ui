@@ -1,20 +1,12 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { expect } from "vite-plus/test";
-import { parse as parseYaml } from "yaml";
-import { repositoryRoot } from "#/scripts/repository.ts";
+import { workflowAt } from "#/tests/support/workflows.ts";
 
 const weeklyWorkflow = ".github/workflows/newest-releases.yml";
 
-type Job = Record<string, unknown> & { steps?: Record<string, unknown>[] };
+type WeeklyTrigger = { schedule?: { cron?: string }[] };
 
-type Workflow = {
-  on?: { schedule?: { cron?: string }[] };
-  jobs?: Record<string, Job>;
-};
-
-function workflow(): Workflow {
-  return parseYaml(readFileSync(join(repositoryRoot, weeklyWorkflow), "utf8")) as Workflow;
+function workflow() {
+  return workflowAt<WeeklyTrigger>(weeklyWorkflow);
 }
 
 const dayNames = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];

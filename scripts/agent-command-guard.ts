@@ -135,7 +135,7 @@ export const refusals = {
   stash:
     "git stash is refused: the stash is shared by every worktree of this repository, so another agent's stash can be popped into yours. Commit the work on a branch instead.",
   playwrightInstall:
-    "playwright install is refused outside CI: the local browsers are the ones the tests were confirmed with. Use the installed ones, and leave recording evidence to CI.",
+    "playwright install is refused outside CI: the local browsers are the ones the tests were confirmed with. Use the installed ones; CI installs its own.",
   hooksSkipped:
     "Skipping the git hooks is refused: --no-verify, -n on a commit, HUSKY, VP_GIT_HOOKS or VITE_GIT_HOOKS set to 0, and another core.hooksPath each turn off the checks that make a commit hold only verified code. Fix what the hooks report.",
   releaseAge:

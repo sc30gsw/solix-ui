@@ -1,5 +1,5 @@
-import { globSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { globSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterAll, expect, test } from "vite-plus/test";
 import {
   descendants,
@@ -17,27 +17,20 @@ import {
   parseAll,
   type Program,
   virtualFile,
-  staticPropertyName,
   ts,
 } from "#/scripts/syntax.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
-const skill = ".agents/skills/verify-playground";
-const skillFile = `${skill}/SKILL.md`;
-const featureDirectory = `${skill}/features`;
-const featureIndex = `${featureDirectory}/README.md`;
-const driveScript = `${skill}/scripts/drive.mjs`;
-const evidenceScript = `${skill}/scripts/evidence.mjs`;
+const servedPageSkill = ".agents/skills/verify-served-page";
 const portHolders = [
   "vite.config.ts",
   "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}",
   "apps/*/*.ts",
   "apps/*/.storybook/*.ts",
   "apps/*/fixtures/**/*.ts",
-  `${skill}/scripts/*.mjs`,
 ];
-const portTexts = [`${skill}/scripts/*.sh`, `${skill}/**/*.md`];
+const portTexts = [`${servedPageSkill}/**/*.md`];
 const setupsModules = "apps/playground/src/sections/*-setups.ts";
 const namesObject = /Names$/;
 const letterOrDigit = /[\p{L}\p{N}]/u;
@@ -45,24 +38,13 @@ const whitespace = /\s/;
 const derivingFunctions = ["panelOf", "valueOf"];
 const playgroundTestCode = "apps/playground/tests/**/*.{ts,tsx,mjs}";
 const playgroundVerificationFiles = globSync(
-  [playgroundTestCode, driveScript, "tests/support/served-app.ts", "scripts/expected-values.ts"],
+  [playgroundTestCode, "tests/support/served-app.ts", "scripts/expected-values.ts"],
   { cwd: repositoryRoot },
 ).sort();
 const openingModule = "apps/playground/tests/support/opening.ts";
 const opener = "opened";
 const navigation = "goto";
 const playwrightPackages = ["playwright", "playwright-core"];
-const featureSections = [
-  "Sub-features",
-  "How to get to it (user POV)",
-  "Driving it with drive.mjs",
-  "Gotchas",
-];
-const journeysVariable = "journeys";
-const journeyListLine = /^Journeys: (.*?)\.(?:\s|$)/m;
-const backticked = /`([^`]+)`/g;
-const featureLink = /\]\(\.\/([\w-]+)\.md\)/g;
-const secondLevelHeading = /^## (.+)$/gm;
 const portName = /port/i;
 const portNumbers = { lowest: 1024, highest: 65_535 };
 const listenCall = /\blisten$/;
@@ -73,119 +55,6 @@ const portInScriptsAndDocs =
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
 }
-
-function nonEmpty(where: string, names: string[]): string[] {
-  if (names.length === 0)
-    throw new Error(`${where}: no journey names were found; fix the parser or the file.`);
-  return names;
-}
-
-function journeysInitializer(path: string): ts.Expression {
-  const source = parse(join(repositoryRoot, path));
-  const declaration = source.statements
-    .filter(ts.isVariableStatement)
-    .flatMap((statement) => [...statement.declarationList.declarations])
-    .find((found) => ts.isIdentifier(found.name) && found.name.text === journeysVariable);
-  if (!declaration?.initializer) {
-    throw new Error(
-      `${path}: declare the journeys as \`const ${journeysVariable} = ...\` at the top level.`,
-    );
-  }
-  return declaration.initializer;
-}
-
-function driveJourneys(): string[] {
-  const initializer = journeysInitializer(driveScript);
-  if (!ts.isObjectLiteralExpression(initializer)) {
-    throw new Error(
-      `${driveScript}: make \`${journeysVariable}\` an object literal keyed by journey name.`,
-    );
-  }
-  return nonEmpty(
-    driveScript,
-    initializer.properties.flatMap((property) => staticPropertyName(property) ?? []),
-  );
-}
-
-function evidenceJourneys(): string[] {
-  const initializer = journeysInitializer(evidenceScript);
-  if (!ts.isArrayLiteralExpression(initializer)) {
-    throw new Error(
-      `${evidenceScript}: make \`${journeysVariable}\` an array of [journey, title] pairs.`,
-    );
-  }
-  return nonEmpty(
-    evidenceScript,
-    initializer.elements.flatMap((element) => {
-      const first = ts.isArrayLiteralExpression(element) ? element.elements[0] : undefined;
-      return first && ts.isStringLiteral(first) ? [first.text] : [];
-    }),
-  );
-}
-
-function skillJourneys(): string[] {
-  const list = journeyListLine.exec(read(skillFile))?.[1] ?? "";
-  return nonEmpty(
-    `${skillFile} (the "Journeys:" line)`,
-    [...list.matchAll(backticked)].map(([, name]) => name),
-  );
-}
-
-function indexedFeatures(): string[] {
-  return nonEmpty(
-    `${featureIndex} (links to ./<journey>.md)`,
-    [...read(featureIndex).matchAll(featureLink)].map(([, name]) => name),
-  );
-}
-
-const featureFiles = nonEmpty(
-  featureDirectory,
-  readdirSync(join(repositoryRoot, featureDirectory))
-    .filter((file) => file.endsWith(".md") && file !== "README.md")
-    .map((file) => basename(file, ".md")),
-);
-
-test("every place that lists the playground's journeys lists the same ones as the feature files", () => {
-  const sources: Record<string, string[]> = {
-    [`${driveScript} (keys of ${journeysVariable})`]: driveJourneys(),
-    [`${evidenceScript} (first item of each ${journeysVariable} pair)`]: evidenceJourneys(),
-    [`${skillFile} (the "Journeys:" line)`]: skillJourneys(),
-    [`${featureIndex} (links under Features)`]: indexedFeatures(),
-  };
-  const expected = [...featureFiles].sort();
-  const violations = Object.entries(sources).flatMap(([where, names]) => {
-    const listed = [...names].sort();
-    const missing = expected.filter((name) => !listed.includes(name));
-    const extra = listed.filter((name) => !expected.includes(name));
-    return [
-      ...missing.map((name) => `${where}: add ${name}, which has ${featureDirectory}/${name}.md.`),
-      ...extra.map(
-        (name) => `${where}: remove ${name}, or add ${featureDirectory}/${name}.md describing it.`,
-      ),
-    ];
-  });
-
-  expect(violations).toEqual([]);
-});
-
-test("every feature file names its own journey and has the four sections of the feature entry contract", () => {
-  const violations = featureFiles.flatMap((name) => {
-    const path = `${featureDirectory}/${name}.md`;
-    const text = read(path);
-    const headings = [...text.matchAll(secondLevelHeading)].map(([, heading]) => heading.trim());
-    const problems: string[] = [];
-    if (!text.includes(`drive.mjs ${name}`))
-      problems.push(`${path}: tell the reader to run \`drive.mjs ${name}\`.`);
-    if (JSON.stringify(headings) !== JSON.stringify(featureSections)) {
-      problems.push(
-        `${path}: use exactly the H2 sections ${featureSections.join(", ")} in that order (found: ${headings.join(", ") || "none"}).`,
-      );
-    }
-    return problems;
-  });
-
-  expect(violations).toEqual([]);
-});
 
 function namesAPort(name: ts.Node): boolean {
   return portName.test(name.getText());
@@ -226,7 +95,7 @@ function portsWrittenIn(text: string, written: RegExp): string[] {
     .filter((port) => Number(port) >= portNumbers.lowest);
 }
 
-test("no test server, test configuration or verification instance names a fixed port: each listens on a port the system gives it, so two runs never meet", () => {
+test("no test server, test configuration or document of the served-page skill names a fixed port: each listens on a port the system gives it, so two runs never meet", () => {
   const codePaths = globSync(portHolders, { cwd: repositoryRoot }).sort();
   const sources = parseAll(codePaths.map((path) => join(repositoryRoot, path)));
   const textPaths = globSync(portTexts, { cwd: repositoryRoot }).sort();
@@ -244,6 +113,7 @@ test("no test server, test configuration or verification instance names a fixed 
   );
 
   expect(codePaths.length).toBeGreaterThan(0);
+  expect(textPaths.length).toBeGreaterThan(0);
   expect([...new Set(violations)]).toEqual([]);
 });
 
@@ -312,7 +182,7 @@ function heldIn(node: ts.Node, held: HeldName[]): HeldName | undefined {
   );
 }
 
-test("no playground test or drive script writes a name that a setups module holds, a list's name, an item's name in an exported *Names object, or what its panelOf or valueOf gives for an item, as a string, as a word of a string with no whitespace, or as a word of a regular expression: each reads it from that module", async () => {
+test("no playground test or helper they share writes a name that a setups module holds, a list's name, an item's name in an exported *Names object, or what its panelOf or valueOf gives for an item, as a string, as a word of a string with no whitespace, or as a word of a regular expression: each reads it from that module", async () => {
   const held = await namesTheSetupsHold();
   const violations = playgroundVerificationFiles.flatMap((file) => {
     const source = parse(join(repositoryRoot, file));
@@ -395,7 +265,7 @@ afterAll(() => {
   opening.dispose();
 });
 
-test(`no playground test, drive script or helper they share reaches Playwright's ${navigation} but through ${opener}, by a member the type checker resolves or by a member of a value typed any, named or not`, () => {
+test(`no playground test or helper they share reaches Playwright's ${navigation} but through ${opener}, by a member the type checker resolves or by a member of a value typed any, named or not`, () => {
   const violations = playgroundVerificationFiles.flatMap((file) =>
     navigationsIn(opening, file)
       .filter(({ node }) => !insideTheOpener(node))
@@ -405,7 +275,7 @@ test(`no playground test, drive script or helper they share reaches Playwright's
       ),
   );
 
-  expect(playgroundVerificationFiles).toEqual(expect.arrayContaining([openingModule, driveScript]));
+  expect(playgroundVerificationFiles).toEqual(expect.arrayContaining([openingModule]));
   expect(
     navigationsIn(opening, openingModule).filter(({ node }) => insideTheOpener(node)),
   ).not.toEqual([]);

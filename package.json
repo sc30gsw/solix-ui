@@ -8,7 +8,6 @@
   },
   "scripts": {
     "check:private-terms": "node scripts/check-private-terms.mjs",
-    "evidence": "node .agents/skills/verify-playground/scripts/evidence.mjs",
     "lint:solid": "solid2-kit check --dir . && solid2-kit doctor",
     "migrate:subpath-imports": "node scripts/migrate-to-subpath-imports.ts",
     "prepare": "vp config --no-agent",

@@ -227,12 +227,6 @@ export async function clickTab(page: Page, list: string, name: string): Promise<
   }
 }
 
-export async function startAt(page: Page, list: string, name: string): Promise<void> {
-  const tab = tabNamed(page, list, name);
-  if ((await stateOf(page, list)).selected === name) await tab.focus();
-  else await tab.click();
-}
-
 export type Named = { tab: string[][]; panel: string[][] };
 
 export function elementsNamedBy(page: Page, list: string): Promise<Named[]> {

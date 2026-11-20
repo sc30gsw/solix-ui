@@ -1,4 +1,4 @@
-import { existsSync, globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { globSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join, relative } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
@@ -8,11 +8,7 @@ import {
   variableNames,
   variableRow,
 } from "#/packages/core/src/style-prop-table.ts";
-import {
-  builtComponents,
-  carriedComponents,
-  compiledClassesOf,
-} from "#/packages/core/tests/built-library.ts";
+import { builtComponents, compiledClassesOf } from "#/packages/core/tests/built-library.ts";
 import { allowedRuntimeDependencies, loads } from "#/scripts/runtime-dependencies.ts";
 import { fileNamedBy } from "#/scripts/subpath.ts";
 import { tokenValues } from "#/scripts/tokens.ts";
@@ -61,7 +57,6 @@ const stylexRuntimeFunctions = ["attrs", "props"];
 const intrinsicElement = /^[a-z][a-z0-9-]*$/;
 const elementPropsType = "ElementProps";
 const polymorphicPropsType = "PolymorphicProps";
-const featureDirectory = join(repositoryRoot, ".agents/skills/verify-playground/features");
 const stylePropTableFile = "packages/core/src/style-prop-table.ts";
 const builtLibraryFile = "packages/core/tests/built-library.ts";
 const fixturesFile = "packages/core/tests/fixtures.ts";
@@ -947,28 +942,6 @@ test("every public token is named --solix-*, is used by a component or the scale
       `tokens used but not defined in ${tokensFile}`,
     ).toEqual([]);
   }
-});
-
-function kebabCase(name: string): string {
-  return name.replace(/(?<=[a-z0-9])(?=[A-Z])/g, "-").toLowerCase();
-}
-
-test("every component is described by a feature file, its own or that of the export that carries it as a static member", () => {
-  const features = readdirSync(featureDirectory);
-  const violations = components.flatMap(({ name }) => {
-    const carrier = carriedComponents[name]?.carrier;
-    const described = [name, ...(carrier === undefined ? [] : [carrier])].map(kebabCase);
-    return features.some((feature) =>
-      described.some((kebab) => feature === `${kebab}.md` || feature.startsWith(`${kebab}-`)),
-    )
-      ? []
-      : [
-          `${relativePath(featureDirectory)}: add ${kebabCase(name)}.md describing ${name} for the verify-playground skill.`,
-        ];
-  });
-
-  expect(existsSync(featureDirectory)).toBe(true);
-  expect(violations).toEqual([]);
 });
 
 function listsOfStylePropsIn(file: string, names: string[]): { line: number; listed: string[] }[] {
