@@ -16,12 +16,14 @@ import {
   manual,
   optional,
   panelOf,
+  setupOf,
   stateOf,
   tabList,
   tabLists,
   tabNamed,
   tabNames,
   tabsRegion,
+  type TabsSetup,
   tabsSetups,
   valueOf,
   vertical,
@@ -145,6 +147,19 @@ inEveryEngine((browser) => {
       expect(await stateOf(page, account)).toMatchObject({ selected, shown });
     });
 
+    test("the selected tab takes the primary text colour, and every other enabled tab the text colour", async () => {
+      const { page, expected } = onPage;
+      const { selected } = await stateOf(page, account);
+      const enabled = setupOf(account).tabs.filter(({ disabled }) => !disabled);
+
+      expect(enabled).not.toEqual([]);
+      for (const { name } of enabled) {
+        await expect
+          .poll(() => computed(tabNamed(page, account, name), "color"))
+          .toBe(expected(name === selected ? "--solix-color-primary" : "--solix-color-text"));
+      }
+    });
+
     test("every tab with a panel names it, and a tab with none names no panel", async () => {
       const { page } = onPage;
       const controls = (list: string) =>
@@ -193,7 +208,7 @@ inEveryEngine((browser) => {
       expect(await orientations(vertical)).toEqual({ aria: "vertical", data: ["vertical"] });
     });
 
-    test("a horizontal list and its selected tab draw their edge under the tabs, and a vertical list and its selected tab draw it at their inline end", async () => {
+    test("every horizontal list and its selected tab draw their edge under the tabs, and every vertical list and its selected tab draw it at their inline end", async () => {
       const { page } = onPage;
       const edges = (element: Locator) =>
         element.evaluate((node) => {
@@ -208,10 +223,20 @@ inEveryEngine((browser) => {
       const selectedOf = (list: string) =>
         tabList(page, list).locator('[role="tab"][aria-selected="true"]');
 
-      expect(await edges(tabList(page, account))).toEqual({ under: "1px", inlineEnd: "none" });
-      expect(await edges(selectedOf(account))).toEqual({ under: "2px", inlineEnd: "none" });
-      expect(await edges(tabList(page, vertical))).toEqual({ under: "none", inlineEnd: "1px" });
-      expect(await edges(selectedOf(vertical))).toEqual({ under: "none", inlineEnd: "2px" });
+      const edgeOf = ({ orientation }: TabsSetup, width: string) =>
+        orientation === "vertical"
+          ? { under: "none", inlineEnd: width }
+          : { under: width, inlineEnd: "none" };
+
+      expect(tabsSetups.map(({ orientation }) => orientation)).toContain("vertical");
+      for (const setup of tabsSetups) {
+        expect(await edges(tabList(page, setup.list)), setup.list).toEqual(edgeOf(setup, "1px"));
+      }
+      for (const setup of tabsSetups.filter(({ deselects }) => !deselects)) {
+        expect(await edges(selectedOf(setup.list)), `the selected tab of ${setup.list}`).toEqual(
+          edgeOf(setup, "2px"),
+        );
+      }
     });
 
     test("a list wider than its container wraps, so every tab of every list outside a shadow root lies inside a narrow container, in either direction", async () => {
@@ -249,8 +274,8 @@ inEveryEngine((browser) => {
       expect(await stateOf(page, manual)).toMatchObject({ focused: two });
     });
 
-    test("Shift+Tab leaves a tab list from the selected tab that a click focused, whether or not it had focus before the click, Tab comes back to that tab, and the click shows no focus ring", async () => {
-      const { page } = onPage;
+    test("Shift+Tab leaves a tab list from the selected tab that a click focused, whether or not it had focus before the click, Tab comes back to that tab and shows the focus ring in the primary colour, and the click shows no focus ring", async () => {
+      const { page, expected } = onPage;
       const securityTab = tabNamed(page, account, security);
       const pressAndFind = async (key: string) => {
         await page.keyboard.press(key);
@@ -291,6 +316,13 @@ inEveryEngine((browser) => {
           (await stateOf(page, account)).focused,
           `${click.name}, then Shift+Tab and Tab: document.activeElement is ${back.described}`,
         ).toBe(security);
+        expect(
+          await computed(securityTab, "outline-style"),
+          `${click.name}, then Shift+Tab and Tab: focus ring`,
+        ).toBe("solid");
+        expect(await computed(securityTab, "outline-color")).toBe(
+          expected("--solix-color-primary"),
+        );
       }
     });
 
@@ -471,9 +503,6 @@ inEveryEngine((browser) => {
         }
       },
     );
-    test("hydration and every interaction above report no console error or warning", () => {
-      expect(onPage.consoleProblems).toEqual([]);
-    });
   });
 
   describe("Tabs for a user who asks for less motion or forced colours", () => {

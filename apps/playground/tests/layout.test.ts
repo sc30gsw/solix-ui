@@ -9,15 +9,14 @@ import {
   type OpenPage,
   scriptModes,
 } from "#/tests/support/playground.ts";
+import {
+  expectTheBoxCascade,
+  mdBreakpointInPixels,
+  viewportHeight,
+  viewports,
+} from "#/tests/support/box-cascade.ts";
 
 const url = inject("playgroundUrl");
-const pixelsPerMediaQueryEm = 16;
-const mdBreakpointInPixels = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
-const viewportHeight = 800;
-const viewports: [label: string, width: number, fromMd: boolean][] = [
-  ["one pixel below the md breakpoint", mdBreakpointInPixels - 1, false],
-  ["at the md breakpoint", mdBreakpointInPixels, true],
-];
 
 type Opened = { page: Page; expected: Expected; fromMd: boolean };
 
@@ -378,5 +377,19 @@ inEveryEngine((browser) => {
         await check({ page: opened.page, expected: opened.expected, fromMd });
       });
     });
+  });
+
+  test("a page widened from one pixel below md to md passes the Box's checks and every layout check at md", async () => {
+    const { page, expected, close } = await openPage(browser(), url, {
+      viewport: { width: mdBreakpointInPixels - 1, height: viewportHeight },
+    });
+    try {
+      await page.setViewportSize({ width: mdBreakpointInPixels, height: viewportHeight });
+
+      await expectTheBoxCascade({ page, expected, fromMd: true });
+      for (const [, check] of checks) await check({ page, expected, fromMd: true });
+    } finally {
+      await close();
+    }
   });
 });

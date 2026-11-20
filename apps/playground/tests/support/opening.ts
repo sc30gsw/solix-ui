@@ -7,6 +7,51 @@ export const pageDidNotBecomeReady = "the page did not become ready";
 
 export const hydrationTimeout = 10_000;
 
+export type ExpectedReport = string | RegExp;
+
+type Heard = { problems: string[]; asked: number; expected?: ExpectedReport };
+
+function isExpected(problem: string, expected: ExpectedReport | undefined): boolean {
+  if (expected === undefined) return false;
+  return typeof expected === "string" ? problem === expected : expected.test(problem);
+}
+
+const heardOnEachPage = new Map<Page, Heard>();
+
+function problemOf(message: ConsoleMessage): string | undefined {
+  const type = message.type();
+  return type === "error" || type === "warning" ? `${type}: ${message.text()}` : undefined;
+}
+
+function keepListening(page: Page, expected: ExpectedReport | undefined): void {
+  let heard = heardOnEachPage.get(page);
+  if (heard === undefined) {
+    const kept: Heard = { problems: [], asked: 0 };
+    page.on("console", (message) => {
+      const problem = problemOf(message);
+      if (problem !== undefined) kept.problems.push(problem);
+    });
+    page.on("pageerror", (error) => kept.problems.push(`pageerror: ${String(error)}`));
+    heardOnEachPage.set(page, kept);
+    heard = kept;
+  }
+  if (expected !== undefined) heard.expected = expected;
+}
+
+export function consoleProblemsSinceLastAsked(): string[] {
+  const found: string[] = [];
+  for (const [page, heard] of heardOnEachPage) {
+    found.push(
+      ...heard.problems
+        .slice(heard.asked)
+        .filter((problem) => !isExpected(problem, heard.expected)),
+    );
+    heard.asked = heard.problems.length;
+    if (page.isClosed()) heardOnEachPage.delete(page);
+  }
+  return found;
+}
+
 function heardFrom(page: Page): { said: string[]; stop: () => void } {
   const said: string[] = [];
   const onConsole = (message: ConsoleMessage) => said.push(`${message.type()}: ${message.text()}`);
@@ -37,8 +82,12 @@ export async function opened(
   page: Page,
   url: string,
   until: OpenedUntil,
-  { timeout = hydrationTimeout }: { timeout?: number } = {},
+  {
+    timeout = hydrationTimeout,
+    reportsToTheConsole,
+  }: { timeout?: number; reportsToTheConsole?: ExpectedReport } = {},
 ): Promise<void> {
+  keepListening(page, reportsToTheConsole);
   if (until !== "hydrated") {
     await page.goto(url, { waitUntil: until });
     return;
