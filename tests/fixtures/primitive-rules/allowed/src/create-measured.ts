@@ -10,6 +10,10 @@ function wire(target: HTMLElement, handlers: { scroll: Listener<Event> }): () =>
   return watchEvents(target, ["scroll"], handlers.scroll);
 }
 
+function wiredOn(target: HTMLElement, handlers: { scroll: Listener<Event> }): () => void {
+  return wire(target, handlers);
+}
+
 function wiredIfGiven(target: HTMLElement, heard?: Listener<Event>): () => void {
   if (!heard) return () => undefined;
   return watchEvents(target, ["scroll"], heard);
@@ -41,6 +45,9 @@ export function createMeasured(): [ref: RefSetter<HTMLElement>, width: () => num
       const holder: Handlers = { now: () => 1, onScroll: () => void element.offsetHeight };
       void holder.now();
       const stopHolder = watchEvents(element, ["scroll"], holder.onScroll);
+      const stopOn = wiredOn(element, { scroll: () => void element.offsetWidth });
+      const stopOther = watchEvents(element, ["scroll"], () => void element.scrollTop);
+      element.dispatchEvent(new Event("settled"));
       return () => {
         stop();
         stopBound();
@@ -50,6 +57,8 @@ export function createMeasured(): [ref: RefSetter<HTMLElement>, width: () => num
         stopWhen();
         stopHeld();
         stopHolder();
+        stopOn();
+        stopOther();
         void element.getBoundingClientRect();
       };
     }),

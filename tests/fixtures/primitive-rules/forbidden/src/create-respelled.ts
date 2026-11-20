@@ -5,12 +5,16 @@ import { type Listener, watchEvents } from "#/packages/primitives/src/internal-l
 import {
   boxedNow,
   Field,
+  fireAll,
+  type Handled,
+  keyedNow,
   Measurer,
   Runner,
   storedNow,
   Sub,
   topOf,
   whenHeard,
+  wireDown,
 } from "#/tests/fixtures/primitive-rules/forbidden/src/internal-position.ts";
 
 type Sizer = { size: (target: HTMLElement) => number };
@@ -194,6 +198,23 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
     [picked] = [() => element.clientLeft + 3];
     let other: () => number = () => 0;
     ({ other } = { other: () => element.scrollTop + 3 });
+    const handled: Handled = { scroll: () => void (element.offsetWidth + 4) };
+    fireAll(handled);
+    fireAll({ scroll: () => void (element.clientHeight + 4) } satisfies Handled);
+    const stopDown = wireDown(element, { scroll: () => void (element.offsetTop + 4) });
+    const stopGot = wireDown(element, {
+      get scroll() {
+        void (element.scrollWidth + 4);
+        return () => undefined;
+      },
+    });
+    keyedNow({ scroll: () => void (element.clientWidth + 4) });
+    const stopReady = watchEvents(element, ["ready"], () => void (element.offsetLeft + 4));
+    element.dispatchEvent(new Event("ready"));
+    let defaulted: () => number = () => 0;
+    ({ defaulted = () => element.clientTop + 4 } = {});
+    let looped: () => number = () => 0;
+    for ([looped] of [[() => element.clientLeft + 4]]) void looped;
     const typedRuns = [
       typedHolder.size(element),
       typedTable.a(element),
@@ -209,6 +230,11 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
       lazy(),
       picked(),
       other(),
+      stopDown,
+      stopGot,
+      stopReady,
+      defaulted(),
+      looped(),
       new Sub(element),
       new Field(element),
     ];

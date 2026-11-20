@@ -1,4 +1,4 @@
-import type { Listener as Heard } from "#/packages/primitives/src/internal-listener.ts";
+import { type Listener as Heard, watchEvents } from "#/packages/primitives/src/internal-listener.ts";
 
 export function verticalOffset(): number {
   return window.scrollY;
@@ -60,4 +60,21 @@ export function storedNow(heard: Heard<Event>): void {
 export function boxedNow(heard: Heard<Event>): void {
   const boxed = { heard };
   boxed.heard(new Event("boxed"));
+}
+
+export type Handled = { scroll: Heard<Event> };
+
+export function fireAll(handlers: { scroll: (event: Event) => void }): void {
+  handlers.scroll(new Event("fired"));
+}
+
+export function wireDown(target: HTMLElement, handlers: { scroll: Heard<Event> }): () => void {
+  fireAll(handlers);
+  return watchEvents(target, ["scroll"], handlers.scroll);
+}
+
+const scrollKey = "scroll";
+
+export function keyedNow(handlers: { scroll: Heard<Event> }): void {
+  handlers[scrollKey](new Event("keyed"));
 }
