@@ -38,7 +38,7 @@ A consumer's `onClick` runs after the SDK already selected, or cannot stop it. A
 | `vite.config.ts` | It sets the test include globs, the global setup and the Solid plugin. |
 | `@ui-sdk/core`, `@ui-sdk/solid`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `bf74dd4`. Run `git diff bf74dd4 -- packages/core/src/headless.ts packages/core/src/parts.ts packages/core/src/style-props.ts packages/core/tests/headless.test.tsx apps/playground/tests/behaviour-seam.test.ts tests/support vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `edcb2c9`. Run `git diff edcb2c9 -- packages/core/src/headless.ts packages/core/src/parts.ts packages/core/src/style-props.ts packages/core/tests/headless.test.tsx apps/playground/tests/behaviour-seam.test.ts tests/support vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 
