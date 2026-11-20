@@ -1,6 +1,10 @@
 import fc from "fast-check";
 import { describe, expect, test } from "vite-plus/test";
-import { assertProperty, type PropertyParameters } from "#/tests/support/properties.ts";
+import {
+  assertProperty,
+  propertyRunsGoing,
+  type PropertyParameters,
+} from "#/tests/support/properties.ts";
 
 const shortTimeout = 4_000;
 const longTimeout = 12_000;
@@ -20,6 +24,14 @@ const stillGoing =
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+const leftHanging: { release: () => void; promise: Promise<void> } = {
+  release: () => undefined,
+  promise: Promise.resolve(),
+};
+leftHanging.promise = new Promise<void>((resolve) => {
+  leftHanging.release = resolve;
+});
 
 const slow = fc.asyncProperty(fc.nat(), async () => {
   await delay(runTime);
@@ -112,6 +124,23 @@ export function definePropertyRunnerTests(): void {
       await expect(assertProperty(context, hanging)).rejects.toThrow(stillGoing);
       hang.release();
       await hung;
+    },
+  );
+
+  test(
+    "a retry counts only its own runs, so a run the attempt before it left going is not counted again",
+    { timeout: shortTimeout, retry: { count: 1 } },
+    async (context) => {
+      const attemptsBefore = context.task.result?.attempts?.length ?? 0;
+      if (attemptsBefore === 0) {
+        const hanging = fc.asyncProperty(fc.nat(), async () => {
+          await leftHanging.promise;
+        });
+        await assertProperty(context, hanging);
+        return;
+      }
+      expect(propertyRunsGoing(context.task), "runs this attempt started").toBe(0);
+      leftHanging.release();
     },
   );
 

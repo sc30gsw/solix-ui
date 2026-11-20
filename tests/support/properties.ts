@@ -33,16 +33,17 @@ function timeLimit({ task }: TestContext): fc.Plugin<unknown>[] {
   return [fc.interruptAfterTimeLimit(runsOutAt - Date.now(), { failOnInterrupt: true })];
 }
 
-const runsGoing = new WeakMap<TestContext["task"], Set<PromiseLike<unknown>>>();
+type Attempt = { startedAt: number; going: Set<PromiseLike<unknown>> };
 
-function goingIn(task: TestContext["task"]): Set<PromiseLike<unknown>> {
-  const going = runsGoing.get(task) ?? new Set<PromiseLike<unknown>>();
-  runsGoing.set(task, going);
-  return going;
+const attempts = new WeakMap<TestContext["task"], Attempt>();
+
+function runsOfThisAttempt(task: TestContext["task"]): Set<PromiseLike<unknown>> | undefined {
+  const attempt = attempts.get(task);
+  return attempt?.startedAt === attemptStartedAt(task) ? attempt.going : undefined;
 }
 
 export function propertyRunsGoing(task: TestContext["task"]): number {
-  return runsGoing.get(task)?.size ?? 0;
+  return runsOfThisAttempt(task)?.size ?? 0;
 }
 
 function isPending(outcome: unknown): outcome is PromiseLike<unknown> {
@@ -50,7 +51,8 @@ function isPending(outcome: unknown): outcome is PromiseLike<unknown> {
 }
 
 function tracksEachRun({ task }: TestContext): fc.Plugin<unknown> {
-  const going = goingIn(task);
+  const going = runsOfThisAttempt(task) ?? new Set<PromiseLike<unknown>>();
+  attempts.set(task, { startedAt: attemptStartedAt(task), going });
   return () => ({
     decorateRun: (nestedRun) => (value) => {
       const outcome = nestedRun(value);
@@ -64,17 +66,23 @@ function tracksEachRun({ task }: TestContext): fc.Plugin<unknown> {
   });
 }
 
+function timeLeftUntil(endsAt: number): { elapsed: Promise<void>; cancel: () => void } {
+  const elapsed = Promise.withResolvers<void>();
+  const pending = setTimeout(elapsed.resolve, Math.max(0, endsAt - Date.now()));
+  return { elapsed: elapsed.promise, cancel: () => clearTimeout(pending) };
+}
+
 async function runsEnded({ task }: TestContext): Promise<number> {
-  const going = goingIn(task);
+  const going = runsOfThisAttempt(task);
+  if (going === undefined) return 0;
   const waitedFor = limitAt(task, shareBeforeTheTestTimesOut);
-  const timer: { pending?: ReturnType<typeof setTimeout> } = {};
-  const timeLeft = new Promise<void>((resolve) => {
-    if (waitedFor !== undefined) {
-      timer.pending = setTimeout(resolve, Math.max(0, waitedFor - Date.now()));
-    }
-  });
-  await Promise.race([Promise.allSettled(going), timeLeft]);
-  clearTimeout(timer.pending);
+  if (waitedFor === undefined) {
+    await Promise.allSettled(going);
+    return going.size;
+  }
+  const timeLeft = timeLeftUntil(waitedFor);
+  await Promise.race([Promise.allSettled(going), timeLeft.elapsed]);
+  timeLeft.cancel();
   return going.size;
 }
 
