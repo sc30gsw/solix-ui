@@ -1,5 +1,5 @@
 import type { JSX } from "@solidjs/web";
-import { createSignal, onCleanup } from "solid-js";
+import { createMemo, createSignal, onCleanup } from "solid-js";
 import {
   baseKey,
   type Breakpoint,
@@ -8,8 +8,6 @@ import {
   canonicalOf,
   containerVariableClass,
   isBreakpoint,
-  layerOrder,
-  libraryCascadeLayer,
   type PropertyRow,
   readerRule,
   registrationRule,
@@ -17,26 +15,25 @@ import {
   type RowOf,
   type Scale,
   stylePropClass,
-  containerQueryLayer,
+  stylePropKeys,
   type StylePropName,
   stylePropNames,
   stylePropTable,
   variableClass,
-  type VariableGroup,
-  type VariableName,
-  variablesOf,
   variableProperty,
-  variableRow,
-  type VariableRowOf,
   visibilityClass,
   type VisibilityPropName,
   type VisibilityValue,
   visibilityPropNames,
 } from "#/src/style-prop-table.ts";
+import { layerOrder, libraryCascadeLayer, containerQueryLayer } from "#/src/layers.ts";
+import { type VariableRow, type Variables } from "#/src/variables.ts";
+import { colorValueOf } from "#/src/color-table.ts";
+import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const pixelsPerRem = 16;
-export const characterThatEndsADeclaration = /[;{}]/;
+const colorScale = "color" satisfies Scale;
 const containerWidthUnits = ["rem", "px", "em"] as const;
 const fractionLeadingZeros = ["", "0", "00", "000"] as const;
 const unsignedInteger = "(?:0|[1-9]\\d*)";
@@ -87,25 +84,30 @@ export type ContainerProp<V> =
 
 type Keyed<V> = V | Absent | Readonly<Record<string, V | Absent>>;
 
-type Row<Name extends VariableName> = VariableRowOf<Name>;
+type DefaultValue<Row extends VariableRow> = Row extends {
+  kind: "length";
+  scale: infer Of extends Scale;
+}
+  ? ScaleValue<Of>
+  : Row extends { kind: "length" }
+    ? number | (string & {})
+    : string | number;
 
-type DefaultValue<Name extends VariableName> =
-  Row<Name> extends { kind: "length"; scale: infer Of extends Scale }
-    ? ScaleValue<Of>
-    : Row<Name> extends { kind: "length" }
-      ? number | (string & {})
-      : string | number;
-
-/** A prop that sets the variable `Name`, keyed by breakpoint when its row is responsive. */
+/**
+ * A prop that sets the variable `Name` of a component's `Of`, keyed by breakpoint when its row is
+ * responsive.
+ */
 export type VariableProp<
-  Name extends VariableName,
-  Value = DefaultValue<Name>,
-> = Row<Name>["responsive"] extends true ? StyleProp<Value> : Value | Absent;
+  Of extends Variables,
+  Name extends keyof Of["rows"],
+  Value = DefaultValue<Of["rows"][Name]>,
+> = Of["rows"][Name]["responsive"] extends true ? StyleProp<Value> : Value | Absent;
 
-/** A prop that sets the responsive variable `Name`, keyed by container width. */
+/** A prop that sets the responsive variable `Name` of a component's `Of`, keyed by container width. */
 export type ContainerVariableProp<
-  Name extends VariableName,
-  Value = DefaultValue<Name>,
+  Of extends Variables,
+  Name extends keyof Of["rows"],
+  Value = DefaultValue<Of["rows"][Name]>,
 > = ContainerProp<Value>;
 
 export type VariableValue = Keyed<string | number>;
@@ -115,7 +117,7 @@ export type ContainerQueries = {
   readonly widths: readonly (readonly [key: string, width: string])[];
 };
 
-type Used = readonly [name: VariableName, slot: number];
+type Used = readonly [name: string, slot: number];
 
 export type QueryContainer = {
   readonly queries: () => ContainerQueries | undefined;
@@ -124,16 +126,24 @@ export type QueryContainer = {
   readonly member: () => QueryContainer;
 };
 
-export type ResolvedVariables = ResolvedStyleProps & { readonly used: readonly Used[] };
+export type ResolvedVariables = Resolved & { readonly used: readonly Used[] };
 
 export type StyleProps = {
   [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
 } & { [Name in VisibilityPropName]?: VisibilityValue<Name> | Absent };
 
-export type ResolvedStyleProps = {
-  classes: string[];
-  properties: Record<`--${string}`, string>;
+export type Resolved = {
+  readonly classes: readonly string[];
+  readonly properties: Readonly<Record<`--${string}`, string>>;
+  readonly attributes: Readonly<Record<string, string>>;
 };
+
+export type Resolver = {
+  readonly keys: readonly string[];
+  readonly resolved: () => Resolved;
+};
+
+export type VariableSource<Props> = (keyof Props & string) | ((props: Props) => VariableValue);
 
 function keyedEntries<Key extends string>(
   value: VariableValue,
@@ -163,7 +173,8 @@ function cssValue(
   }
   if (characterThatEndsADeclaration.test(written)) return undefined;
   const token = row.scale === undefined ? undefined : tokenOf(row.scale, written);
-  return token === undefined ? written : `var(${token})`;
+  if (token !== undefined) return `var(${token})`;
+  return row.scale === colorScale ? (colorValueOf(written) ?? written) : written;
 }
 
 function presentEntries(style: JSX.CSSProperties): [string, string | number][] {
@@ -191,7 +202,7 @@ export function withConsumerStyle(
   return { ...own, ...presentStyle(consumer) };
 }
 
-export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
+export function resolveStyleProps(props: StyleProps): Resolved {
   const classes = new Set<string>();
   const properties: Record<`--${string}`, string> = {};
   for (const name of stylePropNames) {
@@ -208,7 +219,11 @@ export function resolveStyleProps(props: StyleProps): ResolvedStyleProps {
     const className = visibilityClass(name, props[name]);
     if (className !== undefined) classes.add(className);
   }
-  return { classes: [...classes], properties };
+  return { classes: [...classes], properties, attributes: {} };
+}
+
+export function stylePropResolver(props: StyleProps): Resolver {
+  return { keys: stylePropKeys, resolved: createMemo(() => resolveStyleProps(props)) };
 }
 
 export function eachValue<V extends string | number>(
@@ -232,11 +247,12 @@ export function withBase<V extends string | number>(value: Keyed<V>, base: V): K
 }
 
 function placed(
-  name: VariableName,
+  name: string,
+  row: VariableRow,
   value: VariableValue,
   queries: ContainerQueries | undefined,
 ): [className: string, written: string | number, slot: number | undefined][] {
-  if (!variableRow(name).responsive) {
+  if (!row.responsive) {
     return keyedEntries(value, []).map(([, written]) => [
       variableClass(name, baseKey),
       written,
@@ -258,26 +274,60 @@ function placed(
   });
 }
 
+function isVariableValue(value: unknown): value is VariableValue {
+  return (
+    value === undefined || value === null || ["string", "number", "object"].includes(typeof value)
+  );
+}
+
 export function resolveVariables(
-  group: VariableGroup,
-  given: Readonly<Partial<Record<VariableName, VariableValue>>>,
+  variables: Variables,
+  values: Readonly<Record<string, unknown>>,
   queries: ContainerQueries | undefined,
-  leaveOut: (name: VariableName) => boolean,
+  leaveOut: (row: VariableRow) => boolean,
 ): ResolvedVariables {
   const classes: string[] = [];
   const properties: Record<`--${string}`, string> = {};
   const used: Used[] = [];
-  for (const name of variablesOf(group)) {
-    if (leaveOut(name)) continue;
-    for (const [className, written, slot] of placed(name, given[name], queries)) {
-      const value = cssValue(variableRow(name), written);
+  for (const [name, row] of Object.entries(variables.rows)) {
+    if (leaveOut(row)) continue;
+    const value = values[name];
+    const keyed = isVariableValue(value) ? value : undefined;
+    for (const [className, written, slot] of placed(name, row, keyed, queries)) {
+      const value = cssValue(row, written);
       if (value === undefined) continue;
       classes.push(className);
       properties[`--${className}`] = value;
       if (slot !== undefined) used.push([name, slot]);
     }
   }
-  return { classes, properties, used };
+  return { classes, properties, attributes: {}, used };
+}
+
+export function variablesResolver<Props extends Readonly<Record<string, unknown>>>(
+  variables: Variables,
+  from: Readonly<Record<string, VariableSource<Props>>>,
+  props: Props,
+  queries: QueryContainer | undefined,
+): Resolver {
+  const resolved = createMemo(() =>
+    resolveVariables(
+      variables,
+      Object.fromEntries(
+        Object.entries(from).map(([name, source]) => [
+          name,
+          typeof source === "string" ? props[source] : source(props),
+        ]),
+      ),
+      queries?.queries(),
+      (row) => props.unstyled === true && row.children !== undefined,
+    ),
+  );
+  queries?.report(() => resolved().used);
+  return {
+    keys: Object.values(from).filter((source) => typeof source === "string"),
+    resolved,
+  };
 }
 
 export function containerKeysOf(value: Keyed<unknown>): [key: string, width: string][] {

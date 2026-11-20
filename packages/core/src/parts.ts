@@ -1,22 +1,18 @@
 import * as stylex from "@stylexjs/stylex";
-import { createMemo, merge, omit } from "solid-js";
+import { merge, omit } from "solid-js";
 import type { ComponentProps, JSX, ValidComponent } from "@solidjs/web";
+import { type ColorOption, type ColorPropKey, colorResolver } from "#/src/colors.ts";
 import { stableClass } from "#/src/stable-class.ts";
+import { stylePropKeys } from "#/src/style-prop-table.ts";
+import { type Variables } from "#/src/variables.ts";
 import {
-  hasChildRules,
-  isVariableGroup,
-  stylePropKeys,
-  type VariableGroup,
-  type VariablesOf,
-} from "#/src/style-prop-table.ts";
-import {
+  type VariableSource,
   presentStyle,
   type QueryContainer,
-  type ResolvedVariables,
-  resolveStyleProps,
-  resolveVariables,
+  type Resolver,
   type StyleProps,
-  type VariableValue,
+  stylePropResolver,
+  variablesResolver,
   withConsumerStyle,
 } from "#/src/style-props.ts";
 
@@ -90,96 +86,70 @@ type RootProps<Props, KeptOffRoot extends keyof Props> = Omit<Props, HandledKey 
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
-type Given<Props> = (keyof Props & string) | ((props: Props) => VariableValue);
-
 export type CarriedStyling = {
   readonly class: () => JSX.ClassValue;
   readonly style: () => JSX.CSSProperties | undefined;
 };
 
-export type PartsOptions<Group extends VariableGroup, Props> = {
-  readonly variables: { readonly [Name in VariablesOf<Group>]: Given<Props> };
+type VariablesOption<Of, Props> = [Of] extends [Variables<infer Rows>]
+  ? { readonly variables: { readonly [Variable in keyof Rows & string]: VariableSource<Props> } }
+  : { readonly variables?: never };
+
+export type PartsOptions<Of, Props> = VariablesOption<Of, Props> & {
+  readonly keep?: readonly (keyof Props & string)[];
+  readonly color?: ColorOption;
   readonly queries?: QueryContainer;
   readonly carried?: CarriedStyling;
 };
 
-type GivenProps<Options> = Options extends { variables: infer Given }
-  ? Extract<Given[keyof Given], string>
-  : never;
+type KeptBy<Options> =
+  | (Options extends { keep: readonly (infer Kept)[] } ? Kept : never)
+  | (Options extends { variables: infer Sources } ? Extract<Sources[keyof Sources], string> : never)
+  | (Options extends { color: ColorOption } ? ColorPropKey : never);
+
+type TakenWith<Options, Props> = Options extends { color: ColorOption<infer Variant> }
+  ? Props & { readonly variant?: Variant }
+  : Props & { readonly [Key in Exclude<ColorPropKey, "variant">]?: never };
 
 type Parts<Styles, Props, KeptOffRoot extends keyof Props> = {
   root: RootProps<Props, KeptOffRoot>;
   part: (name: OtherPart<Styles>) => Part;
 };
 
-type PartsInput = StylesApiProps<Compiled> & StyleProps & Styling & { component?: unknown };
+type PartsInput = StylesApiProps<Compiled> &
+  StyleProps &
+  Styling & { component?: unknown } & Record<string, unknown>;
 
-const noVariables: ResolvedVariables = { classes: [], properties: {}, used: [] };
-
-type GivenOptions = {
-  readonly variables: Readonly<Record<string, Given<Record<string, unknown>>>>;
-  readonly queries?: QueryContainer;
-  readonly carried?: CarriedStyling;
-};
-
-function isOptions(given: unknown): given is GivenOptions {
-  return typeof given === "object" && given !== null;
+function isResolver(resolver: Resolver | undefined): resolver is Resolver {
+  return resolver !== undefined;
 }
 
 export function createParts<
-  Name extends string,
+  Of extends string | Variables,
   Styles extends Compiled,
   Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
-  KeptOffRoot extends keyof Props = never,
+  const Options extends PartsOptions<Of, Props>,
 >(
-  component: Name extends VariableGroup ? never : Name,
+  of: Of,
   compiled: Styles,
-  props: Props,
-  ...keptOffRoot: KeptOffRoot[]
-): Parts<Styles, Props, KeptOffRoot>;
-export function createParts<
-  Group extends VariableGroup,
-  Styles extends Compiled,
-  Props extends StylesApiProps<Styles> & StyleProps & Styling & { component?: unknown },
-  const Options extends PartsOptions<Group, Props>,
-  KeptOffRoot extends keyof Props = never,
->(
-  component: Group,
-  compiled: Styles,
-  props: Props,
-  options: Options,
-  ...keptOffRoot: KeptOffRoot[]
-): Parts<Styles, Props, KeptOffRoot | (GivenProps<Options> & keyof Props)>;
+  props: TakenWith<Options, Props>,
+  ...[options]: [Of] extends [Variables] ? [options: Options] : [options?: Options]
+): Parts<Styles, Props, KeptBy<Options> & keyof Props>;
 export function createParts(
-  component: string,
+  of: string | Variables,
   compiled: Compiled,
-  props: PartsInput & Record<string, unknown>,
-  ...given: unknown[]
+  props: PartsInput,
+  options?: Partial<PartsOptions<Variables, PartsInput>>,
 ): Parts<Compiled, PartsInput, never> {
-  const [first] = given;
-  const options = isOptions(first) ? first : undefined;
-  const ownProps = Object.values(options?.variables ?? {}).filter(
-    (prop): prop is string => typeof prop === "string",
-  );
-  const keptOffRoot = given.filter((key): key is string => typeof key === "string");
-  const rest = omit(props, ...keptOffRoot, ...ownProps);
-  const resolved = createMemo(() => resolveStyleProps(rest));
-  const variables = createMemo(() => {
-    if (options === undefined || !isVariableGroup(component)) return noVariables;
-    const values = Object.fromEntries(
-      Object.entries(options.variables).map(([name, from]) => [
-        name,
-        typeof from === "string" ? props[from] : from(props),
-      ]),
-    );
-    return resolveVariables(
-      component,
-      values,
-      options.queries?.queries(),
-      (name) => props.unstyled === true && hasChildRules(name),
-    );
-  });
-  options?.queries?.report(() => variables().used);
+  const component = typeof of === "string" ? of : of.component;
+  const own = [
+    options?.color === undefined ? undefined : colorResolver(options.color, props),
+    typeof of === "string" || options?.variables === undefined
+      ? undefined
+      : variablesResolver(of, options.variables, props, options.queries),
+  ].filter(isResolver);
+  const rest = omit(props, ...(options?.keep ?? []), ...own.flatMap(({ keys }) => keys));
+  const resolvers = [...own, stylePropResolver(rest)];
   const wrapsAComponent = () => typeof props.component === "function";
   const stylesApi = omit(rest, (key) => !isStylesApiPropKey(key));
   const partClass = (name: string): JSX.ClassValue => [
@@ -189,18 +159,23 @@ export function createParts(
     props.classes?.[name],
   ];
   const ownStyle = (name: string): JSX.CSSProperties => presentStyle(props.styles?.[name]);
+  const forwarded: object = omit<Record<string, unknown>, typeof handledKeys>(rest, ...handledKeys);
   const root = merge(
-    omit<Record<string, unknown>, typeof handledKeys>(rest, ...handledKeys),
+    forwarded,
     () => (wrapsAComponent() ? stylesApi : {}),
+    () => resolvers.reduce((all, { resolved }) => ({ ...all, ...resolved().attributes }), {}),
     {
       get class() {
-        return [partClass(rootPart), variables().classes, resolved().classes, props.class];
+        return [
+          partClass(rootPart),
+          resolvers.flatMap(({ resolved }) => resolved().classes),
+          props.class,
+        ];
       },
       get style() {
         return withConsumerStyle(
           {
-            ...variables().properties,
-            ...resolved().properties,
+            ...resolvers.reduce((all, { resolved }) => ({ ...all, ...resolved().properties }), {}),
             ...presentStyle(options?.carried?.style()),
             ...ownStyle(rootPart),
           },
@@ -208,7 +183,7 @@ export function createParts(
         );
       },
     },
-  ) as RootProps<PartsInput, never>;
+  );
   const part = (name: string): Part => ({
     get class() {
       return partClass(name);

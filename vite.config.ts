@@ -123,6 +123,10 @@ export default defineConfig({
         rules: { "no-console": "off" },
       },
       {
+        files: ["packages/core/src/development-warning.ts"],
+        rules: { "no-console": ["error", { allow: ["warn"] }] },
+      },
+      {
         files: [
           "vite.config.ts",
           "apps/*/vite.config.ts",

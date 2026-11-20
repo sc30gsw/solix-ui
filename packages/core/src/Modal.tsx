@@ -52,17 +52,9 @@ export type ModalProps = ElementProps<
 >;
 
 export function Modal(props: ModalProps) {
-  const { root, part } = createParts(
-    "Modal",
-    styles,
-    props,
-    "label",
-    "children",
-    "opened",
-    "open",
-    "ref",
-    ...displayPropNames,
-  );
+  const { root, part } = createParts("Modal", styles, props, {
+    keep: ["label", "children", "opened", "open", "ref", ...displayPropNames],
+  });
   const headingId = createUniqueId();
   let dialog: HTMLDialogElement;
 

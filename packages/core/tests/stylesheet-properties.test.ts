@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import fc from "fast-check";
 import postcss from "postcss";
+import { colorRules } from "#/src/color-rules.ts";
 import { expect, test } from "vite-plus/test";
 import {
   compileLibrarySource,
@@ -8,9 +9,12 @@ import {
   behaviourSdkHiddenRule,
   LIBRARY_CASCADE_LAYER,
   LIBRARY_CLASS_PREFIX,
+  LIBRARY_CLASS_PREFIXES,
   libraryStylesheet,
 } from "#/build-pipeline.mjs";
-import { libraryLayers, stylePropRules } from "#/src/style-prop-table.ts";
+import { stylePropRules } from "#/src/style-prop-table.ts";
+import { colorLayer, libraryLayers, stylePropLayer } from "#/src/layers.ts";
+import { builtVariables } from "#/tests/built-library.ts";
 import { layersAroundDeclaration, nestedLayerOrder } from "#/tests/cascade-layers.ts";
 import { rulesThatStyleThePage } from "#/tests/page-rules.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
@@ -158,7 +162,16 @@ test(
           source: sourceFor(definitions),
           packageRoot,
         });
-        const stylesheet = postcss.parse(libraryStylesheet(rules, stylePropRules(), sdkRule));
+        const stylesheet = postcss.parse(
+          libraryStylesheet(
+            rules,
+            {
+              [colorLayer]: colorRules(),
+              [stylePropLayer]: stylePropRules(builtVariables),
+            },
+            sdkRule,
+          ),
+        );
 
         expect(rules.length).toBeGreaterThan(0);
         expect(
@@ -177,9 +190,11 @@ test(
 
         stylesheet.walkRules((rule) => {
           const classNames = rule.selector.match(/\.[A-Za-z_][\w-]*/g) ?? [];
-          expect(classNames.filter((name) => !name.startsWith(`.${LIBRARY_CLASS_PREFIX}`))).toEqual(
-            [],
-          );
+          expect(
+            classNames.filter(
+              (name) => !LIBRARY_CLASS_PREFIXES.some((prefix) => name.startsWith(`.${prefix}`)),
+            ),
+          ).toEqual([]);
         });
         const registered: string[] = [];
         stylesheet.walkAtRules("property", (registration) => {

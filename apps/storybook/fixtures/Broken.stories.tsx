@@ -12,7 +12,9 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-const tooSmall = { root: { height: "12px", width: "12px", padding: "0" } };
+const tooSmall = {
+  root: { height: "12px", width: "12px", "min-height": "0", "min-width": "0", padding: "0" },
+};
 
 export const NoAccessibleName: Story = {
   args: { children: undefined },
@@ -23,6 +25,17 @@ export const TargetTooSmall: Story = {
     <div>
       <Button aria-label="Previous" styles={tooSmall} />
       <Button aria-label="Next" styles={tooSmall} />
+    </div>
+  ),
+};
+
+export const ContrastOutsideTheList: Story = {
+  render: () => (
+    <div>
+      <Button color="blue.6">Given shade</Button>
+      <Button variant="subtle" c="yellow-6">
+        Pale text
+      </Button>
     </div>
   ),
 };

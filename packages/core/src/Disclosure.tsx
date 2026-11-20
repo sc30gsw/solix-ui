@@ -1,17 +1,18 @@
 import * as stylex from "@stylexjs/stylex";
 import { disclosureState } from "#/src/disclosure-state.stylex.ts";
 import { createParts, type ElementProps } from "#/src/parts.ts";
+import { primaryColors } from "#/src/primary-colors.stylex.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
   root: {
     [disclosureState.summaryBackground]: {
       default: tokens["--solix-color-surface"],
-      "[open]": tokens["--solix-color-primary"],
+      "[open]": primaryColors["6"],
     },
     [disclosureState.summaryColor]: {
       default: tokens["--solix-color-text"],
-      "[open]": tokens["--solix-color-on-primary"],
+      "[open]": primaryColors.contrast,
     },
   },
   summary: {
@@ -22,7 +23,7 @@ const styles = stylex.create({
     paddingInline: "1rem",
   },
   content: {
-    borderInlineStartColor: tokens["--solix-color-primary"],
+    borderInlineStartColor: primaryColors["6"],
     borderInlineStartStyle: "solid",
     borderInlineStartWidth: "4px",
     padding: "0.5rem",
@@ -32,7 +33,7 @@ const styles = stylex.create({
 export type DisclosureProps = ElementProps<"details", typeof styles, { label: string }>;
 
 export function Disclosure(props: DisclosureProps) {
-  const { root, part } = createParts("Disclosure", styles, props, "label", "children");
+  const { root, part } = createParts("Disclosure", styles, props, { keep: ["label", "children"] });
   return (
     <details {...root}>
       <summary {...part("summary")}>{props.label}</summary>

@@ -18,6 +18,7 @@ type Outcome = { status: string; messages: string; colorSchemeAtTheEnd: string |
 const reasonOf: { [Story in BrokenStory]: string } = {
   NoAccessibleName: "button-name",
   TargetTooSmall: "target-size",
+  ContrastOutsideTheList: "minimum color contrast ratio",
   PlayFunctionFails: "toHaveTextContent",
   EffectWithoutOwner: "NO_OWNER_EFFECT",
   CleanupWithoutOwner: "NO_OWNER_CLEANUP",

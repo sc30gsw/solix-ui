@@ -23,6 +23,7 @@ const probedProperty = {
   radius: "border-top-left-radius",
   spacing: "margin-top",
   length: "height",
+  shadow: "box-shadow",
 } satisfies Record<TokenKind, string>;
 
 type Probe = [name: string, property: string, value: string];
@@ -47,20 +48,23 @@ function playgroundValue(selector: string, property: string): string {
 }
 
 const quarterPixelsInRem = 0.328125;
+const pixelInRem = 0.0625;
 
 function lengthNoEngineRounds(index: number): string {
-  return `${index + 1 + quarterPixelsInRem}rem`;
+  return `${(index + 1) * pixelInRem + quarterPixelsInRem}rem`;
 }
 
 function sentinelValues(names: string[]): Record<string, string> {
   const colours = names.filter((name) => tokenKind(name) === "colour");
-  const lengths = names.filter((name) => tokenKind(name) !== "colour");
+  const shadows = names.filter((name) => tokenKind(name) === "shadow");
+  const lengths = names.filter((name) => !["colour", "shadow"].includes(tokenKind(name)));
   return Object.fromEntries([
     ...colours.map((name, index) => [
       name,
       `oklch(0.6 0.1 ${Math.round((360 * index) / colours.length)})`,
     ]),
     ...lengths.map((name, index) => [name, lengthNoEngineRounds(index)]),
+    ...shadows.map((name, index) => [name, `0 0 ${lengthNoEngineRounds(index)} oklch(0 0 0)`]),
   ]);
 }
 
@@ -117,7 +121,6 @@ export async function expectedValues(
       sentinelByName ? `var(${name})` : value,
     ]),
     ["danger", "color", playgroundValue(".danger", "background-color")],
-    ["brandGreen", "color", playgroundValue(".brand-green", "--solix-color-primary")],
     ["roomy", "margin-top", playgroundValue(".roomy", "margin-top")],
     ["pinnedMargin", "margin-top", playgroundValue(":root", "--playground-pinned-margin")],
     ["partBackground", "color", playgroundValue(":root", "--playground-part-background")],

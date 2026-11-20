@@ -6,6 +6,7 @@ import {
   behaviourSdkHiddenRule,
   compileLibrarySource,
   componentLibraryLayout,
+  definedVariables,
   libraryStylesheet,
 } from "#/build-pipeline.mjs";
 
@@ -22,9 +23,22 @@ await buildSources(layout, async (filename, source) => {
 const { stylePropRules } = await import(
   pathToFileURL(join(layout.outputDirectory, "style-prop-table.js")).href
 );
+const { colorLayer, stylePropLayer } = await import(
+  pathToFileURL(join(layout.outputDirectory, "layers.js")).href
+);
+const { colorRules } = await import(
+  pathToFileURL(join(layout.outputDirectory, "color-rules.js")).href
+);
 await writeFile(
   join(layout.outputDirectory, "styles.css"),
-  libraryStylesheet(rules, stylePropRules(), behaviourSdkHiddenRule(packageRoot)),
+  libraryStylesheet(
+    rules,
+    {
+      [colorLayer]: colorRules(),
+      [stylePropLayer]: stylePropRules(await definedVariables(layout.outputDirectory)),
+    },
+    behaviourSdkHiddenRule(packageRoot),
+  ),
 );
 console.log(
   `dist/styles.css: ${rules.length} rules, the style-prop rules and the SDK's hidden rule`,

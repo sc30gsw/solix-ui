@@ -4,6 +4,7 @@ import { Show } from "solid-js";
 import { useGrid } from "#/src/grid-context.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { createParts, type ElementProps } from "#/src/parts.ts";
+import { gridColVariables } from "#/src/GridCol.variables.ts";
 import { variableProperty } from "#/src/style-prop-table.ts";
 import { eachValue, type StyleProp, type VariableProp, withBase } from "#/src/style-props.ts";
 
@@ -37,9 +38,13 @@ export type GridColProps = ElementProps<
   typeof styles,
   {
     span?: StyleProp<Span>;
-    order?: VariableProp<"col-order", number>;
+    order?: VariableProp<typeof gridColVariables, "col-order", number>;
     offset?: StyleProp<number>;
-    align?: VariableProp<"col-align-self", JSX.CSSProperties["align-self"]>;
+    align?: VariableProp<
+      typeof gridColVariables,
+      "col-align-self",
+      JSX.CSSProperties["align-self"]
+    >;
   }
 >;
 
@@ -58,38 +63,32 @@ export function GridCol(props: GridColProps) {
     if (!given) return undefined;
     return `calc((100% + ${gap}) * ${share(given, grid.columns())} - ${gap})`;
   };
-  const { root } = createParts(
-    "GridCol",
-    styles,
-    props,
-    {
-      variables: {
-        "col-align-self": "align",
-        "col-flex-basis": (given) => eachValue<Span>(span(given), basis),
-        "col-flex-grow": (given) =>
-          eachValue<Span>(span(given), (each) => {
-            if (!each) return undefined;
-            return each === "auto" || grid.grow() ? "1" : "0";
-          }),
-        "col-max-width": (given) =>
-          eachValue<Span>(span(given), (each) => {
-            if (each === "auto" || grid.grow()) return "100%";
-            return each === "content" ? "unset" : basis(each);
-          }),
-        "col-offset": (given) =>
-          eachValue<number>(given.offset, (each) =>
-            each === 0 ? "0" : `calc((100% + ${gap}) * ${share(each, grid.columns())})`,
-          ),
-        "col-order": "order",
-        "col-width": (given) =>
-          eachValue<Span>(span(given), (each) => (each === "content" ? "auto" : undefined)),
-      },
-      queries: own,
-      carried: grid.col,
+  const { root } = createParts(gridColVariables, styles, props, {
+    variables: {
+      "col-align-self": "align",
+      "col-flex-basis": (given) => eachValue<Span>(span(given), basis),
+      "col-flex-grow": (given) =>
+        eachValue<Span>(span(given), (each) => {
+          if (!each) return undefined;
+          return each === "auto" || grid.grow() ? "1" : "0";
+        }),
+      "col-max-width": (given) =>
+        eachValue<Span>(span(given), (each) => {
+          if (each === "auto" || grid.grow()) return "100%";
+          return each === "content" ? "unset" : basis(each);
+        }),
+      "col-offset": (given) =>
+        eachValue<number>(given.offset, (each) =>
+          each === 0 ? "0" : `calc((100% + ${gap}) * ${share(each, grid.columns())})`,
+        ),
+      "col-order": "order",
+      "col-width": (given) =>
+        eachValue<Span>(span(given), (each) => (each === "content" ? "auto" : undefined)),
     },
-    "offset",
-    "span",
-  );
+    queries: own,
+    carried: grid.col,
+    keep: ["offset", "span"],
+  });
   return (
     <>
       <Show when={own.rules()}>{(rules) => <LibraryStyle of="grid-col" css={rules()} />}</Show>

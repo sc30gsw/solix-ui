@@ -24,6 +24,7 @@ import {
 } from "#/tests/support/workspace.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
+import { exportsOf, parse } from "#/scripts/syntax.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -156,6 +157,47 @@ test("every file a verification skill's covered-code table names exists", () => 
           (path) =>
             `.agents/skills/${name}/SKILL.md: the table names ${path}, which does not exist. Update the skill with the rename.`,
         );
+    });
+
+  expect(violations).toEqual([]);
+});
+
+const namedSource = /`([\w./-]+\.(?:ts|tsx|mjs))`:/g;
+const identifier = /^[A-Za-z_$][\w$]*$/;
+
+function exportedNamesOf(file: string): string[] {
+  const { functions, types, others } = exportsOf(parse(join(repositoryRoot, file)));
+  return [...functions, ...types, ...others];
+}
+
+test("every name a verification skill's covered-code cell gives after a source file and a colon is exported by that file, so a rename or a move cannot leave the table naming what is gone", () => {
+  const violations = skillNames
+    .filter((name) => name.startsWith("verify-"))
+    .flatMap((name) => {
+      const text = readFileSync(join(skillsDirectory, name, "SKILL.md"), "utf8");
+      const coveredCells = text
+        .split("\n")
+        .filter((line) => line.startsWith("| `"))
+        .map((line) => line.slice(2).split(" | ")[0]);
+      return coveredCells.flatMap((cell) => {
+        const starts = [...cell.matchAll(namedSource)];
+        return starts.flatMap((start, index) => {
+          const file = start[1];
+          if (!existsSync(join(repositoryRoot, file))) return [];
+          const segment = cell.slice(
+            (start.index ?? 0) + start[0].length,
+            starts[index + 1]?.index ?? cell.length,
+          );
+          const exported = exportedNamesOf(file);
+          return [...segment.matchAll(backticked)]
+            .map(([, named]) => named)
+            .filter((named) => identifier.test(named) && !exported.includes(named))
+            .map(
+              (named) =>
+                `.agents/skills/${name}/SKILL.md: the covered-code cell names ${named} after ${file}, which does not export it. Name the file that does, or drop the name.`,
+            );
+        });
+      });
     });
 
   expect(violations).toEqual([]);

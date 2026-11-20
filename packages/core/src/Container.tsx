@@ -1,5 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { createParts, type ElementProps } from "#/src/parts.ts";
+import { containerVariables } from "#/src/Container.variables.ts";
 import type { VariableProp } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
@@ -32,26 +33,19 @@ export type ContainerProps = ElementProps<
   "div",
   typeof styles,
   {
-    size?: VariableProp<"container-size">;
+    size?: VariableProp<typeof containerVariables, "container-size">;
     fluid?: boolean;
     strategy?: "block" | "grid";
   }
 >;
 
 export function Container(props: ContainerProps) {
-  const { root } = createParts(
-    "Container",
-    styles,
-    props,
-    {
-      variables: {
-        "container-size": (given) => (given.fluid ? defaultSize : (given.size ?? defaultSize)),
-      },
+  const { root } = createParts(containerVariables, styles, props, {
+    variables: {
+      "container-size": (given) => (given.fluid ? defaultSize : (given.size ?? defaultSize)),
     },
-    "fluid",
-    "size",
-    "strategy",
-  );
+    keep: ["fluid", "size", "strategy"],
+  });
   return (
     <div
       data-fluid={props.fluid ? "true" : undefined}

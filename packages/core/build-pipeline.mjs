@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { parseSync, transformAsync } from "@babel/core";
 import syntaxJsx from "@babel/plugin-syntax-jsx";
@@ -7,9 +7,11 @@ import stylexPlugin from "@stylexjs/babel-plugin";
 import postcss from "postcss";
 import { distSpecifiers, libraryLayout } from "../../scripts/dist-specifiers.ts";
 import { tokensPerScheme } from "../../scripts/tokens-per-scheme.ts";
+import { colorClassPrefix } from "#/src/color-table.ts";
 import { colorSchemeRules, defaultColorScheme } from "#/src/color-schemes.ts";
 import { stableClassPrefix } from "#/src/stable-class.ts";
 
+import { stylePropClassPrefix } from "#/src/style-prop-table.ts";
 import {
   behaviourSdkLayer,
   colorSchemeLayer,
@@ -17,13 +19,15 @@ import {
   hiddenLayer,
   libraryCascadeLayer,
   libraryLayerOrder,
+  libraryLayers,
   outerLayerOrder,
-  stylePropClassPrefix,
   stylePropLayer,
-} from "#/src/style-prop-table.ts";
+} from "#/src/layers.ts";
+import { isVariables } from "#/src/variables.ts";
 
 export const LIBRARY_CASCADE_LAYER = libraryCascadeLayer;
 export const LIBRARY_CLASS_PREFIX = stylePropClassPrefix;
+export const LIBRARY_CLASS_PREFIXES = [stylePropClassPrefix, colorClassPrefix];
 export const STYLE_PROP_LAYER = stylePropLayer;
 export const HIDDEN_LAYER = hiddenLayer;
 export const BEHAVIOUR_SDK_LAYER = behaviourSdkLayer;
@@ -35,6 +39,16 @@ export const sdkHiddenRuleSource = {
   module: "dist/foundation/platform/style.js",
   writer: "enforceHidden",
 };
+
+export const VARIABLES_MODULE = /^[A-Z][A-Za-z0-9]*\.variables\.[jt]s$/;
+
+export async function definedVariables(directory) {
+  const files = readdirSync(directory)
+    .filter((entry) => VARIABLES_MODULE.test(entry))
+    .sort();
+  const modules = await Promise.all(files.map((file) => import(join(directory, file))));
+  return modules.flatMap((module) => Object.values(module).filter(isVariables));
+}
 
 export function componentLibraryLayout(packageRoot) {
   return libraryLayout(packageRoot, { ".ts": ".js", ".tsx": ".jsx" });
@@ -152,28 +166,25 @@ function scopedToLibraryParts(css) {
   return parsed.toString();
 }
 
-export function libraryStylesheet(rules, stylePropRules, behaviourSdkRules) {
+export function libraryStylesheet(rules, rulesByLayer, behaviourSdkRules) {
   const { css, tokens } = tokensPerScheme(
     stylexPlugin.processStylexRules(rules, { useLayers: true }),
     defaultColorScheme,
   );
+  const written = {
+    ...rulesByLayer,
+    [componentLayer]: css,
+    [colorSchemeLayer]: colorSchemeRules(tokens),
+    [HIDDEN_LAYER]: `${HIDDEN_PART_SELECTOR}{display:none}`,
+  };
   return [
     outerLayerOrder,
     scopedToLibraryParts(behaviourSdkRules),
     `@layer ${LIBRARY_CASCADE_LAYER} {`,
     libraryLayerOrder,
-    `@layer ${componentLayer} {`,
-    css,
-    "}",
-    `@layer ${STYLE_PROP_LAYER} {`,
-    stylePropRules,
-    "}",
-    `@layer ${colorSchemeLayer} {`,
-    colorSchemeRules(tokens),
-    "}",
-    `@layer ${HIDDEN_LAYER} {`,
-    `${HIDDEN_PART_SELECTOR}{display:none}`,
-    "}",
+    ...libraryLayers.flatMap((layer) =>
+      written[layer] === undefined ? [] : [`@layer ${layer} {`, written[layer], "}"],
+    ),
     "}",
     "",
   ].join("\n");
