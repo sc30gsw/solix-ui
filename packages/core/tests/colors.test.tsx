@@ -227,17 +227,35 @@ test("autoContrast is off unless it is true: only then does the root take the cl
   expect(Object.keys(ruleFor(`.${shadeClass}`))).not.toContain(shadeProperty("contrast"));
 });
 
-test("any other CSS colour writes one custom property, itself, with the shade and custom classes, and a value that is no colour, such as red-6, blue.12, the typo bleu, the keyword inherit, Red in capitals or one that holds ;, { or }, falls back to the primary palette and writes nothing", async (context) => {
+test("any other CSS colour, a hex colour of 3, 4, 6 or 8 digits included, writes one custom property, itself, with the shade and custom classes, and a value that is no colour, such as red-6, blue.12, the typo bleu, the keyword inherit, Red or RGB() in capitals, a hex colour of any other count of digits, #zzz, or one that holds ;, { or }, falls back to the primary palette and writes nothing", async (context) => {
   await assertProperty(
     context,
     fc.property(
       fc.oneof(
-        fc.stringMatching(/^#[0-9a-f]{6}$/).map((color) => ({ color, valid: true })),
+        fc
+          .stringMatching(/^#(?:[\da-fA-F]{3,4}|[\da-fA-F]{6}|[\da-fA-F]{8})$/)
+          .map((color) => ({ color, valid: true })),
+        fc
+          .stringMatching(/^#(?:[\da-fA-F]{1,2}|[\da-fA-F]{5}|[\da-fA-F]{7}|[\da-fA-F]{9,12})$/)
+          .map((color) => ({ color, valid: false })),
         fc
           .constantFrom("oklch(0.5 0.1 20)", "rgb(10 20 30)", "transparent", "rebeccapurple")
           .map((color) => ({ color, valid: true })),
         fc
-          .constantFrom("red-6", "blue.12", "#f00;", "red}", "a{b", "bleu", "inherit", "Red")
+          .constantFrom(
+            "red-6",
+            "blue.12",
+            "#f00;",
+            "red}",
+            "a{b",
+            "bleu",
+            "inherit",
+            "Red",
+            "#zzz",
+            "#12345",
+            "RGB(10 20 30)",
+            "Oklch(0.5 0.1 20)",
+          )
           .map((color) => ({ color, valid: false })),
       ),
       fc.constantFrom(...variants),
@@ -536,7 +554,14 @@ test("a variant the component's color option does not list falls back to its def
   });
 });
 
-test("SolixColor takes a palette, a palette's shade, a CSS colour keyword, a hex colour and a colour function, and refuses, by type, a typo, a CSS-wide keyword and a name in capitals", () => {
+test("SolixColor takes a palette, a palette's shade, a CSS colour keyword, a hex colour and a colour function, and refuses, by type, a typo, a CSS-wide keyword, a name or function in capitals, and a hex colour whose first three characters are not hex digits", () => {
+  expectTypeOf<"#ABC">().toExtend<SolixColor>();
+  expectTypeOf<"#a1b2">().toExtend<SolixColor>();
+  expectTypeOf<"#AABBCCDD">().toExtend<SolixColor>();
+  expectTypeOf<"#zzz">().not.toExtend<SolixColor>();
+  expectTypeOf<"#12">().not.toExtend<SolixColor>();
+  expectTypeOf<"#">().not.toExtend<SolixColor>();
+  expectTypeOf<"RGB(1 2 3)">().not.toExtend<SolixColor>();
   expectTypeOf<"red">().toExtend<SolixColor>();
   expectTypeOf<"primary.6">().toExtend<SolixColor>();
   expectTypeOf<"rebeccapurple">().toExtend<SolixColor>();

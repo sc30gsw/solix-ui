@@ -171,6 +171,35 @@ export const cssColorFunctions = [
 
 export type CssColorFunction = (typeof cssColorFunctions)[number];
 
+export const hexDigits = [
+  "0",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "a",
+  "b",
+  "c",
+  "d",
+  "e",
+  "f",
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+] as const;
+
+export type HexDigit = (typeof hexDigits)[number];
+
+export const hexDigitCounts = [3, 4, 6, 8] as const;
+
 export function isCssColorKeyword(name: unknown): name is CssColorKeyword {
   return cssColorKeywords.some((keyword) => keyword === name);
 }

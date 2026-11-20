@@ -1,4 +1,9 @@
-import { cssColorFunctions, isCssColorKeyword } from "#/src/css-colors.ts";
+import {
+  cssColorFunctions,
+  hexDigitCounts,
+  hexDigits,
+  isCssColorKeyword,
+} from "#/src/css-colors.ts";
 import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
 
 export const palettes = [
@@ -205,9 +210,9 @@ export function shadeSource(palette: Palette, shade: Shade): ColourToken {
 
 export const solidShade = "6" satisfies Shade;
 const shadeSeparator = ".";
+const hexDigit = `[${hexDigits.join("")}]`;
 const colourSyntax = new RegExp(
-  `^(?:#[\\da-f]{3,8}|(?:${cssColorFunctions.join("|")})\\(.+\\))$`,
-  "i",
+  `^(?:#(?:${hexDigitCounts.map((count) => `${hexDigit}{${count}}`).join("|")})|(?:${cssColorFunctions.join("|")})\\(.+\\))$`,
 );
 
 export type ParsedColor =
