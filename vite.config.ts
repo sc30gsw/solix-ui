@@ -5,7 +5,6 @@ import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 import { storyControls } from "#/scripts/story-controls.ts";
-import { storyRecordsOfThisRun } from "#/apps/storybook/story-records-command.ts";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
@@ -13,7 +12,7 @@ const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
 const storySpec = "apps/storybook/tests/story-spec.test.ts";
-const storyRecords = storyRecordsOfThisRun();
+const storyRecordsSetup = "apps/storybook/story-records-command.ts";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const checkerRules = "tests/rules/**/*.test.ts";
 const programOpeners = [
@@ -193,7 +192,7 @@ export default defineConfig({
         },
         ...storiesServers.map((server) => ({
           extends: false as const,
-          ...storiesProject(server, storybookConfigDirectory, storyRecords),
+          ...storiesProject(server, storybookConfigDirectory),
         })),
       ].map(inGroup(sequenceGroup.others)),
       inGroup(sequenceGroup.storySpec)({
@@ -202,7 +201,7 @@ export default defineConfig({
           name: "story spec",
           environment: "node",
           include: [storySpec],
-          provide: { storyRecords },
+          globalSetup: [storyRecordsSetup],
         },
       }),
     ].map(withPackagesBuiltFirst),

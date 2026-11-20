@@ -9,6 +9,7 @@ import {
   declarationsOfSymbol,
   descendants,
   fallbacksIn,
+  hasCallSignature,
   openProgram,
   type Program,
   propsOfComponent,
@@ -25,9 +26,14 @@ export type LibraryComponent = {
   readonly name: string;
   readonly declarations: readonly ts.Node[];
   readonly props: readonly ComponentProp[];
+  readonly staticParts: readonly string[];
 };
 
 export type ComponentProps = Readonly<Record<string, readonly ComponentProp[]>>;
+
+export type StaticParts = Readonly<Record<string, readonly string[]>>;
+
+type Library = { readonly props: ComponentProps; readonly staticParts: StaticParts };
 
 export const libraryEntry = join(repositoryRoot, "packages/core/src/index.ts");
 export const sharedPropTypes = join(repositoryRoot, "packages/core/src/parts.ts");
@@ -174,6 +180,18 @@ function defaultsOf(program: Program, component: ts.Identifier): Map<ts.Node, st
   return new Map();
 }
 
+function staticPartsOf(program: Program, component: ts.Identifier): string[] {
+  const symbol = symbolOf(program, component);
+  const type = symbol && program.checker.getTypeOfSymbol(symbol);
+  if (!type) return [];
+  return program.checker
+    .getPropertiesOfType(type)
+    .filter((member) =>
+      declarationsOfSymbol(member).some((declaration) => hasCallSignature(program, declaration)),
+    )
+    .map((member) => member.name);
+}
+
 export function componentsIn(
   program: Program,
   elementFile: string,
@@ -189,26 +207,43 @@ export function componentsIn(
       describe: rowDescription,
       defaults: defaultsOf(program, name),
     }),
+    staticParts: staticPartsOf(program, name),
   }));
 }
 
-export function componentPropsOf(entry: string): ComponentProps {
+function libraryOf(entry: string): Library {
   const { program, elementFile } = openLibraryProgram(entry);
   try {
-    return Object.fromEntries(
-      componentsIn(program, elementFile, entry).map(({ name, props }) => [name, props]),
-    );
+    const components = componentsIn(program, elementFile, entry);
+    return {
+      props: Object.fromEntries(components.map(({ name, props }) => [name, props])),
+      staticParts: Object.fromEntries(
+        components.map(({ name, staticParts }) => [name, staticParts]),
+      ),
+    };
   } finally {
     program.dispose();
   }
 }
 
-const resolved = new Map<string, ComponentProps>();
+export function componentPropsOf(entry: string): ComponentProps {
+  return libraryOf(entry).props;
+}
+
+const resolved = new Map<string, Library>();
+
+function resolvedLibrary(entry: string): Library {
+  const library = resolved.get(entry) ?? libraryOf(entry);
+  resolved.set(entry, library);
+  return library;
+}
 
 export function libraryComponentProps(entry: string = libraryEntry): ComponentProps {
-  const props = resolved.get(entry) ?? componentPropsOf(entry);
-  resolved.set(entry, props);
-  return props;
+  return resolvedLibrary(entry).props;
+}
+
+export function libraryStaticParts(entry: string = libraryEntry): StaticParts {
+  return resolvedLibrary(entry).staticParts;
 }
 
 export function forgetComponentProps(changed: readonly string[]): void {

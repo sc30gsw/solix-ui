@@ -1,5 +1,3 @@
-import { rmSync, readdirSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
 import type { StoryIndexEntry } from "storybook/internal/types";
 import { beforeAll, expect, inject, test } from "vite-plus/test";
 import type { Option } from "../../../scripts/component-props.ts";
@@ -28,22 +26,17 @@ let received: Received[] = [];
 
 beforeAll(async () => {
   const directory = inject("storyRecords");
-  for (const run of readdirSync(dirname(directory), { withFileTypes: true })) {
-    if (run.isDirectory() && run.name !== basename(directory)) {
-      rmSync(join(dirname(directory), run.name), { recursive: true, force: true });
-    }
+  if (directory === undefined) {
+    throw new Error(
+      "No directory for the stories' records was provided. The story spec project's global setup, apps/storybook/story-records-command.ts, provides it; list it in that project's globalSetup.",
+    );
   }
   stories = await storyIndex();
   const indexed = new Set(stories.map(({ id }) => id));
   records = recordedStories(directory).filter(({ storyId }) => indexed.has(storyId));
   received = records.flatMap(({ mounts }) =>
-    mounts.flatMap(({ component, props, mountedWhenPlayEnded }) =>
-      Object.entries(props).map(([prop, value]) => ({
-        component,
-        prop,
-        value,
-        played: mountedWhenPlayEnded,
-      })),
+    mounts.flatMap(({ component, props, played }) =>
+      Object.entries(props).map(([prop, value]) => ({ component, prop, value, played })),
     ),
   );
   const opened = openSpecProgram([]);
@@ -92,7 +85,7 @@ test("every indexed story ran in the stories projects of this run and sent a rec
   expect(unrecorded).toEqual([]);
 });
 
-test("every own prop of every component was received by that component, mounted in an indexed story, and every prop the element components share by some component", () => {
+test("every own prop of every component was received by that component, mounted in the canvas of an indexed story, and every prop the element components share by some component", () => {
   const unused = held(() => true)
     .filter((entry) => receivedBy(entry).length === 0)
     .map(
@@ -103,27 +96,31 @@ test("every own prop of every component was received by that component, mounted 
   expect(unused).toEqual([]);
 });
 
-test("every value of every prop whose type is a closed union of literals was received by a mounted component", () => {
+test("every value of every prop whose type is a closed union of literals was received by a component mounted in its story's canvas", () => {
   const missing = held(({ values }) => values !== undefined).flatMap((entry) => {
     const seen = new Set(receivedBy(entry).map(({ value }) => value));
     const unseen = (entry.prop.values ?? []).filter((value: Option) => !seen.has(value));
     return unseen.length === 0
       ? []
       : [
-          `No indexed story mounted a component that received ${named(entry)} as ${unseen.join(", ")}. Export everyValueOf(meta, "${entry.prop.name}") from "#/every-value.tsx" in ${where(entry)}.`,
+          `No indexed story mounted a component that received ${named(entry)} as ${unseen.join(", ")}. ${
+            entry.prop.behaviour
+              ? `Give it as each in ${where(entry)} whose play function checks what that value does.`
+              : `Export everyValueOf(meta, "${entry.prop.name}") from "#/every-value.tsx" in ${where(entry)}.`
+          }`,
         ];
   });
 
   expect(missing).toEqual([]);
 });
 
-test("every prop with behaviour, which its type tells, was received by a component still mounted when a play function of its story ended", () => {
+test("every prop with behaviour, which its type tells, was received by a component in its story's canvas when the story ended, after which mount the story's play function made an expect assertion", () => {
   const behaviour = held(({ behaviour }) => behaviour);
   const unplayed = behaviour
     .filter((entry) => receivedBy(entry).every(({ played }) => !played))
     .map(
       (entry) =>
-        `No play function ended while a component that received ${named(entry)} was mounted. Give it in ${where(entry)} whose play function checks what it does.`,
+        `No story ended with a component that received ${named(entry)} in its canvas after its play function made an expect assertion of storybook/test while that component was mounted. Give it in ${where(entry)} whose play function checks what it does with expect.`,
     );
 
   expect(behaviour.length).toBeGreaterThan(0);

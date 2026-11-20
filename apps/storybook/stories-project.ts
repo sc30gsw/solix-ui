@@ -7,7 +7,7 @@ import { allowedRuntimeDependencyNames } from "../../scripts/runtime-dependencie
 import "#/story-color-scheme.ts";
 import type { StoriesServer } from "#/tests/support/test-servers.ts";
 import { instrumentedLibrary } from "#/instrumented-library.ts";
-import { recordStoryCommand } from "#/story-records-command.ts";
+import { recordStory } from "#/story-records-command.ts";
 import { anyFreePort } from "../../tests/support/server-process.ts";
 
 const schemeOfEachStory = join(import.meta.dirname, "story-color-scheme.setup.ts");
@@ -16,11 +16,7 @@ const recordOfEachStory = join(import.meta.dirname, "story-records.setup.ts");
 const preBundledForStories = ["@stylexjs/stylex"];
 const storyTimeout = 30_000;
 
-export function storiesProject(
-  { project, colorScheme }: StoriesServer,
-  configDir: string,
-  storyRecords: string,
-) {
+export function storiesProject({ project, colorScheme }: StoriesServer, configDir: string) {
   return defineConfig({
     root: dirname(configDir),
     plugins: [solid(), storybookTest({ configDir }), instrumentedLibrary()],
@@ -36,7 +32,7 @@ export function storiesProject(
       hookTimeout: storyTimeout,
       api: { port: anyFreePort, strictPort: true },
       browser: Object.assign(browserInEveryEngine(), {
-        commands: { recordStory: recordStoryCommand(storyRecords) },
+        commands: { recordStory },
       }),
     },
   });

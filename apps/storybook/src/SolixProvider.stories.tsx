@@ -103,7 +103,9 @@ export const PrimaryColorFallsBack: Story = {
           label={`Primary ${primaryColor}`}
           theme={themeWithPrimary(primaryColor)}
           cssVariablesSelector=".unused"
-        />
+        >
+          <p>{`Primary ${primaryColor}`}</p>
+        </OnItsOwnElement>
       ))}
     </>
   ),
