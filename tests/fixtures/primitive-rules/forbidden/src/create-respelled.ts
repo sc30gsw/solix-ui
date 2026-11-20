@@ -3,9 +3,11 @@ import { browserMethod, lookUp } from "#/packages/primitives/src/internal-browse
 import { observe } from "#/packages/primitives/src/internal-dom-observer.ts";
 import { type Listener, watchEvents } from "#/packages/primitives/src/internal-listener.ts";
 import {
+  boxedNow,
   Field,
   Measurer,
   Runner,
+  storedNow,
   Sub,
   topOf,
   whenHeard,
@@ -43,6 +45,45 @@ function notifyNow(heard: Listener<Event>): void {
 
 function invoke<F extends (event: Event) => void>(fn: F): void {
   fn(new Event("now"));
+}
+
+interface Bus {
+  on(heard: Listener<Event>): void;
+}
+
+type Subscribe = (heard: Listener<Event>) => void;
+
+function wireNow(handlers: { scroll: Listener<Event> }): void {
+  handlers.scroll(new Event("wired"));
+}
+
+class Watched {
+  constructor(private readonly heard: Listener<Event>) {}
+
+  fire(): void {
+    this.heard(new Event("fired"));
+  }
+}
+
+function deferred(heard: Listener<Event>): Listener<Event> {
+  return (event) => heard(event);
+}
+
+function throttled(later: Listener<Event>): Listener<Event> {
+  let waiting = false;
+  return (event) => {
+    if (waiting) return;
+    waiting = true;
+    requestAnimationFrame(() => {
+      waiting = false;
+      later(event);
+    });
+  };
+}
+
+function soon(heard: Listener<Event>): void;
+function soon(heard: (event: Event) => void): void {
+  heard(new Event("soon"));
 }
 
 /** Holds what the rules forbid. */
@@ -109,10 +150,16 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
     if (element.isConnected) reassigned = () => element.scrollTop + 1;
     const written: { read?: () => number } = {};
     written.read = () => element.clientWidth + 1;
-    const readers = [() => element.offsetHeight + 1, () => element.offsetWidth + 1];
+    const readers = [
+      () => element.offsetHeight + 1,
+      () => element.offsetWidth + 1,
+    ];
     const iterated: number[] = [];
     for (const read of readers) iterated.push(read());
-    const mapped = [() => element.scrollHeight + 1, () => element.scrollLeft + 1].map((read) => read());
+    const mapped = [
+      () => element.scrollHeight + 1,
+      () => element.scrollLeft + 1,
+    ].map((read) => read());
     const heightBox = {
       get height() {
         return element.clientTop + 1;
@@ -129,9 +176,28 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
     notifyNow(() => void element.scrollTop);
     invoke<Listener<Event>>(() => void (element.clientTop + 2));
     whenHeard(() => void (element.clientLeft + 2));
+    const bus: Bus = { on: (heard) => heard(new Event("bus")) };
+    const subscribe: Subscribe = (heard) => heard(new Event("subscribe"));
+    bus.on(() => void (element.offsetTop + 3));
+    subscribe(() => void (element.offsetLeft + 3));
+    wireNow({ scroll: () => void (element.clientWidth + 3) });
+    new Watched(() => void (element.clientHeight + 3)).fire();
+    deferred(() => void (element.scrollWidth + 3))(new Event("deferred"));
+    const onThrottled = throttled(() => void (element.scrollHeight + 3));
+    onThrottled(new Event("first"));
+    soon(() => void (element.offsetWidth + 3));
+    storedNow(() => void (element.offsetHeight + 3));
+    boxedNow(() => void (element.scrollLeft + 3));
+    let lazy: (() => number) | undefined;
+    lazy ??= () => element.clientTop + 3;
+    let picked: () => number = () => 0;
+    [picked] = [() => element.clientLeft + 3];
+    let other: () => number = () => 0;
+    ({ other } = { other: () => element.scrollTop + 3 });
     const typedRuns = [
       typedHolder.size(element),
       typedTable.a(element),
+      (typedTable as Record<string, (target: HTMLElement) => number>)[element.dir]?.(element),
       measure.height(),
       reassigned(),
       written.read(),
@@ -140,6 +206,9 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
       height,
       spread,
       binder.bind(element),
+      lazy(),
+      picked(),
+      other(),
       new Sub(element),
       new Field(element),
     ];

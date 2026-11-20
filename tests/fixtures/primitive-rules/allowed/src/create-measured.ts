@@ -10,9 +10,20 @@ function wire(target: HTMLElement, handlers: { scroll: Listener<Event> }): () =>
   return watchEvents(target, ["scroll"], handlers.scroll);
 }
 
-function deferred(heard: Listener<Event>): Listener<Event> {
-  return (event) => heard(event);
+function wiredIfGiven(target: HTMLElement, heard?: Listener<Event>): () => void {
+  if (!heard) return () => undefined;
+  return watchEvents(target, ["scroll"], heard);
 }
+
+function wiredOrQuiet(target: HTMLElement, heard: Listener<Event> | undefined): () => void {
+  return watchEvents(target, ["scroll"], heard ?? (() => undefined));
+}
+
+function wiredWhen(target: HTMLElement, wanted: boolean, heard: Listener<Event>): () => void {
+  return watchEvents(target, ["scroll"], wanted ? heard : () => undefined);
+}
+
+type Handlers = { now: () => number; onScroll: (event: Event) => void };
 
 /** Holds what the rules allow. */
 export function createMeasured(): [ref: RefSetter<HTMLElement>, width: () => number] {
@@ -22,12 +33,23 @@ export function createMeasured(): [ref: RefSetter<HTMLElement>, width: () => num
       const stop = watchEvents(element, ["resize"], onResize);
       const stopBound = watchEvents(element, ["scroll"], measureNow.bind(null, element));
       const stopWired = wire(element, { scroll: () => void element.scrollHeight });
-      const stopDeferred = watchEvents(element, ["scroll"], deferred(() => void element.scrollLeft));
+      const stopIfGiven = wiredIfGiven(element, () => void element.offsetTop);
+      const stopOrQuiet = wiredOrQuiet(element, () => void element.offsetLeft);
+      const stopWhen = wiredWhen(element, element.isConnected, () => void element.clientTop);
+      const held = { scroll: () => void element.clientLeft };
+      const stopHeld = wire(element, held);
+      const holder: Handlers = { now: () => 1, onScroll: () => void element.offsetHeight };
+      void holder.now();
+      const stopHolder = watchEvents(element, ["scroll"], holder.onScroll);
       return () => {
         stop();
         stopBound();
         stopWired();
-        stopDeferred();
+        stopIfGiven();
+        stopOrQuiet();
+        stopWhen();
+        stopHeld();
+        stopHolder();
         void element.getBoundingClientRect();
       };
     }),

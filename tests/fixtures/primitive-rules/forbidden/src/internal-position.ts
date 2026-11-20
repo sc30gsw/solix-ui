@@ -1,3 +1,5 @@
+import type { Listener as Heard } from "#/packages/primitives/src/internal-listener.ts";
+
 export function verticalOffset(): number {
   return window.scrollY;
 }
@@ -47,4 +49,15 @@ type Listener = (event: Event) => void;
 export function whenHeard(heard: Listener): Listener {
   heard(new Event("heard"));
   return heard;
+}
+
+export function storedNow(heard: Heard<Event>): void {
+  let saved: Heard<Event> | undefined;
+  saved = heard;
+  saved(new Event("saved"));
+}
+
+export function boxedNow(heard: Heard<Event>): void {
+  const boxed = { heard };
+  boxed.heard(new Event("boxed"));
 }

@@ -145,7 +145,7 @@ function readsByName(declaration: ts.Node): boolean {
 
 export function calledDeclaration(
   program: Program,
-  call: ts.CallExpression | ts.NewExpression | ts.TaggedTemplateExpression,
+  call: ts.CallExpression | ts.NewExpression,
 ): ts.Node | undefined {
   return program.checker.getResolvedSignature(call)?.declaration?.resolve();
 }
