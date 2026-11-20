@@ -8,7 +8,7 @@
   },
   "scripts": {
     "check:private-terms": "node scripts/check-private-terms.mjs",
-    "lint:solid": "solid2-kit check --dir . && solid2-kit doctor",
+    "lint:solid": "solid2-kit check . apps/storybook/.storybook apps/storybook/fixtures/.storybook && solid2-kit doctor",
     "migrate:subpath-imports": "node scripts/migrate-to-subpath-imports.ts",
     "prepare": "vp config --no-agent",
     "verify": "vp check --deny-warnings && vp run lint:solid && vp run check:private-terms && vp test",
