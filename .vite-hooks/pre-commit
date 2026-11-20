@@ -1,1 +1,1 @@
-vp staged && vp run verify
+node scripts/check-working-tree.ts && vp staged --no-stash && node scripts/check-working-tree.ts && vp run verify

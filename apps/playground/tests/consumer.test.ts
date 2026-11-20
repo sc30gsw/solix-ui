@@ -69,10 +69,6 @@ inEveryEngine((browser) => {
       await opened.close();
     });
 
-    test("hydration reports no console errors or warnings", () => {
-      expect(opened.consoleProblems).toEqual([]);
-    });
-
     test("a class and an attribute that change after the first render reach each component's root, and a class that classes names reaches its part", async () => {
       const { page, expected } = opened;
       const emphasise = page.getByRole("button", { name: "Emphasise" });

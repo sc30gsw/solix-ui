@@ -4,13 +4,12 @@ import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { stylesheet as libraryStylesheet } from "../../../packages/core/tests/built-library";
 import { installedVp } from "../../../scripts/repository";
 import { computed, inEveryEngine, serveApp } from "../../../tests/support/served-app";
+import { viteOnAFreePort } from "../../../tests/support/server-process";
 
-const port = 4327;
 const appDirectory = join(import.meta.dirname, "..");
 const url = serveApp({
   directory: appDirectory,
-  port,
-  command: [installedVp, "preview", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
+  command: [installedVp, "preview", ...viteOnAFreePort],
 });
 const arrangements: [label: string, libraryLast: boolean][] = [
   ["as the bundle orders them", false],
@@ -27,7 +26,7 @@ inEveryEngine((browser) => {
 
     beforeAll(async () => {
       page = await browser().newPage();
-      await page.goto(url, { waitUntil: "networkidle" });
+      await page.goto(url(), { waitUntil: "networkidle" });
       await page.getByRole("button", { name: "StyleX class" }).waitFor();
       if (libraryLast) await page.addStyleTag({ content: libraryStylesheet });
     });

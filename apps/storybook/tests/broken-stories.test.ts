@@ -9,11 +9,7 @@ import {
   storyIndex,
 } from "#/tests/support/stories.ts";
 import { collectTelemetry, telemetryUrlVariable } from "#/tests/support/telemetry-collector.ts";
-import {
-  brokenStoriesServer,
-  brokenStoriesTelemetryPort,
-  storiesServers,
-} from "#/tests/support/test-servers.ts";
+import { brokenStoriesServer, storiesServers } from "#/tests/support/test-servers.ts";
 
 type BrokenStory = Exclude<keyof typeof BrokenStories, "default">;
 
@@ -42,7 +38,7 @@ const reasonOf: { [Story in BrokenStory]: string } = {
 const fixturesDirectory = join(storybookDirectory, "fixtures");
 const brokenStoriesRunTimeout = 240_000;
 const indexTimeout = 60_000;
-const telemetry = collectTelemetry(brokenStoriesTelemetryPort);
+const telemetry = collectTelemetry();
 const idOf = new Map<string, string>();
 
 function storyIdOf(story: string): string {

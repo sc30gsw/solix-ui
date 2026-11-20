@@ -15,7 +15,7 @@ The pstack skills come from the pstack plugin that `.claude/settings.json` enabl
 vp run verify
 ```
 
-Run the matching `verify-*` skill for the code the change touches. Drive the changed feature with `vp run evidence`.
+Run the matching `verify-*` skills for the code the change touches. `verify-served-page` matches any change to what the playground serves. To look at a component's states, download the `storybook` artifact of the pull request's CI run and serve the unpacked folder with a static file server.
 
 ## 2. Correct
 
@@ -42,8 +42,7 @@ Each of the two maintain skills ships its corrections as a pull request of its o
 ## 6. Open it
 
 - Stack the branch on the pull request it builds on, and target that branch. Target `main` only for work that builds on nothing unmerged.
-- Title: Conventional Commits, `type(scope): subject`.
-- Body: `## Why`, `## What changed`, `## Scope`, `## Tradeoffs`, `## Blast Radius`, `## Verification`, in that order. Drop a section with nothing to say. Keep `## Scope`.
+- Title and body: the `Pull request` workflow in CI fails a title that is not a Conventional Commit, a body without `## Scope` or with its sections out of the order `sectionOrder` in `scripts/pull-request-text.ts` gives, a body that does not end with the Claude Code footer and the session URL, and a private term. Drop a section with nothing to say.
 - Before you open it, write the title and the body to a file and run `node scripts/check-private-terms.mjs --text <file>`. It must pass.
 - Open it ready, not as a draft.
 
