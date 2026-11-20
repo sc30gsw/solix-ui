@@ -2,7 +2,12 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { type Refusal, refusals, refusalsOf } from "#/scripts/agent-command-guard.ts";
+import {
+  guardHookCommand,
+  type Refusal,
+  refusals,
+  refusalsOf,
+} from "#/scripts/agent-command-guard.ts";
 import { parse, ts } from "#/scripts/syntax.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
@@ -11,7 +16,6 @@ const settingsFile = ".claude/settings.json";
 const guardEvent = "PreToolUse";
 const guardedTool = "Bash";
 const guardFile = "scripts/agent-command-guard.ts";
-const guardCommand = `[ -f "$CLAUDE_PROJECT_DIR/${guardFile}" ] || { echo "This checkout has no command guard, so the command runs unchecked." >&2; exit 0; }; node "$CLAUDE_PROJECT_DIR/${guardFile}" || { echo "The command guard did not run, so the command is refused." >&2; exit 2; }`;
 const blocking = 2;
 const stash = { tool_name: "Bash", tool_input: { command: "git stash" } };
 
@@ -202,7 +206,7 @@ function guardOutput(event: unknown): string {
 
 test("settings.json runs the guard before every Bash command, in an entry of its own, and the guard denies with its reason and says nothing otherwise", () => {
   expect(guardEntries()).toEqual([
-    { matcher: guardedTool, hooks: [{ type: "command", command: guardCommand }] },
+    { matcher: guardedTool, hooks: [{ type: "command", command: guardHookCommand }] },
   ]);
   expect(JSON.parse(guardOutput(stash))).toEqual({
     hookSpecificOutput: {
