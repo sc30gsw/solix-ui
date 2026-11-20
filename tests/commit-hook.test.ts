@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, test } from "vite-plus/test";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
@@ -8,20 +9,38 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const hookFiles = [".vite-hooks/pre-commit", ".vite-hooks/pre-merge-commit"];
 const checkerFile = "scripts/check-working-tree.ts";
+const mergedCommitsFile = "scripts/merged-commits.ts";
+const skillConfirmationsFile = "scripts/skill-confirmations.ts";
+const confirmedSkill = "verify-example";
+const unconfirmed = `.agents/skills/${confirmedSkill}/SKILL.md: it was last confirmed against`;
+const mergeSide = ["merge", "--no-ff", "--message=merge side", "side"];
 const runsHooksAsTheDispatcherDoes = "#!/bin/sh -e\n";
 const stagedRun = "staged --no-stash";
 const verifyRun = "run verify";
 
 const recordingVp = `#!/bin/sh
 printf '%s\\n' "$*" >> "$VP_CALLS"
-if [ "$1" = staged ] && [ -n "$STAGED_DOES" ]; then sh -c "$STAGED_DOES"; fi
+if [ "$1" = staged ] && [ -n "$STAGED_DOES" ]; then sh -c "$STAGED_DOES" || exit; fi
+if [ "$1" = run ] && [ -n "$VERIFY_DOES" ]; then sh -c "$VERIFY_DOES" || exit; fi
 `;
 
+const checksTheSkillConfirmation = `import { unconfirmedSkills } from ${JSON.stringify(
+  pathToFileURL(join(repositoryRoot, skillConfirmationsFile)).href,
+)};
+const problems = unconfirmedSkills(process.cwd(), [${JSON.stringify(confirmedSkill)}], process.env);
+for (const problem of problems) console.error(problem);
+process.exitCode = problems.length === 0 ? 0 : 1;
+`;
+
+type Git = (...args: string[]) => string;
+
 type Commit = {
-  arrange: (git: (...args: string[]) => string, root: string) => void;
+  arrange: (git: Git, root: string) => void;
   commitArgs?: string[];
   stagedDoes?: string;
-  merges?: boolean;
+  checksSkills?: boolean;
+  merges?: readonly string[];
+  side?: (git: Git, root: string) => void;
 };
 
 type Outcome = { committed: boolean; vpCalls: string[]; said: string };
@@ -30,11 +49,17 @@ function attempt({
   arrange,
   commitArgs = [],
   stagedDoes = "",
-  merges = false,
+  checksSkills = false,
+  merges,
+  side = (git, root) => {
+    changed(root, "file.txt");
+    git("commit", "--quiet", "--all", "--message=side");
+  },
 }: Commit): Promise<Outcome> {
   return inTemporaryTree(
     {
       [checkerFile]: readFileSync(join(repositoryRoot, checkerFile), "utf8"),
+      [mergedCommitsFile]: readFileSync(join(repositoryRoot, mergedCommitsFile), "utf8"),
       ".gitignore": "ignored.log\n",
       "file.txt": "base\n",
       "other.txt": "base\n",
@@ -46,8 +71,7 @@ function attempt({
       git("commit", "--quiet", "--message=base");
       if (merges) {
         git("switch", "--quiet", "--create", "side");
-        changed(root, "file.txt");
-        git("commit", "--quiet", "--all", "--message=side");
+        side(git, root);
         git("switch", "--quiet", "main");
       }
       const base = git("rev-parse", "HEAD");
@@ -65,6 +89,8 @@ function attempt({
       }
       writeFileSync(join(bin, "vp"), recordingVp);
       chmodSync(join(bin, "vp"), 0o755);
+      const skillCheck = join(bin, "check-skills.mjs");
+      writeFileSync(skillCheck, checksTheSkillConfirmation);
       const calls = join(root, ".git/vp-calls");
       arrange(git, root);
       const commit = spawnSync(
@@ -78,9 +104,7 @@ function attempt({
           `core.hooksPath=${hooks}`,
           "-c",
           "commit.gpgsign=false",
-          ...(merges
-            ? ["merge", "--no-ff", "--message=merge side", "side"]
-            : ["commit", "--message=change", ...commitArgs]),
+          ...(merges ?? ["commit", "--message=change", ...commitArgs]),
         ],
         {
           cwd: root,
@@ -90,6 +114,7 @@ function attempt({
             PATH: `${bin}:${process.env.PATH}`,
             VP_CALLS: calls,
             STAGED_DOES: stagedDoes,
+            VERIFY_DOES: checksSkills ? `node ${JSON.stringify(skillCheck)}` : "",
           },
         },
       );
@@ -233,7 +258,7 @@ describe("the pre-commit hook verifies exactly what the commit holds", () => {
 
 describe("the pre-merge-commit hook verifies exactly what the merge commit holds", () => {
   test("a merge whose working tree is its index runs verify", async () => {
-    const outcome = await attempt({ arrange: () => undefined, merges: true });
+    const outcome = await attempt({ arrange: () => undefined, merges: mergeSide });
 
     expect(outcome).toMatchObject({ committed: true, vpCalls: [verifyRun] });
   });
@@ -242,9 +267,65 @@ describe("the pre-merge-commit hook verifies exactly what the merge commit holds
     ["an unstaged change", (root) => changed(root, "other.txt"), "unstaged change: other.txt"],
     ["an untracked file", (root) => changed(root, "new.txt"), "untracked file: new.txt"],
   ])("a merge beside %s stops before verify runs", async (_, arrange, said) => {
-    const outcome = await attempt({ arrange: (__, root) => arrange(root), merges: true });
+    const outcome = await attempt({ arrange: (__, root) => arrange(root), merges: mergeSide });
 
     expect(outcome).toMatchObject({ committed: false, vpCalls: [] });
     expect(outcome.said).toContain(said);
+  });
+
+  const confirmingOnSide = (git: Git, root: string) => {
+    changed(root, "file.txt");
+    git("commit", "--quiet", "--all", "--message=side");
+    const confirmed = git("rev-parse", "HEAD").trim();
+    mkdirSync(join(root, ".agents/skills", confirmedSkill), { recursive: true });
+    writeFileSync(
+      join(root, ".agents/skills", confirmedSkill, "SKILL.md"),
+      `Last confirmed against commit \`${confirmed}\`.\n`,
+    );
+    git("add", ".agents");
+    git("commit", "--quiet", "--message=confirm the skill on side");
+  };
+
+  test.each<[string, readonly string[]]>([
+    ["git merge", mergeSide],
+    ["git pull", ["pull", "--no-rebase", "--no-ff", "--no-edit", ".", "side"]],
+  ])(
+    "%s whose merged commit holds a newer confirmation of a skill passes its hook, though git writes MERGE_HEAD only after the hook",
+    async (_, merges) => {
+      const outcome = await attempt({
+        arrange: () => undefined,
+        merges,
+        side: confirmingOnSide,
+        checksSkills: true,
+      });
+
+      expect(outcome.said).not.toContain(unconfirmed);
+      expect(outcome).toMatchObject({ committed: true, vpCalls: [verifyRun] });
+    },
+  );
+
+  test("a merge whose skill names a commit that neither HEAD nor the merged commit contains stops at verify", async () => {
+    const outcome = await attempt({
+      arrange: () => undefined,
+      merges: mergeSide,
+      side: (git, root) => {
+        git("switch", "--quiet", "--create", "elsewhere");
+        changed(root, "other.txt");
+        git("commit", "--quiet", "--all", "--message=elsewhere");
+        const elsewhere = git("rev-parse", "HEAD").trim();
+        git("switch", "--quiet", "side");
+        mkdirSync(join(root, ".agents/skills", confirmedSkill), { recursive: true });
+        writeFileSync(
+          join(root, ".agents/skills", confirmedSkill, "SKILL.md"),
+          `Last confirmed against commit \`${elsewhere}\`.\n`,
+        );
+        git("add", ".agents");
+        git("commit", "--quiet", "--message=confirm the skill elsewhere");
+      },
+      checksSkills: true,
+    });
+
+    expect(outcome).toMatchObject({ committed: false, vpCalls: [verifyRun] });
+    expect(outcome.said).toContain(unconfirmed);
   });
 });

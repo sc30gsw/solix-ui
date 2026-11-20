@@ -24,6 +24,8 @@ import {
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { exportsOf, parse } from "#/scripts/syntax.ts";
+import { mergedCommitsVariable } from "#/scripts/merged-commits.ts";
+import { ancestryOf, unconfirmedSkills } from "#/scripts/skill-confirmations.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -35,7 +37,6 @@ const verifyWithPrivateTerms =
 const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github)\/[^`:*\s]+)`/g;
 const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 const notOneSpaceAtACellBorder = / {2,}\||\| {2,}|\S\||\|\S/;
-const confirmedCommit = /Last confirmed against commit `([0-9a-f]{7,40})`/;
 const diffPathList = /Run `git diff [0-9a-f]{7,40} -- ([^`]+)`/;
 const backticked = /`([^`]+)`/g;
 const checkoutSteps = /- uses: actions\/checkout@/g;
@@ -304,23 +305,7 @@ test("every path a verification skill tells you to diff is in its covered-code t
   expect(violations).toEqual([]);
 });
 
-function gitStatus(directory: string, args: readonly string[]): number | null {
-  return spawnSync("git", args, { cwd: directory, stdio: "ignore" }).status;
-}
-
-function ancestryOf(
-  commit: string,
-  directory: string = repositoryRoot,
-): "ancestor" | "not an ancestor" | "unknown" {
-  const merging = gitStatus(directory, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD"]) === 0;
-  const statuses = (merging ? ["HEAD", "MERGE_HEAD"] : ["HEAD"]).map((head) =>
-    gitStatus(directory, ["merge-base", "--is-ancestor", commit, head]),
-  );
-  if (statuses.includes(0)) return "ancestor";
-  return statuses.every((status) => status === 1) ? "not an ancestor" : "unknown";
-}
-
-test("while a merge is being committed, a commit that HEAD or the merged commit contains counts as one HEAD contains, and one only the merged commit contains stops counting once the merge is aborted", async () => {
+test("while a merge is being committed, a commit that HEAD or the merged commit contains counts as one HEAD contains, and one only the merged commit contains stops counting once the merge is aborted, whether MERGE_HEAD or the pre-merge-commit hook names it", async () => {
   await inTemporaryTree({ "file.txt": "base\n" }, (root) => {
     const probe = (...args: string[]) => gitInScratchRepository(root, args).trim();
     probe("init", "--quiet", "--initial-branch=main");
@@ -336,29 +321,25 @@ test("while a merge is being committed, a commit that HEAD or the merged commit 
     probe("commit", "--quiet", "--all", "--message=main");
     const own = probe("rev-parse", "HEAD");
 
-    expect(ancestryOf(incoming, root)).toBe("not an ancestor");
+    const namedByTheHook = { [mergedCommitsVariable]: incoming };
+
+    expect(ancestryOf(incoming, root, {})).toBe("not an ancestor");
+    expect(ancestryOf(incoming, root, namedByTheHook)).toBe("ancestor");
+    expect(ancestryOf(own, root, namedByTheHook)).toBe("ancestor");
     probe("merge", "--quiet", "--no-commit", "--no-ff", "incoming");
-    expect(ancestryOf(incoming, root)).toBe("ancestor");
-    expect(ancestryOf(own, root)).toBe("ancestor");
+    expect(ancestryOf(incoming, root, {})).toBe("ancestor");
+    expect(ancestryOf(own, root, {})).toBe("ancestor");
     probe("merge", "--abort");
-    expect(ancestryOf(incoming, root)).toBe("not an ancestor");
+    expect(ancestryOf(incoming, root, {})).toBe("not an ancestor");
   });
 });
 
 test("every verification skill was last confirmed against a commit that HEAD contains, or, while a merge is being committed, that the merged commit contains, and CI checks out the history to tell", () => {
-  const violations = skillNames
-    .filter((name) => name.startsWith("verify-"))
-    .flatMap((name) => {
-      const commit = confirmedCommit.exec(skillText(name))?.[1];
-      if (commit === undefined) return [];
-      const ancestry = ancestryOf(commit);
-      if (ancestry === "ancestor") return [];
-      return [
-        ancestry === "unknown"
-          ? `.agents/skills/${name}/SKILL.md: it was last confirmed against ${commit}, which this clone does not hold. Name a commit of this branch.`
-          : `.agents/skills/${name}/SKILL.md: it was last confirmed against ${commit}, which neither HEAD nor, during a merge, the merged commit contains. Confirm the skill against a commit of this branch and name that one.`,
-      ];
-    });
+  const violations = unconfirmedSkills(
+    repositoryRoot,
+    skillNames.filter((name) => name.startsWith("verify-")),
+    process.env,
+  );
   const shallow = workflowFiles
     .filter((file) => {
       const text = read(file);
@@ -433,7 +414,7 @@ test("every check in the repository runs through vp run verify, before a commit,
     "node scripts/check-working-tree.ts && vp staged --no-stash && node scripts/check-working-tree.ts && vp run verify",
   );
   expect(read(".vite-hooks/pre-merge-commit").trim()).toBe(
-    "node scripts/check-working-tree.ts && vp run verify",
+    `node scripts/check-working-tree.ts && merged="$(node scripts/merged-commits.ts)" && ${mergedCommitsVariable}="$merged" vp run verify`,
   );
   const everyEngine = `playwright install --with-deps ${engineNames.join(" ")}`;
   for (const file of workflowFiles) {
