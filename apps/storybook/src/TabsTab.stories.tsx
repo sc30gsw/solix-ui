@@ -1,9 +1,11 @@
 import { Tabs } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect, userEvent } from "storybook/test";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Tabs.Tab,
+  argTypes: argTypesOf(Tabs.Tab),
   args: { value: "security", children: "Security" },
   render: (args) => (
     <Tabs defaultValue="profile">
@@ -15,11 +17,11 @@ const meta = {
       <Tabs.Panel value="security">Security panel</Tabs.Panel>
     </Tabs>
   ),
-} satisfies Meta<typeof Tabs.Tab>;
+} satisfies ComponentMeta<typeof Tabs.Tab>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const SelectedByAPress: Story = {
   play: async ({ canvas }) => {

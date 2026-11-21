@@ -1,8 +1,11 @@
 import { Button, Group } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import { everyValueOf } from "#/every-value.tsx";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Group,
+  argTypes: argTypesOf(Group),
   args: { gap: "sm" },
   render: (args) => (
     <Group {...args}>
@@ -11,14 +14,26 @@ const meta = {
       <Button>Third</Button>
     </Group>
   ),
-} satisfies Meta<typeof Group>;
+} satisfies ComponentMeta<typeof Group>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 
 export const Grown: Story = {
   args: { grow: true },
 };
+
+export const EveryWrap: Story = everyValueOf(meta, "wrap");
+
+export const KeptToItsShare: Story = {
+  args: { grow: true, preventGrowOverflow: true, justify: "center", align: "flex-end" },
+};
+
+export const EveryGrow: Story = everyValueOf(meta, "grow");
+
+export const EveryPreventGrowOverflow: Story = everyValueOf(meta, "preventGrowOverflow", {
+  grow: true,
+});

@@ -1,8 +1,10 @@
 import { Box, Space } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Space,
+  argTypes: argTypesOf(Space),
   args: { h: "xl" },
   render: (args) => (
     <>
@@ -11,10 +13,10 @@ const meta = {
       <Box>Below the space</Box>
     </>
   ),
-} satisfies Meta<typeof Space>;
+} satisfies ComponentMeta<typeof Space>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Vertical: Story = {};

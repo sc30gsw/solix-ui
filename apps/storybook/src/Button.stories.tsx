@@ -1,15 +1,18 @@
 import { Button, type ButtonProps } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect, fn, spyOn, userEvent } from "storybook/test";
+import { everyValueOf } from "#/every-value.tsx";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Button,
+  argTypes: argTypesOf(Button),
   args: { children: "Save", onClick: fn() },
-} satisfies Meta<typeof Button>;
+} satisfies ComponentMeta<typeof Button>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 
@@ -44,6 +47,7 @@ export const GivenColors: Story = {
       <Button color="red.6" autoContrast>
         Given shade
       </Button>
+      <Button autoContrast={false}>Primary without auto contrast</Button>
       <Button color={givenColour}>Given colour</Button>
     </div>
   ),
@@ -85,3 +89,18 @@ export const ColorFallsBack: Story = {
     }
   },
 };
+
+export const EveryVariant: Story = everyValueOf(meta, "variant");
+
+export const AsALink: Story = {
+  render: () => (
+    <Button component="a" href="#as-a-link">
+      Go
+    </Button>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole("link", { name: "Go" })).toHaveAttribute("href", "#as-a-link");
+  },
+};
+
+export const EveryUnstyled: Story = everyValueOf(meta, "unstyled");

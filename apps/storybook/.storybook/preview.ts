@@ -11,6 +11,7 @@ import {
   globalSwitchesThatSkipTheAccessibilityScan,
   selectorsTheAccessibilityAddonLeavesUnscanned,
 } from "#/accessibility-scan.ts";
+import { playReturned, storyMounted, storyStarted } from "#/story-run.ts";
 import "@solix/core/styles.css";
 import "#/.storybook/preview.css";
 
@@ -72,6 +73,7 @@ function giveTheStoryItsOwnAccessibilityParameters({ parameters }: StoryState): 
 }
 
 const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
+  storyStarted();
   refuseAnyWayOut("before it ran", waysOutOfTheGate(context));
   giveTheStoryItsOwnAccessibilityParameters(context);
   if (import.meta.env.DEV && !solidDevelopmentBuildLoaded()) {
@@ -80,9 +82,21 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
     );
   }
   diagnosticsRaised = captureSolidDiagnostics();
+  const mount = context.mount;
+  context.mount = async (...rendered) => {
+    const canvas = await mount(...rendered);
+    storyMounted(context.canvasElement);
+    return canvas;
+  };
 };
 
 const afterEachStory: AfterEach<SolidRenderer> = (context) => {
+  playReturned();
+  if (context.reporting.reports.length > 0) {
+    throw new Error(
+      `The preview's afterEach tells a failed play from a failed gate, so it must run first after the play function, but ${context.reporting.reports.map(({ type }) => type).join(", ")} reported before it. A story or a meta that writes afterEach, or an addon whose afterEach the preview's no longer comes before, ran first.`,
+    );
+  }
   const raised = diagnosticsRaised();
   diagnosticsRaised = () => [];
   refuseAnyWayOut("while it ran", [...waysOutOfTheGate(context), ...unscannedIn(context)]);

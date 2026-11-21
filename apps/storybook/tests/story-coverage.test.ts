@@ -1,23 +1,22 @@
 import { join } from "node:path";
-import type { StoryIndexEntry } from "storybook/internal/types";
 import { beforeAll, expect, test } from "vite-plus/test";
 import { repositoryRoot } from "../../../scripts/repository.ts";
 import { componentExports, library } from "../../../packages/core/tests/built-library.ts";
-import { storyFileOf, storyIndex } from "#/tests/support/stories.ts";
+import { type IndexedStoryFile, indexedStoryFiles } from "#/tests/support/stories.ts";
 
 type StoryModule = { default?: { component?: unknown } };
 
 const builtByName: Record<string, unknown> = library;
 const indexTimeout = 60_000;
-let stories: StoryIndexEntry[] = [];
+let indexed: IndexedStoryFile[] = [];
 
 beforeAll(async () => {
-  stories = await storyIndex();
+  indexed = await indexedStoryFiles();
 }, indexTimeout);
 
 test("every component the built library exports is the component of a story Storybook indexes, and every file of such a story names a component", async () => {
   const components = componentExports();
-  const files = [...new Set(stories.map(storyFileOf))];
+  const files = indexed.map(({ file }) => file);
   const storied = await Promise.all(
     files.map(async (file) => ({
       file,
