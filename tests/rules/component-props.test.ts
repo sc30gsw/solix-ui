@@ -66,7 +66,7 @@ test("a prop's control is a select only for a closed union of literals or litera
 const sharedPropTypes = join(repositoryRoot, "packages/core/src/parts.ts");
 
 const statefulProbe = `import type { JSX } from "@solidjs/web";
-import type { ControlledProps, ElementProps } from ${JSON.stringify(sharedPropTypes)};
+import { type ControlledProps, type ElementProps, withDefaults } from ${JSON.stringify(sharedPropTypes)};
 
 type StatefulProps = ElementProps<
   "div",
@@ -86,10 +86,9 @@ type StatefulProps = ElementProps<
 
 const defaults = { tone: "calm", loop: true } satisfies Partial<StatefulProps>;
 
-function Stateful(props: StatefulProps): JSX.Element {
-  const tone = () => props.tone ?? defaults.tone;
-  const loop = () => props.loop ?? defaults.loop;
-  return <div data-tone={tone()} data-loop={String(loop())} />;
+function Stateful(rawProps: StatefulProps): JSX.Element {
+  const props = withDefaults(defaults, rawProps);
+  return <div data-tone={props.tone} data-loop={String(props.loop)} />;
 }
 
 export { Stateful };
@@ -182,6 +181,7 @@ test("each public prop of every component the library exports is documented on o
 });
 
 const sharedDefaultsProbe = `import type { JSX } from "@solidjs/web";
+import { withDefaults } from ${JSON.stringify(sharedPropTypes)};
 
 type Shared = {
   /** The tone. */
@@ -193,12 +193,14 @@ type PlainProps = Shared;
 const calm = { tone: "calm" } satisfies Partial<Shared>;
 const loud = { tone: "loud" } satisfies Partial<Shared>;
 
-function toneOf(props: Shared): string {
-  return props.tone ?? loud.tone;
+function toneOf(given: Shared): string {
+  const props = withDefaults(loud, given);
+  return props.tone;
 }
 
-function Calm(props: PlainProps): JSX.Element {
-  return <div data-tone={props.tone ?? calm.tone} />;
+function Calm(rawProps: PlainProps): JSX.Element {
+  const props = withDefaults(calm, rawProps);
+  return <div data-tone={props.tone} />;
 }
 
 function Loud(props: PlainProps): JSX.Element {
@@ -212,7 +214,7 @@ function Plain(props: PlainProps): JSX.Element {
 export { Calm, Loud, Plain };
 `;
 
-test("a declared default belongs to the component that reads its defaults object, itself or through a function it calls, so components that share a prop's declaration keep their own defaults and one that reads none has none", () => {
+test("a declared default belongs to the component that gives its defaults object to withDefaults with its own props, itself or through a function it passes its props to, so components that share a prop's declaration keep their own defaults and one that reads none has none", () => {
   const defaults = Object.fromEntries(
     Object.entries(componentPropsOf(virtualFile(sharedDefaultsProbe, ".tsx"))).map(
       ([component, props]) => [component, props.find(({ name }) => name === "tone")?.defaultValue],

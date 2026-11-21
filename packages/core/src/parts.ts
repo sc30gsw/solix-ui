@@ -116,6 +116,29 @@ type RootProps<Props, KeptOffRoot extends keyof Props> = Omit<Props, HandledKey 
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
+export type WithDefaults<P, D> = Omit<P, keyof D> & {
+  [K in keyof D & keyof P]-?: Exclude<P[K], undefined> | D[K];
+};
+
+/**
+ * A component's props with its defaults filled in: each prop of `defaults` reads as the consumer
+ * gave it, or as `defaults` gives it where the consumer gave `undefined` or nothing. A component
+ * that has defaults reads them only through this, so the controls read them from one place.
+ */
+export function withDefaults<P extends object, D extends object>(
+  defaults: D,
+  props: P,
+): WithDefaults<P, D> {
+  const filled: Record<string, unknown> = {};
+  for (const key of Object.keys(defaults)) {
+    Object.defineProperty(filled, key, {
+      enumerable: true,
+      get: () => Reflect.get(props, key) ?? Reflect.get(defaults, key),
+    });
+  }
+  return merge(props, filled) as WithDefaults<P, D>;
+}
+
 export type CarriedStyling = {
   readonly class: () => JSX.ClassValue;
   readonly style: () => JSX.CSSProperties | undefined;

@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { children } from "solid-js";
-import { createParts, type ElementProps } from "#/src/parts.ts";
+import { createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { groupVariables } from "#/src/Group.variables.ts";
 import { rendersSomething } from "#/src/renders-something.ts";
 import { variableProperty } from "#/src/style-prop-table.ts";
@@ -48,14 +48,13 @@ export type GroupProps = ElementProps<
 
 const defaults = { preventGrowOverflow: true } satisfies Partial<GroupProps>;
 
-export function Group(props: GroupProps) {
+export function Group(rawProps: GroupProps) {
+  const props = withDefaults(defaults, rawProps);
   const resolved = children(() => props.children);
   const present = () => resolved.toArray().filter(rendersSomething);
   const gap = `var(${variableProperty("group-gap")})`;
   const childWidth = () =>
-    (props.preventGrowOverflow ?? defaults.preventGrowOverflow)
-      ? `calc((100% + ${gap}) / ${present().length} - ${gap})`
-      : "none";
+    props.preventGrowOverflow ? `calc((100% + ${gap}) / ${present().length} - ${gap})` : "none";
   const { root } = createParts(groupVariables, styles, props, {
     variables: {
       "group-align": "align",

@@ -1,4 +1,4 @@
-import { children, createRoot, untrack } from "solid-js";
+import { $PROXY, children, createRoot, untrack } from "solid-js";
 import type { NoOp, Substitute } from "../../scripts/component-props.ts";
 
 export type RecordedValue = string | number | boolean | null;
@@ -89,7 +89,9 @@ function seeingWhatItReads(
   substitution: Substitution | undefined,
 ): Props {
   return new Proxy(props, {
+    has: (target, key) => key !== $PROXY && Reflect.has(target, key),
     get(target, key) {
+      if (key === $PROXY) return undefined;
       const value: unknown = Reflect.get(target, key);
       if (typeof key !== "string" || value === undefined) return value;
       readByIt.set(key, (readByIt.get(key) ?? new Set()).add(recorded(value)));

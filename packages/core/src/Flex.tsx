@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
-import { createParts, type PolymorphicProps } from "#/src/parts.ts";
+import { createParts, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
 import { flexVariables } from "#/src/Flex.variables.ts";
 import type { GapProps, VariableProp } from "#/src/style-props.ts";
 
@@ -50,7 +50,8 @@ const defaults = { component: "div" } satisfies Partial<FlexProps>;
 
 export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>): JSX.Element;
 export function Flex(props: FlexProps): JSX.Element;
-export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>) {
+export function Flex<T extends ValidComponent = "div">(rawProps: FlexProps<T>) {
+  const props = withDefaults(defaults, rawProps);
   const { root } = createParts(flexVariables, styles, props, {
     variables: {
       "flex-align": "align",
@@ -62,6 +63,6 @@ export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>) {
       "flex-wrap": "wrap",
     },
   });
-  const Root = dynamic(() => props.component ?? defaults.component);
+  const Root = dynamic(() => props.component);
   return <Root {...root} />;
 }

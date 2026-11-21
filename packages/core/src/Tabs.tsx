@@ -1,7 +1,7 @@
 import { createUncontrolled } from "@solix/primitives";
 import * as stylex from "@stylexjs/stylex";
 import { createBehaviour, tabs } from "#/src/headless.ts";
-import { type ControlledProps, createParts, type ElementProps } from "#/src/parts.ts";
+import { type ControlledProps, createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { stepOverDisabled } from "#/src/step-over-disabled.ts";
 import { TabsContext, type TabsOrientation } from "#/src/tabs-context.ts";
 import { TabsList } from "#/src/TabsList.tsx";
@@ -46,16 +46,16 @@ const defaults = {
   keepMounted: true,
 } satisfies Partial<TabsProps>;
 
-export function Tabs(props: TabsProps) {
+export function Tabs(rawProps: TabsProps) {
+  const props = withDefaults(defaults, rawProps);
   const [value, setValue] = createUncontrolled<string | null>({
     value: () => props.value,
     defaultValue: () => props.defaultValue,
     finalValue: null,
     onChange: (selected) => props.onChange?.(selected),
   });
-  const loop = () => props.loop ?? defaults.loop;
-  const activateTabWithKeyboard = () =>
-    props.activateTabWithKeyboard ?? defaults.activateTabWithKeyboard;
+  const loop = () => props.loop;
+  const activateTabWithKeyboard = () => props.activateTabWithKeyboard;
   const behaviour = createBehaviour(tabs, () => ({
     value: value(),
     onValueChange: (selected: string | null) => setValue(selected),
@@ -94,8 +94,8 @@ export function Tabs(props: TabsProps) {
           selected: value,
           baseId: () => (typeof props.id === "string" ? props.id : undefined),
           steps,
-          allowTabDeactivation: () => props.allowTabDeactivation ?? defaults.allowTabDeactivation,
-          keepMounted: () => props.keepMounted ?? defaults.keepMounted,
+          allowTabDeactivation: () => props.allowTabDeactivation,
+          keepMounted: () => props.keepMounted,
         }}
       >
         {props.children}

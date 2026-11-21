@@ -4,7 +4,7 @@ import { createUniqueId, Show } from "solid-js";
 import { GridCol } from "#/src/GridCol.tsx";
 import { GridContext } from "#/src/grid-context.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
-import { createParts, type ElementProps } from "#/src/parts.ts";
+import { createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { gridVariables } from "#/src/Grid.variables.ts";
 import { type Breakpoint, breakpoints } from "#/src/style-prop-table.ts";
 import {
@@ -71,7 +71,8 @@ export type GridProps = ElementProps<
 
 const defaults = { columns: 12, grow: false } satisfies Partial<GridProps>;
 
-export function Grid(props: GridProps) {
+export function Grid(rawProps: GridProps) {
+  const props = withDefaults(defaults, rawProps);
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const widths = props.breakpoints;
@@ -90,8 +91,8 @@ export function Grid(props: GridProps) {
     keep: ["breakpoints", "children", "classes", "columns", "grow", "styles", "type"],
   });
   const context = {
-    columns: () => props.columns ?? defaults.columns,
-    grow: () => props.grow ?? defaults.grow,
+    columns: () => props.columns,
+    grow: () => props.grow,
     container,
     col: { class: () => props.classes?.col, style: () => props.styles?.col },
   };

@@ -6,7 +6,10 @@ import { repositoryRoot } from "../../../scripts/repository.ts";
 import { storyControls, storyControlsModule } from "../../../scripts/story-controls.ts";
 import { inTemporaryTree } from "../../../tests/support/temporary-tree.ts";
 
+const parts = join(repositoryRoot, "packages/core/src/parts.ts");
+
 const libraryWith = (values: string) => `import type { JSX } from "@solidjs/web";
+import { withDefaults } from ${JSON.stringify(parts)};
 
 type ProbeProps = {
   /** How loud it speaks. */
@@ -15,8 +18,9 @@ type ProbeProps = {
 
 const defaults = { tone: "calm" } satisfies Partial<ProbeProps>;
 
-function Probe(props: ProbeProps): JSX.Element {
-  return <div>{props.tone ?? defaults.tone}</div>;
+function Probe(rawProps: ProbeProps): JSX.Element {
+  const props = withDefaults(defaults, rawProps);
+  return <div>{props.tone}</div>;
 }
 
 export { Probe };

@@ -51,6 +51,7 @@ const librarySourcePattern = "**/*.{ts,tsx}";
 const jsxElementSource = "export const jsxElement = <></>;\n";
 const row = { property: "property", kind: "kind", scale: "scale", aliasOf: "aliasOf" } as const;
 const lengthRow = "length";
+const withDefaultsName = "withDefaults";
 
 function namedValueExports(source: ts.SourceFile): ts.Identifier[] {
   return source.statements.flatMap((statement) =>
@@ -151,33 +152,61 @@ function implementationsOf(program: Program, name: ts.Identifier): ts.Node[] {
   );
 }
 
-function readsIn(program: Program, body: ts.Node, seen: Set<ts.Node>): ts.Node[] {
-  if (seen.has(body)) return [];
-  seen.add(body);
-  return descendants(body).flatMap((node) => {
-    if (ts.isIdentifier(node)) return declarationsOfSymbol(symbolOf(program, node));
+function isParameter(program: Program, expression: ts.Expression | undefined, of: ts.Node) {
+  return (
+    expression !== undefined &&
+    ts.isIdentifier(expression) &&
+    declarationsOfSymbol(symbolOf(program, expression)).includes(of)
+  );
+}
+
+function isWithDefaults(program: Program, call: ts.CallExpression): boolean {
+  const called = calledDeclaration(program, call);
+  return (
+    called !== undefined &&
+    ts.isFunctionDeclaration(called) &&
+    called.name?.text === withDefaultsName &&
+    called.getSourceFile().fileName === sharedPropTypes
+  );
+}
+
+export function defaultsGivenIn(
+  program: Program,
+  fn: ts.FunctionDeclaration,
+  declared: readonly DeclaredDefaults[],
+  follow = true,
+): DeclaredDefaults[] {
+  const [first] = fn.parameters;
+  if (first === undefined || fn.body === undefined) return [];
+  return descendants(fn.body).flatMap((node) => {
     if (!ts.isCallExpression(node)) return [];
+    const [given, props] = node.arguments;
+    if (isWithDefaults(program, node)) {
+      if (!isParameter(program, props, first) || given === undefined) return [];
+      const read = declarationsOfSymbol(symbolOf(program, given));
+      return declared.filter(({ variable }) => read.includes(variable));
+    }
     const called = calledDeclaration(program, node);
-    return called &&
+    return follow &&
+      isParameter(program, given, first) &&
+      called !== undefined &&
       ts.isFunctionDeclaration(called) &&
-      called.body !== undefined &&
       !isPackageFile(called.getSourceFile().fileName)
-      ? readsIn(program, called, seen)
+      ? defaultsGivenIn(program, called, declared, false)
       : [];
   });
 }
 
-function defaultsReadBy(
+function defaultsGivenBy(
   program: Program,
   component: ts.Identifier,
   declared: readonly DeclaredDefaults[],
 ): Map<ts.Node, string> {
-  const seen = new Set<ts.Node>();
-  const read = new Set(
-    implementationsOf(program, component).flatMap((body) => readsIn(program, body, seen)),
+  const given = implementationsOf(program, component).flatMap((fn) =>
+    ts.isFunctionDeclaration(fn) ? defaultsGivenIn(program, fn, declared) : [],
   );
   const defaults = new Map<ts.Node, string>();
-  for (const { variable, values } of declared.filter(({ variable }) => read.has(variable))) {
+  for (const { variable, values } of given) {
     for (const [declaration, value] of values) {
       const earlier = defaults.get(declaration);
       if (earlier !== undefined && earlier !== value) {
@@ -224,7 +253,7 @@ export function componentsIn(
     declarations: declarationsOfSymbol(symbolOf(program, name)),
     props: propsOfComponent(program, name, {
       describe: rowDescription,
-      defaults: defaultsReadBy(program, name, declared),
+      defaults: defaultsGivenBy(program, name, declared),
     }),
     staticParts: staticPartMembers(program, name).map((member) => member.name),
     partDeclarations: partDeclarationsOf(program, name),

@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { createUniqueId, Show } from "solid-js";
 import { LibraryStyle } from "#/src/library-style.tsx";
-import { createParts, type ElementProps } from "#/src/parts.ts";
+import { createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { simpleGridVariables } from "#/src/SimpleGrid.variables.ts";
 import {
   type ContainerVariableProp,
@@ -62,7 +62,8 @@ export type SimpleGridProps = ElementProps<
 
 const defaults = { autoFlow: "auto-fill" } satisfies Partial<SimpleGridProps>;
 
-export function SimpleGrid(props: SimpleGridProps) {
+export function SimpleGrid(rawProps: SimpleGridProps) {
+  const props = withDefaults(defaults, rawProps);
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const keyed = new Map([
@@ -84,12 +85,7 @@ export function SimpleGrid(props: SimpleGridProps) {
     queries: container,
     keep: ["autoFlow", "cols", "type"],
   });
-  const grid = (
-    <div
-      data-auto-cols={autoColumns() ? (props.autoFlow ?? defaults.autoFlow) : undefined}
-      {...root}
-    />
-  );
+  const grid = <div data-auto-cols={autoColumns() ? props.autoFlow : undefined} {...root} />;
   return (
     <Show when={container.queries()} fallback={grid}>
       <Show when={container.rules()}>

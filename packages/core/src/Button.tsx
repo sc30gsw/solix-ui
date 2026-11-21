@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
 import type { ColorOption, ColorProps } from "#/src/colors.ts";
-import { createParts, type PolymorphicProps } from "#/src/parts.ts";
+import { createParts, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
 import { buttonVariables } from "#/src/Button.variables.ts";
 import type { ScaleValue, VariableProp } from "#/src/style-props.ts";
 import { targetSize } from "#/src/target-size.stylex.ts";
@@ -61,11 +61,13 @@ export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<
   }
 >;
 
-const defaults = { component: "button", variant: "filled" } satisfies Partial<ButtonProps>;
+const unlistedVariant = "filled";
+const defaults = { component: "button", variant: unlistedVariant } satisfies Partial<ButtonProps>;
 
 export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>): JSX.Element;
 export function Button(props: ButtonProps): JSX.Element;
-export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>) {
+export function Button<T extends ValidComponent = "button">(rawProps: ButtonProps<T>) {
+  const props = withDefaults(defaults, rawProps);
   const { root } = createParts(buttonVariables, styles, props, {
     variables: {
       "button-fz": "size",
@@ -73,8 +75,8 @@ export function Button<T extends ValidComponent = "button">(props: ButtonProps<T
       "button-padding-x": "size",
       "button-radius": "radius",
     },
-    color: { variants: variantsOfButton, default: defaults.variant } satisfies ColorOption,
+    color: { variants: variantsOfButton, default: unlistedVariant } satisfies ColorOption,
   });
-  const Root = dynamic(() => props.component ?? defaults.component);
+  const Root = dynamic(() => props.component);
   return <Root {...root} />;
 }
