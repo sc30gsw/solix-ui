@@ -2,6 +2,7 @@ import { access } from "#/packages/primitives/src/internal-access.ts";
 import { createBrowserValue } from "#/packages/primitives/src/internal-browser-value.ts";
 import { lookUp } from "#/packages/primitives/src/internal-browser-api.ts";
 import { observe } from "#/packages/primitives/src/internal-dom-observer.ts";
+import { watchEvents } from "#/packages/primitives/src/internal-listener.ts";
 import type { BrowserValue, MaybeAccessor } from "#/packages/primitives/src/types.ts";
 
 function matches(text: string): number {
@@ -17,8 +18,12 @@ export function createWatched(query: MaybeAccessor<string>): { value: BrowserVal
   return {
     value: createBrowserValue(
       (deliver, keep, text: string) => {
-        deliver(matches(text));
-        keep(observe("MutationObserver", document.body, { childList: true }, () => undefined));
+        keep(watchEvents(window, ["scroll"], () => deliver(matches(text))));
+        keep(
+          observe("MutationObserver", document.body, { childList: true }, () =>
+            deliver(matches(text)),
+          ),
+        );
       },
       { loadingValue: 0, config: () => access(query) },
     ),

@@ -20,8 +20,13 @@ type Observer<N extends ObserverName> = {
   disconnect(): void;
 };
 
+export type ObserverReport<N extends ObserverName> = (
+  entries: Kinds[N]["entry"][],
+  observer: Observer<N>,
+) => void;
+
 type ObserverClass<N extends ObserverName> = new (
-  callback: (entries: Kinds[N]["entry"][], observer: Observer<N>) => void,
+  callback: ObserverReport<N>,
   init?: Kinds[N]["init"],
 ) => Observer<N>;
 
@@ -29,7 +34,7 @@ export function observe<N extends ObserverName>(
   name: N,
   target: Node,
   init: Kinds[N]["init"] | undefined,
-  onEntries: (entries: Kinds[N]["entry"][], observer: Observer<N>) => void,
+  onEntries: ObserverReport<N>,
 ): () => void {
   const Observer = lookUp(viewOf(target), name) as ObserverClass<N> | undefined;
   if (!Observer) return () => undefined;

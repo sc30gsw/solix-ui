@@ -1,6 +1,7 @@
 import { existsSync, globSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { afterAll, expect, test } from "vite-plus/test";
+import { layoutReadsRuleWith } from "#/tests/support/primitive-rules/layout-reads.ts";
 import {
   loadLibrary,
   primitiveRules,
@@ -204,6 +205,83 @@ const forbiddenFindings: Record<PrimitiveRuleName, string[]> = {
     forbiddenAt("src/create-respelled.ts", "const { MutationObserver: Watcher }"),
     forbiddenAt("src/create-respelled.ts", 'window["IntersectionObserver"]'),
   ],
+  layoutReads: [
+    forbiddenAt("src/create-commanded.ts", "return window.scrollY"),
+    forbiddenAt("src/create-commanded.ts", "return window.scrollX"),
+    forbiddenAt("src/internal-position.ts", "return window.scrollY"),
+    forbiddenAt("src/internal-position.ts", "return this.element.clientHeight"),
+    forbiddenAt("src/internal-position.ts", "return element.scrollTop"),
+    forbiddenAt("src/create-misbehaving.ts", "const width = window.innerWidth"),
+    forbiddenAt("src/create-misbehaving.ts", "window.innerHeight + current"),
+    forbiddenAt("src/create-respelled.ts", "return element.checkVisibility()"),
+    forbiddenAt("src/create-respelled.ts", "element.getBoundingClientRect()"),
+    forbiddenAt("src/create-respelled.ts", "const { offsetWidth }"),
+    forbiddenAt("src/create-respelled.ts", 'lookUp(window, "scrollY")'),
+    forbiddenAt("src/create-respelled.ts", "getComputedStyle(element)"),
+    forbiddenAt("src/create-respelled.ts", "handlerFor(element.getClientRects().length)"),
+    forbiddenAt("src/create-respelled.ts", "(void element.offsetHeight, () => undefined)"),
+    forbiddenAt("src/create-respelled.ts", "(element.scrollLeft)"),
+    forbiddenAt("src/create-respelled.ts", ".getBBox()"),
+    forbiddenAt("src/create-respelled.ts", "element.computedStyleMap()"),
+    forbiddenAt("src/create-respelled.ts", "document.elementFromPoint(0, 0)"),
+    forbiddenAt("src/create-respelled.ts", "element.innerText"),
+    forbiddenAt("src/create-respelled.ts", "window.visualViewport"),
+    forbiddenAt("src/create-respelled.ts", '"clientHeight")'),
+    forbiddenAt("src/create-respelled.ts", "return () => element.offsetLeft"),
+    forbiddenAt("src/create-respelled.ts", "strings.length + element.clientTop"),
+    forbiddenAt("src/create-respelled.ts", "=> target.scrollWidth"),
+    forbiddenAt("src/create-respelled.ts", "=> target.scrollHeight"),
+    forbiddenAt("src/create-respelled.ts", "=> target.offsetTop"),
+    forbiddenAt("src/create-respelled.ts", "=> target.clientLeft"),
+    forbiddenAt("src/create-respelled.ts", "=> target.offsetParent"),
+    forbiddenAt("src/create-respelled.ts", "() => window.pageXOffset"),
+    forbiddenAt("src/create-respelled.ts", "value + window.pageYOffset"),
+    forbiddenAt("src/create-respelled.ts", "document.scrollingElement?.scrollTop"),
+    forbiddenAt("src/create-respelled.ts", "documentElement.clientWidth)()"),
+    forbiddenAt("src/create-respelled.ts", "parentElement?.offsetHeight"),
+    forbiddenAt("src/create-respelled.ts", "document.body.scrollLeft"),
+    forbiddenAt("src/create-respelled.ts", "=> target.scrollWidth + 1"),
+    forbiddenAt("src/create-respelled.ts", "=> target.offsetTop + 1"),
+    forbiddenAt("src/create-respelled.ts", "=> target.offsetLeft + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.clientHeight + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.scrollTop + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.clientWidth + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetHeight + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetWidth + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.scrollHeight + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.scrollLeft + 1"),
+    forbiddenAt("src/create-respelled.ts", "return element.clientTop + 1"),
+    forbiddenAt("src/create-respelled.ts", "return element.clientLeft + 1"),
+    forbiddenAt("src/create-respelled.ts", "target.getClientRects().length + 1"),
+    forbiddenAt("src/create-respelled.ts", "element.clientTop + 2"),
+    forbiddenAt("src/create-respelled.ts", "element.clientLeft + 2"),
+    forbiddenAt("src/create-respelled.ts", 'heard(new Event("now"))'),
+    forbiddenAt("src/create-respelled.ts", 'handlers.scroll(new Event("wired"))'),
+    forbiddenAt("src/create-respelled.ts", 'this.heard(new Event("fired"))'),
+    forbiddenAt("src/create-respelled.ts", "return (event) => heard(event)"),
+    forbiddenAt("src/create-respelled.ts", "later(event)"),
+    forbiddenAt("src/internal-position.ts", "  saved = heard"),
+    forbiddenAt("src/internal-position.ts", "const boxed = { heard }"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetTop + 3"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetLeft + 3"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetWidth + 3"),
+    forbiddenAt("src/create-respelled.ts", "element.clientTop + 3"),
+    forbiddenAt("src/create-respelled.ts", "element.clientLeft + 3"),
+    forbiddenAt("src/create-respelled.ts", "element.scrollTop + 3"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetWidth + 4"),
+    forbiddenAt("src/create-respelled.ts", "element.clientHeight + 4"),
+    forbiddenAt("src/internal-position.ts", "  fireAll(handlers);"),
+    forbiddenAt("src/create-respelled.ts", "element.scrollWidth + 4"),
+    forbiddenAt("src/internal-position.ts", "handlers[scrollKey]"),
+    forbiddenAt("src/create-respelled.ts", "element.offsetLeft + 4"),
+    forbiddenAt("src/create-respelled.ts", "element.clientTop + 4"),
+    forbiddenAt("src/create-respelled.ts", "element.clientLeft + 4"),
+    forbiddenAt("src/create-modelled.ts", "element.clientHeight"),
+    forbiddenAt("src/internal-position.ts", "element.scrollTop + 6"),
+    forbiddenAt("src/internal-position.ts", "element.offsetTop + 6"),
+    forbiddenAt("src/internal-position.ts", "element.offsetLeft + 6"),
+    forbiddenAt("src/internal-position.ts", "this.width = element.offsetWidth * 2"),
+  ],
   caughtErrors: [forbiddenAt("src/create-misbehaving.ts", "} catch {")],
   instanceofChecks: [forbiddenAt("src/create-misbehaving.ts", "instanceof Element")],
   focusMoves: [
@@ -284,6 +362,28 @@ function caughtErrorsWith(errorBoundaries: readonly Required<Home>[]): string[] 
   fixture.dispose();
   return locationsOf(found);
 }
+
+test("the layout-reads rule stops at a function an exemption names, so no read in it or in what it calls is flagged, and flags an exemption whose function reads no layout as a primitive goes live", () => {
+  const fixture = loadLibrary(join(fixtureDirectory, "forbidden"), fixtureRegistration);
+  const found = layoutReadsRuleWith([
+    { file: "create-respelled.ts", fn: "shown", reason: "reads only at the moment of use" },
+    { file: "create-respelled.ts", fn: "handlerFor", reason: "reads only at the moment of use" },
+  ]).rule(fixture);
+  fixture.dispose();
+
+  expect(locationsOf(found).sort()).toEqual(
+    [
+      ...forbiddenFindings.layoutReads.filter(
+        (location) =>
+          location !== forbiddenAt("src/create-respelled.ts", "return element.checkVisibility()"),
+      ),
+      "create-respelled.ts",
+    ].sort(),
+  );
+  expect(found.find((finding) => finding.startsWith("create-respelled.ts: "))).toBe(
+    "create-respelled.ts: handlerFor reads no layout as a primitive goes live, so drop its entry from layoutReadExemptions.",
+  );
+});
 
 test("the caught errors rule passes an error boundary that catches, and flags one that is missing or holds no catch", () => {
   const catching = { file: "create-misbehaving.ts", fn: "createMisbehaving" };
