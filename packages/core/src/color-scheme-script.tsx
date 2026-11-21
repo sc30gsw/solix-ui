@@ -2,21 +2,20 @@ import type { JSX } from "@solidjs/web";
 import { omit, useContext } from "solid-js";
 import {
   colorSchemeAttribute,
+  type ColorSchemeOptions,
   colorSchemes,
   defaultColorScheme,
   isColorScheme,
   prefersColorScheme,
   resolvedColorScheme,
-  type SolixColorScheme,
   systemColorScheme,
 } from "#/src/color-schemes.ts";
-import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
 import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
 import { PageNonceContext } from "#/src/run-time-style.ts";
+import { defaultsOf, withDefaults } from "#/src/parts.ts";
 
-export type ColorSchemeScriptOptions = {
-  defaultColorScheme?: SolixColorScheme;
-  forceColorScheme?: SolixComputedColorScheme;
+export type ColorSchemeScriptOptions = ColorSchemeOptions & {
+  /** The `localStorage` key the stored colour scheme is read from. */
   localStorageKey?: string;
 };
 
@@ -32,21 +31,26 @@ type OptionsAsGiven = {
   localStorageKey?: string;
 };
 
+const defaults = defaultsOf<ColorSchemeScriptOptions>()({
+  defaultColorScheme,
+  localStorageKey: colorSchemeStorageKey,
+});
+
 function inScript(value: unknown): string {
   return JSON.stringify(value).replaceAll("<", "\\u003c");
 }
 
 export function colorSchemeScriptText(options: OptionsAsGiven): string {
+  const given = withDefaults(defaults, options);
   const setTo = (scheme: string) =>
     `document.documentElement.setAttribute(${inScript(colorSchemeAttribute)},${scheme})`;
-  if (isColorScheme(options.forceColorScheme))
-    return `${setTo(inScript(options.forceColorScheme))};`;
-  const fallback = isColorScheme(options.defaultColorScheme)
-    ? options.defaultColorScheme
+  if (isColorScheme(given.forceColorScheme)) return `${setTo(inScript(given.forceColorScheme))};`;
+  const fallback = isColorScheme(given.defaultColorScheme)
+    ? given.defaultColorScheme
     : defaultColorScheme;
   return [
     `(function(){var c=${inScript(fallback)};`,
-    `try{var s=localStorage.getItem(${inScript(options.localStorageKey ?? colorSchemeStorageKey)});`,
+    `try{var s=localStorage.getItem(${inScript(given.localStorageKey)});`,
     `if(${inScript(colorSchemes)}.indexOf(s)!==-1)c=s}catch(e){}`,
     `try{if(c===${inScript(systemColorScheme)})c=matchMedia(${inScript(prefersColorScheme("dark"))}).matches?`,
     `${inScript(resolvedColorScheme(systemColorScheme, true))}:${inScript(resolvedColorScheme(systemColorScheme, false))}}catch(e){}`,

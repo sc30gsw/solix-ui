@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
 import type { ColorOption, ColorProps } from "#/src/colors.ts";
-import { createParts, type PolymorphicProps } from "#/src/parts.ts";
+import { createParts, defaultsOf, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
 import { buttonVariables } from "#/src/Button.variables.ts";
 import type { ScaleValue, VariableProp } from "#/src/style-props.ts";
 import { targetSize } from "#/src/target-size.stylex.ts";
@@ -41,23 +41,33 @@ const styles = stylex.create({
   },
 });
 
-const colorOfButton = {
-  variants: ["default", "filled", "light", "outline", "subtle", "transparent"],
-  default: "filled",
-} as const satisfies ColorOption;
+const variantsOfButton = [
+  "default",
+  "filled",
+  "light",
+  "outline",
+  "subtle",
+  "transparent",
+] as const;
 
 export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<
   T,
   typeof styles,
-  ColorProps<(typeof colorOfButton.variants)[number]> & {
+  ColorProps<(typeof variantsOfButton)[number]> & {
+    /** A key of the `control-height` scale sets its height, padding and font size from their scales; a number of pixels or any CSS length sets all three to that length. */
     size?: VariableProp<typeof buttonVariables, "button-height", ScaleValue<"control-height">>;
+    /** Its corner radius: a key of the `radius` scale, a number of pixels or any CSS length. */
     radius?: VariableProp<typeof buttonVariables, "button-radius">;
   }
 >;
 
+const unlistedVariant = "filled";
+const defaults = defaultsOf<ButtonProps>()({ component: "button", variant: unlistedVariant });
+
 export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>): JSX.Element;
 export function Button(props: ButtonProps): JSX.Element;
-export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>) {
+export function Button<T extends ValidComponent = "button">(rawProps: ButtonProps<T>) {
+  const props = withDefaults(defaults, rawProps);
   const { root } = createParts(buttonVariables, styles, props, {
     variables: {
       "button-fz": "size",
@@ -65,8 +75,8 @@ export function Button<T extends ValidComponent = "button">(props: ButtonProps<T
       "button-padding-x": "size",
       "button-radius": "radius",
     },
-    color: colorOfButton,
+    color: { variants: variantsOfButton, default: unlistedVariant } satisfies ColorOption,
   });
-  const Root = dynamic(() => props.component ?? "button");
+  const Root = dynamic(() => props.component);
   return <Root {...root} />;
 }

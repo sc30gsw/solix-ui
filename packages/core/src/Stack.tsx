@@ -22,8 +22,11 @@ export type StackProps = ElementProps<
   "div",
   typeof styles,
   {
+    /** The gap between children: a key of the `spacing` scale, a number of pixels or any CSS length. */
     gap?: VariableProp<typeof stackVariables, "stack-gap">;
+    /** How children line up across the column, as CSS `align-items`. */
     align?: VariableProp<typeof stackVariables, "stack-align", JSX.CSSProperties["align-items"]>;
+    /** How children spread down the column, as CSS `justify-content`. */
     justify?: VariableProp<
       typeof stackVariables,
       "stack-justify",

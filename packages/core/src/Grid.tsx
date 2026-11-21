@@ -4,18 +4,18 @@ import { createUniqueId, Show } from "solid-js";
 import { GridCol } from "#/src/GridCol.tsx";
 import { GridContext } from "#/src/grid-context.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
-import { createParts, type ElementProps } from "#/src/parts.ts";
+import { createParts, defaultsOf, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { gridVariables } from "#/src/Grid.variables.ts";
 import { type Breakpoint, breakpoints } from "#/src/style-prop-table.ts";
 import {
   type ContainerWidth,
   containerWidthOf,
   createQueryContainer,
+  type GapProps,
+  type GridTypeProps,
   type VariableProp,
 } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
-
-const defaultColumns = 12;
 
 const styles = stylex.create({
   container: {
@@ -42,28 +42,37 @@ const styles = stylex.create({
 export type GridProps = ElementProps<
   "div",
   typeof styles,
-  (
-    | { type?: "media"; breakpoints?: never }
-    | { type: "container"; breakpoints?: Record<Breakpoint, ContainerWidth> }
-  ) & {
-    classes?: { col?: JSX.ClassValue };
-    styles?: { col?: JSX.CSSProperties };
-    gap?: VariableProp<typeof gridVariables, "grid-gap">;
-    rowGap?: VariableProp<typeof gridVariables, "grid-row-gap">;
-    columnGap?: VariableProp<typeof gridVariables, "grid-column-gap">;
-    grow?: boolean;
-    justify?: VariableProp<
-      typeof gridVariables,
-      "grid-justify",
-      JSX.CSSProperties["justify-content"]
-    >;
-    align?: VariableProp<typeof gridVariables, "grid-align", JSX.CSSProperties["align-items"]>;
-    columns?: number;
-    overflow?: VariableProp<typeof gridVariables, "grid-overflow", JSX.CSSProperties["overflow"]>;
-  }
+  GridTypeProps<
+    { breakpoints?: never },
+    {
+      /** The container width each breakpoint stands for, with `type` `container`. */
+      breakpoints?: Record<Breakpoint, ContainerWidth>;
+    }
+  > &
+    GapProps<typeof gridVariables, "grid-gap", "grid-row-gap", "grid-column-gap"> & {
+      classes?: { col?: JSX.ClassValue };
+      styles?: { col?: JSX.CSSProperties };
+      /** Lets the columns of a row that is not full grow to fill it. */
+      grow?: boolean;
+      /** How columns spread along a row, as CSS `justify-content`. */
+      justify?: VariableProp<
+        typeof gridVariables,
+        "grid-justify",
+        JSX.CSSProperties["justify-content"]
+      >;
+      /** How columns line up across a row, as CSS `align-items`. */
+      align?: VariableProp<typeof gridVariables, "grid-align", JSX.CSSProperties["align-items"]>;
+      /** The number of columns a row holds, which `span` and `offset` count in. */
+      columns?: number;
+      /** What the grid does with columns that overflow it, as CSS `overflow`. */
+      overflow?: VariableProp<typeof gridVariables, "grid-overflow", JSX.CSSProperties["overflow"]>;
+    }
 >;
 
-export function Grid(props: GridProps) {
+const defaults = defaultsOf<GridProps>()({ columns: 12, grow: false });
+
+export function Grid(rawProps: GridProps) {
+  const props = withDefaults(defaults, rawProps);
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const widths = props.breakpoints;
@@ -82,8 +91,8 @@ export function Grid(props: GridProps) {
     keep: ["breakpoints", "children", "classes", "columns", "grow", "styles", "type"],
   });
   const context = {
-    columns: () => props.columns ?? defaultColumns,
-    grow: () => props.grow ?? false,
+    columns: () => props.columns,
+    grow: () => props.grow,
     container,
     col: { class: () => props.classes?.col, style: () => props.styles?.col },
   };

@@ -37,9 +37,13 @@ export type GridColProps = ElementProps<
   "div",
   typeof styles,
   {
+    /** How many of the grid's columns it takes, `auto` for the space the others leave, or `content` for its content's width. */
     span?: StyleProp<Span>;
+    /** Its place in the row, as CSS `order`. */
     order?: VariableProp<typeof gridColVariables, "col-order", number>;
+    /** How many of the grid's columns to leave empty before it. */
     offset?: StyleProp<number>;
+    /** How it lines up across the row, as CSS `align-self`. */
     align?: VariableProp<
       typeof gridColVariables,
       "col-align-self",

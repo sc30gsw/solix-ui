@@ -1,8 +1,8 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
-import { createParts, type PolymorphicProps } from "#/src/parts.ts";
+import { createParts, defaultsOf, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
 import { flexVariables } from "#/src/Flex.variables.ts";
-import type { VariableProp } from "#/src/style-props.ts";
+import type { GapProps, VariableProp } from "#/src/style-props.ts";
 
 const styles = stylex.create({
   root: {
@@ -26,17 +26,18 @@ const styles = stylex.create({
 export type FlexProps<T extends ValidComponent = "div"> = PolymorphicProps<
   T,
   typeof styles,
-  {
-    gap?: VariableProp<typeof flexVariables, "flex-gap">;
-    rowGap?: VariableProp<typeof flexVariables, "flex-row-gap">;
-    columnGap?: VariableProp<typeof flexVariables, "flex-column-gap">;
+  GapProps<typeof flexVariables, "flex-gap", "flex-row-gap", "flex-column-gap"> & {
+    /** How items line up across the main axis, as CSS `align-items`. */
     align?: VariableProp<typeof flexVariables, "flex-align", JSX.CSSProperties["align-items"]>;
+    /** How items spread along the main axis, as CSS `justify-content`. */
     justify?: VariableProp<
       typeof flexVariables,
       "flex-justify",
       JSX.CSSProperties["justify-content"]
     >;
+    /** Whether items wrap onto new lines, as CSS `flex-wrap`. */
     wrap?: VariableProp<typeof flexVariables, "flex-wrap", JSX.CSSProperties["flex-wrap"]>;
+    /** The main axis and its direction, as CSS `flex-direction`. */
     direction?: VariableProp<
       typeof flexVariables,
       "flex-direction",
@@ -45,9 +46,12 @@ export type FlexProps<T extends ValidComponent = "div"> = PolymorphicProps<
   }
 >;
 
+const defaults = defaultsOf<FlexProps>()({ component: "div" });
+
 export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>): JSX.Element;
 export function Flex(props: FlexProps): JSX.Element;
-export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>) {
+export function Flex<T extends ValidComponent = "div">(rawProps: FlexProps<T>) {
+  const props = withDefaults(defaults, rawProps);
   const { root } = createParts(flexVariables, styles, props, {
     variables: {
       "flex-align": "align",
@@ -59,6 +63,6 @@ export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>) {
       "flex-wrap": "wrap",
     },
   });
-  const Root = dynamic(() => props.component ?? "div");
+  const Root = dynamic(() => props.component);
   return <Root {...root} />;
 }

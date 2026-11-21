@@ -4,6 +4,8 @@ export {
   aliasDeclarationsReturnedBy,
   assertedType,
   calledDeclaration,
+  declarationsOfSymbol,
+  hasCallSignature,
   constructedClass,
   constructorClasses,
   contextualAliases,
@@ -71,3 +73,18 @@ export {
   type Import,
   type ImportedName,
 } from "#/scripts/syntax/walk.ts";
+export {
+  brandedValuesAt,
+  nodesOfBrandedType,
+  literalTypeAt,
+  type BrandedValue,
+  type BrandMembers,
+  propsOfComponent,
+  type ComponentProp,
+  type MemberKind,
+  type NoOp,
+  type PropsOptions,
+  type Substitute,
+  type Control,
+  type Option,
+} from "#/scripts/syntax/props.ts";

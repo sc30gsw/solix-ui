@@ -93,7 +93,14 @@ const styles = stylex.create({
 export type TabsTabProps = ElementProps<
   "button",
   typeof styles,
-  { value: string; leftSection?: JSX.Element; rightSection?: JSX.Element }
+  {
+    /** The value this tab selects, which its panel names. */
+    value: string;
+    /** Content before the label, such as an icon. */
+    leftSection?: JSX.Element;
+    /** Content after the label, such as a badge. */
+    rightSection?: JSX.Element;
+  }
 >;
 
 export function TabsTab(props: TabsTabProps) {
