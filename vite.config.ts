@@ -118,6 +118,26 @@ const projects = [
   }),
 ].map(withPackagesBuiltFirst);
 
+type NamedProject = { test?: { name?: unknown; browser?: unknown } };
+
+/**
+ * The name of every project this config gives, as the runner names them: a project whose browser
+ * is enabled once for each of its instances, as `name (engine)`.
+ */
+export function configuredProjectNames(): string[] {
+  return projects.flatMap(({ test }: NamedProject) => {
+    const name = typeof test?.name === "string" ? test.name : "";
+    const browser: unknown = test?.browser;
+    const enabled =
+      typeof browser === "object" && browser !== null && Reflect.get(browser, "enabled") === true;
+    const instances: unknown = enabled ? Reflect.get(browser, "instances") : undefined;
+    if (!Array.isArray(instances)) return [name];
+    return instances.map(
+      (instance: unknown) => `${name} (${String(Reflect.get(Object(instance), "browser"))})`,
+    );
+  });
+}
+
 export default defineConfig({
   plugins: lazyPlugins(() => [solid()]),
   staged: {
