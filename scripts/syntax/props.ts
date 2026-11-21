@@ -245,6 +245,28 @@ export function brandedValuesAt(
   });
 }
 
+/** The nodes among `nodes` whose type has a property that `isBrand` names by its declaration. */
+export function nodesOfBrandedType<N extends ts.Node>(
+  program: Program,
+  nodes: readonly N[],
+  isBrand: (declaration: ts.Node) => boolean,
+): N[] {
+  const { checker } = program;
+  const types = nodes.length === 0 ? [] : checker.getTypeAtLocation(nodes);
+  const branded = new Map<unknown, boolean>();
+  return nodes.filter((_, at) => {
+    const type = types[at];
+    if (type === undefined) return false;
+    const known = branded.get(type.id);
+    if (known !== undefined) return known;
+    const has = checker
+      .getPropertiesOfType(type)
+      .some((member) => declarationsOfSymbol(member).some(isBrand));
+    branded.set(type.id, has);
+    return has;
+  });
+}
+
 function ownerName(declaration: ts.Node): string {
   const owner = findAncestor(
     declaration,

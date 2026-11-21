@@ -5,6 +5,7 @@ import {
   aliasDeclarationsOfTypeAt,
   aliasDeclarationsReturnedBy,
   brandedValuesAt,
+  nodesOfBrandedType,
   calledDeclaration,
   type ComponentProp,
   declarationsOfSymbol,
@@ -182,6 +183,13 @@ export function isWithDefaults(program: Program, call: ts.CallExpression): boole
 function isTheDefaultsBrand(declaration: ts.Node): boolean {
   const owner = findAncestor(declaration, ts.isTypeAliasDeclaration);
   return owner?.name.text === defaultsTypeName && fileOf(owner) === sharedPropTypes;
+}
+
+export function nodesHoldingDefaults<N extends ts.Node>(
+  program: Program,
+  nodes: readonly N[],
+): N[] {
+  return nodesOfBrandedType(program, nodes, isTheDefaultsBrand);
 }
 
 export function defaultsBrandAt(program: Program, node: ts.Node) {

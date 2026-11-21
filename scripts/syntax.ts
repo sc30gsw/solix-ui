@@ -74,6 +74,7 @@ export {
 } from "#/scripts/syntax/walk.ts";
 export {
   brandedValuesAt,
+  nodesOfBrandedType,
   literalTypeAt,
   type BrandedValue,
   type BrandMembers,

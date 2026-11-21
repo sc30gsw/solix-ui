@@ -4,7 +4,7 @@ import { expect, test } from "vite-plus/test";
 import { builtComponents, compiledClassesOf } from "#/packages/core/tests/built-library.ts";
 import {
   componentsIn,
-  defaultsBrandAt,
+  nodesHoldingDefaults,
   defaultsGivenIn,
   isWithDefaults,
   librarySources as librarySourcesOf,
@@ -22,6 +22,7 @@ import {
   fileOf,
   findAncestor,
   firstLine,
+  isInTypePosition,
   isValueReference,
   memberDeclarations,
   memberRead,
@@ -796,43 +797,41 @@ test("a component's defaults have one source: each withDefaults call of the libr
             `${where(call)}: ${name}: it gives a default to ${where(declaration)}, which is not one of its props, so the controls cannot show it.`,
         ),
     ]);
-    const holders = sources.flatMap((source) =>
+    const identifiers = sources.flatMap((source) =>
       descendants(source).filter(
-        (node): node is ts.VariableDeclaration =>
-          ts.isVariableDeclaration(node) && defaultsBrandAt(program, node.name) !== undefined,
+        (node): node is ts.Identifier => ts.isIdentifier(node) && !isInTypePosition(node),
       ),
     );
-    const names = new Set(
-      holders.flatMap(({ name }) => (ts.isIdentifier(name) ? [name.text] : [])),
-    );
-    const readElsewhere = sources.flatMap((source) =>
-      descendants(source)
-        .filter(
-          (node): node is ts.Identifier =>
-            ts.isIdentifier(node) &&
-            names.has(node.text) &&
-            !ts.isVariableDeclaration(node.parent) &&
-            !ts.isTypeQueryNode(node.parent) &&
-            declarationsOfSymbol(symbolOf(program, node)).some((declaration) =>
-              holders.some((holder) => holder === declaration),
-            ),
-        )
-        .filter(
-          (node) =>
-            !(
-              ts.isCallExpression(node.parent) &&
-              node.parent.arguments[0] === node &&
-              isWithDefaults(program, node.parent)
-            ),
-        )
-        .map(
-          (node) =>
-            `${where(node)}: ${node.text} holds a Defaults and is read here, not as the first argument of withDefaults. Read the defaults from the props withDefaults returns.`,
-        ),
-    );
+    const holding = nodesHoldingDefaults(program, identifiers);
+    const isDeclaredHere = (node: ts.Identifier) =>
+      (ts.isVariableDeclaration(node.parent) ||
+        ts.isParameterDeclaration(node.parent) ||
+        ts.isTypeAliasDeclaration(node.parent)) &&
+      node.parent.name === node;
+    const isInWithDefaults = (node: ts.Identifier) => {
+      const fn = findAncestor(node, ts.isFunctionDeclaration);
+      return (
+        fn !== undefined &&
+        fileOf(fn) === sharedPropTypes &&
+        calls.some((call) => calledDeclaration(program, call) === fn)
+      );
+    };
+    const isMerged = (node: ts.Identifier) =>
+      ts.isCallExpression(node.parent) &&
+      node.parent.arguments[0] === node &&
+      isWithDefaults(program, node.parent);
+    const readElsewhere = holding
+      .filter((node) => !isDeclaredHere(node) && !isMerged(node) && !isInWithDefaults(node))
+      .map((node) =>
+        ts.isImportSpecifier(node.parent) ||
+        ts.isExportSpecifier(node.parent) ||
+        ts.isImportClause(node.parent)
+          ? `${where(node)}: ${node.text} is a Defaults ${ts.isExportSpecifier(node.parent) ? "exported" : "imported"} here. A component's defaults are declared in its own module, by defaultsOf of its own props type, and merged there, so the controls and a reader find them beside the component; declare them there instead of sharing them across modules.`
+          : `${where(node)}: ${node.text} holds a Defaults and is read here, not as the first argument of withDefaults, so whatever it gives the component is a default the controls cannot see. Read the defaults from the props withDefaults returns.`,
+      );
 
     expect(calls.length).toBeGreaterThan(0);
-    expect(holders.length).toBeGreaterThan(0);
+    expect(holding.length).toBeGreaterThan(0);
     expect([...unread, ...wrong, ...readElsewhere]).toEqual([]);
   } finally {
     program.dispose();
