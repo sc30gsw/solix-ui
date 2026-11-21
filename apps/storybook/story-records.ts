@@ -1,16 +1,27 @@
-import { children, createRoot, DEV, getOwner, untrack } from "solid-js";
-import { followThePlayPhase } from "#/play-phase.ts";
+import { children, createRoot, untrack } from "solid-js";
+import type { NoOp, Substitute } from "../../scripts/component-props.ts";
 
 export type RecordedValue = string | number | boolean | null;
 
+export type Played = { readonly prop: string; readonly value?: RecordedValue };
+
 export type Mount = {
   readonly component: string;
+  readonly order: number;
   readonly given: readonly string[];
   readonly values: Readonly<Record<string, readonly RecordedValue[]>>;
-  readonly played: boolean;
+  readonly played: Played[];
 };
 
-export type StoryRecord = { readonly mounts: readonly Mount[] };
+export type StoryRecord = { readonly substituted: boolean; readonly mounts: readonly Mount[] };
+
+export type Substitution = {
+  readonly order: number;
+  readonly component: string;
+  readonly prop: string;
+  readonly value?: RecordedValue;
+  readonly by: unknown;
+};
 
 declare module "vite-plus/test/browser" {
   interface BrowserCommands {
@@ -19,118 +30,33 @@ declare module "vite-plus/test/browser" {
 }
 
 export type PropsRead = Readonly<
-  Record<string, { readonly values: readonly string[]; readonly elements: readonly string[] }>
+  Record<
+    string,
+    {
+      readonly values: readonly string[];
+      readonly elements: readonly string[];
+      readonly substitutes: Readonly<Record<string, Substitute>>;
+    }
+  >
 >;
 
 type Props = Record<string, unknown>;
 type Component = (props: Props) => unknown;
-type Owner = NonNullable<ReturnType<typeof getOwner>>;
 type Live = {
   readonly component: string;
+  readonly order: number;
   readonly props: Props;
   readonly readByIt: ReadonlyMap<string, ReadonlySet<RecordedValue>>;
-  readonly objectsRead: ReadonlySet<unknown>;
-  readonly owner: Owner | null;
   readonly returned: unknown;
-  played: boolean;
 };
 
 const recording: {
   live: Live[];
   read: PropsRead;
-  playing: boolean;
-  playEnded: boolean;
-} = { live: [], read: {}, playing: false, playEnded: false };
-
-const createdUnder = new WeakMap<Node, Owner>();
-
-const nodeFactories: readonly {
-  readonly on: object;
-  readonly name: string;
-  readonly deep: (args: readonly unknown[]) => boolean;
-}[] = [
-  { on: Document.prototype, name: "createElement", deep: () => false },
-  { on: Document.prototype, name: "createElementNS", deep: () => false },
-  { on: Document.prototype, name: "createTextNode", deep: () => false },
-  { on: Document.prototype, name: "createComment", deep: () => false },
-  { on: Document.prototype, name: "createDocumentFragment", deep: () => false },
-  { on: Document.prototype, name: "importNode", deep: (args) => args[1] === true },
-  { on: Node.prototype, name: "cloneNode", deep: (args) => args[0] === true },
-];
-
-function ownerTree() {
-  if (DEV === undefined) {
-    throw new Error(
-      "Solid's development build is not loaded in the stories project, so the recorder cannot tell which component created a node. The stories run on the development build; read the stories project's resolve conditions again.",
-    );
-  }
-  return DEV;
-}
-
-function markCreated(node: unknown, deep: boolean): void {
-  const owner = getOwner();
-  if (owner === null || !(node instanceof Node)) return;
-  createdUnder.set(node, owner);
-  if (!deep) return;
-  const walker = document.createTreeWalker(node);
-  for (let inside = walker.nextNode(); inside !== null; inside = walker.nextNode()) {
-    createdUnder.set(inside, owner);
-  }
-}
-
-function recordNodeCreation(): void {
-  for (const { on, name, deep } of nodeFactories) {
-    const original: unknown = Reflect.get(on, name);
-    if (typeof original !== "function") {
-      throw new Error(
-        `${name}: the browser gives no such function, so the recorder cannot tell which component created a node. Read the DOM factories Solid's web runtime calls again.`,
-      );
-    }
-    Object.defineProperty(on, name, {
-      configurable: true,
-      writable: true,
-      value: function created(this: unknown, ...args: unknown[]) {
-        const node: unknown = Reflect.apply(original, this, args);
-        markCreated(node, deep(args));
-        return node;
-      },
-    });
-  }
-}
-
-function startThePlay(): void {
-  recording.playing = true;
-}
-
-function endThePlay(): void {
-  recording.playing = false;
-  recording.playEnded = true;
-}
-
-function isUnder(node: Node, owner: Owner): boolean {
-  const tree = ownerTree();
-  for (let at = createdUnder.get(node) ?? null; at !== null; at = tree.getParent(at)) {
-    if (at === owner) return true;
-  }
-  return false;
-}
-
-function isAbout(subject: unknown, { owner, objectsRead }: Live): boolean {
-  if (subject instanceof Node) {
-    for (let node: Node | null = subject; node !== null; node = node.parentNode) {
-      if (owner !== null && isUnder(node, owner)) return true;
-    }
-    return false;
-  }
-  return (typeof subject === "object" || typeof subject === "function") && objectsRead.has(subject);
-}
-
-export function matcherCompleted(subject: unknown): void {
-  if (!recording.playing) return;
-  for (const live of recording.live) {
-    if (!live.played && isAbout(subject, live)) live.played = true;
-  }
-}
+  created: number;
+  substitution: Substitution | undefined;
+  substituted: boolean;
+} = { live: [], read: {}, created: 0, substitution: undefined, substituted: false };
 
 function readOf(component: string) {
   const read = recording.read[component];
@@ -148,39 +74,44 @@ function recorded(value: unknown): RecordedValue {
     : null;
 }
 
+function substitutes(substitution: Substitution | undefined, key: string, value: unknown) {
+  return (
+    substitution !== undefined &&
+    key === substitution.prop &&
+    value !== undefined &&
+    (!("value" in substitution) || recorded(value) === substitution.value)
+  );
+}
+
 function seeingWhatItReads(
   props: Props,
   readByIt: Map<string, Set<RecordedValue>>,
-  objectsRead: Set<unknown>,
+  substitution: Substitution | undefined,
 ): Props {
   return new Proxy(props, {
     get(target, key) {
       const value: unknown = Reflect.get(target, key);
-      if (typeof key === "string" && value !== undefined) {
-        readByIt.set(key, (readByIt.get(key) ?? new Set()).add(recorded(value)));
-        if ((typeof value === "object" && value !== null) || typeof value === "function") {
-          objectsRead.add(value);
-        }
-      }
-      return value;
+      if (typeof key !== "string" || value === undefined) return value;
+      readByIt.set(key, (readByIt.get(key) ?? new Set()).add(recorded(value)));
+      if (!substitutes(substitution, key, value)) return value;
+      recording.substituted = true;
+      return substitution?.by;
     },
   });
 }
 
 function recordingOf(component: string, real: Component): Component {
   function recordedComponent(props: Props) {
+    const order = recording.created;
+    recording.created += 1;
     const readByIt = new Map<string, Set<RecordedValue>>();
-    const objectsRead = new Set<unknown>();
-    const returned = real(seeingWhatItReads(props, readByIt, objectsRead));
-    recording.live.push({
-      component,
-      props,
-      readByIt,
-      objectsRead,
-      owner: getOwner(),
-      returned,
-      played: false,
-    });
+    const { substitution } = recording;
+    const substituting =
+      substitution?.order === order && substitution.component === component
+        ? substitution
+        : undefined;
+    const returned = real(seeingWhatItReads(props, readByIt, substituting));
+    recording.live.push({ component, order, props, readByIt, returned });
     return returned;
   }
   return Object.defineProperty(recordedComponent, "name", { value: real.name });
@@ -210,7 +141,6 @@ export function instrumented(
   read: PropsRead,
   staticParts: Readonly<Record<string, readonly string[]>>,
 ): Record<string, Component> {
-  ownerTree();
   recording.read = read;
   const wrapperOf = new Map<Component, Component>();
   const wrappers: Record<string, Component> = {};
@@ -239,15 +169,18 @@ export function instrumented(
       });
     }
   }
-  recordNodeCreation();
-  followThePlayPhase({ started: startThePlay, ended: endThePlay });
   return wrappers;
 }
 
-export function startRecording(): void {
+export function startRecording(substitution?: Substitution): void {
   recording.live = [];
-  recording.playing = false;
-  recording.playEnded = false;
+  recording.created = 0;
+  recording.substitution = substitution;
+  recording.substituted = false;
+}
+
+export function substitutionTookPlace(): boolean {
+  return recording.substituted;
 }
 
 function nodesOf(returned: unknown): unknown[] {
@@ -258,13 +191,9 @@ function nodesOf(returned: unknown): unknown[] {
   });
 }
 
-function shownIn(canvas: Element, { owner, returned }: Live): boolean {
-  return (
-    owner !== null &&
-    nodesOf(returned).some(
-      (node) =>
-        node instanceof Node && node.isConnected && canvas.contains(node) && isUnder(node, owner),
-    )
+function shownIn(canvas: Element, { returned }: Live): boolean {
+  return nodesOf(returned).some(
+    (node) => node instanceof Node && node.isConnected && canvas.contains(node),
   );
 }
 
@@ -291,15 +220,46 @@ function valuesOf({ component, props, readByIt }: Live): Record<string, Recorded
   );
 }
 
-export function takeRecord(canvas: Element): StoryRecord {
+export function takeRecord(canvas: Element): Mount[] {
   const mounts = recording.live
     .filter((live) => shownIn(canvas, live))
     .map((live) => ({
       component: live.component,
+      order: live.order,
       given: givenOf(live),
       values: valuesOf(live),
-      played: recording.playEnded && live.played,
+      played: [],
     }));
   recording.live = [];
-  return { mounts };
+  return mounts;
+}
+
+function noOpFrom(noOp: NoOp): unknown {
+  if ("members" in noOp) {
+    return Object.fromEntries(
+      Object.entries(noOp.members).map(([name, member]) => [name, noOpFrom(member)]),
+    );
+  }
+  const returned = noOp.returns === "nothing" ? undefined : noOpFrom(noOp.returns);
+  return () => returned;
+}
+
+function another(values: readonly RecordedValue[], value: RecordedValue): RecordedValue {
+  const at = values.indexOf(value);
+  return values[(at + 1) % values.length] ?? null;
+}
+
+export function substitutionsOf({ component, order, given, values }: Mount): Substitution[] {
+  const { substitutes } = readOf(component);
+  return given.flatMap((prop): Substitution[] => {
+    const substitute = substitutes[prop];
+    if (substitute === undefined) return [];
+    if (substitute.kind === "null") return [{ order, component, prop, by: null }];
+    if (substitute.kind === "no-op") {
+      return [{ order, component, prop, by: noOpFrom(substitute.noOp) }];
+    }
+    return (values[prop] ?? [])
+      .filter((value) => substitute.values.includes(value as never))
+      .map((value) => ({ order, component, prop, value, by: another(substitute.values, value) }));
+  });
 }

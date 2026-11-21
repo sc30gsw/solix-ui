@@ -1,6 +1,7 @@
 import type { JSX } from "@solidjs/web";
 import { For } from "solid-js";
 import type { ComponentStory } from "#/story-meta.ts";
+import { playOfEveryValueStarted } from "#/story-run.ts";
 
 type Args = Record<string, unknown>;
 type Option = string | number | boolean;
@@ -150,6 +151,7 @@ export function everyValueOf(
       </ul>
     ),
     play: ({ canvasElement }: { readonly canvasElement: Element }) => {
+      playOfEveryValueStarted();
       const values = valuesOf(meta, prop);
       const items = [...canvasElement.querySelectorAll(`ul[aria-label="${label}"] > li`)];
       const looks = items.map(renderedLooks);

@@ -139,3 +139,21 @@ export function openSpecProgram(entry: string = libraryEntry): {
   );
   return { program, components: specOf(componentsIn(program, elementFile, entry), common, state) };
 }
+
+let behaviourOfTheLibrary: Readonly<Record<string, readonly string[]>> | undefined;
+
+export function behaviourProps(): Readonly<Record<string, readonly string[]>> {
+  if (behaviourOfTheLibrary !== undefined) return behaviourOfTheLibrary;
+  const { program, components } = openSpecProgram();
+  try {
+    behaviourOfTheLibrary = Object.fromEntries(
+      components.map(({ name, props }) => [
+        name,
+        props.filter(({ behaviour }) => behaviour).map((prop) => prop.name),
+      ]),
+    );
+    return behaviourOfTheLibrary;
+  } finally {
+    program.dispose();
+  }
+}

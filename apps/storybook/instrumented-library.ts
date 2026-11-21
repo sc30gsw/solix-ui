@@ -5,22 +5,15 @@ import {
   libraryComponentProps,
   libraryStaticParts,
 } from "../../scripts/component-props.ts";
+import { behaviourProps } from "../../scripts/component-spec.ts";
 import { libraryModule } from "../../scripts/story-controls.ts";
 
 const instrumentedModule = `\0instrumented:${libraryModule}`;
 const recorder = join(import.meta.dirname, "story-records.ts");
-const countedExpect = join(import.meta.dirname, "counted-expect.ts");
-const testModule = "storybook/test";
 const testMode = "test";
 
 function takesALiteralAndNoElement({ kinds }: ComponentProp): boolean {
   return kinds.has("literal") && !kinds.has("function");
-}
-
-function isStoryCode(importer: string | undefined): boolean {
-  return (
-    importer !== undefined && importer !== countedExpect && !importer.includes("/node_modules/")
-  );
 }
 
 function takesAnElement({ kinds }: ComponentProp): boolean {
@@ -30,12 +23,18 @@ function takesAnElement({ kinds }: ComponentProp): boolean {
 }
 
 function instrumentedSource(): string {
+  const behaviour = behaviourProps();
   const read = Object.fromEntries(
     Object.entries(libraryComponentProps()).map(([name, props]) => [
       name,
       {
         values: props.filter(takesALiteralAndNoElement).map((prop) => prop.name),
         elements: props.filter(takesAnElement).map((prop) => prop.name),
+        substitutes: Object.fromEntries(
+          props.flatMap(({ name: prop, substitute }) =>
+            substitute !== undefined && behaviour[name]?.includes(prop) ? [[prop, substitute]] : [],
+          ),
+        ),
       },
     ]),
   );
@@ -57,7 +56,6 @@ export function instrumentedLibrary(): Plugin {
     apply: (_, { mode }) => mode === testMode,
     resolveId(source, importer) {
       if (source === instrumentedModule) return instrumentedModule;
-      if (source === testModule && isStoryCode(importer)) return countedExpect;
       if (source !== libraryModule || importer === instrumentedModule) return undefined;
       return instrumentedModule;
     },

@@ -79,7 +79,9 @@ export {
   type ComponentProp,
   type DeclaredDefaults,
   type MemberKind,
+  type NoOp,
   type PropsOptions,
+  type Substitute,
   type Control,
   type Option,
 } from "#/scripts/syntax/props.ts";

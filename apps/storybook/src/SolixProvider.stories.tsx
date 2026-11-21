@@ -151,12 +151,12 @@ export const GivesItsNonceToItsStyles: Story = {
 
 const systemDark = "(prefers-color-scheme: dark)";
 
-function systemPrefersDark(): () => void {
+function systemPrefers(scheme: SolixComputedColorScheme): () => void {
   const real = window.matchMedia;
   window.matchMedia = (query: string) =>
     query === systemDark
       ? {
-          matches: true,
+          matches: scheme === "dark",
           media: query,
           onchange: null,
           addEventListener: () => undefined,
@@ -173,7 +173,7 @@ function systemPrefersDark(): () => void {
 
 export const EveryDefaultColorScheme: Story = {
   ...everyValueOf(meta, "defaultColorScheme", {}, { auto: "dark" }),
-  beforeEach: systemPrefersDark,
+  beforeEach: () => systemPrefers("dark"),
 };
 
 export const EveryForcedColorScheme: Story = everyValueOf(meta, "forceColorScheme");
@@ -194,6 +194,21 @@ export const DefaultsToLight: Story = {
   },
 };
 
+export const FollowsTheSystemWhenItsDefaultIsAuto: Story = {
+  beforeEach: () => systemPrefers("light"),
+  render: () => (
+    <OnItsOwnElement colorSchemeManager={unusedManager} defaultColorScheme="auto">
+      <SchemeButtons of="the provider" />
+    </OnItsOwnElement>
+  ),
+  play: async ({ canvas }) => {
+    await waitFor(() =>
+      expect(canvas.getByRole("region")).toHaveAttribute(colorSchemeAttribute, "light"),
+    );
+    await expect(canvas.getByRole("status")).toHaveTextContent("auto");
+  },
+};
+
 const managerOfTheChangingDefault = localStorageColorSchemeManager({
   key: storageKeys.changingDefault,
 });
@@ -209,6 +224,7 @@ function ChangingDefault() {
 }
 
 export const FollowsItsDefaultWhileNothingIsStored: Story = {
+  beforeEach: () => systemPrefers("dark"),
   render: () => <ChangingDefault />,
   play: async ({ canvas }) => {
     const region = () => canvas.getByRole("region");

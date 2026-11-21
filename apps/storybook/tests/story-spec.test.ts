@@ -15,7 +15,6 @@ type Received = {
   readonly component: string;
   readonly prop: string;
   readonly value: unknown;
-  readonly played: boolean;
 };
 
 const indexTimeout = 120_000;
@@ -23,6 +22,7 @@ let components: SpecComponent[] = [];
 let stories: StoryIndexEntry[] = [];
 let records: RecordedStory[] = [];
 let received: Received[] = [];
+let played: Received[] = [];
 
 beforeAll(async () => {
   const directory = inject("storyRecords");
@@ -35,10 +35,15 @@ beforeAll(async () => {
   const indexed = new Set(stories.map(({ id }) => id));
   records = recordedStories(directory).filter(({ storyId }) => indexed.has(storyId));
   received = records.flatMap(({ mounts }) =>
-    mounts.flatMap(({ component, given, values, played }) =>
+    mounts.flatMap(({ component, given, values }) =>
       given.flatMap((prop) =>
-        (values[prop] ?? [undefined]).map((value) => ({ component, prop, value, played })),
+        (values[prop] ?? [undefined]).map((value) => ({ component, prop, value })),
       ),
+    ),
+  );
+  played = records.flatMap(({ mounts }) =>
+    mounts.flatMap((mount) =>
+      mount.played.map(({ prop, value }) => ({ component: mount.component, prop, value })),
     ),
   );
   const opened = openSpecProgram();
@@ -58,8 +63,8 @@ function held(keep: (prop: SpecProp) => boolean): Held[] {
   );
 }
 
-function receivedBy({ holder, prop }: Held): Received[] {
-  return received.filter(
+function receivedBy({ holder, prop }: Held, among: readonly Received[] = received): Received[] {
+  return among.filter(
     (entry) =>
       entry.prop === prop.name && (holder.kind === "shared" || entry.component === holder.name),
   );
@@ -87,6 +92,28 @@ test("every indexed story ran in the stories projects of this run and sent a rec
   expect(unrecorded).toEqual([]);
 });
 
+test("every indexed story ran again in Chromium with each value of a behaviour prop it gives substituted", () => {
+  const unsubstituted = stories
+    .filter(({ id }) => !records.some(({ storyId, substituted }) => storyId === id && substituted))
+    .map(
+      ({ id }) =>
+        `${id}: no record of this story from Chromium, where each value it gives a behaviour prop is substituted and the story run again, reached this run, so none of its behaviour is known to be played. Run vp test without --project, with Chromium installed, or with a --project filter that keeps a stories project in Chromium.`,
+    );
+
+  expect(unsubstituted).toEqual([]);
+});
+
+test("every prop with behaviour has another value to substitute for it, which its type gives", () => {
+  const unplayable = held(({ behaviour }) => behaviour)
+    .filter(({ prop }) => prop.substitute === undefined)
+    .map(
+      (entry) =>
+        `${named(entry)} is not playable: its type, ${entry.prop.type}, gives no other value to substitute for it. A closed union gives another of its literals, a callback or an object of callbacks a no-op of its type, a type that takes null gives null; give it such a type.`,
+    );
+
+  expect(unplayable).toEqual([]);
+});
+
 test("every own prop of every component was received by that component, mounted in the canvas of an indexed story, and every prop the element components share by some component", () => {
   const unused = held(() => true)
     .filter((entry) => receivedBy(entry).length === 0)
@@ -98,19 +125,17 @@ test("every own prop of every component was received by that component, mounted 
   expect(unused).toEqual([]);
 });
 
-test("every value of every prop whose type is a closed union of literals was received by a component mounted in its story's canvas, and every value of one with behaviour by a component after whose mount its story's play function completed a matcher about it", () => {
+test("every value of every prop whose type is a closed union of literals was received by a component mounted in its story's canvas, and every value of one with behaviour played: its story's play function passed as written and failed with another value substituted for it", () => {
   const missing = held(({ values }) => values !== undefined).flatMap((entry) => {
     const seen = new Set(
-      receivedBy(entry)
-        .filter(({ played }) => played || !entry.prop.behaviour)
-        .map(({ value }) => value),
+      receivedBy(entry, entry.prop.behaviour ? played : received).map(({ value }) => value),
     );
     const unseen = (entry.prop.values ?? []).filter((value: Option) => !seen.has(value));
     return unseen.length === 0
       ? []
       : [
           entry.prop.behaviour
-            ? `No story ended with a component that received ${named(entry)} as ${unseen.join(", ")} in its canvas after its play function completed a matcher of storybook/test's expect about that component, while it was mounted: about an element it created or one inside it, or about a function or object it read from its props. Give it as each in ${where(entry)} whose play function checks what that value does with expect.`
+            ? `No story's play function failed when ${named(entry)} as ${unseen.join(", ")}, received by a component mounted in its canvas, was substituted with another value, while it passed as written. Give it as each in ${where(entry)} whose play function checks what that value does, so another value fails it.`
             : `No indexed story mounted a component that received ${named(entry)} as ${unseen.join(", ")}. Export everyValueOf(meta, "${entry.prop.name}") from "#/every-value.tsx" in ${where(entry)}.`,
         ];
   });
@@ -118,13 +143,13 @@ test("every value of every prop whose type is a closed union of literals was rec
   expect(missing).toEqual([]);
 });
 
-test("every prop with behaviour, which its type tells, was received by a component in its story's canvas when the story ended, after whose mount the story's play function completed a matcher about it", () => {
+test("every prop with behaviour, which its type tells, played: a component in its story's canvas received it, and the story's play function passed as written and failed with another value substituted for it", () => {
   const behaviour = held(({ behaviour }) => behaviour);
   const unplayed = behaviour
-    .filter((entry) => receivedBy(entry).every(({ played }) => !played))
+    .filter((entry) => receivedBy(entry, played).length === 0)
     .map(
       (entry) =>
-        `No story ended with a component that received ${named(entry)} in its canvas after its play function completed a matcher of storybook/test's expect about that component, while it was mounted: about an element it created or one inside it, or about a function or object it read from its props. Give it in ${where(entry)} whose play function checks what it does with expect.`,
+        `No story's play function failed when ${named(entry)}, received by a component mounted in its canvas, was substituted with another value, while it passed as written. Give it in ${where(entry)} whose play function checks what it does, so another value fails it.`,
     );
 
   expect(behaviour.length).toBeGreaterThan(0);

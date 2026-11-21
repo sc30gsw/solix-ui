@@ -32,6 +32,15 @@ export type MemberKind =
   | "function"
   | "absent";
 
+export type NoOp =
+  | { readonly returns: "nothing" | NoOp }
+  | { readonly members: Readonly<Record<string, NoOp>> };
+
+export type Substitute =
+  | { readonly kind: "another"; readonly values: readonly Option[] }
+  | { readonly kind: "null" }
+  | { readonly kind: "no-op"; readonly noOp: NoOp };
+
 export type ComponentProp = {
   readonly name: string;
   readonly control: Control;
@@ -43,6 +52,7 @@ export type ComponentProp = {
   readonly description: string;
   readonly values?: readonly Option[];
   readonly defaultValue?: string;
+  readonly substitute?: Substitute;
 };
 
 export type DeclaredDefaults = {
@@ -60,6 +70,7 @@ type Member = { kind: "literal"; value: Option } | { kind: Exclude<MemberKind, "
 type Chosen = { readonly control: Control; readonly values?: readonly Option[] };
 
 const whitespace = /\s+/;
+const maxCallbackDepth = 2;
 const literalTypes = TypeFlags.StringLiteral | TypeFlags.NumberLiteral | TypeFlags.BooleanLiteral;
 const absent = TypeFlags.Undefined | TypeFlags.Null | TypeFlags.Void;
 const stringLike = TypeFlags.String | TypeFlags.TemplateLiteral | TypeFlags.StringMapping;
@@ -113,6 +124,63 @@ function memberOf(program: Program, type: Type): Member[] {
 
 function isCallable(program: Program, type: Type): boolean {
   return program.checker.getSignaturesOfType(type, SignatureKind.Call).length > 0;
+}
+
+function takesNothing(type: Type): boolean {
+  return unionMembersOf(type).some(
+    (member) => (member.flags & (absent | TypeFlags.Any | TypeFlags.Unknown)) !== 0,
+  );
+}
+
+function callbackNoOp(program: Program, type: Type, depth: number): NoOp | undefined {
+  const present = program.checker.getNonNullableType(type) ?? type;
+  const signatures = program.checker.getSignaturesOfType(present, SignatureKind.Call);
+  if (signatures.length === 0 || depth > maxCallbackDepth) return undefined;
+  const returned = signatures.map((signature) =>
+    program.checker.getReturnTypeOfSignature(signature),
+  );
+  if (returned.every((type) => type !== undefined && takesNothing(type))) {
+    return { returns: "nothing" };
+  }
+  const [only] = returned;
+  const inner =
+    returned.length === 1 && only !== undefined
+      ? callbackNoOp(program, only, depth + 1)
+      : undefined;
+  return inner === undefined ? undefined : { returns: inner };
+}
+
+function noOpOf(program: Program, type: Type): NoOp | undefined {
+  const callback = callbackNoOp(program, type, 0);
+  if (callback !== undefined) return callback;
+  const present = program.checker.getNonNullableType(type) ?? type;
+  if (unionMembersOf(present).length !== 1 || (present.flags & TypeFlags.Object) === 0) {
+    return undefined;
+  }
+  const members: Record<string, NoOp> = {};
+  for (const property of program.checker.getPropertiesOfType(present)) {
+    const member = program.checker.getTypeOfSymbol(property);
+    const noOp = member && callbackNoOp(program, member, 0);
+    if (noOp === undefined) return undefined;
+    members[property.name] = noOp;
+  }
+  return Object.keys(members).length === 0 ? undefined : { members };
+}
+
+function substituteOf(
+  program: Program,
+  declared: Type,
+  members: readonly Member[],
+  values: readonly Option[] | undefined,
+): Substitute | undefined {
+  if (values !== undefined) return { kind: "another", values };
+  if (members.some(({ kind }) => kind === "function")) {
+    const noOp = noOpOf(program, declared);
+    return noOp === undefined ? undefined : { kind: "no-op", noOp };
+  }
+  return unionMembersOf(declared).some((member) => (member.flags & TypeFlags.Null) !== 0)
+    ? { kind: "null" }
+    : undefined;
 }
 
 function oneLine(text: string): string {
@@ -228,7 +296,12 @@ function propOf(
       oneLine(program.checker.getDocumentationCommentOfSymbol(symbol)) || describe(declarations),
     ...(values === undefined ? {} : { values }),
     ...(defaultValue === undefined ? {} : { defaultValue }),
+    ...optional("substitute", substituteOf(program, declared, members, values)),
   };
+}
+
+function optional<K extends string, V>(key: K, value: V | undefined): Partial<Record<K, V>> {
+  return value === undefined ? {} : ({ [key]: value } as Record<K, V>);
 }
 
 export function propsOfComponent(

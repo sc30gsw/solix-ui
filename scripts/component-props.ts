@@ -22,7 +22,14 @@ import {
   virtualFile,
 } from "#/scripts/syntax.ts";
 
-export type { ComponentProp, Control, MemberKind, Option } from "#/scripts/syntax.ts";
+export type {
+  ComponentProp,
+  Control,
+  MemberKind,
+  NoOp,
+  Option,
+  Substitute,
+} from "#/scripts/syntax.ts";
 
 export type LibraryComponent = {
   readonly name: string;

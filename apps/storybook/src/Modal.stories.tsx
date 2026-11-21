@@ -33,6 +33,7 @@ export const Opened: Story = {
 
 export const OpenedAndClosedByItsCloseButton: Story = {
   play: async ({ canvas }) => {
+    await expect(canvas.queryByRole("dialog")).toBeNull();
     await userEvent.click(canvas.getByRole("button", { name: "Open settings" }));
     const dialog = await canvas.findByRole("dialog", { name: "Settings" });
     await expect(dialog).toBeVisible();
