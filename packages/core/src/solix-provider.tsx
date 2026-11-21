@@ -11,7 +11,7 @@ import { type SolixTheme, themeStyleSheet } from "#/src/create-theme.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { localStorageColorSchemeManager } from "#/src/local-storage-manager.ts";
 import { type GetStyleNonce, PageNonceContext } from "#/src/run-time-style.ts";
-import { type WithDefaults, withDefaults } from "#/src/parts.ts";
+import { type DefaultValues, defaultsOf, type WithDefaults, withDefaults } from "#/src/parts.ts";
 
 export type SolixProviderProps = ColorSchemeOptions & {
   /** The theme whose tokens the provider sets, made with `createTheme`. */
@@ -31,11 +31,11 @@ export type SolixProviderProps = ColorSchemeOptions & {
 };
 
 const storedInLocalStorage = localStorageColorSchemeManager();
-const defaults = {
+const defaults = defaultsOf<SolixProviderProps>()({
   defaultColorScheme,
   cssVariablesSelector: ":root",
   withCssVariables: true,
-} satisfies Partial<SolixProviderProps>;
+});
 const schemeProps = [
   "colorSchemeManager",
   "defaultColorScheme",
@@ -44,7 +44,7 @@ const schemeProps = [
 
 function colorSchemeOf(
   given: SolixProviderProps,
-  props: WithDefaults<SolixProviderProps, typeof defaults>,
+  props: WithDefaults<SolixProviderProps, DefaultValues<typeof defaults>>,
 ): ProvidedColorScheme {
   const outer = useContext(ColorSchemeContext);
   const passedOn = untrack(() => ({

@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
-import { createParts, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
+import { createParts, defaultsOf, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
 import { flexVariables } from "#/src/Flex.variables.ts";
 import type { GapProps, VariableProp } from "#/src/style-props.ts";
 
@@ -46,7 +46,7 @@ export type FlexProps<T extends ValidComponent = "div"> = PolymorphicProps<
   }
 >;
 
-const defaults = { component: "div" } satisfies Partial<FlexProps>;
+const defaults = defaultsOf<FlexProps>()({ component: "div" });
 
 export function Flex<T extends ValidComponent = "div">(props: FlexProps<T>): JSX.Element;
 export function Flex(props: FlexProps): JSX.Element;

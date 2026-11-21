@@ -4,21 +4,25 @@ import { expect, test } from "vite-plus/test";
 import { builtComponents, compiledClassesOf } from "#/packages/core/tests/built-library.ts";
 import {
   componentsIn,
+  defaultsBrandAt,
   defaultsGivenIn,
+  isWithDefaults,
   librarySources as librarySourcesOf,
   openLibraryProgram,
+  sharedPropTypes,
 } from "#/scripts/component-props.ts";
 import { fileNamedBy } from "#/scripts/subpath.ts";
 import {
   calledDeclaration,
+  declarationsOf,
   declarationsOfSymbol,
-  declaredDefaultsIn,
   descendants,
   literalTypeAt,
   exportsOf,
   fileOf,
   findAncestor,
   firstLine,
+  isValueReference,
   memberDeclarations,
   memberRead,
   staticPropertyName,
@@ -430,7 +434,7 @@ function rootProblems(name: string, fn: ts.FunctionDeclaration, shape: PropsShap
     const element = polymorphicDefault(fn) ?? "<element>";
     if (!isDynamicRoot(variableNamed(fn, tag)?.initializer)) {
       problems.push(
-        `render the root as \`const ${tag} = dynamic(() => props.component)\`, the dynamic() of @solidjs/web, with \`component: "${element}"\`, the element the type parameter defaults to, in \`const defaults = { ... } satisfies Partial<Props>\` merged into the props with withDefaults.`,
+        `render the root as \`const ${tag} = dynamic(() => props.component)\`, the dynamic() of @solidjs/web, with \`component: "${element}"\`, the element the type parameter defaults to, in \`const defaults = defaultsOf<Props>()({ ... })\` merged into the props with withDefaults.`,
       );
     }
   } else if (tag !== shape.element) {
@@ -469,6 +473,28 @@ function partProblems(fn: ts.FunctionDeclaration): string[] {
   });
 }
 
+const mergedPropsName = "props";
+
+function mergesItsParameterFirst(fn: ts.FunctionDeclaration): boolean {
+  const [parameter] = fn.parameters;
+  const [first] = fn.body?.statements ?? [];
+  if (parameter === undefined || first === undefined || !ts.isVariableStatement(first)) {
+    return false;
+  }
+  const [declaration, ...others] = first.declarationList.declarations;
+  const call = declaration?.initializer;
+  if (call === undefined || !ts.isCallExpression(call) || others.length > 0) return false;
+  const [, merged] = call.arguments;
+  return (
+    isConst(declaration) &&
+    ts.isIdentifier(declaration.name) &&
+    declaration.name.text === mergedPropsName &&
+    isWithDefaults(librarySources, call) &&
+    merged !== undefined &&
+    declarationsOfSymbol(symbolOf(librarySources, merged)).includes(parameter)
+  );
+}
+
 function problemsWith({ name, file, source }: Component): string[] {
   const where = relativePath(file);
   const problems: string[] = [];
@@ -493,12 +519,11 @@ function problemsWith({ name, file, source }: Component): string[] {
   }
 
   const parameter = fn.parameters[0];
-  const merged =
-    fn.body.statements[0]?.getText() === "const props = withDefaults(defaults, rawProps);";
+  const merged = mergesItsParameterFirst(fn);
   const named = parameter?.name.getText();
   if (fn.parameters.length !== 1 || !(named === "props" || (named === "rawProps" && merged))) {
     report(
-      'take one parameter named "props", or one named "rawProps" that its first statement merges as `const props = withDefaults(defaults, rawProps);`.',
+      'take one parameter named "props", or one named "rawProps" that its first statement merges as `const props = withDefaults(defaults, rawProps);`: one const named props, given by withDefaults of parts.ts with that parameter.',
     );
   }
   const typeParameter = fn.typeParameters?.[0]?.name.text;
@@ -651,7 +676,7 @@ test("only a Component.tsx calls createParts, so a module that renders a styled 
   expect(violations).toEqual([]);
 });
 
-const mergedType = "WithDefaults<";
+const mergedTypeName = "WithDefaults";
 const fallbackOperators = new Set([
   ts.SyntaxKind.QuestionQuestionToken,
   ts.SyntaxKind.BarBarToken,
@@ -687,14 +712,35 @@ function isAbsent(expression: ts.Expression): boolean {
   );
 }
 
+function readOf(program: Program, expression: ts.Expression) {
+  const bare = peeled(expression);
+  const read = memberRead(program, bare);
+  if (read === undefined) {
+    const [declaration] = isValueReference(bare) ? declarationsOf(program, bare) : [];
+    return declaration && { owner: declaration, names: [] as string[] };
+  }
+  const [owner] = ts.isExpression(read.owner) ? declarationsOf(program, read.owner) : [];
+  return owner && { owner, names: read.names };
+}
+
+function sameRead(program: Program, one: ts.Expression, other: ts.Expression): boolean {
+  const first = readOf(program, one);
+  const second = readOf(program, other);
+  return (
+    first !== undefined &&
+    second !== undefined &&
+    first.owner === second.owner &&
+    first.names.join("\n") === second.names.join("\n")
+  );
+}
+
 function fallbacksIn(program: Program, source: ts.SourceFile, isProp: (node: ts.Node) => boolean) {
   const readsAProp = (expression: ts.Expression) => isProp(peeled(expression));
   const isLiteral = (expression: ts.Expression | undefined) =>
     expression !== undefined && literalTypeAt(program, expression) !== undefined;
   const absentBranch = ({ condition, whenTrue, whenFalse }: ts.ConditionalExpression) => {
     const test = peeled(condition);
-    const same = (one: ts.Expression, other: ts.Expression) =>
-      peeled(one).getText() === peeled(other).getText();
+    const same = (one: ts.Expression, other: ts.Expression) => sameRead(program, one, other);
     if (ts.isPrefixUnaryExpression(test) && test.operator === ts.SyntaxKind.ExclamationToken) {
       return readsAProp(test.operand) && same(test.operand, whenFalse) ? whenTrue : undefined;
     }
@@ -715,45 +761,79 @@ function fallbacksIn(program: Program, source: ts.SourceFile, isProp: (node: ts.
   });
 }
 
-test("a component's defaults have one source: each defaults object that satisfies Partial of a props type is read once, as the first argument of withDefaults from parts.ts, whose second is the first parameter of a component's implementation or of a library function such an implementation passes its own first parameter to, the one place the controls read a default from", () => {
+test("a component's defaults have one source: each withDefaults call of the library takes a Defaults that defaultsOf made, whose type gives one literal for each prop, and merges it into the first parameter of a component's implementation or of a library function such an implementation passes its own first parameter to; each default is a prop of that component, and a variable that holds a Defaults is read only as the first argument of withDefaults, so the controls read every default from the type at those calls", () => {
   const { program, elementFile } = openLibraryProgram();
   try {
     const sources = librarySourcesOf().flatMap((file) => program.sourceFile(file) ?? []);
-    const declared = declaredDefaultsIn(program, sources);
-    const given = new Set(
-      componentsIn(program, elementFile).flatMap(({ declarations }) =>
-        declarations.flatMap((declaration) =>
-          ts.isFunctionDeclaration(declaration)
-            ? defaultsGivenIn(program, declaration, declared).map(({ variable }) => variable)
-            : [],
-        ),
+    const where = (node: ts.Node) => `${relativePath(fileOf(node))}:${lineOf(node)}`;
+    const calls = sources.flatMap((source) =>
+      descendants(source).filter(
+        (node): node is ts.CallExpression =>
+          ts.isCallExpression(node) && isWithDefaults(program, node),
       ),
     );
-    const problems = declared.flatMap(({ variable }) => {
-      const reads = sources.flatMap((source) =>
-        descendants(source).filter(
-          (node) =>
-            ts.isIdentifier(node) &&
-            node !== variable.name &&
-            !ts.isTypeQueryNode(node.parent) &&
-            declarationsOfSymbol(symbolOf(program, node)).includes(variable),
-        ),
+    const given = componentsIn(program, elementFile).flatMap(({ name, declarations, props }) => {
+      const own = new Set(props.flatMap((prop) => prop.declarations));
+      return declarations.flatMap((declaration) =>
+        ts.isFunctionDeclaration(declaration)
+          ? defaultsGivenIn(program, declaration).map((defaults) => ({ name, own, ...defaults }))
+          : [],
       );
-      const where = `${relativePath(variable.getSourceFile().fileName)}:${lineOf(variable)}`;
-      if (!given.has(variable)) {
-        return [
-          `${where}: ${variable.name.getText()} is not given to a component as \`const props = withDefaults(${variable.name.getText()}, rawProps)\`, so the controls show none of its defaults. Merge it into the component's own first parameter with withDefaults from parts.ts.`,
-        ];
-      }
-      return reads.length === 1
-        ? []
-        : [
-            `${where}: ${variable.name.getText()} is read ${reads.length} times: ${reads.map((read) => `line ${lineOf(read)}`).join(", ")}. Read it only in withDefaults, and read the defaults from the props it returns.`,
-          ];
     });
+    const merged = new Set(given.map(({ call }) => call));
+    const unread = calls
+      .filter((call) => !merged.has(call))
+      .map(
+        (call) =>
+          `${where(call)}: this withDefaults call does not merge into the first parameter of a component's implementation, or of a library function that one passes its own first parameter to, so the controls show none of its defaults.`,
+      );
+    const wrong = given.flatMap(({ name, own, call, values, problems }) => [
+      ...problems.map((problem) => `${where(call)}: ${name}: ${problem}`),
+      ...[...values.keys()]
+        .filter((declaration) => !own.has(declaration))
+        .map(
+          (declaration) =>
+            `${where(call)}: ${name}: it gives a default to ${where(declaration)}, which is not one of its props, so the controls cannot show it.`,
+        ),
+    ]);
+    const holders = sources.flatMap((source) =>
+      descendants(source).filter(
+        (node): node is ts.VariableDeclaration =>
+          ts.isVariableDeclaration(node) && defaultsBrandAt(program, node.name) !== undefined,
+      ),
+    );
+    const names = new Set(
+      holders.flatMap(({ name }) => (ts.isIdentifier(name) ? [name.text] : [])),
+    );
+    const readElsewhere = sources.flatMap((source) =>
+      descendants(source)
+        .filter(
+          (node): node is ts.Identifier =>
+            ts.isIdentifier(node) &&
+            names.has(node.text) &&
+            !ts.isVariableDeclaration(node.parent) &&
+            !ts.isTypeQueryNode(node.parent) &&
+            declarationsOfSymbol(symbolOf(program, node)).some((declaration) =>
+              holders.some((holder) => holder === declaration),
+            ),
+        )
+        .filter(
+          (node) =>
+            !(
+              ts.isCallExpression(node.parent) &&
+              node.parent.arguments[0] === node &&
+              isWithDefaults(program, node.parent)
+            ),
+        )
+        .map(
+          (node) =>
+            `${where(node)}: ${node.text} holds a Defaults and is read here, not as the first argument of withDefaults. Read the defaults from the props withDefaults returns.`,
+        ),
+    );
 
-    expect(declared.length).toBeGreaterThan(0);
-    expect(problems).toEqual([]);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(holders.length).toBeGreaterThan(0);
+    expect([...unread, ...wrong, ...readElsewhere]).toEqual([]);
   } finally {
     program.dispose();
   }
@@ -771,8 +851,13 @@ test("no component falls back to a literal for a prop, with ??, ||, ??=, ||=, a 
       componentsIn(program, elementFile).flatMap(({ props }) => props.map(({ name }) => name)),
     );
     const isMerged = (owner: ts.Node) => {
-      const type = program.checker.getTypeAtLocation(owner);
-      return type !== undefined && program.checker.typeToString(type).startsWith(mergedType);
+      const alias = program.checker.getTypeAtLocation(owner)?.getAliasSymbol();
+      return declarationsOfSymbol(alias).some(
+        (declaration) =>
+          ts.isTypeAliasDeclaration(declaration) &&
+          declaration.name.text === mergedTypeName &&
+          fileOf(declaration) === sharedPropTypes,
+      );
     };
     const isProp = (node: ts.Node) => {
       if (
@@ -789,7 +874,7 @@ test("no component falls back to a literal for a prop, with ??, ||, ??=, ||=, a 
     const problems = sources.flatMap((source) =>
       fallbacksIn(program, source, isProp).map(
         (node) =>
-          `${relativePath(source.fileName)}:${lineOf(node)}: ${node.getText()} falls back to a literal the controls cannot read. Give the prop its default in the component's \`const defaults = { ... } satisfies Partial<Props>\`, merged with withDefaults, and read the prop.`,
+          `${relativePath(source.fileName)}:${lineOf(node)}: ${node.getText()} falls back to a literal the controls cannot read. Give the prop its default in the component's \`const defaults = defaultsOf<Props>()({ ... })\`, merged with withDefaults, and read the prop.`,
       ),
     );
 

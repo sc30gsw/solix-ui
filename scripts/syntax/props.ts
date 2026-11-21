@@ -8,13 +8,12 @@ import {
 import * as ts from "#/scripts/syntax/ast.ts";
 import {
   declarationsOfSymbol,
-  isDefaultLibraryFile,
   isPackageFile,
   symbolOf,
   unionMembersOf,
 } from "#/scripts/syntax/checker.ts";
 import type { Program } from "#/scripts/syntax/program.ts";
-import { descendants, fileOf, findAncestor, staticPropertyName } from "#/scripts/syntax/walk.ts";
+import { findAncestor } from "#/scripts/syntax/walk.ts";
 
 export type Option = string | number | boolean;
 
@@ -53,11 +52,6 @@ export type ComponentProp = {
   readonly values?: readonly Option[];
   readonly defaultValue?: string;
   readonly substitute?: Substitute;
-};
-
-export type DeclaredDefaults = {
-  readonly variable: ts.VariableDeclaration;
-  readonly values: ReadonlyMap<ts.Node, string>;
 };
 
 export type PropsOptions = {
@@ -211,50 +205,44 @@ export function literalTypeAt(program: Program, node: ts.Node): string | undefin
   return type && (type.flags & literalTypes) !== 0 ? program.checker.typeToString(type) : undefined;
 }
 
-const partialType = "Partial";
+export type BrandedValue = {
+  readonly name: string;
+  readonly literal: string | undefined;
+  readonly declarations: readonly ts.Node[];
+};
 
-function isPartialOfTheLibrary(program: Program, type: ts.TypeNode): boolean {
-  if (!ts.isTypeReferenceNode(type) || type.typeArguments?.length !== 1) return false;
-  const declaration = symbolOf(program, type.typeName)?.declarations?.[0]?.resolve();
-  return (
-    declaration !== undefined &&
-    ts.isTypeAliasDeclaration(declaration) &&
-    declaration.name.text === partialType &&
-    isDefaultLibraryFile(fileOf(declaration))
-  );
-}
+export type BrandMembers = { readonly props: string; readonly values: string };
 
-export function declaredDefaultsIn(
+export function brandedValuesAt(
   program: Program,
-  sources: readonly ts.SourceFile[],
-): DeclaredDefaults[] {
-  return sources.flatMap((source) =>
-    descendants(source).flatMap((node): DeclaredDefaults[] => {
-      if (
-        !ts.isSatisfiesExpression(node) ||
-        !ts.isVariableDeclaration(node.parent) ||
-        !ts.isObjectLiteralExpression(node.expression) ||
-        !isPartialOfTheLibrary(program, node.type)
-      ) {
-        return [];
-      }
-      const satisfied = program.checker.getTypeAtLocation(node.type);
-      const values = new Map<ts.Node, string>();
-      for (const property of node.expression.properties) {
-        const value = ts.isPropertyAssignment(property)
-          ? property.initializer
-          : ts.isShorthandPropertyAssignment(property)
-            ? property.name
-            : undefined;
-        const name = staticPropertyName(property);
-        const given = value && literalTypeAt(program, value);
-        const prop = satisfied && name && program.checker.getPropertyOfType(satisfied, name);
-        if (given === undefined || !prop) continue;
-        for (const declaration of declarationsOfSymbol(prop)) values.set(declaration, given);
-      }
-      return [{ variable: node.parent, values }];
-    }),
-  );
+  node: ts.Node,
+  isBrand: (declaration: ts.Node) => boolean,
+  members: BrandMembers,
+): BrandedValue[] | undefined {
+  const { checker } = program;
+  const type = checker.getTypeAtLocation(node);
+  const brand =
+    type &&
+    checker.getPropertiesOfType(type).find((member) => declarationsOfSymbol(member).some(isBrand));
+  const inner = brand && checker.getTypeOfSymbol(brand);
+  const member = (name: string) => {
+    const symbol = inner && checker.getPropertyOfType(inner, name);
+    return symbol && checker.getTypeOfSymbol(symbol);
+  };
+  const props = member(members.props);
+  const values = member(members.values);
+  if (!props || !values) return undefined;
+  return checker.getPropertiesOfType(values).map((property) => {
+    const value = checker.getTypeOfSymbol(property);
+    return {
+      name: property.name,
+      literal:
+        value && (value.flags & literalTypes) !== 0 && "value" in value
+          ? JSON.stringify(value.value)
+          : undefined,
+      declarations: declarationsOfSymbol(checker.getPropertyOfType(props, property.name)),
+    };
+  });
 }
 
 function ownerName(declaration: ts.Node): string {

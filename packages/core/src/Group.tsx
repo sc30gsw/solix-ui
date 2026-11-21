@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { children } from "solid-js";
-import { createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
+import { createParts, defaultsOf, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { groupVariables } from "#/src/Group.variables.ts";
 import { rendersSomething } from "#/src/renders-something.ts";
 import { variableProperty } from "#/src/style-prop-table.ts";
@@ -46,7 +46,7 @@ export type GroupProps = ElementProps<
   }
 >;
 
-const defaults = { preventGrowOverflow: true } satisfies Partial<GroupProps>;
+const defaults = defaultsOf<GroupProps>()({ preventGrowOverflow: true });
 
 export function Group(rawProps: GroupProps) {
   const props = withDefaults(defaults, rawProps);

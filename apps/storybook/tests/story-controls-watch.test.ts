@@ -9,14 +9,14 @@ import { inTemporaryTree } from "../../../tests/support/temporary-tree.ts";
 const parts = join(repositoryRoot, "packages/core/src/parts.ts");
 
 const libraryWith = (values: string) => `import type { JSX } from "@solidjs/web";
-import { withDefaults } from ${JSON.stringify(parts)};
+import { defaultsOf, withDefaults } from ${JSON.stringify(parts)};
 
 type ProbeProps = {
   /** How loud it speaks. */
   tone?: ${values};
 };
 
-const defaults = { tone: "calm" } satisfies Partial<ProbeProps>;
+const defaults = defaultsOf<ProbeProps>()({ tone: "calm" });
 
 function Probe(rawProps: ProbeProps): JSX.Element {
   const props = withDefaults(defaults, rawProps);

@@ -73,11 +73,12 @@ export {
   type ImportedName,
 } from "#/scripts/syntax/walk.ts";
 export {
-  declaredDefaultsIn,
+  brandedValuesAt,
   literalTypeAt,
+  type BrandedValue,
+  type BrandMembers,
   propsOfComponent,
   type ComponentProp,
-  type DeclaredDefaults,
   type MemberKind,
   type NoOp,
   type PropsOptions,

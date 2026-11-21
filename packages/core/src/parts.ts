@@ -116,17 +116,64 @@ type RootProps<Props, KeptOffRoot extends keyof Props> = Omit<Props, HandledKey 
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
+declare const definedFor: unique symbol;
+
+/**
+ * A component's defaults, as `defaultsOf` makes them: the props type they are for and the one
+ * literal each prop takes when it is not given. Its values can be read only by `withDefaults`.
+ */
+export type Defaults<P, D> = {
+  readonly [definedFor]: { readonly props: P; readonly values: D };
+};
+
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
+
+type OneLiteral<T> = [T] extends [string | number | boolean]
+  ? true extends IsUnion<T>
+    ? never
+    : string extends T
+      ? never
+      : number extends T
+        ? never
+        : T
+  : never;
+
+/** Each value is one literal: a widened type, a union or `undefined` is none. */
+export type LiteralValues<D> = { readonly [K in keyof D]-?: OneLiteral<D[K]> };
+
+type DefaultsFor<P, D> = {
+  readonly [K in keyof D]: K extends keyof P
+    ? K extends keyof ControlledProps<unknown>
+      ? never
+      : OneLiteral<D[K]> & Exclude<P[K], undefined>
+    : never;
+};
+
+/**
+ * Declares the defaults of the props type `P`, one literal for each prop that has one, as
+ * `defaultsOf<P>()({ … })`. A key that is not a prop of `P` and a value that is not one literal of
+ * the prop's type are refused. So are the props of `ControlledProps`: `withDefaults` gives the
+ * default for `null` too, and `null` in `value` or `defaultValue`, as in Tabs, selects nothing.
+ */
+export function defaultsOf<P extends object>() {
+  return <const D extends object>(values: D & DefaultsFor<P, D>): Defaults<P, D> =>
+    values as unknown as Defaults<P, D>;
+}
+
+/** The values of defaults that `defaultsOf` made. */
+export type DefaultValues<T> = T extends Defaults<unknown, infer D> ? D : never;
+
 export type WithDefaults<P, D> = Omit<P, keyof D> & {
   [K in keyof D & keyof P]-?: Exclude<P[K], undefined> | D[K];
 };
 
 /**
  * A component's props with its defaults filled in: each prop of `defaults` reads as the consumer
- * gave it, or as `defaults` gives it where the consumer gave `undefined` or nothing. A component
- * that has defaults reads them only through this, so the controls read them from one place.
+ * gave it, or as `defaults` gives it where the consumer gave `undefined`, `null` or nothing. It
+ * takes only defaults that `defaultsOf` made, so the controls read every default from its type.
  */
-export function withDefaults<P extends object, D extends object>(
-  defaults: D,
+export function withDefaults<P extends object, D extends LiteralValues<D>>(
+  defaults: Defaults<unknown, D>,
   props: P,
 ): WithDefaults<P, D> {
   const filled: Record<string, unknown> = {};

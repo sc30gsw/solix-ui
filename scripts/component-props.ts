@@ -1,15 +1,16 @@
 import { globSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { repositoryRoot } from "#/scripts/repository.ts";
 import {
   aliasDeclarationsOfTypeAt,
   aliasDeclarationsReturnedBy,
+  brandedValuesAt,
   calledDeclaration,
   type ComponentProp,
-  type DeclaredDefaults,
   declarationsOfSymbol,
   descendants,
-  declaredDefaultsIn,
+  fileOf,
+  findAncestor,
   hasCallSignature,
   isPackageFile,
   openProgram,
@@ -52,6 +53,8 @@ const jsxElementSource = "export const jsxElement = <></>;\n";
 const row = { property: "property", kind: "kind", scale: "scale", aliasOf: "aliasOf" } as const;
 const lengthRow = "length";
 const withDefaultsName = "withDefaults";
+const defaultsTypeName = "Defaults";
+const brandMembers = { props: "props", values: "values" } as const;
 
 function namedValueExports(source: ts.SourceFile): ts.Identifier[] {
   return source.statements.flatMap((statement) =>
@@ -160,31 +163,69 @@ function isParameter(program: Program, expression: ts.Expression | undefined, of
   );
 }
 
-function isWithDefaults(program: Program, call: ts.CallExpression): boolean {
+export type GivenDefaults = {
+  readonly call: ts.CallExpression;
+  readonly values: ReadonlyMap<ts.Node, string>;
+  readonly problems: readonly string[];
+};
+
+export function isWithDefaults(program: Program, call: ts.CallExpression): boolean {
   const called = calledDeclaration(program, call);
   return (
     called !== undefined &&
     ts.isFunctionDeclaration(called) &&
     called.name?.text === withDefaultsName &&
-    called.getSourceFile().fileName === sharedPropTypes
+    fileOf(called) === sharedPropTypes
   );
+}
+
+function isTheDefaultsBrand(declaration: ts.Node): boolean {
+  const owner = findAncestor(declaration, ts.isTypeAliasDeclaration);
+  return owner?.name.text === defaultsTypeName && fileOf(owner) === sharedPropTypes;
+}
+
+export function defaultsBrandAt(program: Program, node: ts.Node) {
+  return brandedValuesAt(program, node, isTheDefaultsBrand, brandMembers);
+}
+
+export function defaultsAt(program: Program, call: ts.CallExpression): GivenDefaults {
+  const [given] = call.arguments;
+  const branded = given && defaultsBrandAt(program, given);
+  if (branded === undefined) {
+    return {
+      call,
+      values: new Map(),
+      problems: [
+        "its first argument is not a Defaults that defaultsOf made, so the controls cannot read its defaults. Give it `defaultsOf<Props>()({ … })`.",
+      ],
+    };
+  }
+  const values = new Map<ts.Node, string>();
+  const problems: string[] = [];
+  for (const { name, literal, declarations } of branded) {
+    if (literal === undefined || declarations.length === 0) {
+      problems.push(
+        `it gives ${name} a default that is not one literal of a prop of the props type its Defaults is for, so the controls cannot show it.`,
+      );
+      continue;
+    }
+    for (const declaration of declarations) values.set(declaration, literal);
+  }
+  return { call, values, problems };
 }
 
 export function defaultsGivenIn(
   program: Program,
   fn: ts.FunctionDeclaration,
-  declared: readonly DeclaredDefaults[],
   follow = true,
-): DeclaredDefaults[] {
+): GivenDefaults[] {
   const [first] = fn.parameters;
   if (first === undefined || fn.body === undefined) return [];
   return descendants(fn.body).flatMap((node) => {
     if (!ts.isCallExpression(node)) return [];
     const [given, props] = node.arguments;
     if (isWithDefaults(program, node)) {
-      if (!isParameter(program, props, first) || given === undefined) return [];
-      const read = declarationsOfSymbol(symbolOf(program, given));
-      return declared.filter(({ variable }) => read.includes(variable));
+      return isParameter(program, props, first) ? [defaultsAt(program, node)] : [];
     }
     const called = calledDeclaration(program, node);
     return follow &&
@@ -192,26 +233,22 @@ export function defaultsGivenIn(
       called !== undefined &&
       ts.isFunctionDeclaration(called) &&
       !isPackageFile(called.getSourceFile().fileName)
-      ? defaultsGivenIn(program, called, declared, false)
+      ? defaultsGivenIn(program, called, false)
       : [];
   });
 }
 
-function defaultsGivenBy(
-  program: Program,
-  component: ts.Identifier,
-  declared: readonly DeclaredDefaults[],
-): Map<ts.Node, string> {
+function defaultsGivenBy(program: Program, component: ts.Identifier): Map<ts.Node, string> {
   const given = implementationsOf(program, component).flatMap((fn) =>
-    ts.isFunctionDeclaration(fn) ? defaultsGivenIn(program, fn, declared) : [],
+    ts.isFunctionDeclaration(fn) ? defaultsGivenIn(program, fn) : [],
   );
   const defaults = new Map<ts.Node, string>();
-  for (const { variable, values } of given) {
+  for (const { call, values } of given) {
     for (const [declaration, value] of values) {
       const earlier = defaults.get(declaration);
       if (earlier !== undefined && earlier !== value) {
         throw new Error(
-          `${component.text}: it reads two defaults objects that give one prop ${earlier} and ${value}, the second ${variable.name.getText()}. Give the prop one default.`,
+          `${component.text}: it merges two defaults that give one prop ${earlier} and ${value}, the second in ${relative(repositoryRoot, fileOf(call))}. Give the prop one default.`,
         );
       }
       defaults.set(declaration, value);
@@ -246,14 +283,12 @@ export function componentsIn(
   elementFile: string,
   entry: string = libraryEntry,
 ): LibraryComponent[] {
-  const sources = librarySources(entry).flatMap((file) => program.sourceFile(file) ?? []);
-  const declared = declaredDefaultsIn(program, sources);
   return exportsReturningAJsxElement(program, elementFile, entry).map((name) => ({
     name: name.text,
     declarations: declarationsOfSymbol(symbolOf(program, name)),
     props: propsOfComponent(program, name, {
       describe: rowDescription,
-      defaults: defaultsGivenBy(program, name, declared),
+      defaults: defaultsGivenBy(program, name),
     }),
     staticParts: staticPartMembers(program, name).map((member) => member.name),
     partDeclarations: partDeclarationsOf(program, name),

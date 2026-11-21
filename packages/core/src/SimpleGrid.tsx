@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { createUniqueId, Show } from "solid-js";
 import { LibraryStyle } from "#/src/library-style.tsx";
-import { createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
+import { createParts, defaultsOf, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { simpleGridVariables } from "#/src/SimpleGrid.variables.ts";
 import {
   type ContainerVariableProp,
@@ -60,7 +60,7 @@ export type SimpleGridProps = ElementProps<
   }
 >;
 
-const defaults = { autoFlow: "auto-fill" } satisfies Partial<SimpleGridProps>;
+const defaults = defaultsOf<SimpleGridProps>()({ autoFlow: "auto-fill" });
 
 export function SimpleGrid(rawProps: SimpleGridProps) {
   const props = withDefaults(defaults, rawProps);

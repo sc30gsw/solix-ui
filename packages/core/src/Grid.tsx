@@ -4,7 +4,7 @@ import { createUniqueId, Show } from "solid-js";
 import { GridCol } from "#/src/GridCol.tsx";
 import { GridContext } from "#/src/grid-context.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
-import { createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
+import { createParts, defaultsOf, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { gridVariables } from "#/src/Grid.variables.ts";
 import { type Breakpoint, breakpoints } from "#/src/style-prop-table.ts";
 import {
@@ -69,7 +69,7 @@ export type GridProps = ElementProps<
     }
 >;
 
-const defaults = { columns: 12, grow: false } satisfies Partial<GridProps>;
+const defaults = defaultsOf<GridProps>()({ columns: 12, grow: false });
 
 export function Grid(rawProps: GridProps) {
   const props = withDefaults(defaults, rawProps);

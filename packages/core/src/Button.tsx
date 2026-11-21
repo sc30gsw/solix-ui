@@ -1,7 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
 import type { ColorOption, ColorProps } from "#/src/colors.ts";
-import { createParts, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
+import { createParts, defaultsOf, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
 import { buttonVariables } from "#/src/Button.variables.ts";
 import type { ScaleValue, VariableProp } from "#/src/style-props.ts";
 import { targetSize } from "#/src/target-size.stylex.ts";
@@ -62,7 +62,7 @@ export type ButtonProps<T extends ValidComponent = "button"> = PolymorphicProps<
 >;
 
 const unlistedVariant = "filled";
-const defaults = { component: "button", variant: unlistedVariant } satisfies Partial<ButtonProps>;
+const defaults = defaultsOf<ButtonProps>()({ component: "button", variant: unlistedVariant });
 
 export function Button<T extends ValidComponent = "button">(props: ButtonProps<T>): JSX.Element;
 export function Button(props: ButtonProps): JSX.Element;

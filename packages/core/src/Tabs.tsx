@@ -1,7 +1,13 @@
 import { createUncontrolled } from "@solix/primitives";
 import * as stylex from "@stylexjs/stylex";
 import { createBehaviour, tabs } from "#/src/headless.ts";
-import { type ControlledProps, createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
+import {
+  type ControlledProps,
+  createParts,
+  defaultsOf,
+  type ElementProps,
+  withDefaults,
+} from "#/src/parts.ts";
 import { stepOverDisabled } from "#/src/step-over-disabled.ts";
 import { TabsContext, type TabsOrientation } from "#/src/tabs-context.ts";
 import { TabsList } from "#/src/TabsList.tsx";
@@ -39,12 +45,12 @@ export type TabsProps = ElementProps<
   }
 >;
 
-const defaults = {
+const defaults = defaultsOf<TabsProps>()({
   loop: true,
   activateTabWithKeyboard: true,
   allowTabDeactivation: false,
   keepMounted: true,
-} satisfies Partial<TabsProps>;
+});
 
 export function Tabs(rawProps: TabsProps) {
   const props = withDefaults(defaults, rawProps);

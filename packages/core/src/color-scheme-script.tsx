@@ -12,7 +12,7 @@ import {
 } from "#/src/color-schemes.ts";
 import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
 import { PageNonceContext } from "#/src/run-time-style.ts";
-import { withDefaults } from "#/src/parts.ts";
+import { defaultsOf, withDefaults } from "#/src/parts.ts";
 
 export type ColorSchemeScriptOptions = ColorSchemeOptions & {
   /** The `localStorage` key the stored colour scheme is read from. */
@@ -31,10 +31,10 @@ type OptionsAsGiven = {
   localStorageKey?: string;
 };
 
-const defaults = {
+const defaults = defaultsOf<ColorSchemeScriptOptions>()({
   defaultColorScheme,
   localStorageKey: colorSchemeStorageKey,
-} satisfies Partial<ColorSchemeScriptOptions>;
+});
 
 function inScript(value: unknown): string {
   return JSON.stringify(value).replaceAll("<", "\\u003c");

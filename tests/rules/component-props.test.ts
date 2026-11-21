@@ -66,7 +66,7 @@ test("a prop's control is a select only for a closed union of literals or litera
 const sharedPropTypes = join(repositoryRoot, "packages/core/src/parts.ts");
 
 const statefulProbe = `import type { JSX } from "@solidjs/web";
-import { type ControlledProps, type ElementProps, withDefaults } from ${JSON.stringify(sharedPropTypes)};
+import { type ControlledProps, defaultsOf, type ElementProps, withDefaults } from ${JSON.stringify(sharedPropTypes)};
 
 type StatefulProps = ElementProps<
   "div",
@@ -84,7 +84,7 @@ type StatefulProps = ElementProps<
   }
 >;
 
-const defaults = { tone: "calm", loop: true } satisfies Partial<StatefulProps>;
+const defaults = defaultsOf<StatefulProps>()({ tone: "calm", loop: true });
 
 function Stateful(rawProps: StatefulProps): JSX.Element {
   const props = withDefaults(defaults, rawProps);
@@ -138,22 +138,6 @@ test("every public prop of every component the library exports has a doc comment
   expect([...new Set(undescribed)]).toEqual([]);
 });
 
-test("a default declared in an object literal that satisfies Partial of a props type is that prop's default, as for ColorSchemeScript, whose script text reads the props through its own options type, and Group, which is on unless set to false", () => {
-  const defaultsOf = (component: string) =>
-    Object.fromEntries(
-      (libraryComponentProps()[component] ?? []).map(({ name, defaultValue }) => [
-        name,
-        defaultValue,
-      ]),
-    );
-
-  expect(defaultsOf("ColorSchemeScript")).toMatchObject({
-    localStorageKey: '"solix-color-scheme-value"',
-    defaultColorScheme: '"light"',
-  });
-  expect(defaultsOf("Group")).toMatchObject({ preventGrowOverflow: "true" });
-});
-
 const docComment = /^\s*\/\*\*/;
 
 test("each public prop of every component the library exports is documented on one declaration, so its description is one comment and not several run together", () => {
@@ -181,7 +165,7 @@ test("each public prop of every component the library exports is documented on o
 });
 
 const sharedDefaultsProbe = `import type { JSX } from "@solidjs/web";
-import { withDefaults } from ${JSON.stringify(sharedPropTypes)};
+import { defaultsOf, withDefaults } from ${JSON.stringify(sharedPropTypes)};
 
 type Shared = {
   /** The tone. */
@@ -190,8 +174,8 @@ type Shared = {
 
 type PlainProps = Shared;
 
-const calm = { tone: "calm" } satisfies Partial<Shared>;
-const loud = { tone: "loud" } satisfies Partial<Shared>;
+const calm = defaultsOf<Shared>()({ tone: "calm" });
+const loud = defaultsOf<Shared>()({ tone: "loud" });
 
 function toneOf(given: Shared): string {
   const props = withDefaults(loud, given);
@@ -224,21 +208,40 @@ test("a declared default belongs to the component that gives its defaults object
   expect(defaults).toEqual({ Calm: '"calm"', Loud: '"loud"', Plain: undefined });
 });
 
-test("each component's own defaults object gives its defaults, the colour variant of Button among them", () => {
-  const defaultsOf = (component: string) =>
-    Object.fromEntries(
-      (libraryComponentProps()[component] ?? []).map(({ name, defaultValue }) => [
-        name,
-        defaultValue,
-      ]),
-    );
+test("the defaults the controls show are exactly these, each read from the Defaults type a component's withDefaults call takes, the colour variant of Button, ColorSchemeScript, whose script text reads the props through its own options type, and Group, which is on unless set to false, among them", () => {
+  const shown = Object.fromEntries(
+    Object.entries(libraryComponentProps()).flatMap(([component, props]) => {
+      const defaults = props.flatMap(({ name, defaultValue }) =>
+        defaultValue === undefined ? [] : [[name, defaultValue]],
+      );
+      return defaults.length === 0 ? [] : [[component, Object.fromEntries(defaults)]];
+    }),
+  );
 
-  expect(defaultsOf("Button")).toMatchObject({ variant: '"filled"', component: '"button"' });
-  expect(defaultsOf("Container")).toMatchObject({ strategy: '"block"', size: '"md"' });
-  expect(defaultsOf("Tabs")).toMatchObject({ loop: "true", keepMounted: "true" });
-  expect(defaultsOf("SolixProvider")).toMatchObject({
-    defaultColorScheme: '"light"',
-    withCssVariables: "true",
+  expect(shown).toEqual({
+    Box: { component: '"div"' },
+    Button: { component: '"button"', variant: '"filled"' },
+    Center: { component: '"div"' },
+    ColorSchemeScript: {
+      defaultColorScheme: '"light"',
+      localStorageKey: '"solix-color-scheme-value"',
+    },
+    Container: { size: '"md"', strategy: '"block"' },
+    Flex: { component: '"div"' },
+    Grid: { columns: "12", grow: "false" },
+    Group: { preventGrowOverflow: "true" },
+    SimpleGrid: { autoFlow: '"auto-fill"' },
+    SolixProvider: {
+      cssVariablesSelector: '":root"',
+      defaultColorScheme: '"light"',
+      withCssVariables: "true",
+    },
+    Tabs: {
+      activateTabWithKeyboard: "true",
+      allowTabDeactivation: "false",
+      keepMounted: "true",
+      loop: "true",
+    },
   });
 });
 

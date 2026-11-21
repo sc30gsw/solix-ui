@@ -1,5 +1,5 @@
 import * as stylex from "@stylexjs/stylex";
-import { createParts, type ElementProps, withDefaults } from "#/src/parts.ts";
+import { createParts, defaultsOf, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { containerVariables } from "#/src/Container.variables.ts";
 import type { VariableProp } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
@@ -41,7 +41,7 @@ export type ContainerProps = ElementProps<
 >;
 
 const fluidGridSize = "md";
-const defaults = { size: "md", strategy: "block" } satisfies Partial<ContainerProps>;
+const defaults = defaultsOf<ContainerProps>()({ size: "md", strategy: "block" });
 
 export function Container(rawProps: ContainerProps) {
   const props = withDefaults(defaults, rawProps);

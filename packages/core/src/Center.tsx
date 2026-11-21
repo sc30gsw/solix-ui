@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
-import { createParts, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
+import { createParts, defaultsOf, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
 
 const styles = stylex.create({
   root: {
@@ -22,7 +22,7 @@ export type CenterProps<T extends ValidComponent = "div"> = PolymorphicProps<
   }
 >;
 
-const defaults = { component: "div" } satisfies Partial<CenterProps>;
+const defaults = defaultsOf<CenterProps>()({ component: "div" });
 
 export function Center<T extends ValidComponent = "div">(props: CenterProps<T>): JSX.Element;
 export function Center(props: CenterProps): JSX.Element;
