@@ -36,34 +36,60 @@ function canvasOfTheStory(): Element {
   return canvas;
 }
 
-async function ranAgain(story: RunnableStory, substitution?: Substitution): Promise<unknown> {
-  const reports = [...story.reporting.reports];
-  startRecording(substitution);
-  let failure: unknown;
-  try {
-    await story.run();
-  } catch (error) {
-    failure = error ?? new Error("The story failed with no error.");
-  }
-  story.reporting.reports.splice(0, story.reporting.reports.length, ...reports);
-  return failure;
-}
-
 function named({ component, prop, value }: Substitution): string {
   return `${component}'s ${prop}${value === undefined ? "" : ` as ${JSON.stringify(value)}`}`;
 }
 
-async function failsInItsPlay(story: RunnableStory, substitution: Substitution): Promise<boolean> {
-  const failed = (await ranAgain(story, substitution)) !== undefined;
+function outOfTime(timeout: number, substitution: Substitution | undefined): Error {
+  const how = substitution === undefined ? "as written" : `with ${named(substitution)} substituted`;
+  return new Error(
+    `The story ran again ${how} and did not end within its timeout of ${timeout} ms, so that run counts as failed.`,
+  );
+}
+
+async function ranAgain(
+  story: RunnableStory,
+  timeout: number,
+  substitution?: Substitution,
+): Promise<unknown> {
+  const reports = story.reporting.reports.splice(0);
+  startRecording(substitution);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<unknown>((resolve) => {
+    timer = setTimeout(() => resolve(outOfTime(timeout, substitution)), timeout);
+  });
+  const ended = story.run().then(
+    () => undefined,
+    (error: unknown) => error ?? new Error("The story failed with no error."),
+  );
+  try {
+    return await Promise.race([ended, timedOut]);
+  } finally {
+    clearTimeout(timer);
+    story.reporting.reports.splice(0, story.reporting.reports.length, ...reports);
+  }
+}
+
+function passedAgain(failure: unknown, when: string): void {
+  if (failure === undefined) return;
+  throw new Error(
+    `The story passed as written and then failed as written ${when}, so a failure of its play tells nothing about what it checks. Reset in the story's beforeEach what its play or render leaves changed for the next run.`,
+    { cause: failure },
+  );
+}
+
+async function failsInItsPlay(
+  story: RunnableStory,
+  timeout: number,
+  substitution: Substitution,
+): Promise<boolean> {
+  const failed = (await ranAgain(story, timeout, substitution)) !== undefined;
   const { mounted, playReturned } = lastStoryRun();
   const tookPlace = substitutionTookPlace();
-  const again = await ranAgain(story);
-  if (again !== undefined) {
-    throw new Error(
-      `The story passed as written, ran with ${named(substitution)} substituted, and then failed as written, so a failure of its play tells nothing about what it checks. Reset in the story's beforeEach what its play or render leaves changed for the next run.`,
-      { cause: again },
-    );
-  }
+  passedAgain(
+    await ranAgain(story, timeout),
+    `right after it ran with ${named(substitution)} substituted`,
+  );
   return failed && mounted && !playReturned && tookPlace;
 }
 
@@ -71,12 +97,21 @@ function keyOf({ component, prop, value }: Substitution): string {
   return JSON.stringify([component, prop, value]);
 }
 
-async function substituted(story: RunnableStory, mounts: readonly Mount[]): Promise<void> {
+async function substituted(
+  story: RunnableStory,
+  timeout: number,
+  mounts: readonly Mount[],
+): Promise<void> {
   const played = new Set<string>();
+  let ranBefore = false;
   for (const mount of mounts) {
     for (const substitution of substitutionsOf(mount)) {
       if (played.has(keyOf(substitution))) continue;
-      if (!(await failsInItsPlay(story, substitution))) continue;
+      if (!ranBefore) {
+        passedAgain(await ranAgain(story, timeout), "when it ran again before any substitution");
+        ranBefore = true;
+      }
+      if (!(await failsInItsPlay(story, timeout, substitution))) continue;
       played.add(keyOf(substitution));
       mount.played.push({
         prop: substitution.prop,
@@ -109,7 +144,7 @@ afterEach(async (context) => {
         "The story test's context carries no composed story to run again, so no value can be substituted. Read how @storybook/addon-vitest sets context.story again.",
       );
     }
-    if (!playOfEveryValue) await substituted(story, mounts);
+    if (!playOfEveryValue) await substituted(story, context.task.timeout, mounts);
   }
   await commands.recordStory(storyId, { substituted: substituting, mounts });
 }, substitutionsTimeout);
