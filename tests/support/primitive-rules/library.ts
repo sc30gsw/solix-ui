@@ -9,6 +9,7 @@ import {
   fileOf,
   firstLine,
   importsOf,
+  isDefaultLibraryFile,
   isDomLibraryFile,
   isPackageFile,
   memberDeclarations,
@@ -201,6 +202,13 @@ export function isDeclared(declaration: ts.Node, declared: Declared): boolean {
     !isPackageFile(fileOf(declaration)) &&
     nameOf(declaration) === declared.name
   );
+}
+
+export function isDefaultLibraryDeclarationNamed(
+  declaration: ts.Node,
+  names: readonly string[],
+): boolean {
+  return isDefaultLibraryFile(fileOf(declaration)) && names.includes(nameOf(declaration));
 }
 
 export function isFromSolid(declaration: ts.Node, names: readonly string[]): boolean {

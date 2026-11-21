@@ -100,6 +100,15 @@ export function declarationsOf(program: Program, node: ts.Node): ts.Node[] {
   ];
 }
 
+export function propertiesOfType(program: Program, owner: ts.Node): ts.Node[][] {
+  const { checker } = program;
+  const type = checker.getTypeAtLocation(owner);
+  const present = type && checker.getNonNullableType(type);
+  const apparent = present && (checker.getApparentType(present) ?? present);
+  if (!apparent) return [];
+  return checker.getPropertiesOfType(apparent).map(declarationsOfSymbol);
+}
+
 export function propertyDeclarations(
   program: Program,
   owner: ts.Node,
@@ -150,7 +159,10 @@ export function hasCallSignature(program: Program, node: ts.Node | undefined): b
   );
 }
 
-export function calledDeclaration(program: Program, call: ts.CallExpression): ts.Node | undefined {
+export function calledDeclaration(
+  program: Program,
+  call: ts.CallExpression | ts.NewExpression,
+): ts.Node | undefined {
   return program.checker.getResolvedSignature(call)?.declaration?.resolve();
 }
 

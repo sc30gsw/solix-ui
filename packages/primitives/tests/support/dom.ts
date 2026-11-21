@@ -1,3 +1,4 @@
+import { onTestFinished } from "vite-plus/test";
 import { userEvent } from "vite-plus/test/browser";
 
 export function attached<E extends Element>(element: E, parent: ParentNode = document.body): E {
@@ -25,6 +26,13 @@ export function box(label: string, parent?: ParentNode): HTMLDivElement {
   element.textContent = label;
   element.style.padding = "8px";
   return attached(element, parent);
+}
+
+export function stylesheetArrives(rules: string): void {
+  const stylesheet = document.createElement("style");
+  stylesheet.textContent = rules;
+  document.head.append(stylesheet);
+  onTestFinished(() => stylesheet.remove());
 }
 
 export function focusedId(): string {

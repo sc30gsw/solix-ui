@@ -20,6 +20,7 @@ export {
   memberDeclarations,
   memberRead,
   parameterAliases,
+  propertiesOfType,
   propertyDeclarations,
   reachedFrom,
   returnsAlias,

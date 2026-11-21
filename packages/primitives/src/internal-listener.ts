@@ -14,6 +14,8 @@ type EventMapOf<T> = T extends Window
 
 export type EventOf<T, K extends string> = K extends keyof EventMapOf<T> ? EventMapOf<T>[K] : Event;
 
+export type Listener<E> = (event: E) => void;
+
 export type ListenerSettings<K extends string = string> = {
   type: K;
   capture: boolean;
@@ -47,7 +49,7 @@ export function listenerSettings<K extends string>(
 function listen<T extends EventTarget, K extends string>(
   target: T,
   settings: ListenerSettings<K>,
-  listener: (event: EventOf<T, K>) => void,
+  listener: Listener<EventOf<T, K>>,
   accepts: (event: Event) => boolean = () => true,
 ): () => void {
   const handle = (event: Event) => {
@@ -71,7 +73,7 @@ export function disposeAll(disposers: readonly (() => void)[]): () => void {
 export function watchEvents<T extends EventTarget, K extends string>(
   target: T,
   types: readonly K[],
-  listener: (event: EventOf<T, K>) => void,
+  listener: Listener<EventOf<T, K>>,
   options?: { passive?: boolean },
 ): () => void {
   return disposeAll(
@@ -89,7 +91,7 @@ export function watchEvents<T extends EventTarget, K extends string>(
 export function handleEvent<T extends EventTarget, K extends string>(
   target: T,
   type: K,
-  listener: (event: EventOf<T, K>) => void,
+  listener: Listener<EventOf<T, K>>,
 ): () => void {
   return listen<T, K>(target, listenerSettings(type), listener, (event) => !event.defaultPrevented);
 }
@@ -97,7 +99,7 @@ export function handleEvent<T extends EventTarget, K extends string>(
 export function listenAsAsked<T extends EventTarget, K extends string>(
   target: T,
   settings: ListenerSettings<K>,
-  listener: (event: EventOf<T, K>) => void,
+  listener: Listener<EventOf<T, K>>,
 ): () => void {
   return listen(target, settings, listener);
 }

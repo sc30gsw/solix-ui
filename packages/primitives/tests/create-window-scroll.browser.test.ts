@@ -2,7 +2,11 @@ import { afterEach, expect, test, vi } from "vite-plus/test";
 import { createWindowScroll } from "#/src/index.ts";
 import { mount, unmount, watch } from "#/tests/support/browser-harness.ts";
 import { nextTask, engineWait } from "#/tests/support/dom.ts";
-import { tallPage } from "#/tests/support/scroll.ts";
+import {
+  scrolledDownATallPage,
+  tallPage,
+  theEngineScrollsAsAStylesheetShortens,
+} from "#/tests/support/scroll.ts";
 
 afterEach(() => {
   window.scrollTo({ top: 0, left: 0, behavior: "instant" });
@@ -16,6 +20,15 @@ test("it reads the window's scroll position at once, and follows it as the windo
   expect(position()).toEqual({ x: 30, y: 60 });
   window.scrollTo({ left: 0, top: 200, behavior: "instant" });
   await expect.poll(position, engineWait).toEqual({ x: 0, y: 200 });
+});
+
+test("once the scroll that put the page at 3000 has reported, a stylesheet that shortens the page after it goes live clamps the position, the engine fires scroll for that move, and the position follows", async () => {
+  const spacer = await scrolledDownATallPage(3000);
+  const [position] = mount(() => createWindowScroll());
+
+  expect(position()).toEqual({ x: 0, y: 3000 });
+  await theEngineScrollsAsAStylesheetShortens(spacer);
+  await expect.poll(position, engineWait).toEqual({ x: 0, y: 0 });
 });
 
 test("a resize that leaves the position where it was changes nothing", async () => {
