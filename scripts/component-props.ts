@@ -295,16 +295,17 @@ export function componentsIn(
   }));
 }
 
+function libraryFrom(components: readonly LibraryComponent[]): Library {
+  return {
+    props: Object.fromEntries(components.map(({ name, props }) => [name, props])),
+    staticParts: Object.fromEntries(components.map(({ name, staticParts }) => [name, staticParts])),
+  };
+}
+
 function libraryOf(entry: string): Library {
   const { program, elementFile } = openLibraryProgram(entry);
   try {
-    const components = componentsIn(program, elementFile, entry);
-    return {
-      props: Object.fromEntries(components.map(({ name, props }) => [name, props])),
-      staticParts: Object.fromEntries(
-        components.map(({ name, staticParts }) => [name, staticParts]),
-      ),
-    };
+    return libraryFrom(componentsIn(program, elementFile, entry));
   } finally {
     program.dispose();
   }
@@ -320,6 +321,11 @@ function resolvedLibrary(entry: string): Library {
   const library = resolved.get(entry) ?? libraryOf(entry);
   resolved.set(entry, library);
   return library;
+}
+
+/** Keeps the components a program that already read the library gave, so no other opens it. */
+export function rememberLibrary(entry: string, components: readonly LibraryComponent[]): void {
+  if (!resolved.has(entry)) resolved.set(entry, libraryFrom(components));
 }
 
 export function libraryComponentProps(entry: string = libraryEntry): ComponentProps {

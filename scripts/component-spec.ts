@@ -4,6 +4,7 @@ import {
   type LibraryComponent,
   libraryEntry,
   openLibraryProgram,
+  rememberLibrary,
   sharedPropTypes,
 } from "#/scripts/component-props.ts";
 import { type ts, type Program, virtualFile } from "#/scripts/syntax.ts";
@@ -137,7 +138,9 @@ export function openSpecProgram(entry: string = libraryEntry): {
     stateTypes.map((_, at) => probe(stateProbe(at))),
     common,
   );
-  return { program, components: specOf(componentsIn(program, elementFile, entry), common, state) };
+  const library = componentsIn(program, elementFile, entry);
+  rememberLibrary(entry, library);
+  return { program, components: specOf(library, common, state) };
 }
 
 let behaviourOfTheLibrary: Readonly<Record<string, readonly string[]>> | undefined;

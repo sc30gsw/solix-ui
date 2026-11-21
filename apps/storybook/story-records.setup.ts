@@ -1,4 +1,4 @@
-import { afterEach, beforeEach } from "vite-plus/test";
+import { afterEach, beforeEach, inject } from "vite-plus/test";
 import { commands, server } from "vite-plus/test/browser";
 import {
   type Mount,
@@ -11,6 +11,7 @@ import {
 import { lastStoryRun } from "#/story-run.ts";
 
 const substitutingEngine = "chromium";
+const substitutingScheme = "light";
 const substitutionsTimeout = 600_000;
 
 type RunnableStory = {
@@ -137,7 +138,10 @@ afterEach(async (context) => {
   const mounts = takeRecord(canvasOfTheStory());
   const { playOfEveryValue } = lastStoryRun();
   const story: unknown = Reflect.get(context, "story");
-  const substituting = server.browser === substitutingEngine && !failed;
+  const substituting =
+    server.browser === substitutingEngine &&
+    inject("storyColorScheme") === substitutingScheme &&
+    !failed;
   if (substituting) {
     if (!isRunnableStory(story)) {
       throw new Error(

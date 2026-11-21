@@ -92,12 +92,12 @@ test("every indexed story ran in the stories projects of this run and sent a rec
   expect(unrecorded).toEqual([]);
 });
 
-test("every indexed story ran again in Chromium with each value of a behaviour prop it gives substituted", () => {
+test("every indexed story ran again in Chromium, in the light scheme, with each value of a behaviour prop it gives substituted", () => {
   const unsubstituted = stories
     .filter(({ id }) => !records.some(({ storyId, substituted }) => storyId === id && substituted))
     .map(
       ({ id }) =>
-        `${id}: no record of this story from Chromium, where each value it gives a behaviour prop is substituted and the story run again, reached this run, so none of its behaviour is known to be played. Run vp test without --project, with Chromium installed, or with a --project filter that keeps a stories project in Chromium.`,
+        `${id}: no record of this story from Chromium, where each value it gives a behaviour prop is substituted and the story run again, reached this run, so none of its behaviour is known to be played. Run vp test without --project, with Chromium installed, or with a --project filter that keeps the light stories project in Chromium.`,
     );
 
   expect(unsubstituted).toEqual([]);

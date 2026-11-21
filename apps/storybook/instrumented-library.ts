@@ -54,6 +54,9 @@ export function instrumentedLibrary(): Plugin {
     name: "solix:instrumented-library",
     enforce: "pre",
     apply: (_, { mode }) => mode === testMode,
+    buildStart() {
+      behaviourProps();
+    },
     resolveId(source, importer) {
       if (source === instrumentedModule) return instrumentedModule;
       if (source !== libraryModule || importer === instrumentedModule) return undefined;
