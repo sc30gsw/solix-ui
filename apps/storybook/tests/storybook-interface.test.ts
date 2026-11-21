@@ -3,8 +3,10 @@ import { join } from "node:path";
 import type { Browser, Page } from "playwright";
 import type { StoryIndexEntry } from "storybook/internal/types";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { libraryComponentProps } from "../../../scripts/component-props.ts";
 import { storybookAppManifest } from "../../../scripts/release-sources.ts";
 import { manifestAt } from "../../../scripts/repository.ts";
+import { variantAttribute } from "../../../packages/core/src/color-table.ts";
 import { inEveryEngine } from "../../../tests/support/served-app.ts";
 import { childRunMargin, runVp } from "#/tests/support/child-runs.ts";
 import { serveDirectory } from "#/tests/support/static-server.ts";
@@ -24,6 +26,7 @@ const idleCallbacks = ["requestIdleCallback", "cancelIdleCallback"];
 const storyWithATextArg = "button--default";
 const textArg = "children";
 const typedArg = "Saved again";
+const selectedProp = "variant";
 
 const telemetry = collectTelemetry();
 const site = serveDirectory(staticStorybookDirectory);
@@ -163,6 +166,36 @@ function checkTheInterface(
             timeout: panelTimeout,
           })
           .toBe(typedArg);
+      },
+      interfaceTimeout,
+    );
+
+    test(
+      "a select the type checker gives a prop of the story's component, in the controls panel, reaches the preview",
+      async () => {
+        const story = stories.find(({ id }) => id === storyWithATextArg);
+        const prop = libraryComponentProps()[story?.title ?? ""]?.find(
+          ({ name }) => name === selectedProp,
+        );
+        if (prop?.control.type !== "select") {
+          throw new Error(`${storyWithATextArg}: its component gives ${selectedProp} no select.`);
+        }
+        const chosen = String(prop.control.options.at(-1));
+        await page.goto(`${site.url}?path=/story/${storyWithATextArg}`, { waitUntil: "load" });
+        await page.getByRole("tab", { name: /controls/i }).click();
+        await page.locator(`#control-${selectedProp}`).selectOption(chosen);
+
+        await expect
+          .poll(
+            () =>
+              page
+                .frameLocator(previewFrame)
+                .locator(`${storyRoot} > *`)
+                .first()
+                .getAttribute(variantAttribute),
+            { timeout: panelTimeout },
+          )
+          .toBe(chosen);
       },
       interfaceTimeout,
     );

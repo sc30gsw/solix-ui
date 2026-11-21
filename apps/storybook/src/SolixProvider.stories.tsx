@@ -12,8 +12,10 @@ import {
   type SolixTheme,
 } from "@solix/core";
 import { createEffect, createSignal, Show } from "solid-js";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect, spyOn, userEvent, waitFor } from "storybook/test";
+import { everyValueOf } from "#/every-value.tsx";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const themedPadding = "3rem";
 const schemeRoot = "Scheme root";
@@ -31,9 +33,11 @@ const storeOfThePage = localStorageColorSchemeManager();
 function OnItsOwnElement(props: SolixProviderProps & { label?: string }) {
   const [root, setRoot] = createSignal<HTMLElement>();
   return (
-    <section aria-label={props.label ?? schemeRoot} ref={setRoot}>
-      <SolixProvider getRootElement={root} {...props} />
-    </section>
+    <SolixProvider getRootElement={root} {...props}>
+      <section aria-label={props.label ?? schemeRoot} ref={setRoot}>
+        {props.children}
+      </section>
+    </SolixProvider>
   );
 }
 
@@ -55,6 +59,7 @@ function schemeOn(element: HTMLElement): string | null {
 
 const meta = {
   component: SolixProvider,
+  argTypes: argTypesOf(SolixProvider),
   args: { theme: createTheme({ spacing: { md: themedPadding } }) },
   beforeEach: () => {
     for (const key of Object.values(storageKeys)) localStorage.removeItem(key);
@@ -67,20 +72,21 @@ const meta = {
       </Box>
     </OnItsOwnElement>
   ),
-} satisfies Meta<typeof SolixProvider>;
+} satisfies ComponentMeta<typeof SolixProvider>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const ThemedSpacing: Story = {
+  args: { withCssVariables: true },
   play: async ({ canvas }) => {
     const probe = document.createElement("div");
     probe.style.paddingTop = themedPadding;
     document.body.append(probe);
     const expected = getComputedStyle(probe).paddingTop;
     probe.remove();
-    await expect(getComputedStyle(canvas.getByTestId("themed")).paddingTop).toBe(expected);
+    await expect(canvas.getByTestId("themed")).toHaveStyle({ paddingTop: expected });
   },
 };
 
@@ -100,7 +106,9 @@ export const PrimaryColorFallsBack: Story = {
           label={`Primary ${primaryColor}`}
           theme={themeWithPrimary(primaryColor)}
           cssVariablesSelector=".unused"
-        />
+        >
+          <p>{`Primary ${primaryColor}`}</p>
+        </OnItsOwnElement>
       ))}
     </>
   ),
@@ -119,7 +127,56 @@ export const PrimaryColorFallsBack: Story = {
 
 export const WithoutCssVariables: Story = {
   args: { withCssVariables: false },
+  play: async ({ canvas }) => {
+    const probe = document.createElement("div");
+    probe.style.paddingTop = themedPadding;
+    document.body.append(probe);
+    const themed = getComputedStyle(probe).paddingTop;
+    probe.remove();
+    await expect(canvas.getByTestId("themed")).not.toHaveStyle({ paddingTop: themed });
+  },
 };
+
+const providerNonce = "provider-nonce";
+
+export const GivesItsNonceToItsStyles: Story = {
+  args: { getStyleNonce: () => providerNonce },
+  play: async ({ canvasElement }) => {
+    const styles = [...canvasElement.ownerDocument.querySelectorAll("style")];
+    await expect(styles.find((style) => style.nonce === providerNonce)).toBeInstanceOf(
+      HTMLStyleElement,
+    );
+  },
+};
+
+const systemDark = "(prefers-color-scheme: dark)";
+
+function systemPrefers(scheme: SolixComputedColorScheme): () => void {
+  const real = window.matchMedia;
+  window.matchMedia = (query: string) =>
+    query === systemDark
+      ? {
+          matches: scheme === "dark",
+          media: query,
+          onchange: null,
+          addEventListener: () => undefined,
+          removeEventListener: () => undefined,
+          addListener: () => undefined,
+          removeListener: () => undefined,
+          dispatchEvent: () => false,
+        }
+      : real.call(window, query);
+  return () => {
+    window.matchMedia = real;
+  };
+}
+
+export const EveryDefaultColorScheme: Story = {
+  ...everyValueOf(meta, "defaultColorScheme", {}, { auto: "dark" }),
+  beforeEach: () => systemPrefers("dark"),
+};
+
+export const EveryForcedColorScheme: Story = everyValueOf(meta, "forceColorScheme");
 
 const unusedManager = localStorageColorSchemeManager({ key: storageKeys.unused });
 
@@ -130,8 +187,25 @@ export const DefaultsToLight: Story = {
     </OnItsOwnElement>
   ),
   play: async ({ canvas }) => {
-    await waitFor(() => expect(schemeOn(canvas.getByRole("region"))).toBe("light"));
+    await waitFor(() =>
+      expect(canvas.getByRole("region")).toHaveAttribute(colorSchemeAttribute, "light"),
+    );
     await expect(canvas.getByRole("status")).toHaveTextContent("light");
+  },
+};
+
+export const FollowsTheSystemWhenItsDefaultIsAuto: Story = {
+  beforeEach: () => systemPrefers("light"),
+  render: () => (
+    <OnItsOwnElement colorSchemeManager={unusedManager} defaultColorScheme="auto">
+      <SchemeButtons of="the provider" />
+    </OnItsOwnElement>
+  ),
+  play: async ({ canvas }) => {
+    await waitFor(() =>
+      expect(canvas.getByRole("region")).toHaveAttribute(colorSchemeAttribute, "light"),
+    );
+    await expect(canvas.getByRole("status")).toHaveTextContent("auto");
   },
 };
 
@@ -150,17 +224,18 @@ function ChangingDefault() {
 }
 
 export const FollowsItsDefaultWhileNothingIsStored: Story = {
+  beforeEach: () => systemPrefers("dark"),
   render: () => <ChangingDefault />,
   play: async ({ canvas }) => {
-    const scheme = () => schemeOn(canvas.getByRole("region"));
+    const region = () => canvas.getByRole("region");
 
-    await waitFor(() => expect(scheme()).toBe("light"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "light"));
     await userEvent.click(canvas.getByRole("button", { name: "Default to dark" }));
-    await waitFor(() => expect(scheme()).toBe("dark"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "dark"));
     await userEvent.click(canvas.getByRole("button", { name: "Toggle in the provider" }));
-    await waitFor(() => expect(scheme()).toBe("light"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "light"));
     await userEvent.click(canvas.getByRole("button", { name: "Clear in the provider" }));
-    await waitFor(() => expect(scheme()).toBe("dark"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "dark"));
   },
 };
 
@@ -178,16 +253,20 @@ export const TwoProvidersFollowOneManager: Story = {
     </>
   ),
   play: async ({ canvas }) => {
-    const schemes = () => canvas.getAllByRole("region").map(schemeOn);
-
     await userEvent.click(canvas.getByRole("button", { name: "Dark in the first" }));
-    await waitFor(() => expect(schemes()).toEqual(["dark", "dark"]));
+    await waitFor(() => everyRegionIn(canvas, "dark", 2));
     await userEvent.click(canvas.getByRole("button", { name: "Clear in the second" }));
-    await waitFor(() => expect(schemes()).toEqual(["light", "light"]));
+    await waitFor(() => everyRegionIn(canvas, "light", 2));
   },
 };
 
 type Canvas = Parameters<NonNullable<Story["play"]>>[0]["canvas"];
+
+async function everyRegionIn(canvas: Canvas, scheme: string, count?: number): Promise<void> {
+  const regions = canvas.getAllByRole("region");
+  if (count !== undefined) await expect(regions).toHaveLength(count);
+  for (const region of regions) await expect(region).toHaveAttribute(colorSchemeAttribute, scheme);
+}
 
 type Press = readonly [button: string, scheme: string, stored: SolixColorScheme | undefined];
 
@@ -198,11 +277,7 @@ async function pressAndSee(
 ) {
   for (const [button, scheme, kept] of presses) {
     await userEvent.click(canvas.getByRole("button", { name: button }));
-    await waitFor(() =>
-      expect(canvas.getAllByRole("region").map(schemeOn)).toEqual(
-        canvas.getAllByRole("region").map(() => scheme),
-      ),
-    );
+    await waitFor(() => everyRegionIn(canvas, scheme));
     for (const chosen of canvas.getAllByRole("status")) {
       await expect(chosen).toHaveTextContent(scheme);
     }
@@ -260,16 +335,16 @@ export const NestedProviderPassesTheSchemeOn: Story = {
     </OnItsOwnElement>
   ),
   play: async ({ canvas }) => {
-    const scheme = () => schemeOn(canvas.getByRole("region"));
+    const region = () => canvas.getByRole("region");
     const ofThePage = schemeOn(document.documentElement);
 
-    await waitFor(() => expect(scheme()).toBe("light"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "light"));
     await userEvent.click(canvas.getByRole("button", { name: "Dark in the inner provider" }));
-    await waitFor(() => expect(scheme()).toBe("dark"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "dark"));
     await expect(canvas.getByRole("status")).toHaveTextContent("dark");
     await expect(schemeOn(document.documentElement)).toBe(ofThePage);
     await userEvent.click(canvas.getByRole("button", { name: "Clear in the inner provider" }));
-    await waitFor(() => expect(scheme()).toBe("light"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "light"));
   },
 };
 
@@ -290,7 +365,9 @@ export const WritesOnARootThatMountsLater: Story = {
   render: () => <RootThatMountsLater />,
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole("button", { name: "Show the root" }));
-    await waitFor(() => expect(schemeOn(canvas.getByRole("region"))).toBe("dark"));
+    await waitFor(() =>
+      expect(canvas.getByRole("region")).toHaveAttribute(colorSchemeAttribute, "dark"),
+    );
   },
 };
 
@@ -325,16 +402,16 @@ export const GivesTheStoredSchemeWhenTheForceIsLifted: Story = {
   },
   render: () => <ForcedThenFree />,
   play: async ({ canvas }) => {
-    const scheme = () => schemeOn(canvas.getByRole("region"));
+    const region = () => canvas.getByRole("region");
     const forceOrFree = canvas.getByRole("button", { name: "Force or free" });
 
-    await waitFor(() => expect(scheme()).toBe("light"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "light"));
     await userEvent.click(forceOrFree);
-    await waitFor(() => expect(scheme()).toBe("dark"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "dark"));
     await userEvent.click(forceOrFree);
-    await waitFor(() => expect(scheme()).toBe("light"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "light"));
     await userEvent.click(forceOrFree);
-    await waitFor(() => expect(scheme()).toBe("dark"));
+    await waitFor(() => expect(region()).toHaveAttribute(colorSchemeAttribute, "dark"));
     await expect(canvas.getByRole("status")).toHaveTextContent(/^light dark light dark$/);
   },
 };

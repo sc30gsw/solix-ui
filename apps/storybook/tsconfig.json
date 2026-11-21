@@ -12,6 +12,13 @@
     "vite.config.ts",
     "stories-project.ts",
     "story-color-scheme.ts",
-    "story-color-scheme.setup.ts"
+    "story-color-scheme.setup.ts",
+    "story-controls.d.ts",
+    "story-meta.ts",
+    "every-value.tsx",
+    "story-records.ts",
+    "story-records.setup.ts",
+    "story-records-command.ts",
+    "instrumented-library.ts"
   ]
 }

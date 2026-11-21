@@ -95,15 +95,21 @@ type HiddenAtAWidth = { className: string; query: (width: string) => string };
 type HiddenInAScheme = { className: string; scheme: SolixComputedColorScheme };
 
 const visibilityTable = {
+  /** Hides it from this breakpoint's width up. */
   hiddenFrom: { className: "hidden-from", query: (width: string) => `(min-width: ${width})` },
+  /** Shows it only from this breakpoint's width up. */
   visibleFrom: { className: "visible-from", query: (width: string) => `(width < ${width})` },
+  /** Hides it in the light colour scheme. */
   lightHidden: { className: "light-hidden", scheme: "light" },
+  /** Hides it in the dark colour scheme. */
   darkHidden: { className: "dark-hidden", scheme: "dark" },
 } satisfies Record<string, HiddenAtAWidth | HiddenInAScheme>;
 
 export const baseKey = "base";
 
 type Rows = typeof stylePropTable;
+export type StylePropRows = Rows;
+export type VisibilityRows = typeof visibilityTable;
 export type StylePropName = keyof Rows;
 export type CanonicalStylePropName = {
   [Name in StylePropName]: Rows[Name] extends AliasRow ? never : Name;
@@ -115,9 +121,9 @@ export type RowOf<Name extends StylePropName> = Rows[Name] extends {
   : Rows[Name];
 export type Breakpoint = keyof typeof breakpointWidths;
 export type ResponsiveKey = typeof baseKey | Breakpoint;
-export type VisibilityPropName = keyof typeof visibilityTable;
+export type VisibilityPropName = keyof VisibilityRows;
 export type VisibilityValue<Name extends VisibilityPropName> = Name extends VisibilityPropName
-  ? (typeof visibilityTable)[Name] extends HiddenAtAWidth
+  ? VisibilityRows[Name] extends HiddenAtAWidth
     ? Breakpoint
     : boolean
   : never;

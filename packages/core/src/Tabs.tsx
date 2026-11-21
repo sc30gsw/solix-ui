@@ -1,7 +1,13 @@
 import { createUncontrolled } from "@solix/primitives";
 import * as stylex from "@stylexjs/stylex";
 import { createBehaviour, tabs } from "#/src/headless.ts";
-import { createParts, type ElementProps } from "#/src/parts.ts";
+import {
+  type ControlledProps,
+  createParts,
+  defaultsOf,
+  type ElementProps,
+  withDefaults,
+} from "#/src/parts.ts";
 import { stepOverDisabled } from "#/src/step-over-disabled.ts";
 import { TabsContext, type TabsOrientation } from "#/src/tabs-context.ts";
 import { TabsList } from "#/src/TabsList.tsx";
@@ -25,27 +31,37 @@ const styles = stylex.create({
 export type TabsProps = ElementProps<
   "div",
   typeof styles,
-  {
-    value?: string | null;
-    defaultValue?: string | null;
-    onChange?: (value: string | null) => void;
+  ControlledProps<string | null> & {
+    /** Lays the tabs out in a row or a column; the arrow keys follow it. */
     orientation?: TabsOrientation;
+    /** Lets the arrow keys wrap from the last tab to the first and back. */
     loop?: boolean;
+    /** Selects a tab when the arrow keys move focus to it; otherwise Enter or Space selects it. */
     activateTabWithKeyboard?: boolean;
+    /** Lets a press on the selected tab deselect it. */
     allowTabDeactivation?: boolean;
+    /** Keeps every panel's content in the page, hidden, while its tab is not selected. */
     keepMounted?: boolean;
   }
 >;
 
-export function Tabs(props: TabsProps) {
+const defaults = defaultsOf<TabsProps>()({
+  loop: true,
+  activateTabWithKeyboard: true,
+  allowTabDeactivation: false,
+  keepMounted: true,
+});
+
+export function Tabs(rawProps: TabsProps) {
+  const props = withDefaults(defaults, rawProps);
   const [value, setValue] = createUncontrolled<string | null>({
     value: () => props.value,
     defaultValue: () => props.defaultValue,
     finalValue: null,
     onChange: (selected) => props.onChange?.(selected),
   });
-  const loop = () => props.loop ?? true;
-  const activateTabWithKeyboard = () => props.activateTabWithKeyboard ?? true;
+  const loop = () => props.loop;
+  const activateTabWithKeyboard = () => props.activateTabWithKeyboard;
   const behaviour = createBehaviour(tabs, () => ({
     value: value(),
     onValueChange: (selected: string | null) => setValue(selected),
@@ -84,8 +100,8 @@ export function Tabs(props: TabsProps) {
           selected: value,
           baseId: () => (typeof props.id === "string" ? props.id : undefined),
           steps,
-          allowTabDeactivation: () => props.allowTabDeactivation ?? false,
-          keepMounted: () => props.keepMounted ?? true,
+          allowTabDeactivation: () => props.allowTabDeactivation,
+          keepMounted: () => props.keepMounted,
         }}
       >
         {props.children}

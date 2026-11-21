@@ -11,6 +11,14 @@ export const cssColorSchemeOf = {
 
 export type SolixColorScheme = keyof typeof cssColorSchemeOf;
 
+/** The colour scheme options that `SolixProvider` and `ColorSchemeScript` both take. */
+export type ColorSchemeOptions = {
+  /** The colour scheme while nothing is stored; `auto` follows the system. */
+  defaultColorScheme?: SolixColorScheme;
+  /** Holds the colour scheme to this one, whatever is stored or picked. */
+  forceColorScheme?: SolixComputedColorScheme;
+};
+
 export const systemColorScheme = "auto" satisfies SolixColorScheme;
 
 export const defaultColorScheme = "light" satisfies SolixComputedColorScheme;

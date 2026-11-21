@@ -38,7 +38,7 @@ It does if it edits any of these:
 | `vite.config.ts` | It sets the test include globs and the global setup. |
 | `@stylexjs/babel-plugin`, `@stylexjs/stylex`, `@ui-sdk/core`, `@babel/core`, `@babel/plugin-syntax-jsx`, `@babel/preset-typescript`, `postcss` and `postcss-selector-parser` in the catalog in `pnpm-workspace.yaml` | Each at the version the catalog pins. The module and function that `sdkHiddenRuleSource` names hold for that version of the SDK. `@babel/core` runs the build pipeline with `@babel/preset-typescript`, and with `@babel/plugin-syntax-jsx` for a `.tsx` file, `postcss` parses the SDK's rule in the build and the stylesheet in the tests, and `postcss-selector-parser` parses each selector for `page-rules.ts`, which reads its type guards, `isTag`, `isClassName`, `isAttribute`, `isCombinator` and `isPseudoClass`. |
 
-Last confirmed against commit `ab35373`. Run `git diff ab35373 -- packages/core scripts/dist-specifiers.ts scripts/subpath.ts apps/playground/tests tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `c07710d`. Run `git diff c07710d -- packages/core scripts/dist-specifiers.ts scripts/subpath.ts apps/playground/tests tests/support scripts/syntax.ts scripts/syntax scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 
@@ -90,3 +90,4 @@ No verifier runs on a JavaScript build script, so this is not a proof. `styleshe
 - Upgrading StyleX: change the version in the catalog in `pnpm-workspace.yaml`, then run the check.
 - Upgrading the SDK: if the build fails in `behaviourSdkHiddenRule`, find where the new version writes its hidden rule, point `sdkHiddenRuleSource` at it, and run the check; `behaviour-seam.test.ts` fails if the rule the SDK writes at run time differs from the one the build read.
 - Using a StyleX feature listed under "does not cover": add it to the generator first.
+- Mutation check after editing covered code: copy `packages/core/src/layers.ts`, reverse `outerLayers` in `outerLayerOrder`, so the stylesheet orders `solix` before `ui-sdk`, and run the command. The generated check and the built stylesheet's first-statement check must fail, and so must the playground's seam check in each installed engine. Restore the file and confirm with `cmp`.

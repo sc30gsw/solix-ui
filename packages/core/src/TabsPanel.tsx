@@ -16,7 +16,12 @@ const styles = stylex.create({
 export type TabsPanelProps = ElementProps<
   "div",
   typeof styles,
-  { value: string; keepMounted?: boolean }
+  {
+    /** The value of the tab that shows this panel. */
+    value: string;
+    /** Keeps the panel's content in the page, hidden, while its tab is not selected, even when the `Tabs` drop the others'. */
+    keepMounted?: boolean;
+  }
 >;
 
 export function TabsPanel(props: TabsPanelProps) {

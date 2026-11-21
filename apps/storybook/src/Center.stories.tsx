@@ -1,17 +1,30 @@
 import { Center } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import { everyValueOf } from "#/every-value.tsx";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Center,
+  argTypes: argTypesOf(Center),
   args: { children: "Centred content", h: 120 },
-} satisfies Meta<typeof Center>;
+} satisfies ComponentMeta<typeof Center>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 
 export const Inline: Story = {
   args: { inline: true },
 };
+
+export const AsASpan: Story = {
+  render: () => (
+    <Center component="span" inline>
+      Centred in a span
+    </Center>
+  ),
+};
+
+export const EveryInline: Story = everyValueOf(meta, "inline");

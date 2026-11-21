@@ -1,8 +1,10 @@
 import { Grid } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Grid.Col,
+  argTypes: argTypesOf(Grid.Col),
   args: { span: 6, children: "A column of six" },
   render: (args) => (
     <Grid>
@@ -10,11 +12,11 @@ const meta = {
       <Grid.Col span="auto">The rest</Grid.Col>
     </Grid>
   ),
-} satisfies Meta<typeof Grid.Col>;
+} satisfies ComponentMeta<typeof Grid.Col>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 
@@ -24,4 +26,8 @@ export const Offset: Story = {
 
 export const Content: Story = {
   args: { span: "content" },
+};
+
+export const OrderedAndAligned: Story = {
+  args: { order: 2, align: "flex-end" },
 };

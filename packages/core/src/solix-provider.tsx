@@ -6,61 +6,75 @@ import {
   type ProvidedColorScheme,
 } from "#/src/color-scheme.ts";
 import type { SolixColorSchemeManager } from "#/src/color-scheme-manager.ts";
-import { defaultColorScheme, type SolixColorScheme } from "#/src/color-schemes.ts";
-import type { SolixComputedColorScheme } from "#/src/computed-color-scheme.ts";
+import { type ColorSchemeOptions, defaultColorScheme } from "#/src/color-schemes.ts";
 import { type SolixTheme, themeStyleSheet } from "#/src/create-theme.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { localStorageColorSchemeManager } from "#/src/local-storage-manager.ts";
 import { type GetStyleNonce, PageNonceContext } from "#/src/run-time-style.ts";
+import { type DefaultValues, defaultsOf, type WithDefaults, withDefaults } from "#/src/parts.ts";
 
-export type SolixProviderProps = {
+export type SolixProviderProps = ColorSchemeOptions & {
+  /** The theme whose tokens the provider sets, made with `createTheme`. */
   theme?: SolixTheme;
+  /** Gives the Content Security Policy nonce for every style the library adds at run time. */
   getStyleNonce?: GetStyleNonce;
+  /** The selector the theme's custom properties are set on; `:root` unless given. */
   cssVariablesSelector?: string;
+  /** Adds the theme's custom properties to the page; turn it off when the stylesheet already holds them. */
   withCssVariables?: boolean;
+  /** Stores the colour scheme the user picks and tells of changes; `localStorage` unless given. */
   colorSchemeManager?: SolixColorSchemeManager;
-  defaultColorScheme?: SolixColorScheme;
-  forceColorScheme?: SolixComputedColorScheme;
+  /** Gives the element that carries the colour scheme; `<html>` unless given. */
   getRootElement?: () => HTMLElement | undefined;
+  /** The content that reads the provider's colour scheme and style nonce; the theme reaches whatever `cssVariablesSelector` selects. */
   children?: JSX.Element;
 };
 
 const storedInLocalStorage = localStorageColorSchemeManager();
+const defaults = defaultsOf<SolixProviderProps>()({
+  defaultColorScheme,
+  cssVariablesSelector: ":root",
+  withCssVariables: true,
+});
 const schemeProps = [
   "colorSchemeManager",
   "defaultColorScheme",
   "forceColorScheme",
 ] as const satisfies readonly (keyof SolixProviderProps)[];
 
-function colorSchemeOf(props: SolixProviderProps): ProvidedColorScheme {
+function colorSchemeOf(
+  given: SolixProviderProps,
+  props: WithDefaults<SolixProviderProps, DefaultValues<typeof defaults>>,
+): ProvidedColorScheme {
   const outer = useContext(ColorSchemeContext);
-  const given = untrack(() => ({
-    root: props.getRootElement !== undefined,
-    scheme: schemeProps.filter((name) => props[name] !== undefined),
+  const passedOn = untrack(() => ({
+    root: given.getRootElement !== undefined,
+    scheme: schemeProps.filter((name) => given[name] !== undefined),
   }));
-  if (outer === null || given.root) {
+  if (outer === null || passedOn.root) {
     return createProvidedColorScheme({
       manager: () => props.colorSchemeManager ?? storedInLocalStorage,
-      defaultColorScheme: () => props.defaultColorScheme ?? defaultColorScheme,
+      defaultColorScheme: () => props.defaultColorScheme,
       forceColorScheme: () => props.forceColorScheme,
       getRootElement: () =>
         props.getRootElement === undefined ? document.documentElement : props.getRootElement(),
     });
   }
-  if (given.scheme.length > 0) {
+  if (passedOn.scheme.length > 0) {
     throw new Error(
-      `A SolixProvider inside another is given ${given.scheme.join(", ")} and no getRootElement. Give it getRootElement, the element its own scheme is written on, or leave these props out, and it passes on the scheme of the provider around it.`,
+      `A SolixProvider inside another is given ${passedOn.scheme.join(", ")} and no getRootElement. Give it getRootElement, the element its own scheme is written on, or leave these props out, and it passes on the scheme of the provider around it.`,
     );
   }
   return outer;
 }
 
-export function SolixProvider(props: SolixProviderProps) {
+export function SolixProvider(rawProps: SolixProviderProps) {
+  const props = withDefaults(defaults, rawProps);
   const outerNonce = useContext(PageNonceContext);
-  const colorScheme = colorSchemeOf(props);
+  const colorScheme = colorSchemeOf(rawProps, props);
   const styleSheet = () =>
-    (props.withCssVariables ?? true)
-      ? themeStyleSheet(props.theme ?? {}, props.cssVariablesSelector ?? ":root")
+    props.withCssVariables
+      ? themeStyleSheet(props.theme ?? {}, props.cssVariablesSelector)
       : undefined;
   return (
     <PageNonceContext value={() => props.getStyleNonce?.() ?? outerNonce()}>
