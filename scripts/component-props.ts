@@ -323,7 +323,22 @@ export function componentPropsOf(entry: string): ComponentProps {
   return libraryOf(entry).props;
 }
 
-const resolved = new Map<string, Library>();
+const resolvedLibraries = "solix:resolved-libraries";
+
+/**
+ * One cache per process, kept on globalThis: the Vite config bundles this module and Storybook's
+ * main.ts imports it on its own, so two instances of it read the library, and they share this.
+ */
+function sharedCache<V>(key: string): Map<string, V> {
+  const symbol = Symbol.for(key);
+  const found: unknown = Reflect.get(globalThis, symbol);
+  if (found instanceof Map) return found;
+  const made = new Map<string, V>();
+  Reflect.set(globalThis, symbol, made);
+  return made;
+}
+
+const resolved = sharedCache<Library>(resolvedLibraries);
 
 function resolvedLibrary(entry: string): Library {
   const library = resolved.get(entry) ?? libraryOf(entry);
