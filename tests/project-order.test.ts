@@ -1,22 +1,34 @@
 import { expect, inject, test } from "vite-plus/test";
+import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
+import { enginesToVerify } from "#/scripts/browser-engines.mjs";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 
 const checkerProject = "rules";
 const browserProject = "browser";
+const nodeProject = "node";
+const storySpecProject = "story spec";
 
 function isOf(name: string, project: string): boolean {
   return name === project || name.startsWith(`${project} (`);
 }
 
-function refuseAFilteredRun(
-  projects: readonly string[],
-  needed: readonly string[],
-  cannotTell: string,
-): void {
-  const missing = needed.filter((project) => !projects.some((name) => isOf(name, project)));
-  if (missing.length > 0 || projects.length < 2) {
+function everyProject(): string[] {
+  const inEachEngine = [browserProject, ...storiesServers.map(({ project }) => project)];
+  return [
+    checkerProject,
+    nodeProject,
+    storySpecProject,
+    ...enginesToVerify().flatMap((engine) =>
+      inEachEngine.map((project) => `${project} (${engine})`),
+    ),
+  ];
+}
+
+function refuseAFilteredRun(projects: readonly string[], cannotTell: string): void {
+  const missing = everyProject().filter((project) => !projects.includes(project));
+  if (missing.length > 0) {
     throw new Error(
-      `The run is filtered: it holds only the projects ${projects.join(", ")}${missing.length > 0 ? `, and no ${missing.join(" or ")} project` : ""}, so it cannot tell ${cannotTell}. Run it without --project.`,
+      `The run is filtered: it holds only the projects ${projects.join(", ")}, and no ${missing.join(" or ")} project, so it cannot tell ${cannotTell}. Run it without --project.`,
     );
   }
 }
@@ -25,7 +37,6 @@ test(`the ${checkerProject} project's sequence group comes before that of every 
   const settings = inject("runSettingsOfEachProject");
   refuseAFilteredRun(
     Object.keys(settings),
-    [checkerProject],
     `whether the ${checkerProject} project runs before the others`,
   );
   const others = Object.entries(settings).filter(([name]) => name !== checkerProject);
@@ -55,7 +66,6 @@ test("no browser project saves a screenshot when a test fails: every project who
   const settings = inject("runSettingsOfEachProject");
   refuseAFilteredRun(
     Object.keys(settings),
-    [browserProject],
     "whether every project whose browser is enabled saves no screenshot",
   );
   const inABrowser = Object.entries(settings).filter(([, { browser }]) => browser.enabled);
@@ -74,7 +84,6 @@ test(`the ${browserProject} project's instances run in a sequence group no other
   const settings = inject("runSettingsOfEachProject");
   refuseAFilteredRun(
     Object.keys(settings),
-    [checkerProject, browserProject],
     `whether the ${browserProject} project's instances share a sequence group with another project`,
   );
   const isBrowser = (name: string) => isOf(name, browserProject);
