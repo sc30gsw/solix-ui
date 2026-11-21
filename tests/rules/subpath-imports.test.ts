@@ -121,7 +121,10 @@ test(`the rule flags every way a file can reach a file of its own package withou
     const changed = migrated.map((file) => relative(root, file));
     const after = moduleReferences(filesTheRuleCovers(root));
     const reachedAt = (references: readonly ModuleReference[]) =>
-      references.map(({ file, line, reached }) => `${relative(root, file)}:${line} ${reached}`);
+      references.map(
+        ({ file, line, reach }) =>
+          `${relative(root, file)}:${line} ${reach.kind === "file" ? reach.path : reach.kind}`,
+      );
 
     expect(changed.toSorted()).toEqual([
       "package.json",
@@ -160,6 +163,54 @@ test(`a file outside its package keeps its relative specifier, because Node refu
       expect(errorCodeOf(() => resolveFrom(outsideThePackage.replace("*", "src/a.ts")))).toBe(
         "ERR_INVALID_PACKAGE_TARGET",
       );
+    },
+  );
+});
+
+test("a specifier that an ambient module declaration of its package declares, such as a module a Vite plugin serves, reaches no file, so the rule neither rewrites it nor reports it unresolved, while a path no declaration holds still is", async () => {
+  await inTemporaryTree(
+    {
+      "package.json": JSON.stringify({ name: "served", type: "module" }),
+      "src/served.d.ts": 'declare module "virtual:served" {\n  export const served: number;\n}\n',
+      "src/uses-it.ts": 'import { served } from "virtual:served";\nexport { served };\n',
+      "src/uses-nothing.ts": 'import { missing } from "virtual:missing";\nexport { missing };\n',
+    },
+    (root) => {
+      const references = moduleReferences(filesTheRuleCovers(root));
+      const named = (found: readonly ModuleReference[]) =>
+        found.map(({ file, specifier }) => `${relative(root, file)} ${specifier}`).toSorted();
+
+      expect(named(references)).toEqual([
+        "src/uses-it.ts virtual:served",
+        "src/uses-nothing.ts virtual:missing",
+      ]);
+      expect(misspelt(references, root)).toEqual([]);
+      expect(named(unresolvedPaths(references))).toEqual(["src/uses-nothing.ts virtual:missing"]);
+    },
+  );
+});
+
+test("a wildcard ambient module declaration, such as one for every .svg, declares no module of its own, so the rule still resolves a path it matches with Node: a path to no file is unresolved, and a path to a file of the package is rewritten", async () => {
+  await inTemporaryTree(
+    {
+      "package.json": JSON.stringify({ name: "assets", type: "module" }),
+      "src/assets.d.ts":
+        'declare module "*.svg" {\n  const url: string;\n  export default url;\n}\n',
+      "src/icon.svg": "<svg></svg>\n",
+      "src/nested/uses-icon.ts": 'import icon from "../icon.svg";\nexport { icon };\n',
+      "src/nested/uses-missing.ts": 'import missing from "./missing.svg";\nexport { missing };\n',
+    },
+    (root) => {
+      const references = moduleReferences(filesTheRuleCovers(root));
+      const named = (found: readonly ModuleReference[]) =>
+        found.map(({ file, specifier }) => `${relative(root, file)} ${specifier}`).toSorted();
+
+      expect(named(unresolvedPaths(references))).toEqual([
+        "src/nested/uses-missing.ts ./missing.svg",
+      ]);
+      expect(
+        misspelt(references, root).map(({ file, wanted }) => `${relative(root, file)} ${wanted}`),
+      ).toEqual(["src/nested/uses-icon.ts #/src/icon.svg"]);
     },
   );
 });

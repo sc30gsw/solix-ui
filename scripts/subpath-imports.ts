@@ -35,8 +35,13 @@ export type ModuleReference = {
   specifier: string;
   start: number;
   end: number;
-  reached: string | undefined;
+  reach: ModuleReach;
 };
+
+export type ModuleReach =
+  | { kind: "file"; path: string }
+  | { kind: "ambient" }
+  | { kind: "unresolved" };
 
 export type Misspelt = ModuleReference & { wanted: string };
 
@@ -55,6 +60,25 @@ function resolvedByNode(file: string, specifier: string): string | undefined {
   }
 }
 
+function declaresExactly(declaration: ts.Node, specifier: string): boolean {
+  return (
+    ts.isModuleDeclaration(declaration) &&
+    ts.isStringLiteral(declaration.name) &&
+    declaration.name.text === specifier
+  );
+}
+
+function reachOf(file: string, specifier: string, declaration: ts.Node | undefined): ModuleReach {
+  if (declaration !== undefined && declaresExactly(declaration, specifier)) {
+    return { kind: "ambient" };
+  }
+  const path =
+    declaration !== undefined && !ts.isModuleDeclaration(declaration)
+      ? realpathSync(fileOf(declaration))
+      : resolvedByNode(file, specifier);
+  return path === undefined ? { kind: "unresolved" } : { kind: "file", path };
+}
+
 export function moduleReferences(files: readonly string[]): ModuleReference[] {
   const program = openProgram(files);
   try {
@@ -65,6 +89,7 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
         const specifier = moduleSpecifierOf(node);
         if (!specifier || !ts.isStringLiteralLikeNode(specifier)) return [];
         const declaration = symbolOf(program, specifier)?.declarations?.[0]?.resolve();
+        const reach = reachOf(file, specifier.text, declaration);
         return [
           {
             file,
@@ -73,9 +98,7 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
             specifier: specifier.text,
             start: specifier.getStart(),
             end: specifier.end,
-            reached: declaration
-              ? realpathSync(fileOf(declaration))
-              : resolvedByNode(file, specifier.text),
+            reach,
           },
         ];
       });
@@ -87,7 +110,7 @@ export function moduleReferences(files: readonly string[]): ModuleReference[] {
 
 export function unresolvedPaths(references: readonly ModuleReference[]): ModuleReference[] {
   return references.filter(
-    ({ reached, specifier }) => reached === undefined && !namesAPackage(specifier),
+    ({ reach, specifier }) => reach.kind === "unresolved" && !namesAPackage(specifier),
   );
 }
 
@@ -97,15 +120,16 @@ export function misspelt(
 ): Misspelt[] {
   const realRoot = realpathSync(root);
   return references.flatMap((reference) => {
+    const { reach } = reference;
     if (
-      reference.reached === undefined ||
+      reach.kind !== "file" ||
       namesAPackage(reference.specifier) ||
-      !insideOf(realRoot, reference.reached) ||
-      relative(realRoot, reference.reached).split(sep).includes(installedPackages)
+      !insideOf(realRoot, reach.path) ||
+      relative(realRoot, reach.path).split(sep).includes(installedPackages)
     ) {
       return [];
     }
-    const wanted = subpathSpecifierOf(reference.file, reference.reached);
+    const wanted = subpathSpecifierOf(reference.file, reach.path);
     return wanted === undefined || wanted === reference.specifier ? [] : [{ ...reference, wanted }];
   });
 }

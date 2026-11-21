@@ -41,6 +41,7 @@ export {
   isJsxText,
   isLiteralTypeNode,
   isMappedTypeNode,
+  isModuleDeclaration,
   isMethodDeclaration,
   isNamedExports,
   isNamedImports,
