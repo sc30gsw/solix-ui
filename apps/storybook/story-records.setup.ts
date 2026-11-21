@@ -41,9 +41,11 @@ function named({ component, prop, value }: Substitution): string {
   return `${component}'s ${prop}${value === undefined ? "" : ` as ${JSON.stringify(value)}`}`;
 }
 
+class RanOutOfTime extends Error {}
+
 function outOfTime(timeout: number, substitution: Substitution | undefined): Error {
   const how = substitution === undefined ? "as written" : `with ${named(substitution)} substituted`;
-  return new Error(
+  return new RanOutOfTime(
     `The story ran again ${how} and did not end within its timeout of ${timeout} ms, so that run counts as failed.`,
   );
 }
@@ -79,19 +81,23 @@ function passedAgain(failure: unknown, when: string): void {
   );
 }
 
+type Outcome = { readonly played: boolean; readonly timedOut?: string };
+
 async function failsInItsPlay(
   story: RunnableStory,
   timeout: number,
   substitution: Substitution,
-): Promise<boolean> {
-  const failed = (await ranAgain(story, timeout, substitution)) !== undefined;
+): Promise<Outcome> {
+  const failure = await ranAgain(story, timeout, substitution);
+  const failed = failure !== undefined;
   const { mounted, playReturned } = lastStoryRun();
   const tookPlace = substitutionTookPlace();
   passedAgain(
     await ranAgain(story, timeout),
     `right after it ran with ${named(substitution)} substituted`,
   );
-  return failed && mounted && !playReturned && tookPlace;
+  const played = failed && mounted && !playReturned && tookPlace;
+  return failure instanceof RanOutOfTime ? { played, timedOut: failure.message } : { played };
 }
 
 function keyOf({ component, prop, value }: Substitution): string {
@@ -112,11 +118,13 @@ async function substituted(
         passedAgain(await ranAgain(story, timeout), "when it ran again before any substitution");
         ranBefore = true;
       }
-      if (!(await failsInItsPlay(story, timeout, substitution))) continue;
+      const outcome = await failsInItsPlay(story, timeout, substitution);
+      if (!outcome.played) continue;
       played.add(keyOf(substitution));
       mount.played.push({
         prop: substitution.prop,
         ...("value" in substitution ? { value: substitution.value } : {}),
+        ...(outcome.timedOut === undefined ? {} : { timedOut: outcome.timedOut }),
       });
     }
   }
