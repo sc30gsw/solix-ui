@@ -22,7 +22,15 @@ type RegistryPin = { source: "registry"; name: string; registryName: string; pin
 
 export type Pin = RegistryPin | { source: "node"; name: typeof nodePinName; pinned: string };
 
-export type HeldBack = { name: string; reason: string; liftWhen: string; holds?: string };
+export type HoldCondition = { pin: string; requiresExactly: { name: string; version: string } };
+
+export type HeldBack = {
+  name: string;
+  reason: string;
+  liftWhen: string;
+  holds?: string;
+  while?: HoldCondition;
+};
 
 const heldDirections = ["behind", "ahead"];
 
@@ -45,7 +53,11 @@ export type PinComparison =
   | (Compared & { status: "ahead" })
   | { pin: Pin; channel: string; status: "unknown"; why: string };
 
-export type Report = { comparisons: PinComparison[]; problems: string[] };
+export type ProblemKind = "behind" | "ahead" | "unknown" | "hold";
+
+export type Problem = { kind: ProblemKind; message: string };
+
+export type Report = { comparisons: PinComparison[]; problems: Problem[] };
 
 export type Published = { version: string; eligibleAt: number };
 
@@ -390,6 +402,33 @@ export function holdsWithoutReason(heldBack: readonly HeldBack[]): string[] {
     );
 }
 
+export function holdsWhoseConditionFailed(
+  heldBack: readonly HeldBack[],
+  pins: readonly Pin[],
+  documents: Record<string, RegistryDocument>,
+): string[] {
+  return heldBack.flatMap((held) => {
+    const condition = held.while;
+    if (condition === undefined) return [];
+    const pin = pins.find(
+      (candidate): candidate is RegistryPin =>
+        candidate.source === "registry" && candidate.name === condition.pin,
+    );
+    if (pin === undefined) {
+      return [
+        `${held.name}: its hold names ${condition.pin}, which is not a pin of the catalog; name a registry pin.`,
+      ];
+    }
+    const { name, version } = condition.requiresExactly;
+    const required = exactlyRequiredBy(documents[pin.registryName]?.versions?.[pin.pinned]);
+    return required.some((release) => release.name === name && release.version === version)
+      ? []
+      : [
+          `${held.name}: it is held back while ${pin.name} ${pin.pinned} requires ${name} ${version} exactly, and ${pin.name} ${pin.pinned} no longer does; move ${held.name} and drop or rewrite its entry in ${heldBackFile}.`,
+        ];
+  });
+}
+
 export function compareWithNewest(input: {
   pins: readonly Pin[];
   documents: Record<string, RegistryDocument>;
@@ -422,24 +461,112 @@ export function compareWithNewest(input: {
           input.heldBack.find(({ name }) => name === pin.name),
         );
   });
-  const problems = [
-    ...comparisons.flatMap((comparison) => {
+  const holdProblems = [
+    ...holdsOfNothing(input.heldBack, comparisons),
+    ...holdsWithoutReason(input.heldBack),
+    ...holdsWhoseConditionFailed(input.heldBack, input.pins, input.documents),
+  ];
+  const problems: Problem[] = [
+    ...comparisons.flatMap((comparison): Problem[] => {
       if (comparison.status === "ahead") {
         return [
-          `${comparison.pin.name}: ${comparison.pin.pinned} is ahead of ${comparison.newest}, the newest release on its channel (${comparison.channel}). Pin ${comparison.newest}.`,
+          {
+            kind: "ahead",
+            message: `${comparison.pin.name}: ${comparison.pin.pinned} is ahead of ${comparison.newest}, the newest release on its channel (${comparison.channel}). Pin ${comparison.newest}.`,
+          },
         ];
       }
       if (comparison.status === "behind") {
         return [
-          `${comparison.pin.name}: ${comparison.pin.pinned} is behind ${comparison.eligible}, the newest release it may move to (${comparison.channel}). Move to it, or hold it back in ${heldBackFile} with a reason and a liftWhen.`,
+          {
+            kind: "behind",
+            message: `${comparison.pin.name}: ${comparison.pin.pinned} is behind ${comparison.eligible}, the newest release it may move to (${comparison.channel}). Move to it, or hold it back in ${heldBackFile} with a reason and a liftWhen.`,
+          },
         ];
       }
-      return comparison.status === "unknown" ? [`${comparison.pin.name}: ${comparison.why}`] : [];
+      return comparison.status === "unknown"
+        ? [{ kind: "unknown", message: `${comparison.pin.name}: ${comparison.why}` }]
+        : [];
     }),
-    ...holdsOfNothing(input.heldBack, comparisons),
-    ...holdsWithoutReason(input.heldBack),
+    ...holdProblems.map((message): Problem => ({ kind: "hold", message })),
   ];
   return { comparisons, problems };
+}
+
+export type RunEnvironment = Record<string, string | undefined>;
+
+export function failureLines(problems: readonly Problem[], run: RunEnvironment): string[] {
+  const messages = problems.map(({ message }) => message);
+  if (run.GITHUB_EVENT_NAME !== "pull_request" || !problems.some(({ kind }) => kind === "behind")) {
+    return messages;
+  }
+  const base = run.GITHUB_BASE_REF || "main";
+  return [
+    ...messages,
+    `On a pull request the check reads the registry as it is now, so a pin it names as behind is behind on ${base} too, unless this pull request moved it.`,
+    `Move it in a build(deps) pull request of its own to ${base}, or hold it back there with a reason, then merge ${base} into this branch.`,
+  ];
+}
+
+const keysOfAHold = ["name", "reason", "liftWhen", "holds", "while"];
+const keysOfACondition = ["pin", "requiresExactly"];
+const keysOfARequiredRelease = ["name", "version"];
+
+function keysBeyond(part: unknown, allowed: readonly string[]): string[] {
+  return isRecord(part) ? Object.keys(part).filter((key) => !allowed.includes(key)) : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function holdShapeProblems(entry: unknown): string[] {
+  if (!isRecord(entry)) return ["give it as an object."];
+  const beyond = keysBeyond(entry, keysOfAHold);
+  const condition = entry.while;
+  const required = isRecord(condition) ? condition.requiresExactly : undefined;
+  const conditionBeyond = keysBeyond(condition, keysOfACondition);
+  const requiredBeyond = keysBeyond(required, keysOfARequiredRelease);
+  return [
+    ...(beyond.length > 0
+      ? [
+          `it sets ${beyond.join(", ")}; an entry sets only name, reason, liftWhen, holds and while.`,
+        ]
+      : []),
+    ...(conditionBeyond.length > 0
+      ? [`while sets ${conditionBeyond.join(", ")}; it sets only pin and requiresExactly.`]
+      : []),
+    ...(requiredBeyond.length > 0
+      ? [`while.requiresExactly sets ${requiredBeyond.join(", ")}; it sets only name and version.`]
+      : []),
+    ...(["name", "reason", "liftWhen"].every((key) => typeof entry[key] === "string")
+      ? []
+      : ["give it a name, a reason and a liftWhen, each a string."]),
+    ...(entry.holds === undefined ||
+    (typeof entry.holds === "string" && heldDirections.includes(entry.holds))
+      ? []
+      : ['holds is "behind" or "ahead".']),
+    ...(condition === undefined ||
+    (isRecord(condition) &&
+      typeof condition.pin === "string" &&
+      isRecord(required) &&
+      typeof required.name === "string" &&
+      typeof required.version === "string")
+      ? []
+      : ["give while a pin and a requiresExactly with a name and a version."]),
+  ];
+}
+
+export function heldBackFrom(value: unknown): HeldBack[] {
+  if (!Array.isArray(value)) throw new Error(`${heldBackFile}: give a list of entries.`);
+  const problems = value.flatMap((entry: unknown, index) => {
+    const name = isRecord(entry) && typeof entry.name === "string" ? entry.name : "no name";
+    return holdShapeProblems(entry).map(
+      (problem) => `${heldBackFile}: entry ${index + 1} (${name}): ${problem}`,
+    );
+  });
+  if (problems.length > 0) throw new Error(problems.join("\n"));
+  return value as HeldBack[];
 }
 
 export function reportTable(comparisons: readonly PinComparison[]): string {

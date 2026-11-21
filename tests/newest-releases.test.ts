@@ -1,6 +1,8 @@
 import { expect, test } from "vite-plus/test";
 import {
   compareWithNewest,
+  failureLines,
+  heldBackFrom,
   exactlyRequiredBy,
   type HeldBack,
   heldBackFile,
@@ -26,8 +28,10 @@ import { type Listing, now, policy, registryDocument } from "#/tests/support/reg
 import {
   cronProblems,
   expectEveryJobToRunWeeklyAndFailTheRun,
-  expectJobToHaveOneStepRunning,
+  weeklyWorkflow,
 } from "#/tests/support/weekly-workflow.ts";
+import { newestReleasesCheck } from "#/tests/support/release-checks.ts";
+import { gateJobProblems, workflowAt } from "#/tests/support/workflows.ts";
 
 const manifest = { packageManager: "pnpm@12.18.0", engines: { node: "^26.13.1" } };
 
@@ -78,15 +82,20 @@ const pins = pinsOf(manifest, {
   vite: "npm:@voidzero-dev/vite-plus-core@1.6.0",
 });
 
-function check(
-  options: {
-    pins?: Pin[];
-    documents?: Record<string, RegistryDocument>;
-    nodeReleases?: NodeRelease[];
-    heldBack?: HeldBack[];
-    untilStablePackages?: string[];
-  } = {},
-) {
+type CheckOptions = {
+  pins?: Pin[];
+  documents?: Record<string, RegistryDocument>;
+  nodeReleases?: NodeRelease[];
+  heldBack?: HeldBack[];
+  untilStablePackages?: string[];
+};
+
+function check(options: CheckOptions = {}) {
+  const found = report(options);
+  return { ...found, problems: found.problems.map(({ message }) => message) };
+}
+
+function report(options: CheckOptions = {}) {
   return compareWithNewest({
     pins: options.pins ?? pins,
     documents: options.documents ?? documents,
@@ -400,6 +409,115 @@ test("a pin behind its channel fails the check, unless the held-back list holds 
   ).toBe(false);
 });
 
+test("a hold that names a condition lasts only while that condition is true: while the pin it names, at the version the catalog pins, requires the named release exactly", () => {
+  const hold: HeldBack = {
+    name: "playwright",
+    reason: "The runner requires playwright-core 1.63.0 exactly.",
+    liftWhen: "the runner the catalog pins no longer requires playwright-core 1.63.0 exactly.",
+    while: { pin: "semver", requiresExactly: { name: "playwright-core", version: "1.63.0" } },
+  };
+  const requiring = (version: string) =>
+    registryDocument([
+      ["7.8.5", 30],
+      ["7.8.6", 10, { dependencies: { "playwright-core": version } }],
+      ["7.8.7", 0.25],
+    ]);
+  const held = (version: string) =>
+    check({ heldBack: [hold], documents: { ...documents, semver: requiring(version) } }).problems;
+
+  expect(held("1.63.0").filter((problem) => problem.startsWith("playwright:"))).toEqual([]);
+  expect(held("1.65.1")).toContain(
+    "playwright: it is held back while semver 7.8.6 requires playwright-core 1.63.0 exactly, and semver 7.8.6 no longer does; move playwright and drop or rewrite its entry in scripts/held-back-releases.json.",
+  );
+  expect(held("^1.63.0")).toContain(
+    "playwright: it is held back while semver 7.8.6 requires playwright-core 1.63.0 exactly, and semver 7.8.6 no longer does; move playwright and drop or rewrite its entry in scripts/held-back-releases.json.",
+  );
+  expect(
+    check({
+      heldBack: [{ ...hold, while: { ...hold.while, pin: "not-a-pin" } }] as HeldBack[],
+    }).problems,
+  ).toContain(
+    "playwright: its hold names not-a-pin, which is not a pin of the catalog; name a registry pin.",
+  );
+});
+
+const conditionedHold: HeldBack = {
+  name: "playwright",
+  reason: "The runner requires playwright-core 1.63.0 exactly.",
+  liftWhen: "the runner the catalog pins no longer requires playwright-core 1.63.0 exactly.",
+  while: { pin: "semver", requiresExactly: { name: "playwright-core", version: "1.63.0" } },
+};
+
+test("each problem has a kind: a pin behind, a pin ahead, a pin whose newest release cannot be told, or a hold", () => {
+  const kinds = (options: CheckOptions) =>
+    Object.fromEntries(
+      report(options).problems.map((problem) => [problem.message.split(":")[0], problem.kind]),
+    );
+
+  expect(kinds({})).toMatchObject({ playwright: "behind" });
+  expect(kinds({ pins: pinsOf(manifest, { semver: "9.0.0" }) })).toMatchObject({
+    semver: "ahead",
+  });
+  expect(kinds({ nodeReleases: [] })).toMatchObject({ [nodePinName]: "unknown" });
+  expect(kinds({ heldBack: [conditionedHold] })).toMatchObject({ playwright: "hold" });
+});
+
+const behind = { kind: "behind", message: "playwright: 1.63.0 is behind 1.65.1." } as const;
+const holdFailed = { kind: "hold", message: "playwright: its hold no longer applies." } as const;
+const onAPullRequest = { GITHUB_EVENT_NAME: "pull_request", GITHUB_BASE_REF: "release-2" };
+
+test("on a pull request, a failing check with a pin behind says that the pin is behind on the base branch the run names too, and that its fix is a build(deps) pull request of its own to it", () => {
+  expect(failureLines([behind], onAPullRequest)).toEqual([
+    behind.message,
+    "On a pull request the check reads the registry as it is now, so a pin it names as behind is behind on release-2 too, unless this pull request moved it.",
+    "Move it in a build(deps) pull request of its own to release-2, or hold it back there with a reason, then merge release-2 into this branch.",
+  ]);
+  expect(failureLines([behind], { GITHUB_EVENT_NAME: "pull_request" }).join("\n")).toContain(
+    "behind on main too",
+  );
+});
+
+test("a failing check adds no pull-request advice when no pin is behind, or when the run is not a pull request", () => {
+  expect(failureLines([holdFailed], onAPullRequest)).toEqual([holdFailed.message]);
+  expect(failureLines([behind], { ...onAPullRequest, GITHUB_EVENT_NAME: "push" })).toEqual([
+    behind.message,
+  ]);
+  expect(failureLines([behind], {})).toEqual([behind.message]);
+});
+
+test(`${heldBackFile} is read against its type, so an entry of the wrong shape fails by its place and its name`, () => {
+  const entry = { name: "a-package", reason: "Why.", liftWhen: "When." };
+
+  expect(heldBackFrom([entry])).toEqual([entry]);
+  expect(() => heldBackFrom({})).toThrow(`${heldBackFile}: give a list of entries.`);
+  expect(() => heldBackFrom([{ ...entry, while: { pin: "vite-plus" } }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): give while a pin and a requiresExactly with a name and a version.`,
+  );
+  expect(() => heldBackFrom([{ ...entry, reason: 1 }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): give it a name, a reason and a liftWhen, each a string.`,
+  );
+  expect(() => heldBackFrom([{ ...entry, holds: "sideways" }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): holds is "behind" or "ahead".`,
+  );
+  expect(() => heldBackFrom([{ ...entry, whlie: {} }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): it sets whlie; an entry sets only name, reason, liftWhen, holds and while.`,
+  );
+  const condition = { pin: "vite-plus", requiresExactly: { name: "vitest", version: "5.1.0" } };
+  expect(() => heldBackFrom([{ ...entry, while: { ...condition, until: "never" } }])).toThrow(
+    `${heldBackFile}: entry 1 (a-package): while sets until; it sets only pin and requiresExactly.`,
+  );
+  expect(() =>
+    heldBackFrom([
+      {
+        ...entry,
+        while: { ...condition, requiresExactly: { ...condition.requiresExactly, range: "^5" } },
+      },
+    ]),
+  ).toThrow(
+    `${heldBackFile}: entry 1 (a-package): while.requiresExactly sets range; it sets only name and version.`,
+  );
+});
+
 test("a held-back entry that holds nothing back, or has no reason or no liftWhen, fails the check", () => {
   const idle = { name: "vite", reason: "Waiting.", liftWhen: "it is out." };
   const unexplained = { name: "playwright", reason: "", liftWhen: "" };
@@ -444,8 +562,8 @@ test("every job of the weekly workflow runs each week and fails the run when it 
   expectEveryJobToRunWeeklyAndFailTheRun();
 });
 
-test("the pins job has exactly one step that runs the pin check, with no if and no continue-on-error", () => {
-  expectJobToHaveOneStepRunning("pins", "node scripts/check-newest-releases.ts");
+test("the pins job is a gate job that runs the pin check: its steps are exactly the checkout, the setup and the check, it sets only runs-on, timeout-minutes, steps and permissions, which only read, its workflow sets only name, on, permissions and jobs, and it reads no secret", () => {
+  expect(gateJobProblems(workflowAt(weeklyWorkflow), "pins", newestReleasesCheck)).toEqual([]);
 });
 
 test("a UI SDK pin follows the release the latest dist-tag names, once it is old enough to install: a release ahead of latest is not newer, a pin ahead of latest fails by name, and a document with no latest tag fails by name", () => {

@@ -1,1 +1,8 @@
-[]
+[
+  {
+    "name": "@vitest/browser-playwright",
+    "reason": "vite-plus, at the version the catalog pins, depends on vitest 5.1.0 and its @vitest packages exactly, and asks for @vitest/browser-playwright 5.1.0 as its peer, so a newer @vitest/browser-playwright installs a second vitest beside the one vp test runs.",
+    "liftWhen": "the vite-plus that the catalog pins no longer requires vitest 5.1.0 exactly; the check then fails on this entry by name.",
+    "while": { "pin": "vite-plus", "requiresExactly": { "name": "vitest", "version": "5.1.0" } }
+  }
+]
