@@ -3,6 +3,7 @@ import {
   calledDeclaration,
   declarationsOf,
   fileOf,
+  isDomLibraryFile,
   memberDeclarations,
   nameOf,
   stringsIn,
@@ -103,9 +104,21 @@ const listenerRegistrars: readonly Declared[] = ["watchEvents", "handleEvent", "
   (name) => ({ file: "internal-listener.ts", name }),
 );
 const registrarsOfSettings = ["listenAsAsked"];
-const focusMover: Declared = { file: "internal-focus.ts", name: "moveFocus" };
+const eventDispatcher = "dispatchEvent";
 const focusMoveEvents: readonly string[] = ["focus", "blur", "focusin", "focusout"];
-const dispatchers = ["dispatchEvent"];
+const eventsDispatchedBy: Record<string, readonly string[]> = {
+  focus: focusMoveEvents,
+  blur: ["blur", "focusout"],
+  click: ["click"],
+  showPopover: ["beforetoggle"],
+  hidePopover: ["beforetoggle"],
+  togglePopover: ["beforetoggle"],
+  requestSubmit: ["submit"],
+};
+
+type Dispatched = { types: readonly string[]; unknown: boolean; parameters: readonly number[] };
+
+const dispatchesNothing: Dispatched = { types: [], unknown: false, parameters: [] };
 
 function runsWhereItStands(later: Later, fn: ts.Node): boolean {
   const outer = outermost(fn);
@@ -162,8 +175,19 @@ type Walk = {
   reads: Set<ts.Node>;
   readsOfExemptions: Map<LayoutReadExemption, Set<ts.Node>>;
   visited: Map<FunctionNode, Set<LayoutReadExemption | undefined>>;
-  movesFocus: Map<FunctionNode, boolean>;
+  dispatches: Map<FunctionNode, Dispatched>;
+  registrations: Map<FunctionNode, Registration[]>;
+  calls: Map<ts.CallExpression, FunctionNode[]>;
+  domMethods: Map<ts.CallExpression, string | undefined>;
 };
+
+function functionsRunBy(walk: Walk, call: ts.CallExpression): FunctionNode[] {
+  const known = walk.calls.get(call);
+  if (known !== undefined) return known;
+  const called = functionsACallRuns(resolution(walk.library), call);
+  walk.calls.set(call, called);
+  return called;
+}
 
 function runFunction(walk: Walk, fn: FunctionNode, under: LayoutReadExemption | undefined): void {
   const exemption = under ?? exemptionOf(fn, walk.exemptions);
@@ -273,7 +297,10 @@ function registrationOf(library: Library, call: ts.CallExpression): Registration
 }
 
 function registrationsIn(walk: Walk, fn: FunctionNode): Registration[] {
+  const known = walk.registrations.get(fn);
+  if (known !== undefined) return known;
   const found: Registration[] = [];
+  walk.registrations.set(fn, found);
   const look = (node: ts.Node): void => {
     if (isFunctionNode(node) && !runsWhereItStands(walk.later, node)) return;
     if (ts.isCallExpression(node)) {
@@ -310,42 +337,106 @@ function runListenersFor(
   }
 }
 
-function dispatchedTypes(library: Library, call: ts.CallExpression): string[] | undefined {
-  const event = call.arguments[0] && unwrapped(call.arguments[0]);
-  if (event === undefined || !ts.isNewExpression(event)) return undefined;
-  const types = stringsIn(library.compiled, event.arguments?.[0]);
-  return types.length > 0 ? types : undefined;
+function parameterIndexIn(
+  library: Library,
+  fn: FunctionNode | undefined,
+  expression: ts.Expression | undefined,
+): number | undefined {
+  if (fn === undefined || expression === undefined) return undefined;
+  const [declaration] = declarationsOf(library.compiled, unwrapped(expression));
+  const index = (fn.parameters ?? []).findIndex((parameter) => parameter === declaration);
+  return index === -1 ? undefined : index;
 }
 
-function isADispatch(library: Library, call: ts.CallExpression): boolean {
-  return refersToDomMember(library, unwrapped(call.expression), (declaration) =>
-    dispatchers.includes(nameOf(declaration)),
+function typedBy(
+  library: Library,
+  fn: FunctionNode | undefined,
+  expression: ts.Expression | undefined,
+): Dispatched {
+  const types = expression === undefined ? [] : stringsIn(library.compiled, expression);
+  if (types.length > 0) return { ...dispatchesNothing, types };
+  const index = parameterIndexIn(library, fn, expression);
+  return index === undefined
+    ? { ...dispatchesNothing, unknown: true }
+    : { ...dispatchesNothing, parameters: [index] };
+}
+
+function domMethodCalled(walk: Walk, call: ts.CallExpression): string | undefined {
+  if (walk.domMethods.has(call)) return walk.domMethods.get(call);
+  const [member] = memberDeclarations(walk.library.compiled, unwrapped(call.expression)).filter(
+    (declaration) => isDomLibraryFile(fileOf(declaration)),
   );
+  const name = member === undefined ? undefined : nameOf(member);
+  walk.domMethods.set(call, name);
+  return name;
 }
 
-function movesFocus(walk: Walk, fn: FunctionNode): boolean {
-  const known = walk.movesFocus.get(fn);
-  if (known !== undefined) return known;
-  walk.movesFocus.set(fn, false);
-  if (isDeclared(fn, focusMover)) {
-    walk.movesFocus.set(fn, true);
-    return true;
+function domDispatchOf(
+  walk: Walk,
+  call: ts.CallExpression,
+  within: FunctionNode | undefined,
+): Dispatched | undefined {
+  const { library } = walk;
+  const name = domMethodCalled(walk, call);
+  if (name === undefined) return undefined;
+  if (name === eventDispatcher) {
+    const event = call.arguments[0] && unwrapped(call.arguments[0]);
+    return event !== undefined && ts.isNewExpression(event)
+      ? typedBy(library, within, event.arguments?.[0])
+      : { ...dispatchesNothing, unknown: true };
   }
-  let found = false;
+  const types = eventsDispatchedBy[name];
+  return types === undefined ? undefined : { ...dispatchesNothing, types };
+}
+
+function together(dispatched: readonly Dispatched[]): Dispatched {
+  return {
+    types: [...new Set(dispatched.flatMap(({ types }) => types))],
+    unknown: dispatched.some(({ unknown }) => unknown),
+    parameters: [...new Set(dispatched.flatMap(({ parameters }) => parameters))],
+  };
+}
+
+function dispatchedAt(
+  library: Library,
+  call: ts.CallExpression,
+  dispatched: Dispatched,
+  within: FunctionNode | undefined,
+): Dispatched {
+  return together([
+    { ...dispatched, parameters: [] },
+    ...dispatched.parameters.map((index) => typedBy(library, within, call.arguments[index])),
+  ]);
+}
+
+function dispatchesOf(walk: Walk, fn: FunctionNode): Dispatched {
+  const known = walk.dispatches.get(fn);
+  if (known !== undefined) return known;
+  walk.dispatches.set(fn, dispatchesNothing);
+  const found: Dispatched[] = [];
   const look = (node: ts.Node): void => {
-    if (found || (isFunctionNode(node) && !runsWhereItStands(walk.later, node))) return;
-    if (
-      ts.isCallExpression(node) &&
-      functionsACallRuns(resolution(walk.library), node).some((called) => movesFocus(walk, called))
-    ) {
-      found = true;
-      return;
+    if (isFunctionNode(node) && !runsWhereItStands(walk.later, node)) return;
+    if (ts.isCallExpression(node)) {
+      const direct = domDispatchOf(walk, node, fn);
+      if (direct !== undefined) found.push(direct);
+      for (const called of functionsRunBy(walk, node)) {
+        found.push(dispatchedAt(walk.library, node, dispatchesOf(walk, called), fn));
+      }
     }
     node.forEachChild(look);
   };
   if (fn.body !== undefined) look(fn.body);
-  walk.movesFocus.set(fn, found);
-  return found;
+  const dispatched = together(found);
+  walk.dispatches.set(fn, dispatched);
+  return dispatched;
+}
+
+function dispatchesAny({ types, unknown, parameters }: Dispatched): boolean {
+  return unknown || types.length > 0 || parameters.length > 0;
+}
+
+function heardTypes(dispatched: Dispatched): readonly string[] | undefined {
+  return dispatched.unknown || dispatched.parameters.length > 0 ? undefined : dispatched.types;
 }
 
 function runListenersACallRuns(
@@ -354,12 +445,17 @@ function runListenersACallRuns(
   called: readonly FunctionNode[],
   under: LayoutReadExemption | undefined,
 ): void {
-  if (isADispatch(walk.library, call)) {
-    runListenersFor(walk, call, dispatchedTypes(walk.library, call), under);
-  }
+  const direct = domDispatchOf(walk, call, undefined);
+  if (direct !== undefined) runListenersFor(walk, call, heardTypes(direct), under);
   for (const fn of called) {
-    if (movesFocus(walk, fn)) {
-      runListenersFor(walk, call, focusMoveEvents, under ?? exemptionOf(fn, walk.exemptions));
+    const dispatched = dispatchedAt(walk.library, call, dispatchesOf(walk, fn), undefined);
+    if (dispatchesAny(dispatched)) {
+      runListenersFor(
+        walk,
+        call,
+        heardTypes(dispatched),
+        under ?? exemptionOf(fn, walk.exemptions),
+      );
     }
   }
 }
@@ -375,7 +471,7 @@ function visit(walk: Walk, node: ts.Node, under: LayoutReadExemption | undefined
     bucket?.add(node);
   }
   if (ts.isCallExpression(node)) {
-    const called = functionsACallRuns(resolution(walk.library), node);
+    const called = functionsRunBy(walk, node);
     runEach(walk, called, under);
     runListenersACallRuns(walk, node, called, under);
   }
@@ -417,7 +513,10 @@ export function layoutReadsRuleWith(exemptions: readonly LayoutReadExemption[]):
         reads: new Set(),
         readsOfExemptions: new Map(),
         visited: new Map(),
-        movesFocus: new Map(),
+        dispatches: new Map(),
+        registrations: new Map(),
+        calls: new Map(),
+        domMethods: new Map(),
       };
       for (const module of publicModules(library)) {
         runEach(walk, exportedFunctions(module).all, undefined);

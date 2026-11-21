@@ -78,3 +78,21 @@ const scrollKey = "scroll";
 export function keyedNow(handlers: { scroll: Heard<Event> }): void {
   handlers[scrollKey](new Event("keyed"));
 }
+
+function announce(target: EventTarget, type: string): void {
+  target.dispatchEvent(new Event(type));
+}
+
+export function announcedNow(element: HTMLElement): () => void {
+  const stop = watchEvents(element, ["announced"], () => void (element.scrollTop + 6));
+  announce(element, "announced");
+  return stop;
+}
+
+export function clickedNow(element: HTMLElement): (() => void)[] {
+  const stopClick = watchEvents(element, ["click"], () => void (element.offsetTop + 6));
+  element.click();
+  const stopBlur = watchEvents(element, ["blur"], () => void (element.offsetLeft + 6));
+  element.blur();
+  return [stopClick, stopBlur];
+}

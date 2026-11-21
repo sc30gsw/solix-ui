@@ -243,7 +243,7 @@ function valuesAssignedTo(library: Library, declaration: ts.Node): ts.Node[] {
 
 export const nothingPruned: ReadonlySet<string> = new Set();
 
-export type Resolution = {
+type Resolution = {
   library: Library;
   seen: Set<ts.Node>;
   pruned: ReadonlySet<string>;

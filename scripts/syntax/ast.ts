@@ -21,6 +21,7 @@ export {
   isForOfStatement,
   isFunctionDeclaration,
   isFunctionExpression,
+  isFunctionTypeNode,
   isGetAccessorDeclaration,
   isIdentifier,
   isIfStatement,

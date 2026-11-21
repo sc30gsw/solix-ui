@@ -3,7 +3,9 @@ import { browserMethod, lookUp } from "#/packages/primitives/src/internal-browse
 import { observe } from "#/packages/primitives/src/internal-dom-observer.ts";
 import { type Listener, watchEvents } from "#/packages/primitives/src/internal-listener.ts";
 import {
+  announcedNow,
   boxedNow,
+  clickedNow,
   Field,
   fireAll,
   type Handled,
@@ -215,6 +217,8 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
     ({ defaulted = () => element.clientTop + 4 } = {});
     let looped: () => number = () => 0;
     for ([looped] of [[() => element.clientLeft + 4]]) void looped;
+    const stopAnnounced = announcedNow(element);
+    const stopClicked = clickedNow(element);
     const typedRuns = [
       typedHolder.size(element),
       typedTable.a(element),
@@ -233,6 +237,8 @@ export function createRespelled(element: HTMLElement, listener: () => void): voi
       stopDown,
       stopGot,
       stopReady,
+      stopAnnounced,
+      stopClicked,
       defaulted(),
       looped(),
       new Sub(element),

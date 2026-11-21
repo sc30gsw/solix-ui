@@ -6,6 +6,7 @@ import {
   findAncestor,
   memberDeclarations,
   nameOf,
+  propertiesOfType,
   stringsIn,
   ts,
   unwrapped,
@@ -65,10 +66,11 @@ export type Later = {
   relied: Set<ts.Node>;
   relayed: Map<ts.ParameterDeclaration, ReadonlySet<string>>;
   watched: Map<ts.Node, boolean>;
+  pruned: Map<ts.ParameterDeclaration, ReadonlySet<string>>;
 };
 
 export function laterOf(library: Library): Later {
-  return { library, relied: new Set(), relayed: new Map(), watched: new Map() };
+  return { library, relied: new Set(), relayed: new Map(), watched: new Map(), pruned: new Map() };
 }
 
 function isARunsLaterType(library: Library, type: ts.Node): boolean {
@@ -141,29 +143,29 @@ function isACallbackTakerExemption(called: ts.Node | undefined): boolean {
   );
 }
 
-function typeMembersOf(library: Library, type: ts.Node | undefined): readonly ts.Node[] {
-  if (type === undefined) return [];
-  if (ts.isTypeLiteralNode(type)) return type.members;
-  if (!ts.isTypeReferenceNode(type)) return [];
-  return declarationsOf(library.compiled, type.typeName).flatMap((declaration) => {
-    if (!inSource(declaration)) return [];
-    if (ts.isInterfaceDeclaration(declaration)) return [...declaration.members];
-    return ts.isTypeAliasDeclaration(declaration) ? typeMembersOf(library, declaration.type) : [];
-  });
-}
-
-function propertiesThatRunLater(later: Later, type: ts.Node | undefined): ReadonlySet<string> {
+function propertiesThatRunLater(
+  later: Later,
+  parameter: ts.ParameterDeclaration,
+): ReadonlySet<string> {
+  const known = later.pruned.get(parameter);
+  if (known !== undefined) return known;
   const names = new Set<string>();
-  for (const member of typeMembersOf(later.library, type)) {
-    if (ts.isPropertySignatureDeclaration(member) && isWatched(later, member)) {
-      later.relied.add(member);
-      names.add(nameOf(member));
-    }
+  later.pruned.set(parameter, names);
+  for (const declarations of propertiesOfType(later.library.compiled, parameter.name)) {
+    const watched =
+      declarations.length > 0 &&
+      declarations.every(
+        (declaration) =>
+          ts.isPropertySignatureDeclaration(declaration) && isWatched(later, declaration),
+      );
+    if (!watched) continue;
+    for (const declaration of declarations) later.relied.add(declaration);
+    names.add(nameOf(declarations[0]));
   }
   return names;
 }
 
-export type RunsNow = { pruned: ReadonlySet<string> };
+type RunsNow = { pruned: ReadonlySet<string> };
 
 const runsNow: RunsNow = { pruned: nothingPruned };
 
@@ -182,7 +184,7 @@ function argumentPosition(later: Later, node: ts.Node): "later" | RunsNow | unde
     later.relied.add(parameter);
     return "later";
   }
-  const pruned = propertiesThatRunLater(later, parameter.type);
+  const pruned = propertiesThatRunLater(later, parameter);
   if (pruned.size > 0) later.relayed.set(parameter, pruned);
   return { pruned };
 }
@@ -333,6 +335,19 @@ function isOnlyHandedOn(
     const uses = referencesTo(later, holder);
     return uses.length > 0 && uses.every((use) => isOnlyHandedOn(later, use, owner, followed));
   }
+  const binding = node.parent;
+  if (
+    binding !== undefined &&
+    ts.isBindingElement(binding) &&
+    ts.isObjectBindingPattern(binding.parent) &&
+    (binding.propertyName ?? binding.name) === node &&
+    binding.name !== undefined &&
+    ts.isIdentifier(binding.name) &&
+    binding.initializer === undefined
+  ) {
+    const uses = referencesTo(later, binding);
+    return uses.length > 0 && uses.every((use) => isOnlyHandedOn(later, use, owner, followed));
+  }
   const nested = enclosingFunction(node);
   return nested !== undefined && nested !== owner && isOnlyHandedOn(later, nested, owner, followed);
 }
@@ -363,16 +378,29 @@ function isOnlyRelayed(later: Later, use: ts.Node, names: ReadonlySet<string>): 
   );
 }
 
+const valueKeywords: readonly ts.SyntaxKind[] = [
+  ts.SyntaxKind.StringKeyword,
+  ts.SyntaxKind.NumberKeyword,
+  ts.SyntaxKind.BooleanKeyword,
+  ts.SyntaxKind.BigIntKeyword,
+  ts.SyntaxKind.SymbolKeyword,
+];
+
+function mayHoldAnObject(type: ts.TypeNode | undefined): boolean {
+  return type !== undefined && !valueKeywords.includes(type.kind) && !ts.isFunctionTypeNode(type);
+}
+
 function watchIn(later: Later): void {
   for (const { source } of later.library.modules) {
     const look = (node: ts.Node): void => {
       if (isWatched(later, node)) later.relied.add(node);
       else if (
         ts.isParameterDeclaration(node) &&
+        mayHoldAnObject(node.type) &&
         isFunctionNode(node.parent) &&
         node.parent.body !== undefined
       ) {
-        const pruned = propertiesThatRunLater(later, node.type);
+        const pruned = propertiesThatRunLater(later, node);
         if (pruned.size > 0) later.relayed.set(node, pruned);
       }
       node.forEachChild(look);
