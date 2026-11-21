@@ -106,6 +106,19 @@ function rootOf(name: string, html: string): Element {
   return elementCarrying(html, stableClass(name, rootPart));
 }
 
+function structuralRootOf(name: string, html: string): Element {
+  const outer = withoutLeadingRules(html);
+  if (!(containerPart in compiled[name])) return rootElementOf(outer);
+  return rootElementOf(outer.slice(outer.indexOf(">") + 1, outer.lastIndexOf("</")));
+}
+
+function expectTheRootPartOnTheRoot(name: string, html: string): void {
+  expect(
+    elementsOf(html).filter((element) => partsOn(name, element).includes(rootPart)),
+    `the root part of ${name} is on one element, its root: the first element of its markup, or the one inside its container part`,
+  ).toEqual([structuralRootOf(name, html)]);
+}
+
 function partsOf(name: string): string[] {
   return Object.keys(compiled[name]);
 }
@@ -241,6 +254,7 @@ test.each(components)(
 );
 
 function expectClassesOnTheirParts(name: string, html: string, tokens: PartClassToken[]): void {
+  expectTheRootPartOnTheRoot(name, html);
   const given = tokens.map(({ token }) => token);
   for (const element of elementsOf(html)) {
     const [part] = partsOn(name, element);
@@ -308,6 +322,7 @@ test.for(builtComponents)(
             unstyled,
           });
 
+          expectTheRootPartOnTheRoot(name, html);
           for (const element of elementsOf(html)) {
             const [part] = partsOn(name, element);
             const wanted = [
