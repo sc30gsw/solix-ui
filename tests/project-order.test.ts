@@ -2,18 +2,32 @@ import { expect, inject, test } from "vite-plus/test";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 
 const checkerProject = "rules";
+const browserProject = "browser";
 
-function refuseAFilteredRun(projects: readonly string[]): void {
-  if (!projects.includes(checkerProject) || projects.length < 2) {
+function isOf(name: string, project: string): boolean {
+  return name === project || name.startsWith(`${project} (`);
+}
+
+function refuseAFilteredRun(
+  projects: readonly string[],
+  needed: readonly string[],
+  cannotTell: string,
+): void {
+  const missing = needed.filter((project) => !projects.some((name) => isOf(name, project)));
+  if (missing.length > 0 || projects.length < 2) {
     throw new Error(
-      `The run holds only the projects ${projects.join(", ")}, so it cannot tell whether the ${checkerProject} project runs before the others. Run it without --project.`,
+      `The run is filtered: it holds only the projects ${projects.join(", ")}${missing.length > 0 ? `, and no ${missing.join(" or ")} project` : ""}, so it cannot tell ${cannotTell}. Run it without --project.`,
     );
   }
 }
 
 test(`the ${checkerProject} project's sequence group comes before that of every other project`, () => {
   const settings = inject("runSettingsOfEachProject");
-  refuseAFilteredRun(Object.keys(settings));
+  refuseAFilteredRun(
+    Object.keys(settings),
+    [checkerProject],
+    `whether the ${checkerProject} project runs before the others`,
+  );
   const others = Object.entries(settings).filter(([name]) => name !== checkerProject);
 
   expect(Math.min(...others.map(([, { groupOrder }]) => groupOrder))).toBeGreaterThan(
@@ -39,7 +53,11 @@ test("every project builds the packages, with no GIT_ variable left, before any 
 
 test("no browser project saves a screenshot when a test fails: every project whose browser is enabled resolves screenshotFailures to false", () => {
   const settings = inject("runSettingsOfEachProject");
-  refuseAFilteredRun(Object.keys(settings));
+  refuseAFilteredRun(
+    Object.keys(settings),
+    [browserProject],
+    "whether every project whose browser is enabled saves no screenshot",
+  );
   const inABrowser = Object.entries(settings).filter(([, { browser }]) => browser.enabled);
   const screenshotting = inABrowser
     .filter(([, { browser }]) => browser.screenshotFailures)
@@ -52,13 +70,14 @@ test("no browser project saves a screenshot when a test fails: every project who
   expect(screenshotting).toEqual([]);
 });
 
-const browserProject = "browser";
-
 test(`the ${browserProject} project's instances run in a sequence group no other project shares, so no other project's engines load the machine while its timed properties run`, () => {
   const settings = inject("runSettingsOfEachProject");
-  refuseAFilteredRun(Object.keys(settings));
-  const isBrowser = (name: string) =>
-    name === browserProject || name.startsWith(`${browserProject} (`);
+  refuseAFilteredRun(
+    Object.keys(settings),
+    [checkerProject, browserProject],
+    `whether the ${browserProject} project's instances share a sequence group with another project`,
+  );
+  const isBrowser = (name: string) => isOf(name, browserProject);
   const browserGroups = new Set(
     Object.entries(settings)
       .filter(([name]) => isBrowser(name))
