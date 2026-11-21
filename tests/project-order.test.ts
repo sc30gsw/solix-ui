@@ -1,31 +1,16 @@
 import { expect, inject, test } from "vite-plus/test";
-import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
-import { enginesToVerify } from "#/scripts/browser-engines.mjs";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
+import { configuredProjectNames } from "#/vite.config.ts";
 
 const checkerProject = "rules";
 const browserProject = "browser";
-const nodeProject = "node";
-const storySpecProject = "story spec";
 
 function isOf(name: string, project: string): boolean {
   return name === project || name.startsWith(`${project} (`);
 }
 
-function everyProject(): string[] {
-  const inEachEngine = [browserProject, ...storiesServers.map(({ project }) => project)];
-  return [
-    checkerProject,
-    nodeProject,
-    storySpecProject,
-    ...enginesToVerify().flatMap((engine) =>
-      inEachEngine.map((project) => `${project} (${engine})`),
-    ),
-  ];
-}
-
 function refuseAFilteredRun(projects: readonly string[], cannotTell: string): void {
-  const missing = everyProject().filter((project) => !projects.includes(project));
+  const missing = configuredProjectNames().filter((project) => !projects.includes(project));
   if (missing.length > 0) {
     throw new Error(
       `The run is filtered: it holds only the projects ${projects.join(", ")}, and no ${missing.join(" or ")} project, so it cannot tell ${cannotTell}. Run it without --project.`,
