@@ -1,16 +1,9 @@
-import {
-  declarationsOf,
-  fileOf,
-  isDefaultLibraryFile,
-  isValueReference,
-  nameOf,
-  stringsIn,
-  ts,
-} from "#/scripts/syntax.ts";
+import { declarationsOf, isValueReference, nameOf, stringsIn, ts } from "#/scripts/syntax.ts";
 import {
   calleeName,
   callsTo,
   forbidOutside,
+  isDefaultLibraryDeclarationNamed,
   type Library,
   refersTo,
   refersToDomMember,
@@ -58,9 +51,8 @@ export const listenerRolesRule = forbidOutside({
 });
 
 function callsTheLibrary(library: Library, call: ts.CallExpression, names: string[]): boolean {
-  return declarationsOf(library.compiled, calleeName(call.expression)).some(
-    (declaration) =>
-      isDefaultLibraryFile(fileOf(declaration)) && names.includes(nameOf(declaration)),
+  return declarationsOf(library.compiled, calleeName(call.expression)).some((declaration) =>
+    isDefaultLibraryDeclarationNamed(declaration, names),
   );
 }
 

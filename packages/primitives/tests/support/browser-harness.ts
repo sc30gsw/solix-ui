@@ -1,5 +1,6 @@
 import { createEffect, createRoot, flush as flushSolid } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
+import { propertyRunsGoing } from "../../../../tests/support/properties.ts";
 import {
   captureSolidDiagnostics,
   solidDevelopmentBuildLoaded,
@@ -348,7 +349,8 @@ beforeEach(() => {
   startRecording();
 });
 
-afterEach(() => {
+afterEach(({ task }) => {
+  const propertyRunsLeft = propertyRunsGoing(task);
   unmount();
   for (const remove of recorders.splice(0)) remove();
   document.body.replaceChildren();
@@ -357,4 +359,8 @@ afterEach(() => {
     leftAfterDispose(),
     "a primitive left a listener, timer or observer behind after its owner was disposed",
   ).toEqual([]);
+  expect(
+    propertyRunsLeft,
+    "a run of a generated property was still going when its test ended",
+  ).toBe(0);
 });

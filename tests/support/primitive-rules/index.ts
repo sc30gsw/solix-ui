@@ -16,6 +16,7 @@ import { elementAttachmentsRule } from "#/tests/support/primitive-rules/element-
 import { accessibilityTestsRule, focusMovesRule } from "#/tests/support/primitive-rules/focus.ts";
 import { hydrationPolicyRule } from "#/tests/support/primitive-rules/hydration-policy.ts";
 import { instanceofChecksRule } from "#/tests/support/primitive-rules/instanceof-checks.ts";
+import { layoutReadsRule } from "#/tests/support/primitive-rules/layout-reads.ts";
 import { type PrimitiveRule } from "#/tests/support/primitive-rules/library.ts";
 import {
   eventHandlerPropertiesRule,
@@ -62,6 +63,7 @@ const primitivesOnlyRules = {
   listenerRoles: listenerRolesRule,
   eventHandlerProperties: eventHandlerPropertiesRule,
   observerConstruction: observerConstructionRule,
+  layoutReads: layoutReadsRule,
   focusMoves: focusMovesRule,
   testsNamedForModules: testsNamedForModulesRule,
   modelTests: modelTestsRule,
