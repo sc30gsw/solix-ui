@@ -6,17 +6,25 @@ export type ChangedLines = { removed: readonly string[]; added: readonly string[
 const nulByte = "\0";
 const signaturesHidden = ["-c", "log.showSignature=false"];
 
-export function gitRun(args: readonly string[]): { status: number | null; stdout: string } {
+export function gitRun(args: readonly string[]): {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+} {
   const run = spawnSync("git", [...signaturesHidden, ...args], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
-  return { status: run.status, stdout: run.stdout };
+  return { status: run.status, stdout: run.stdout, stderr: run.stderr };
 }
 
 export function git(args: readonly string[]): string {
   const run = gitRun(args);
-  if (run.status !== 0) throw new Error(`git ${args.join(" ")} failed with status ${run.status}.`);
+  if (run.status !== 0) {
+    throw new Error(
+      `git ${args.join(" ")} failed with status ${run.status}:\n${run.stderr.trim()}`,
+    );
+  }
   return run.stdout;
 }
 

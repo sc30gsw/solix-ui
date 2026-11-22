@@ -111,7 +111,6 @@ const inBackticks = /`([^`\s]+)`/g;
 const trailingMarks = /[:.,;…]+$/;
 const pathSuffix = /(?::\d+(?:[-:]\d+)?|:[A-Za-z_$][\w$.]*|#[\w-]+)$/;
 const notOnePath = /[*?{}<>[\]$]/;
-const fileName = /\/[^/]+\.\w+$/;
 
 function trackedTopLevelFolders(): string[] {
   return [
@@ -175,17 +174,25 @@ test("every path a project-owned skill names in backticks under a folder git tra
   expect(violations).toEqual([]);
 });
 
-test("every file under a folder git tracks at the top of the repository that the rules table in AGENTS.md names exists; a folder it names may be one it forbids, such as .claude/commands", () => {
+const pathsTheTableForbids = [".claude/commands", ".claude/hooks"];
+
+test("every path under a folder git tracks at the top of the repository that the rules table in AGENTS.md names exists, but for the paths it forbids, which it names and which do not exist", () => {
   const rows = read("AGENTS.md")
     .split("\n")
     .filter((line) => line.startsWith("|"));
-  const violations = missingPathsOf(
-    rows.join("\n"),
-    trackedTopLevelFolders(),
-    existsInTheRepository,
-  )
-    .filter((path) => fileName.test(path))
-    .map((path) => `AGENTS.md: the table names ${path}, which does not exist.`);
+  const table = rows.join("\n");
+  const missing = missingPathsOf(table, trackedTopLevelFolders(), existsInTheRepository);
+  const violations = [
+    ...missing
+      .filter((path) => !pathsTheTableForbids.includes(path))
+      .map((path) => `AGENTS.md: the table names ${path}, which does not exist.`),
+    ...pathsTheTableForbids
+      .filter((path) => !table.includes(`\`${path}\``) || existsInTheRepository(path))
+      .map(
+        (path) =>
+          `${path}: pathsTheTableForbids holds it, so the table must name it and it must not exist.`,
+      ),
+  ];
 
   expect(rows.length).toBeGreaterThan(3);
   expect(violations).toEqual([]);

@@ -786,6 +786,20 @@ describe("a fix carries its test", () => {
     expect(unmatched).toEqual([]);
   });
 
+  test("the check says what git said when git cannot read a commit", async () => {
+    await inTemporaryTree({ "src/a.ts": "a\n" }, (root) => {
+      gitInScratchRepository(root, ["init", "--quiet", "--initial-branch=main"]);
+      const run = spawnSync(process.execPath, [fixCheck, "no-such-base", "HEAD"], {
+        cwd: root,
+        encoding: "utf8",
+      });
+
+      expect(run.status).not.toBe(0);
+      expect(run.stderr).toContain("no-such-base..HEAD failed with status 128:");
+      expect(run.stderr).toMatch(/fatal: .*(no-such-base|revision)/);
+    });
+  });
+
   test("the check reads the commits a pull request adds, and passes over merge commits whatever their message", async () => {
     await inTemporaryTree({ "src/a.ts": "a\n" }, (root) => {
       const git = (...args: string[]) => gitInScratchRepository(root, args).trim();
