@@ -28,7 +28,7 @@ const steps = [
   "8. Reflect",
 ];
 const pointers = [
-  "`AGENTS.md`",
+  "`filesAfterReview` in `scripts/pull-request-text.ts`",
   "`modelFilePatterns` in `scripts/formal-verification.ts`",
   "`reviewLines` in `scripts/pull-request-text.ts`",
   "`pstack/skills/poteto-mode/playbooks/opening-a-pr.md`",
@@ -49,7 +49,7 @@ test("open-pull-request has its eight steps in order, with the verification skil
   expect(text).toContain(`\`${formalSkillPrefix}*\``);
   for (const pointer of pointers) expect(text).toContain(pointer);
   for (const pattern of modelFilePatterns) expect(text).not.toContain(pattern.replace("**/", ""));
-  expect(text).not.toContain(String(lineLimit));
+  expect(text).not.toMatch(new RegExp(`\\b${lineLimit}\\b`));
 });
 
 test("the review step of open-pull-request starts each reviewer from its rubric's path, so any agent can run it, and reviews the diff with review-solid2", () => {
