@@ -6,6 +6,7 @@ import {
   plainValuesIn,
   renderedOnTheServer,
 } from "#/tests/support/server-harness.ts";
+import { raisesSolidDiagnosticOnPurpose } from "../../../tests/support/solid-diagnostics-check.ts";
 
 const primitivePrefix = "create";
 
@@ -30,7 +31,10 @@ function renderOnTheServer(name: Primitive) {
       rendered.expected = started.value?.expected;
       started.browserCommands?.();
       rendered.afterBrowserCommands = serialized(started.value?.read());
-      started.stateCommands?.run();
+      if (started.stateCommands !== undefined) {
+        raisesSolidDiagnosticOnPurpose("SERVER_WRITE");
+        started.stateCommands.run();
+      }
       return rendered.afterBrowserCommands;
     });
   });
