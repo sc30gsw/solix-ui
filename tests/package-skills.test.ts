@@ -21,8 +21,11 @@ import {
   reviewedSkillsFile,
   reviewProblems,
   skillDirectories,
+  vendoredSkillProblems,
+  vendoredSkills,
 } from "#/scripts/package-skills.ts";
 import { repositoryRoot, workflowFiles, workspaceFile } from "#/tests/support/workspace.ts";
+import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 
 const packageSkillIgnoreFile = ".gitignore";
 const skillFolders = skillDirectories.join(" and ");
@@ -153,6 +156,31 @@ test(`${reviewedSkillsFile} records a reviewed hash for exactly the package skil
     `${reviewedSkillsFile}: record the reviewed hash of ${skill.pack} ${skill.name}, which ${workspaceFile} approves.`,
     `${reviewedSkillsFile}: remove ${skill.pack} another, which ${workspaceFile} does not approve.`,
   ]);
+});
+
+test("every skill vendoredSkills names is in skills-lock.json and installed in .agents/skills and .claude/skills, and the lock file holds no other", () => {
+  expect(vendoredSkillProblems(repositoryRoot, vendoredSkills)).toEqual([]);
+});
+
+test("a vendored skill that is missing, one the lock file does not hold, and a locked skill the list leaves out each fail", async () => {
+  const lock = JSON.stringify({ skills: { kept: {}, gone: {}, unlisted: {} } });
+  await inTemporaryTree(
+    {
+      "skills-lock.json": lock,
+      ".agents/skills/kept/SKILL.md": skillText,
+      ".claude/skills/kept/SKILL.md": skillText,
+      ".agents/skills/gone/SKILL.md": skillText,
+    },
+    (root) => {
+      expect(vendoredSkillProblems(root, ["kept", "gone", "unlocked"])).toEqual([
+        "skills-lock.json: vendoredSkills in scripts/package-skills.ts names unlocked, which this lock file does not hold. Install it with npx skills add, or drop it from the list.",
+        "scripts/package-skills.ts: skills-lock.json holds unlisted, so name it in vendoredSkills.",
+        ".claude/skills/gone: vendoredSkills in scripts/package-skills.ts names this skill, but its SKILL.md is missing. Install it again with npx skills add.",
+        ".agents/skills/unlocked: vendoredSkills in scripts/package-skills.ts names this skill, but its SKILL.md is missing. Install it again with npx skills add.",
+        ".claude/skills/unlocked: vendoredSkills in scripts/package-skills.ts names this skill, but its SKILL.md is missing. Install it again with npx skills add.",
+      ]);
+    },
+  );
 });
 
 function trackedFiles(directory: string): string[] {

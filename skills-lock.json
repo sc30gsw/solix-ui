@@ -1,11 +1,25 @@
 {
   "version": 2,
   "skills": {
+    "create-verification-skill": {
+      "source": "e2e-inc/e2e",
+      "commit": "5acb82235d7e88364d614cbd23b96d2b9e8233a6",
+      "sourceType": "github",
+      "skillPath": "skills/create-verification-skill/SKILL.md",
+      "computedHash": "9fea0eabbdedc671cd774ecde0968b635006b38daa41396e6f7c79d89d8f9930"
+    },
     "domain-modeling": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/domain-modeling/SKILL.md",
       "computedHash": "b78689833404148c769077355e12dbe5ad996a158a1e21e58ddf169e439d9d8c"
+    },
+    "e2e": {
+      "source": "e2e-inc/e2e",
+      "commit": "5acb82235d7e88364d614cbd23b96d2b9e8233a6",
+      "sourceType": "github",
+      "skillPath": "skills/e2e/SKILL.md",
+      "computedHash": "cbd6b9c5f5315251824327fc58f1b6bd235ca7ea80c88100e820261f0de686cf"
     },
     "grill-with-docs": {
       "source": "mattpocock/skills",
@@ -18,6 +32,13 @@
       "sourceType": "github",
       "skillPath": "skills/productivity/grilling/SKILL.md",
       "computedHash": "485451958784497cd4c4dbea13cb5bbb579da58fac0d0e45f3bcb310fab68ac7"
+    },
+    "migrate-to-e2e": {
+      "source": "e2e-inc/e2e",
+      "commit": "5acb82235d7e88364d614cbd23b96d2b9e8233a6",
+      "sourceType": "github",
+      "skillPath": "skills/migrate-to-e2e/SKILL.md",
+      "computedHash": "3eacc56de47ef0a9f396451df4e7c0514ec4e09097e4f84432b1eb18e2655bfd"
     },
     "thermo-nuclear-code-quality-review": {
       "source": "cursor/plugins",

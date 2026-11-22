@@ -14,6 +14,17 @@ import { repositoryRoot } from "#/scripts/repository.ts";
 export const reviewedSkillsFile = "scripts/reviewed-skills.json";
 const skillsLockFile = "skills-lock.json";
 export const kitSkills: readonly string[] = ["solid-2"];
+export const vendoredSkills: readonly string[] = [
+  "create-verification-skill",
+  "domain-modeling",
+  "e2e",
+  "grill-with-docs",
+  "grilling",
+  "migrate-to-e2e",
+  "thermo-nuclear-code-quality-review",
+  "thermo-nuclear-review",
+  "thermos",
+];
 export const skillDirectories = [".agents/skills", ".claude/skills"];
 const skillFile = "SKILL.md";
 
@@ -29,13 +40,39 @@ export function approvedSkills(): PackageSkill[] {
 type OutsideSkill = { name: string; source: "package" | "vendored" | "kit" };
 
 export function outsideSkills(): OutsideSkill[] {
-  const lock: { skills: Record<string, unknown> } = JSON.parse(
-    readFileSync(join(repositoryRoot, skillsLockFile), "utf8"),
-  );
   return [
     ...approvedSkills().map(({ name }) => ({ name, source: "package" as const })),
-    ...Object.keys(lock.skills).map((name) => ({ name, source: "vendored" as const })),
+    ...vendoredSkills.map((name) => ({ name, source: "vendored" as const })),
     ...kitSkills.map((name) => ({ name, source: "kit" as const })),
+  ];
+}
+
+export function vendoredSkillProblems(root: string, vendored: readonly string[]): string[] {
+  const lock: { skills: Record<string, unknown> } = JSON.parse(
+    readFileSync(join(root, skillsLockFile), "utf8"),
+  );
+  const locked = Object.keys(lock.skills);
+  return [
+    ...vendored
+      .filter((name) => !locked.includes(name))
+      .map(
+        (name) =>
+          `${skillsLockFile}: vendoredSkills in scripts/package-skills.ts names ${name}, which this lock file does not hold. Install it with npx skills add, or drop it from the list.`,
+      ),
+    ...locked
+      .filter((name) => !vendored.includes(name))
+      .map(
+        (name) =>
+          `scripts/package-skills.ts: ${skillsLockFile} holds ${name}, so name it in vendoredSkills.`,
+      ),
+    ...vendored.flatMap((name) =>
+      skillDirectories
+        .filter((directory) => !existsSync(join(root, directory, name, skillFile)))
+        .map(
+          (directory) =>
+            `${directory}/${name}: vendoredSkills in scripts/package-skills.ts names this skill, but its ${skillFile} is missing. Install it again with npx skills add.`,
+        ),
+    ),
   ];
 }
 
