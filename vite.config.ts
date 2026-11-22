@@ -12,6 +12,7 @@ import { anyFreePort } from "#/tests/support/server-process.ts";
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
+const mutationInputsKeptAsWritten = ["apps/storybook/fixtures/mutation-inputs/**"];
 const storySpec = "apps/storybook/tests/story-spec.test.ts";
 const storyRecordsSetup = "apps/storybook/story-records-command.ts";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
@@ -144,7 +145,12 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   fmt: {
-    ignorePatterns: [...filesOwnedByOtherTools, ...tablesKeptCompact, ...ruleFixtures],
+    ignorePatterns: [
+      ...filesOwnedByOtherTools,
+      ...tablesKeptCompact,
+      ...ruleFixtures,
+      ...mutationInputsKeptAsWritten,
+    ],
   },
   lint: {
     ignorePatterns: [...filesOwnedByOtherTools, ...ruleFixtures],

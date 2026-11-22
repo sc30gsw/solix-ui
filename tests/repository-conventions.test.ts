@@ -485,6 +485,26 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\`, the
   ).toEqual([]);
 });
 
+const repositoryPathInBackticks = /`((?:apps|packages|tests|scripts)\/[^`\s]+)`/g;
+
+test("every file or folder a verification skill's mutation entry names exists, so a step that copies an input in cannot name an input that is gone", () => {
+  const missing = skillNames
+    .filter((name) => name.startsWith(verificationSkillPrefix))
+    .flatMap((name) =>
+      mutationEntriesOf(skillText(name)).flatMap(({ text }) =>
+        [...text.matchAll(repositoryPathInBackticks)]
+          .map(([, path]) => path.replace(trailingPunctuation, ""))
+          .filter((path) => !existsSync(join(repositoryRoot, path)))
+          .map(
+            (path) =>
+              `.agents/skills/${name}/SKILL.md: a mutation entry names ${path}, which does not exist.`,
+          ),
+      ),
+    );
+
+  expect(missing).toEqual([]);
+});
+
 const coveredCodeHeader = "Covered code";
 
 function coveredPathsOf(text: string): string[] {
