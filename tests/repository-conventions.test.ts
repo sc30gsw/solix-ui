@@ -34,12 +34,9 @@ import { nodeTestFiles } from "#/tests/support/project-setups.ts";
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
 const agentsDirectory = join(repositoryRoot, ".claude/agents");
-const agentPathInBackticks = /`(\.(?:agents|claude)\/[^`*\s]+)`/g;
 const trailingPunctuation = /[:.,]$/;
 const verifyWithPrivateTerms =
   /- run: vp run verify\n\s+env:\n\s+SOLIX_PRIVATE_TERMS: \$\{\{ secrets\.SOLIX_PRIVATE_TERMS \}\}$/m;
-const pathInBackticks = /`((?:packages|apps|tests|scripts|docs|\.agents|\.github)\/[^`:*\s]+)`/g;
-const fileInBackticks = /`([\w./-]+\/[\w.-]+\.(?:ts|tsx|mjs|yml|json|md))`/g;
 const notOneSpaceAtACellBorder = / {2,}\||\| {2,}|\S\||\|\S/;
 const confirmedCommit = /Last confirmed against commit `([0-9a-f]{7,40})`/;
 const diffPathList = /Run `git diff [0-9a-f]{7,40} -- ([^`]+)`/;
@@ -110,20 +107,53 @@ test("every skill is named for its directory, described, and linked from .claude
   expect([...violations, ...dangling]).toEqual([]);
 });
 
-test("every .agents or .claude path that a project-owned skill names exists", () => {
+const repositoryPathInBackticks =
+  /`((?:\.agents|\.claude|\.github|\.vite-hooks|apps|packages|tests|scripts|docs)\/[^`\s]*)`/g;
+const lineNumber = /:\d+(?::\d+)?$/;
+const notOnePath = /[*?{}<>]/;
+const fileName = /\/[^/]+\.\w+$/;
+
+function missingPathsOf(text: string, exists: (path: string) => boolean): string[] {
+  const named = [...text.matchAll(repositoryPathInBackticks)].map(([, path]) =>
+    path.replace(lineNumber, "").replace(trailingPunctuation, ""),
+  );
+  return [...new Set(named)].filter((path) => !notOnePath.test(path) && !exists(path));
+}
+
+function existsInTheRepository(path: string): boolean {
+  return existsSync(join(repositoryRoot, path));
+}
+
+test("a path a skill or a rule names is missing when no file or folder holds it, and a glob, a placeholder or a line number is no path of its own", () => {
+  const text =
+    "`tests/support/model.ts`, `packages/a/src/b.ts:12`, `packages/*/src`, `tests/<file>.test.ts`, `packages/a/src/{a,b}.ts` and `apps/x/README.md`.";
+  const exists = (path: string) => path === "packages/a/src/b.ts";
+
+  expect(missingPathsOf(text, exists)).toEqual(["tests/support/model.ts", "apps/x/README.md"]);
+});
+
+test("every repository path a project-owned skill names in backticks exists, so a step cannot name a file that moved or is gone", () => {
   const copied = copiedOutsideSkills();
   const projectOwned = skillNames.filter((name) => !copied.includes(name));
   const violations = projectOwned.flatMap((name) =>
-    [...skillText(name).matchAll(agentPathInBackticks)]
-      .map(([, path]) => path.replace(trailingPunctuation, ""))
-      .filter((path) => !existsSync(join(repositoryRoot, path)))
-      .map(
-        (path) =>
-          `.agents/skills/${name}/SKILL.md: ${path} does not exist. A vendored skill may have been renamed upstream; point at its new path.`,
-      ),
+    missingPathsOf(skillText(name), existsInTheRepository).map(
+      (path) => `.agents/skills/${name}/SKILL.md: ${path} does not exist. Point at its new path.`,
+    ),
   );
 
   expect(projectOwned.length).toBeGreaterThan(0);
+  expect(violations).toEqual([]);
+});
+
+test("every repository file the rules table in AGENTS.md names exists; a folder it names may be one it forbids, such as .claude/commands", () => {
+  const rows = read("AGENTS.md")
+    .split("\n")
+    .filter((line) => line.startsWith("|"));
+  const violations = missingPathsOf(rows.join("\n"), existsInTheRepository)
+    .filter((path) => fileName.test(path))
+    .map((path) => `AGENTS.md: the table names ${path}, which does not exist.`);
+
+  expect(rows.length).toBeGreaterThan(3);
   expect(violations).toEqual([]);
 });
 
@@ -148,24 +178,6 @@ test("every agent is named for its file and is started by an installed skill", (
   });
 
   expect(agentFiles.length).toBeGreaterThan(0);
-  expect(violations).toEqual([]);
-});
-
-test("every file a verification skill's covered-code table names exists", () => {
-  const violations = skillNames
-    .filter((name) => name.startsWith(verificationSkillPrefix))
-    .flatMap((name) => {
-      const text = readFileSync(join(skillsDirectory, name, "SKILL.md"), "utf8");
-      const tableRows = text.split("\n").filter((line) => line.startsWith("|"));
-      return tableRows
-        .flatMap((row) => [...row.matchAll(pathInBackticks)].map(([, path]) => path))
-        .filter((path) => !existsSync(join(repositoryRoot, path)))
-        .map(
-          (path) =>
-            `.agents/skills/${name}/SKILL.md: the table names ${path}, which does not exist. Update the skill with the rename.`,
-        );
-    });
-
   expect(violations).toEqual([]);
 });
 
@@ -485,26 +497,6 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\`, the
   ).toEqual([]);
 });
 
-const repositoryPathInBackticks = /`((?:apps|packages|tests|scripts)\/[^`\s]+)`/g;
-
-test("every file or folder a verification skill's mutation entry names exists, so a step that copies an input in cannot name an input that is gone", () => {
-  const missing = skillNames
-    .filter((name) => name.startsWith(verificationSkillPrefix))
-    .flatMap((name) =>
-      mutationEntriesOf(skillText(name)).flatMap(({ text }) =>
-        [...text.matchAll(repositoryPathInBackticks)]
-          .map(([, path]) => path.replace(trailingPunctuation, ""))
-          .filter((path) => !existsSync(join(repositoryRoot, path)))
-          .map(
-            (path) =>
-              `.agents/skills/${name}/SKILL.md: a mutation entry names ${path}, which does not exist.`,
-          ),
-      ),
-    );
-
-  expect(missing).toEqual([]);
-});
-
 const coveredCodeHeader = "Covered code";
 
 function coveredPathsOf(text: string): string[] {
@@ -683,19 +675,6 @@ test("no project-owned skill copies a version from the catalog", () => {
     );
 
   expect(versions.length).toBeGreaterThan(0);
-  expect(violations).toEqual([]);
-});
-
-test("every file the rules table in AGENTS.md names exists", () => {
-  const rows = read("AGENTS.md")
-    .split("\n")
-    .filter((line) => line.startsWith("|"));
-  const violations = rows
-    .flatMap((row) => [...row.matchAll(fileInBackticks)].map(([, path]) => path))
-    .filter((path) => !existsSync(join(repositoryRoot, path)))
-    .map((path) => `AGENTS.md: the table names ${path}, which does not exist.`);
-
-  expect(rows.length).toBeGreaterThan(3);
   expect(violations).toEqual([]);
 });
 
