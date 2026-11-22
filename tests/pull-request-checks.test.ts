@@ -793,6 +793,21 @@ describe("a fix carries its test", () => {
     });
   });
 
+  test("the check says why when git cannot start, instead of failing on the output it lacks", async () => {
+    await inTemporaryTree({ "bin/.keep": "" }, (root) => {
+      const run = spawnSync(process.execPath, [fixCheck, "a", "b"], {
+        cwd: root,
+        encoding: "utf8",
+        env: { PATH: join(root, "bin") },
+      });
+
+      expect(run.status).not.toBe(0);
+      expect(run.stderr).toContain("git rev-list a..b could not run:");
+      expect(run.stderr).toContain("ENOENT");
+      expect(run.stderr).not.toContain("TypeError");
+    });
+  });
+
   test("the check reads the commits a pull request adds, and passes over merge commits whatever their message", async () => {
     await inTemporaryTree({ "src/a.ts": "a\n" }, (root) => {
       const git = (...args: string[]) => gitInScratchRepository(root, args).trim();

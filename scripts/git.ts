@@ -15,6 +15,11 @@ export function gitRun(args: readonly string[]): {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
+  if (run.error !== undefined) {
+    throw new Error(`git ${args.join(" ")} could not run: ${run.error.message}`, {
+      cause: run.error,
+    });
+  }
   return { status: run.status, stdout: run.stdout, stderr: run.stderr };
 }
 
