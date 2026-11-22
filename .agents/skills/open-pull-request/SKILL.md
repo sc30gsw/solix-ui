@@ -25,7 +25,7 @@ Follow pstack `correct` over this branch: its commits, its review findings and e
 
 Bring the skills that verify the changed code in line with it before anyone reviews it, so the review covers them too.
 
-- pstack `maintain-verification-skill` for each `verify-*` skill whose covered-code table covers a changed file, and `create-verification-skill` when the branch adds behaviour a user can see that no skill drives.
+- pstack `maintain-verification-skill` for each `verify-*` skill whose covered-code table covers a changed file. When the branch adds behaviour a user can see that no skill drives, make its skill with e2e's `create-verification-skill` (`.agents/skills/create-verification-skill/SKILL.md`), which drives the UI surface; pstack `create-verification-skill` only for code with no surface that no formal model covers.
 - pstack `maintain-formal-verification-skill` for each `verify-formal-*` skill whose covered code changed, and `create-formal-verification-skill` when the branch adds code whose promise a model or a prover can check and no skill checks it.
 - Run each skill's mutation checks once, on the last code commit, with the commands they give. Commit each skill's corrections in a commit of its own. A bug a skill finds is a fix commit of its own, with its test, and sends you back to step 1.
 

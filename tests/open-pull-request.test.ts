@@ -10,6 +10,8 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const openPullRequest = ".agents/skills/open-pull-request/SKILL.md";
 const reviewStep = /^(## 5\. Review[\s\S]*?)(?=^## )/m;
+const verificationSkillsStep = /^(## 3\. Verification skills[\s\S]*?)(?=^## )/m;
+const surfaceSkillCreator = ".agents/skills/create-verification-skill/SKILL.md";
 const rubrics = [
   ".agents/skills/thermo-nuclear-review/SKILL.md",
   ".agents/skills/thermo-nuclear-code-quality-review/SKILL.md",
@@ -69,6 +71,15 @@ test("the review step of open-pull-request starts each reviewer from its rubric'
     [...rubrics].sort(),
   );
   expect(step).toContain(`\`${solidReview}\``);
+});
+
+test("the verification-skills step of open-pull-request makes a skill that drives a UI surface with e2e's create-verification-skill, and keeps pstack's for code with no surface that no formal model covers", () => {
+  const step = verificationSkillsStep.exec(read(openPullRequest))?.[1] ?? "";
+
+  expect(step).toContain(`e2e's \`create-verification-skill\` (\`${surfaceSkillCreator}\`)`);
+  expect(step).toContain(
+    "pstack `create-verification-skill` only for code with no surface that no formal model covers",
+  );
 });
 
 test("review-solid2 reviews the diff against the review checklist of the kit's solid-2 skill, which has one", () => {
