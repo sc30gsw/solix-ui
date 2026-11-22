@@ -254,6 +254,9 @@ catalogs:
     storybook-solidjs-vite:
       specifier: 11.0.0-next-20261117161333
       version: 11.0.0-next-20261117161333
+    tla-ts:
+      specifier: 0.0.10
+      version: 0.0.10
     typescript:
       specifier: 7.0.2
       version: 7.0.2
@@ -326,6 +329,9 @@ importers:
       solid2-agent-kit:
         specifier: 'catalog:'
         version: 0.29.0
+      tla-ts:
+        specifier: 'catalog:'
+        version: 0.0.10
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -2496,6 +2502,10 @@ packages:
     resolution: {integrity: sha512-LgO3D9yZJjApUiuUfl9iFAwrtaX4+lok3wJIqttGoKCHlWUqHqbQpnxCf82L8FjgKsh4iGo78hqJwgL8F6To2A==}
     engines: {node: '>=14.0.0'}
 
+  tla-ts@0.0.10:
+    resolution: {integrity: sha512-Ki4mbMjn3Gq8BjxlRVUISDQJCwZlPUsj3cSgg365eckHpoZMbqi3v0vRZ1ZPNcWfcRMzvC8S9lERtOQlNTD30A==}
+    hasBin: true
+
   totalist@3.0.1:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
     engines: {node: '>=6'}
@@ -4227,6 +4237,11 @@ snapshots:
   tinypool@2.2.0: {}
 
   tinyrainbow@3.2.0: {}
+
+  tla-ts@0.0.10:
+    dependencies:
+      '@typescript/typescript6': 6.0.2
+      fflate: 0.8.3
 
   totalist@3.0.1: {}
 
