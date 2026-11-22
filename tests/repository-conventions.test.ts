@@ -364,15 +364,16 @@ test(`a skill whose check runs tla-ts is named ${formalSkillPrefix}*, a ${formal
   expect(formalNamingProblems(skills, readRepositoryFile)).toEqual([]);
 });
 
-test("a model test that tla-ts checks through Vitest is named *.model.test.ts, which is both a model file and a file the node project runs", () => {
-  const modelTest = "packages/core/tests/tabs.model.test.ts";
-
-  expect(isModelFile(modelTest)).toBe(true);
-  expect(nodeTestFiles.some((pattern) => matchesGlob(modelTest, pattern))).toBe(true);
-  expect(
-    nodeTestFiles.some((pattern) => matchesGlob("packages/core/tests/tabs.model.ts", pattern)),
-  ).toBe(false);
-});
+test.each(["packages/core/tests/tabs.model.test.ts", "packages/core/tests/tabs.model.test.tsx"])(
+  "a model test that tla-ts checks through Vitest, such as %s, is both a model file and a file the node project runs",
+  (modelTest) => {
+    expect(isModelFile(modelTest)).toBe(true);
+    expect(nodeTestFiles.some((pattern) => matchesGlob(modelTest, pattern))).toBe(true);
+    expect(
+      nodeTestFiles.some((pattern) => matchesGlob("packages/core/tests/tabs.model.ts", pattern)),
+    ).toBe(false);
+  },
+);
 
 test("every verification skill says which commit it was last confirmed against", () => {
   const violations = skillNames

@@ -6,7 +6,7 @@ export const modelFilePatterns = [
   "**/*.tla",
   "**/*.cfg",
   "**/*.model.ts",
-  "**/*.model.test.ts",
+  "**/*.model.test.{ts,tsx}",
 ] as const;
 export const formalSkillFiles = `.agents/skills/${formalSkillPrefix}*/**`;
 
