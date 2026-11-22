@@ -31,7 +31,7 @@ import {
 import { layerOrder, libraryCascadeLayer, containerQueryLayer } from "#/src/layers.ts";
 import { type VariableRow, type Variables } from "#/src/variables.ts";
 import { colorValueOf } from "#/src/color-table.ts";
-import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
+import { written } from "#/src/css-syntax.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const pixelsPerRem = 16;
@@ -179,25 +179,20 @@ function keyedEntries<Key extends string>(
   value: VariableValue,
   keys: readonly Key[],
 ): [typeof baseKey | Key, string | number][] {
-  if (value === undefined || value === null) return [];
-  if (typeof value !== "object") return [[baseKey, value]];
-  const keyed: Partial<Record<string, string | number | Absent>> = value;
+  const given = written(value);
+  if (given === undefined) return [];
+  if (typeof given !== "object") return [[baseKey, given]];
+  const keyed: Partial<Record<string, string | number | Absent>> = given;
   const every: (typeof baseKey | Key)[] = [baseKey, ...keys];
   return every.flatMap((key): [typeof baseKey | Key, string | number][] => {
-    const written = keyed[key];
-    return written === undefined || written === null ? [] : [[key, written]];
+    const each = written(keyed[key]);
+    return each === undefined ? [] : [[key, each]];
   });
 }
 
 export function tokenOf(scale: Scale, key: string): string | undefined {
   const token = `--solix-${scale}-${key}`;
   return Object.hasOwn(tokens, token) ? token : undefined;
-}
-
-export function isWritten<V>(value: V | Absent): value is V {
-  return (
-    value !== undefined && value !== null && (typeof value !== "string" || value.trim() !== "")
-  );
 }
 
 function cssValue(
@@ -207,7 +202,6 @@ function cssValue(
   if (typeof written === "number") {
     return row.kind === "length" ? `${written / pixelsPerRem}rem` : String(written);
   }
-  if (!isWritten(written) || characterThatEndsADeclaration.test(written)) return undefined;
   const token = row.scale === undefined ? undefined : tokenOf(row.scale, written);
   if (token !== undefined) return `var(${token})`;
   return row.scale === colorScale ? (colorValueOf(written) ?? written) : written;
@@ -266,20 +260,22 @@ export function eachValue<V extends string | number>(
   value: Keyed<V>,
   write: (given: V) => string | undefined,
 ): Keyed<string> {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "object") return write(value);
+  const given = written(value);
+  if (given === undefined) return undefined;
+  if (typeof given !== "object") return write(given);
   return Object.fromEntries(
-    Object.entries(value).map(([key, given]) => [
-      key,
-      given === undefined || given === null ? given : write(given),
-    ]),
+    Object.entries(given).map(([key, each]) => {
+      const kept = written(each);
+      return [key, kept === undefined ? kept : write(kept)];
+    }),
   );
 }
 
 export function withBase<V extends string | number>(value: Keyed<V>, base: V): Keyed<V> {
-  if (value === undefined || value === null) return base;
-  if (typeof value !== "object") return value;
-  return { ...value, [baseKey]: value[baseKey] ?? base };
+  const given = written(value);
+  if (given === undefined) return base;
+  if (typeof given !== "object") return given;
+  return { ...given, [baseKey]: written(given[baseKey]) ?? base };
 }
 
 function placed(

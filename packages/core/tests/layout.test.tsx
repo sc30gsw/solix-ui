@@ -90,6 +90,14 @@ const spaceCases: [what: string, props: SpaceProps, expected: Rendered][] = [
       style: { "--sx-h": "0.25rem", "--sx-space-min-height": "0.25rem" },
     },
   ],
+  ...["", " "].map((mih): [string, SpaceProps, Rendered] => [
+    `a mih of ${JSON.stringify(mih)} leaves h as the minimum height`,
+    { h: "2rem", mih },
+    {
+      classes: ["sx-h", "sx-space-min-height"],
+      style: { "--sx-h": "2rem", "--sx-space-min-height": "2rem" },
+    },
+  ]),
   ["with no size it sets nothing", {}, { classes: [], style: {} }],
 ];
 
@@ -492,7 +500,7 @@ test("SimpleGrid: with minColWidth, fills the row with columns at least that wid
   ).toEqual(["auto-fit"]);
 });
 
-test.each([null, "", " "])(
+test.each([null, "", " ", "1rem;"])(
   "SimpleGrid: a minColWidth of %j is no minColWidth, so cols still sets the columns and no auto columns are written",
   (minColWidth) => {
     expect(simpleGridOf({ type: "media", minColWidth, cols: 3 })).toEqual(
