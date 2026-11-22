@@ -4,7 +4,7 @@ export const packagesBuiltFirst = [
 ];
 
 export const nodeTestFiles = [
-  "tests/**/*.test.ts",
+  "tests/**/*.test.{ts,tsx}",
   "packages/*/tests/**/*.test.{ts,tsx}",
   "apps/*/tests/**/*.test.{ts,tsx}",
 ] as const;

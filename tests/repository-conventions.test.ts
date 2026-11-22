@@ -376,7 +376,12 @@ test(`a skill whose check runs tla-ts is named ${formalSkillPrefix}*, a ${formal
   expect(formalNamingProblems(skills, readRepositoryFile)).toEqual([]);
 });
 
-test.each(["packages/core/tests/tabs.model.test.ts", "packages/core/tests/tabs.model.test.tsx"])(
+test.each([
+  "packages/core/tests/tabs.model.test.ts",
+  "packages/core/tests/tabs.model.test.tsx",
+  "tests/tabs.model.test.ts",
+  "tests/tabs.model.test.tsx",
+])(
   "a model test that tla-ts checks through Vitest, such as %s, is both a model file and a file the node project runs",
   (modelTest) => {
     expect(isModelFile(modelTest)).toBe(true);
