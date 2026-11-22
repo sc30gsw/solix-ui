@@ -1,6 +1,6 @@
 import fc from "fast-check";
 import type { TestContext } from "vite-plus/test";
-import { seedFrom } from "#/tests/support/property-seed.ts";
+import { seedFrom, seedOfThisRun } from "#/tests/support/property-seed.ts";
 
 const shareOfTheTestTimeout = 0.9;
 const shareBeforeTheTestTimesOut = 0.97;
@@ -106,7 +106,7 @@ export async function assertProperty<Ts>(
   property: fc.IRawProperty<Ts>,
   { numRuns, examples, seed, path, endOnFailure, verbose }: PropertyParameters<Ts> = {},
 ): Promise<void> {
-  const fixedSeed = seed ?? seedFrom(import.meta.env.SOLIX_PROPERTY_SEED);
+  const fixedSeed = seed ?? seedFrom(seedOfThisRun());
   try {
     await fc.assert(property, {
       ...(numRuns === undefined ? {} : { numRuns }),

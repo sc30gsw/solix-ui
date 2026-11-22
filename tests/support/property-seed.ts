@@ -1,5 +1,9 @@
 export const seedVariable = "SOLIX_PROPERTY_SEED";
 
+export function seedOfThisRun(): string | undefined {
+  return import.meta.env.SOLIX_PROPERTY_SEED;
+}
+
 const integer = /^-?\d+$/;
 
 export function seedFrom(given: string | undefined): number | undefined {

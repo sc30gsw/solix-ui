@@ -1,4 +1,5 @@
 import { parseMarkdown } from "#/scripts/markdown.ts";
+import { wordsOf } from "#/tests/support/skill-commands.ts";
 
 export type TlaTsRun = { kind: "command" | "script"; line: string; files: string[] };
 
@@ -16,16 +17,11 @@ const shellBlocks = new Set([
 const tlaTsLauncher = /^(?:\S*\/)?tla-ts(?:@[\w.-]+)?$/;
 const tlaTsImport =
   /(?:\bfrom\s+|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)["']tla-ts(?:\/[^"']*)?["']/;
-const word = /"[^"]*"|'[^']*'|\S+/g;
 const commandEnd = new Set(["|", "||", "&&", ";", "&"]);
 const redirection = /^\d?>>?$|^<$/;
 const optionWithTwoValues = "-dump";
 const number = /^\d+$/;
 const pathLike = /^(?:[\w.-]+\/)*[\w.-]+\.\w[\w.]*$/;
-
-function wordsOf(line: string): string[] {
-  return (line.match(word) ?? []).map((each) => each.replace(/^["']|["']$/g, ""));
-}
 
 function argumentsOf(words: readonly string[]): string[] {
   const files: string[] = [];

@@ -5,7 +5,12 @@ import {
   propertyRunsGoing,
   type PropertyParameters,
 } from "#/tests/support/properties.ts";
-import { seedFrom, seedNotice, seedVariable } from "#/tests/support/property-seed.ts";
+import {
+  seedFrom,
+  seedNotice,
+  seedOfThisRun,
+  seedVariable,
+} from "#/tests/support/property-seed.ts";
 
 const shortTimeout = 4_000;
 const longTimeout = 12_000;
@@ -35,7 +40,7 @@ const slow = fc.asyncProperty(fc.nat(), async () => {
 
 export function definePropertyRunnerTests(): void {
   test(`the run gives every test ${seedVariable} as a string, and assertProperty reads it as the seed of each property that names none`, () => {
-    expect(typeof import.meta.env.SOLIX_PROPERTY_SEED).toBe("string");
+    expect(typeof seedOfThisRun()).toBe("string");
     expect([seedFrom(""), seedFrom(undefined), seedFrom("42"), seedFrom(" -7 ")]).toEqual([
       undefined,
       undefined,

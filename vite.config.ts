@@ -5,7 +5,7 @@ import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 import { storyControls } from "#/scripts/story-controls.ts";
-import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
+import { nodeTestFiles, packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 import { seedNotice, seedVariable } from "#/tests/support/property-seed.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
@@ -49,17 +49,11 @@ const fastCheckRunnersOnlyThroughTheWrapper = {
 };
 
 const seedNoticeShown = `${seedVariable}_NOTICE_SHOWN`;
-const fixedSeed = seedNotice(process.env[seedVariable]);
-if (fixedSeed !== undefined && process.env[seedNoticeShown] === undefined) {
+const seedNoticeText = seedNotice(process.env[seedVariable]);
+if (seedNoticeText !== undefined && process.env[seedNoticeShown] === undefined) {
   process.env[seedNoticeShown] = "yes";
-  process.stderr.write(`${fixedSeed}\n`);
+  process.stderr.write(`${seedNoticeText}\n`);
 }
-
-export const nodeTestFiles = [
-  "tests/**/*.test.ts",
-  "packages/*/tests/**/*.test.{ts,tsx}",
-  "apps/*/tests/**/*.test.{ts,tsx}",
-] as const;
 
 const sequenceGroup = { browser: 1, others: 2, storySpec: 3 } as const;
 

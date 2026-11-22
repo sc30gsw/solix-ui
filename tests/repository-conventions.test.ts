@@ -28,7 +28,8 @@ import { seedVariable } from "#/tests/support/property-seed.ts";
 import { isModelFile, modelFilePatterns } from "#/scripts/formal-verification.ts";
 import { formalSkillPrefix, verificationSkillPrefix } from "#/scripts/verification-skills.ts";
 import { tlaTsRunsOf } from "#/tests/support/formal-verification.ts";
-import { nodeTestFiles } from "#/vite.config.ts";
+import { mutationEntriesOf } from "#/tests/support/skill-commands.ts";
+import { nodeTestFiles } from "#/tests/support/project-setups.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -389,68 +390,51 @@ test("every verification skill says which commit it was last confirmed against",
   expect(violations).toEqual([]);
 });
 
-const mutationEntryStart = /^- (?:[^:\n]*?\s)?[Mm]utation(?: check)?\b[^:\n]*:/;
-const testCommand = new RegExp(`\`(?:${seedVariable}=(-?\\d+) )?vp test ([^\`]+)\``, "g");
-const optionsWithAValue = new Set(["--project", "-t", "--testNamePattern"]);
 const runsAProperty = /\bassertProperty\(/;
+const testOrStory = /\.(?:test|stories)\.(?:ts|tsx|mts)$/;
 
-function mutationEntriesOf(text: string): string[] {
-  const entries: string[][] = [];
-  for (const line of text.split("\n")) {
-    if (mutationEntryStart.test(line)) entries.push([line]);
-    else if (/^\s+\S/.test(line) && entries.length > 0 && entries.at(-1)?.at(-1) !== "") {
-      entries.at(-1)?.push(line);
-    } else if (entries.length > 0) entries.at(-1)?.push("");
-  }
-  return entries.map((lines) => lines.join("\n").trim());
-}
-
-function filtersOf(command: string): string[] {
-  const words = (command.match(/"[^"]*"|\S+/g) ?? []).filter((word) => word !== "run");
-  return words.filter(
-    (word, index) =>
-      !word.startsWith("-") &&
-      !optionsWithAValue.has(words[index - 1] ?? "") &&
-      !word.startsWith('"'),
-  );
-}
-
-function filesOfFilter(filter: string): string[] {
-  return filesUnder(filter).filter((file) => /\.(?:ts|tsx|mts)$/.test(file));
+function testFiles(): string[] {
+  return gitInScratchRepository(repositoryRoot, ["ls-files", "-z"])
+    .split("\0")
+    .filter((file) => testOrStory.test(file));
 }
 
 function mutationCommandProblems(
   name: string,
   text: string,
-  resolve: (filter: string) => string[],
+  files: readonly string[],
   read: (file: string) => string,
 ): string[] {
   const where = `.agents/skills/${name}/SKILL.md`;
-  return mutationEntriesOf(text).flatMap((entry) => {
-    const commands = [...entry.matchAll(testCommand)];
-    const named = `the mutation entry "${entry.slice(0, 60)}…"`;
+  return mutationEntriesOf(text).flatMap(({ text: entry, commands }) => {
+    const named = `the mutation entry "${entry.trim().slice(0, 60)}…"`;
     if (commands.length === 0) {
       return [
         `${where}: ${named} gives no \`vp test <files>\` command. Write the command it runs.`,
       ];
     }
-    return commands.flatMap(([written, seed, rest]) => {
-      const filters = filtersOf(rest);
-      const unmatched = filters.filter((filter) => resolve(filter).length === 0);
-      if (unmatched.length > 0) {
+    return commands.flatMap(({ written, seed, filters }) => {
+      if (filters.length === 0) {
         return [
-          `${where}: ${named} runs \`${written.slice(1, -1)}\`, whose ${unmatched.join(", ")} matches no file.`,
+          `${where}: ${named} runs \`${written}\`, which names no file, so it runs every test of its projects. Name the files it runs.`,
         ];
       }
-      const property = filters.flatMap(resolve).some((file) => runsAProperty.test(read(file)));
+      const resolved = filters.map((filter) => files.filter((file) => file.includes(filter)));
+      const unmatched = filters.filter((_, index) => resolved[index].length === 0);
+      if (unmatched.length > 0) {
+        return [
+          `${where}: ${named} runs \`${written}\`, whose ${unmatched.join(", ")} is in no test file's path.`,
+        ];
+      }
+      const property = resolved.flat().some((file) => runsAProperty.test(read(file)));
       if (property && seed === undefined) {
         return [
-          `${where}: ${named} runs \`${written.slice(1, -1)}\`, which runs a generated property, with no \`${seedVariable}=<n>\`. Run it once without the variable, then write the command with a seed it failed with on its first run, so the check cannot pass by the luck of the draw.`,
+          `${where}: ${named} runs \`${written}\`, which runs a generated property, with no \`${seedVariable}=<n>\`. Run it once without the variable, then write the command with a seed it failed with, so the check cannot pass by the luck of the draw.`,
         ];
       }
       if (!property && seed !== undefined) {
         return [
-          `${where}: ${named} sets ${seedVariable} on \`${written.slice(1, -1)}\`, which runs no generated property. Drop the variable.`,
+          `${where}: ${named} sets ${seedVariable} on \`${written}\`, which runs no generated property. Drop the variable.`,
         ];
       }
       return [];
@@ -458,32 +442,45 @@ function mutationCommandProblems(
   });
 }
 
-test(`a mutation entry of any name runs \`vp test <files>\`, with \`${seedVariable}=<n>\` exactly when one of its files runs a generated property`, () => {
-  const files: Record<string, string> = {
-    "a.test.ts": "await assertProperty(context, property);\n",
-    "b.test.ts": 'test("fixed", () => {});\n',
+test(`a mutation entry of any name and list marker runs \`vp test <files>\`, the files read as Vitest reads them, with \`${seedVariable}=<n>\` exactly when one of them runs a generated property`, () => {
+  const fixtureFiles: Record<string, string> = {
+    "packages/a/tests/a.test.ts": "await assertProperty(context, property);\n",
+    "packages/b/tests/b.test.ts": 'test("fixed", () => {});\n',
   };
-  const resolve = (filter: string) => (filter in files ? [filter] : []);
-  const readFixture = (file: string) => files[file] ?? "";
-  const problems = (entry: string) => mutationCommandProblems(plain, entry, resolve, readFixture);
-  const seeded = `\`${seedVariable}=-42 vp test a.test.ts\``;
+  const files = Object.keys(fixtureFiles);
+  const readFixture = (file: string) => fixtureFiles[file] ?? "";
+  const problems = (entry: string) => mutationCommandProblems(plain, entry, files, readFixture);
+  const seeded = (filter: string) => `\`${seedVariable}=-42 vp test ${filter}\``;
 
-  expect(problems("- Mutation check after editing covered code: run the command.")).toHaveLength(1);
-  expect(problems("- Late layout read mutation: run `vp test a.test.ts`.")).toHaveLength(1);
-  expect(
-    problems("- Scroll mutation: change the line,\n  and run `vp test a.test.ts`."),
-  ).toHaveLength(1);
-  expect(problems(`- Focus mutation: run \`${seedVariable}=-42 vp test b.test.ts\`.`)).toHaveLength(
-    1,
-  );
-  expect(problems("- Focus mutation: run `vp test c.test.ts`.")).toHaveLength(1);
-  expect(problems(`- Scroll mutation: change the line,\n  and run ${seeded}.`)).toEqual([]);
-  expect(problems("- Hydration mutation: run `vp test b.test.ts --project node`.")).toEqual([]);
-  expect(problems('- Story mutation: run `vp test --project "stories*"`.')).toEqual([]);
+  for (const refused of [
+    "- Mutation check after editing covered code: run the command.",
+    "- Late layout read mutation: run `vp test packages/a/tests/a.test.ts`.",
+    "- Scroll mutation: change the line,\n  and run `vp test packages/a/tests/a.test.ts`.",
+    '- Quoted mutation: run `vp test "packages/a/tests/a.test.ts"`.',
+    "- Quoted mutation: run `vp test 'packages/a/tests/a.test.ts'`.",
+    "- Substring mutation: run `vp test a.test`.",
+    "* Starred mutation: run `vp test a.test`.",
+    "1. Numbered mutation: run `vp test a.test`.",
+    "- Steps:\n  - Nested mutation: run `vp test a.test`.",
+    '- Project mutation: run `vp test --project "stories*"`.',
+    `- Focus mutation: run ${seeded("packages/b/tests/b.test.ts")}.`,
+    "- Focus mutation: run `vp test packages/c/tests/c.test.ts`.",
+  ]) {
+    expect(problems(refused), refused).toHaveLength(1);
+  }
+  for (const passed of [
+    `- Scroll mutation: change the line,\n  and run ${seeded("packages/a/tests/a.test.ts")}.`,
+    `* Quoted mutation: run ${seeded('"packages/a/tests/a.test.ts"')}.`,
+    "1. Hydration mutation: run `vp test packages/b/tests/b.test.ts --project node`.",
+    '- Story mutation: run `vp test --project "stories*" packages/b`.',
+  ]) {
+    expect(problems(passed), passed).toEqual([]);
+  }
+  const tracked = testFiles();
   expect(
     skillNames
       .filter((name) => name.startsWith(verificationSkillPrefix))
-      .flatMap((name) => mutationCommandProblems(name, skillText(name), filesOfFilter, read)),
+      .flatMap((name) => mutationCommandProblems(name, skillText(name), tracked, read)),
   ).toEqual([]);
 });
 
