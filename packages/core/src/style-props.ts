@@ -190,6 +190,10 @@ function keyedEntries<Key extends string>(
   });
 }
 
+export function declaresAValue(value: VariableValue): boolean {
+  return keyedEntries(value, breakpoints).length > 0;
+}
+
 export function tokenOf(scale: Scale, key: string): string | undefined {
   const token = `--solix-${scale}-${key}`;
   return Object.hasOwn(tokens, token) ? token : undefined;

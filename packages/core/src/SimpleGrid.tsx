@@ -1,11 +1,11 @@
 import * as stylex from "@stylexjs/stylex";
 import { createUniqueId, Show } from "solid-js";
-import { declarable } from "#/src/css-syntax.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { createParts, defaultsOf, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { simpleGridVariables } from "#/src/SimpleGrid.variables.ts";
 import {
   containerKeysOf,
+  declaresAValue,
   createQueryContainer,
   type GridType,
   type GridTypeProps,
@@ -59,7 +59,7 @@ const defaults = defaultsOf<SimpleGridProps>()({ autoFlow: "auto-fill" });
 
 export function SimpleGrid(rawProps: SimpleGridProps) {
   const props = withDefaults(defaults, rawProps);
-  const fitsColumns = () => declarable(props.minColWidth) !== undefined;
+  const fitsColumns = () => declaresAValue(props.minColWidth);
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const keyed = new Map([
