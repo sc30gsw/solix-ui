@@ -11,7 +11,7 @@ import {
   systemColorScheme,
 } from "#/src/color-schemes.ts";
 import { colorSchemeStorageKey } from "#/src/local-storage-manager.ts";
-import { PageNonceContext } from "#/src/run-time-style.ts";
+import { nonceOf, PageNonceContext } from "#/src/run-time-style.ts";
 import { defaultsOf, withDefaults } from "#/src/parts.ts";
 
 export type ColorSchemeScriptOptions = ColorSchemeOptions & {
@@ -71,7 +71,7 @@ export function ColorSchemeScript(props: ColorSchemeScriptProps) {
   return (
     <script
       {...others}
-      nonce={props.nonce ?? pageNonce()}
+      nonce={props.nonce === false ? false : (nonceOf(props.nonce) ?? pageNonce())}
       innerHTML={colorSchemeScriptText(props)}
     />
   );

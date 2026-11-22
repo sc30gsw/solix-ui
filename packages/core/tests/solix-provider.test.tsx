@@ -197,35 +197,20 @@ test("given no cssVariablesSelector, the provider writes its theme under a selec
   );
 });
 
-test("a provider given no getStyleNonce gives its theme style the nonce of the provider around it", () => {
-  const html = renderToString(() =>
-    createComponent(library.SolixProvider, {
-      getStyleNonce: () => "outer",
-      get children() {
-        return createComponent(library.SolixProvider, {
-          theme: { spacing: { md: "1rem" } },
-          cssVariablesSelector: ".inner",
-        });
-      },
-    }),
-  );
-
-  expect(
-    elementsOf(html)
-      .filter(({ tag }) => tag === "style")
-      .map((style) => valuesOf(style, "nonce")),
-  ).toEqual([["outer"]]);
-});
-
-test.each(["", " "])(
-  "a provider whose getStyleNonce gives %j gives its theme style the nonce of the provider around it, as when it gives none",
-  (given) => {
+test.each([
+  ["no getStyleNonce", {}],
+  ["a getStyleNonce that gives undefined", { getStyleNonce: () => undefined }],
+  ['a getStyleNonce that gives ""', { getStyleNonce: () => "" }],
+  ['a getStyleNonce that gives " "', { getStyleNonce: () => " " }],
+])(
+  "a provider given %s gives its theme style the nonce of the provider around it",
+  (_, own: { getStyleNonce?: () => string | undefined }) => {
     const html = renderToString(() =>
       createComponent(library.SolixProvider, {
         getStyleNonce: () => "outer",
         get children() {
           return createComponent(library.SolixProvider, {
-            getStyleNonce: () => given,
+            ...own,
             theme: { spacing: { md: "1rem" } },
             cssVariablesSelector: ".inner",
           });

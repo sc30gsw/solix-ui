@@ -10,13 +10,12 @@ import { type ColorSchemeOptions, defaultColorScheme } from "#/src/color-schemes
 import { type SolixTheme, themeStyleSheet } from "#/src/create-theme.ts";
 import { LibraryStyle } from "#/src/library-style.tsx";
 import { localStorageColorSchemeManager } from "#/src/local-storage-manager.ts";
-import { type GetStyleNonce, PageNonceContext } from "#/src/run-time-style.ts";
+import { type GetStyleNonce, nonceOf, PageNonceContext } from "#/src/run-time-style.ts";
 import { type DefaultValues, defaultsOf, type WithDefaults, withDefaults } from "#/src/parts.ts";
-import { isWritten } from "#/src/style-props.ts";
 
 export type SolixProviderProps = ColorSchemeOptions & {
   theme?: SolixTheme;
-  /** The nonce goes on every style the library adds at run time; without it, or when it gives none, a provider inside another uses the outer provider's nonce. */
+  /** The nonce goes on every style the library adds at run time; without it, or when it gives `undefined` or a blank string, a provider inside another uses the outer provider's nonce. */
   getStyleNonce?: GetStyleNonce;
   /** The theme's custom properties go on what it selects, not on the children alone. */
   cssVariablesSelector?: string;
@@ -69,17 +68,13 @@ function colorSchemeOf(
 export function SolixProvider(rawProps: SolixProviderProps) {
   const props = withDefaults(defaults, rawProps);
   const outerNonce = useContext(PageNonceContext);
-  const ownNonce = () => {
-    const given = props.getStyleNonce?.();
-    return isWritten(given) ? given : undefined;
-  };
   const colorScheme = colorSchemeOf(rawProps, props);
   const styleSheet = () =>
     props.withCssVariables
       ? themeStyleSheet(props.theme ?? {}, props.cssVariablesSelector)
       : undefined;
   return (
-    <PageNonceContext value={() => ownNonce() ?? outerNonce()}>
+    <PageNonceContext value={() => nonceOf(props.getStyleNonce?.()) ?? outerNonce()}>
       <ColorSchemeContext value={colorScheme}>
         <Show when={styleSheet()}>{(css) => <LibraryStyle of="theme" css={css()} />}</Show>
         {props.children}

@@ -144,7 +144,7 @@ const nothingOfItsOwn: ComponentProps = {};
 const pageNonceProperty = "csp-nonce";
 
 function giveTheSdkThePageNonce(nonce: string | undefined): void {
-  if (isServer || nonce === undefined || nonce === "") return;
+  if (isServer || nonce === undefined) return;
   if (document.head.querySelector(`meta[property="${pageNonceProperty}"]`)) return;
   const meta = document.createElement("meta");
   meta.setAttribute("property", pageNonceProperty);

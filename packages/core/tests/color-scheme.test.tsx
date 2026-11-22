@@ -138,7 +138,7 @@ test("the pre-paint script never holds the text that would end its <script> elem
   );
 });
 
-test("ColorSchemeScript renders one <script> with that text and nothing else in it, the nonce of the provider around it unless it is given one that is not undefined, and the attributes it is given", () => {
+test("ColorSchemeScript renders one <script> with that text and nothing else in it, the nonce of the provider around it unless it is given one that is not undefined, empty or blank, and the attributes it is given", () => {
   const options = { defaultColorScheme: "auto" as const, localStorageKey: "theme" };
   const inside = renderToString(() =>
     createComponent(library.SolixProvider, {
@@ -164,6 +164,16 @@ test("ColorSchemeScript renders one <script> with that text and nothing else in 
       },
     }),
   );
+  const withBlank = ["", " "].map((blank) =>
+    renderToString(() =>
+      createComponent(library.SolixProvider, {
+        getStyleNonce: () => "page",
+        get children() {
+          return createComponent(library.ColorSchemeScript, { ...options, nonce: blank });
+        },
+      }),
+    ),
+  );
   const [script] = elementsOf(inside).filter(({ tag }) => tag === "script");
   const [ownScript] = elementsOf(own).filter(({ tag }) => tag === "script");
 
@@ -172,6 +182,7 @@ test("ColorSchemeScript renders one <script> with that text and nothing else in 
     inside,
   );
   expect(valuesOf(script, "nonce")).toEqual(["page"]);
+  expect(withBlank, "an empty or blank nonce is no nonce").toEqual([inside, inside]);
   expect(valuesOf(ownScript, "nonce")).toEqual(["own"]);
   expect(valuesOf(ownScript, "id")).toEqual(["scheme"]);
   expect(valuesOf(script, "defaultcolorscheme")).toEqual([]);
