@@ -151,6 +151,63 @@ test("each public prop of every component the library exports is documented on o
   }
 });
 
+const refusedDefaultsProbe = `import { type ControlledProps, defaultsOf } from ${JSON.stringify(sharedPropTypes)};
+
+type Props = ControlledProps<string | null> & { loop?: boolean; label?: string };
+type Indexed = ControlledProps<string | null> & { [key: string]: unknown; loop?: boolean };
+
+export const allowed = defaultsOf<Props>()({ loop: true, label: "Mail" });
+export const allowedBesideAnIndexSignature = defaultsOf<Indexed>()({ loop: true });
+export const value = defaultsOf<Props>()({ value: "inbox" });
+export const defaultValue = defaultsOf<Props>()({ defaultValue: null });
+export const onChange = defaultsOf<Props>()({ onChange: () => undefined });
+export const notAProp = defaultsOf<Props>()({ size: "md" });
+export const widened = defaultsOf<Props>()({ label: "Mail" as string });
+export const valueBesideAnIndexSignature = defaultsOf<Indexed>()({ value: "inbox" });
+`;
+
+test("defaultsOf refuses a default for value, defaultValue and onChange, even beside an index signature, for a key that is not a prop and for a value that is not one literal, and takes one literal for a prop", () => {
+  const file = virtualFile(refusedDefaultsProbe, ".ts");
+  const program = openProgram([file]);
+  try {
+    const statements = program.sourceFile(file)?.statements ?? [];
+    const declared = statements.flatMap((statement) =>
+      ts.isVariableStatement(statement)
+        ? statement.declarationList.declarations.map((declaration) => ({
+            name: declaration.name.getText(),
+            pos: statement.pos,
+            end: statement.end,
+          }))
+        : [],
+    );
+    const refused = [
+      ...new Set(
+        program
+          .typeErrors(file)
+          .map(
+            ({ pos }) =>
+              declared.find((declaration) => declaration.pos <= pos && pos < declaration.end)
+                ?.name ?? `an error outside the probe's declarations, at ${pos}`,
+          ),
+      ),
+    ];
+
+    expect(declared.length).toBe(8);
+    expect(refused.toSorted()).toEqual(
+      [
+        "value",
+        "defaultValue",
+        "onChange",
+        "notAProp",
+        "widened",
+        "valueBesideAnIndexSignature",
+      ].toSorted(),
+    );
+  } finally {
+    program.dispose();
+  }
+});
+
 const sharedDefaultsProbe = `import type { JSX } from "@solidjs/web";
 import { defaultsOf, withDefaults } from ${JSON.stringify(sharedPropTypes)};
 

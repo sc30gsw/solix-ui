@@ -127,14 +127,16 @@ type OneLiteral<T> = [T] extends [string | number | boolean]
 
 export type LiteralValues<D> = { readonly [K in keyof D]-?: OneLiteral<D[K]> };
 
-type KeyWhereNullSelectsNothing = keyof ControlledProps<unknown>;
+type ControlledKey = keyof ControlledProps<unknown>;
 
-type KeyThatTakesADefault<P> = Exclude<keyof P, KeyWhereNullSelectsNothing>;
+type DefaultableKey<P> = Exclude<keyof P, ControlledKey>;
 
 type DefaultsFor<P, D> = {
-  readonly [K in keyof D]: K extends KeyThatTakesADefault<P>
-    ? OneLiteral<D[K]> & Exclude<P[K], undefined>
-    : never;
+  readonly [K in keyof D]: [K] extends [ControlledKey]
+    ? never
+    : K extends DefaultableKey<P>
+      ? OneLiteral<D[K]> & Exclude<P[K], undefined>
+      : never;
 };
 
 export function defaultsOf<P extends object>() {
