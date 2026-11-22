@@ -4,10 +4,12 @@ import { join } from "node:path";
 import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
+import { allowedRuntimeDependencyNames } from "#/scripts/runtime-dependencies.ts";
 import { storyControls } from "#/scripts/story-controls.ts";
 import { nodeTestFiles, packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 import { seedNotice, seedVariable } from "#/tests/support/property-seed.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
+import { specCommands } from "#/packages/core/spec/commands.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const tablesKeptCompact = ["AGENTS.md"];
@@ -16,6 +18,9 @@ const mutationInputsKeptAsWritten = ["apps/storybook/fixtures/mutation-inputs/**
 const storySpec = "apps/storybook/tests/story-spec.test.ts";
 const storyRecordsSetup = "apps/storybook/story-records-command.ts";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
+const specRoot = join(import.meta.dirname, "packages/core");
+const specTestsInTheirRoot = "tests/**/*.browser.test.{ts,tsx}";
+const specTests = `packages/core/${specTestsInTheirRoot}`;
 const checkerRules = "tests/rules/**/*.test.ts";
 const programOpeners = [
   "tests/rules/**",
@@ -25,6 +30,7 @@ const programOpeners = [
 ];
 const storybookConfigDirectory = join(import.meta.dirname, "apps/storybook/.storybook");
 const preBundledForBrowserTests = ["axe-core", "fast-check", "vite-plus/test/browser"];
+const preBundledForSpecTests = ["@stylexjs/stylex", "axe-core", "vite-plus/test/browser"];
 const propertyRunner = "tests/support/properties.ts";
 const fastCheckRunners = [
   "assert",
@@ -102,9 +108,30 @@ const projects = [
         name: "node",
         environment: "node",
         include: [...nodeTestFiles],
-        exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules, storySpec],
+        exclude: [
+          "**/node_modules/**",
+          browserTests,
+          specTests,
+          ...ruleFixtures,
+          checkerRules,
+          storySpec,
+        ],
         globalSetup: ["tests/support/global-setup.ts"],
         setupFiles: ["apps/playground/tests/support/console-check.ts"],
+      },
+    },
+    {
+      extends: true,
+      root: specRoot,
+      optimizeDeps: {
+        include: preBundledForSpecTests,
+        exclude: allowedRuntimeDependencyNames(),
+      },
+      test: {
+        name: "component spec",
+        include: [specTestsInTheirRoot],
+        api: { port: anyFreePort, strictPort: true },
+        browser: Object.assign(browserInEveryEngine(), { commands: specCommands }),
       },
     },
     ...storiesServers.map((server) => ({
