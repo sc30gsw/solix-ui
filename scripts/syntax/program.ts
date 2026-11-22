@@ -1,11 +1,10 @@
 import { resolve, sep } from "node:path";
-import { API, type Checker, type CompilerOptions, type Diagnostic } from "typescript/unstable/sync";
+import { API, type Checker, type CompilerOptions } from "typescript/unstable/sync";
 import type { Node, SourceFile } from "#/scripts/syntax/ast.ts";
 
 export type Program = {
   sourceFile: (file: string) => SourceFile | undefined;
   checker: Checker;
-  typeErrors: (file: string) => readonly Diagnostic[];
   dispose: () => void;
 };
 
@@ -57,7 +56,6 @@ function openProject(rootFiles: readonly string[], compilerOptions: CompilerOpti
   return {
     sourceFile: (file) => project.program.getSourceFile(normalised(file)),
     checker: project.checker,
-    typeErrors: (file) => project.program.getSemanticDiagnostics(normalised(file)),
     dispose: () => {
       api.updateSnapshot({ closeProjects: [config] }).dispose();
       snapshot.dispose();
