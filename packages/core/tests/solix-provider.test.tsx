@@ -34,6 +34,8 @@ const sizes = [
   "__proto__",
 ];
 const refusedValues = [
+  "",
+  " ",
   "1rem;color:red",
   "1rem}",
   "{",
@@ -47,7 +49,7 @@ const refusedValues = [
   "a /* b",
   "a\\b",
 ];
-const refusedSelectors = ["a{", "b}", ":root;", "<x>", ":not(.a", "[data-x"];
+const refusedSelectors = ["", " ", "a{", "b}", ":root;", "<x>", ":not(.a", "[data-x"];
 const writable = fc.oneof(
   fc.stringMatching(/^[a-z0-9.%]{1,12}$/),
   fc.constantFrom(

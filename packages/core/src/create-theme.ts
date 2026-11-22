@@ -10,7 +10,7 @@ import { colorSchemeAttribute } from "#/src/color-schemes.ts";
 import { warnInTheBrowserDuringDevelopment } from "#/src/development-warning.ts";
 import { type Scale } from "#/src/style-prop-table.ts";
 import { layerOrder, libraryCascadeLayer } from "#/src/layers.ts";
-import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
+import { written } from "#/src/css-syntax.ts";
 import { type ScaleKey, tokenOf } from "#/src/style-props.ts";
 
 export const scaleOfThemeKey = {
@@ -51,11 +51,7 @@ function isClosed(text: string): boolean {
 }
 
 function isWritable(text: string): boolean {
-  return (
-    !characterThatEndsADeclaration.test(text) &&
-    !characterThatLeavesItsPlace.test(text) &&
-    isClosed(text)
-  );
+  return written(text) !== undefined && !characterThatLeavesItsPlace.test(text) && isClosed(text);
 }
 
 function isThemeKey(key: string): key is ThemeKey {
