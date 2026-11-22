@@ -7,6 +7,8 @@ const pixelsPerMediaQueryEm = 16;
 
 export const mdBreakpointInPixels = Number.parseFloat(breakpointWidths.md) * pixelsPerMediaQueryEm;
 
+export const lgBreakpointInPixels = Number.parseFloat(breakpointWidths.lg) * pixelsPerMediaQueryEm;
+
 export const viewportHeight = 800;
 
 export const viewports: [label: string, width: number, fromMd: boolean][] = [

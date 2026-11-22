@@ -15,6 +15,16 @@ export function SpaceSection() {
       <p>Above the pinned space</p>
       <Space h="xl" mih="xs" />
       <p>Below the pinned space</p>
+      <p>Above the space with a blank mih</p>
+      <Space h="xl" mih={{ base: " " }} />
+      <p>Above the space with mih from md</p>
+      <Space h="xl" mih={{ md: "xs" }} />
+      <p>Above the space with mih from md over h from lg</p>
+      <Space h={{ base: "md", lg: "xl" }} mih={{ md: "xs" }} />
+      <Box display="flex">
+        <span>Before the space with miw from md</span>
+        <Space w="lg" miw={{ md: "xs" }} />
+      </Box>
     </Box>
   );
 }

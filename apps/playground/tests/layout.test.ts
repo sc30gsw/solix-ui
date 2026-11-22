@@ -11,6 +11,7 @@ import {
 } from "#/tests/support/playground.ts";
 import {
   expectTheBoxCascade,
+  lgBreakpointInPixels,
   mdBreakpointInPixels,
   viewportHeight,
   viewports,
@@ -94,6 +95,29 @@ async function centredIn(outer: Locator, inner: Locator): Promise<boolean> {
   );
 }
 
+async function expectTheKeyedSpaces(
+  page: Page,
+  expected: Expected,
+  width: "base" | "md" | "lg",
+): Promise<void> {
+  expect(
+    await computed(after(page, "Above the space with a blank mih"), "min-height"),
+    "a blank mih leaves h as the minimum height",
+  ).toBe(expected("--solix-spacing-xl"));
+  expect(
+    await computed(after(page, "Above the space with mih from md"), "min-height"),
+    "h is the minimum height below the breakpoint mih names, and mih from it up",
+  ).toBe(expected(width === "base" ? "--solix-spacing-xl" : "--solix-spacing-xs"));
+  expect(
+    await computed(after(page, "Above the space with mih from md over h from lg"), "min-height"),
+    "mih from md holds over an h that changes at lg",
+  ).toBe(expected(width === "base" ? "--solix-spacing-md" : "--solix-spacing-xs"));
+  expect(
+    await computed(after(page, "Before the space with miw from md"), "min-width"),
+    "w is the minimum width below the breakpoint miw names, and miw from it up",
+  ).toBe(expected(width === "base" ? "--solix-spacing-lg" : "--solix-spacing-xs"));
+}
+
 const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = [
   [
     "a Space keeps the height and width it is given as its minimum, unless mih or miw replaces it",
@@ -110,6 +134,7 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
         await computed(after(page, "Above the pinned space"), "min-height"),
         "mih replaces h as the minimum height",
       ).toBe(expected("--solix-spacing-xs"));
+      await expectTheKeyedSpaces(page, expected, fromMd ? "md" : "base");
     },
   ],
   [
@@ -377,6 +402,17 @@ inEveryEngine((browser) => {
         await check({ page: opened.page, expected: opened.expected, fromMd });
       });
     });
+  });
+
+  test("past the lg breakpoint, a Space's mih or miw from md still holds over its h or w", async () => {
+    const { page, expected, close } = await openPage(browser(), url, {
+      viewport: { width: lgBreakpointInPixels + 100, height: viewportHeight },
+    });
+    try {
+      await expectTheKeyedSpaces(page, expected, "lg");
+    } finally {
+      await close();
+    }
   });
 
   test("a page widened from one pixel below md to md passes the Box's checks and every layout check at md", async () => {

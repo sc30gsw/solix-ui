@@ -71,14 +71,14 @@ const spaceCases: [what: string, props: SpaceProps, expected: Rendered][] = [
     },
   ],
   [
-    "mih replaces h as the minimum height",
+    "with mih, the minimum height Space sets still follows h, and mih writes its own class, which the style-prop layer puts over it",
     { h: "xl", mih: "xs" },
     {
       classes: ["sx-h", "sx-mih", "sx-space-min-height"],
       style: {
         "--sx-h": "var(--solix-spacing-xl)",
         "--sx-mih": "var(--solix-spacing-xs)",
-        "--sx-space-min-height": "var(--solix-spacing-xs)",
+        "--sx-space-min-height": "var(--solix-spacing-xl)",
       },
     },
   ],
@@ -98,54 +98,6 @@ const spaceCases: [what: string, props: SpaceProps, expected: Rendered][] = [
       style: { "--sx-h": "2rem", "--sx-space-min-height": "2rem" },
     },
   ]),
-  [
-    "a mih whose base is blank leaves h as the minimum height",
-    { h: "2rem", mih: { base: " " } },
-    {
-      classes: ["sx-h", "sx-space-min-height"],
-      style: { "--sx-h": "2rem", "--sx-space-min-height": "2rem" },
-    },
-  ],
-  [
-    "a mih from a breakpoint up leaves h as the minimum height below it",
-    { h: "2rem", mih: { md: "1rem" } },
-    {
-      classes: ["sx-h", "sx-mih-md", "sx-space-min-height", "sx-space-min-height-md"],
-      style: {
-        "--sx-h": "2rem",
-        "--sx-mih-md": "1rem",
-        "--sx-space-min-height": "2rem",
-        "--sx-space-min-height-md": "1rem",
-      },
-    },
-  ],
-  [
-    "a mih from a breakpoint up holds above it, over a later h",
-    { h: { base: 8, lg: "xl" }, mih: { md: "1rem" } },
-    {
-      classes: ["sx-h", "sx-h-lg", "sx-mih-md", "sx-space-min-height", "sx-space-min-height-md"],
-      style: {
-        "--sx-h": "0.5rem",
-        "--sx-h-lg": "var(--solix-spacing-xl)",
-        "--sx-mih-md": "1rem",
-        "--sx-space-min-height": "0.5rem",
-        "--sx-space-min-height-md": "1rem",
-      },
-    },
-  ],
-  [
-    "a miw from a breakpoint up leaves w as the minimum width below it",
-    { w: "2rem", miw: { md: "1rem" } },
-    {
-      classes: ["sx-miw-md", "sx-space-min-width", "sx-space-min-width-md", "sx-w"],
-      style: {
-        "--sx-miw-md": "1rem",
-        "--sx-space-min-width": "2rem",
-        "--sx-space-min-width-md": "1rem",
-        "--sx-w": "2rem",
-      },
-    },
-  ],
   ["with no size it sets nothing", {}, { classes: [], style: {} }],
 ];
 

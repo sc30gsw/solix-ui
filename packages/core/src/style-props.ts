@@ -278,20 +278,6 @@ export function withBase<V extends string | number>(value: Keyed<V>, base: V): K
   return { ...given, [baseKey]: declarable(given[baseKey]) ?? base };
 }
 
-export function withFallback(value: VariableValue, fallback: VariableValue): VariableValue {
-  const own = new Map(keyedEntries(value, breakpoints));
-  if (own.size === 0) return fallback;
-  const other = new Map(keyedEntries(fallback, breakpoints));
-  const every: (typeof baseKey | Breakpoint)[] = [baseKey, ...breakpoints];
-  const firstOwn = every.findIndex((key) => own.has(key));
-  return Object.fromEntries(
-    every.flatMap((key, at): [string, string | number][] => {
-      const kept = at < firstOwn ? other.get(key) : own.get(key);
-      return kept === undefined ? [] : [[key, kept]];
-    }),
-  );
-}
-
 function placed(
   name: string,
   row: VariableRow,
