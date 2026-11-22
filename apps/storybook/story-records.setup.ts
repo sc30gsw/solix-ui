@@ -82,11 +82,11 @@ function passedAgain(failure: unknown, when: string): void {
   );
 }
 
-async function failsInItsPlay(
+async function playedBy(
   story: RunnableStory,
   timeout: number,
   substitution: Substitution,
-): Promise<Pick<Played, "timedOutMessage"> | undefined> {
+): Promise<Played | undefined> {
   const failure = await ranAgain(story, timeout, substitution);
   const failed = failure !== undefined;
   const { mounted, playReturned } = lastStoryRun();
@@ -96,7 +96,11 @@ async function failsInItsPlay(
     `right after it ran with ${named(substitution)} substituted`,
   );
   if (!(failed && mounted && !playReturned && tookPlace)) return undefined;
-  return failure instanceof RanOutOfTime ? { timedOutMessage: failure.message } : {};
+  return {
+    prop: substitution.prop,
+    ...("value" in substitution ? { value: substitution.value } : {}),
+    ...(failure instanceof RanOutOfTime ? { timedOutMessage: failure.message } : {}),
+  };
 }
 
 function keyOf({ component, prop, value }: Substitution): string {
@@ -117,14 +121,10 @@ async function substituted(
         passedAgain(await ranAgain(story, timeout), "when it ran again before any substitution");
         ranBefore = true;
       }
-      const outcome = await failsInItsPlay(story, timeout, substitution);
-      if (outcome === undefined) continue;
+      const record = await playedBy(story, timeout, substitution);
+      if (record === undefined) continue;
       played.add(keyOf(substitution));
-      mount.played.push({
-        prop: substitution.prop,
-        ...("value" in substitution ? { value: substitution.value } : {}),
-        ...outcome,
-      });
+      mount.played.push(record);
     }
   }
 }
