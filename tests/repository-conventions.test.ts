@@ -24,6 +24,7 @@ import {
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { exportsOf, parse } from "#/scripts/syntax.ts";
+import { seedVariable } from "#/tests/support/properties.ts";
 import {
   formalSkillPrefix,
   isModelFile,
@@ -322,32 +323,38 @@ test("every verification skill says which commit it was last confirmed against",
   expect(violations).toEqual([]);
 });
 
-const mutationCheck = /^- Mutation check\b.*$/gm;
+const mutationEntry = /^- (?:[\w-]+ )?[Mm]utation\b[^:\n]*:.*$/gm;
 const reliesOnADraw = /\bgenerated\b|\bcounterexample\b/i;
-const fixedSeed = /`seed: -?\d+`/;
+const seededCommand = new RegExp(`\`${seedVariable}=-?\\d+ vp test [^\`]+\``);
 
-function luckyMutationChecks(name: string, text: string): string[] {
-  return [...text.matchAll(mutationCheck)]
+function unseededMutationChecks(name: string, text: string): string[] {
+  return [...text.matchAll(mutationEntry)]
     .map(([line]) => line)
-    .filter((line) => reliesOnADraw.test(line) && !fixedSeed.test(line))
+    .filter((line) => reliesOnADraw.test(line) && !seededCommand.test(line))
     .map(
       (line) =>
-        `.agents/skills/${name}/SKILL.md: the mutation check "${line.slice(0, 80)}…" says a generated check fails but gives no \`seed: <n>\`. Run it, and name the seed it failed with on its first run, so the check cannot pass by the luck of the draw.`,
+        `.agents/skills/${name}/SKILL.md: the mutation check "${line.slice(0, 80)}…" says a generated check fails but runs no \`${seedVariable}=<n> vp test …\`. Run it once without the variable, then write the command with the seed it failed with, so the check cannot pass by the luck of the draw.`,
     );
 }
 
-test("a mutation check that says a generated check fails names the seed it fails with", () => {
-  const lucky =
-    "- Mutation check after editing covered code: run it, and the generated check must fail with a sequence that presses an arrow towards a disabled tab.\n";
+test(`a mutation check that says a generated check fails runs it as \`${seedVariable}=<n> vp test …\`, whatever the entry is called`, () => {
+  const entries = [
+    "- Mutation check after editing covered code: run `vp test a.test.ts`, and the generated check must fail.",
+    "- Scroll mutation: run `vp test a.test.ts`. Its generated test must fail with a counterexample.",
+    "- Focus mutation: the generated one fails with `seed: 42` added to its parameters.",
+  ];
 
-  expect(luckyMutationChecks("verify-tabs", lucky)).toHaveLength(1);
+  for (const entry of entries) expect(unseededMutationChecks("verify-tabs", entry)).toHaveLength(1);
   expect(
-    luckyMutationChecks("verify-tabs", lucky.replace("fail", "fail with `seed: -42`")),
+    unseededMutationChecks(
+      "verify-tabs",
+      entries[1].replace("`vp test", `\`${seedVariable}=-42 vp test`),
+    ),
   ).toEqual([]);
   expect(
     skillNames
       .filter((name) => name.startsWith(verificationSkillPrefix))
-      .flatMap((name) => luckyMutationChecks(name, skillText(name))),
+      .flatMap((name) => unseededMutationChecks(name, skillText(name))),
   ).toEqual([]);
 });
 

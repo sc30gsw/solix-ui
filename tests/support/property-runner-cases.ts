@@ -4,6 +4,8 @@ import {
   assertProperty,
   propertyRunsGoing,
   type PropertyParameters,
+  seedFrom,
+  seedVariable,
 } from "#/tests/support/properties.ts";
 
 const shortTimeout = 4_000;
@@ -33,6 +35,17 @@ const slow = fc.asyncProperty(fc.nat(), async () => {
 });
 
 export function definePropertyRunnerTests(): void {
+  test(`the run gives every test ${seedVariable} as a string, and assertProperty reads it as the seed of each property that names none`, () => {
+    expect(typeof import.meta.env.SOLIX_PROPERTY_SEED).toBe("string");
+    expect([seedFrom(""), seedFrom(undefined), seedFrom("42"), seedFrom(" -7 ")]).toEqual([
+      undefined,
+      undefined,
+      42,
+      -7,
+    ]);
+    expect(() => seedFrom("4.2")).toThrow(`${seedVariable} is "4.2"`);
+  });
+
   test(
     "a property that fails and is still shrinking when its time runs out reports its seed, its path and its counterexample before the test's timeout",
     { timeout: shortTimeout, retry: attemptsAfterAStall },

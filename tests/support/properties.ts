@@ -1,7 +1,18 @@
 import fc from "fast-check";
 import type { TestContext } from "vite-plus/test";
 
+declare global {
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+  interface ImportMetaEnv {
+    readonly SOLIX_PROPERTY_SEED?: string;
+  }
+}
+
 const shareOfTheTestTimeout = 0.9;
+export const seedVariable = "SOLIX_PROPERTY_SEED";
+const integer = /^-?\d+$/;
 const shareBeforeTheTestTimesOut = 0.97;
 
 export type PropertyParameters<Ts> = Pick<
@@ -100,16 +111,27 @@ function withTheRunsStillGoing(failure: unknown, going: number): unknown {
   );
 }
 
+export function seedFrom(given: unknown): number | undefined {
+  if (given === undefined || given === "") return undefined;
+  if (typeof given !== "string" || !integer.test(given.trim())) {
+    throw new Error(
+      `${seedVariable} is ${JSON.stringify(given)}. Set it to an integer seed, or leave it unset.`,
+    );
+  }
+  return Number(given.trim());
+}
+
 export async function assertProperty<Ts>(
   context: TestContext,
   property: fc.IRawProperty<Ts>,
   { numRuns, examples, seed, path, endOnFailure, verbose }: PropertyParameters<Ts> = {},
 ): Promise<void> {
+  const fixedSeed = seed ?? seedFrom(import.meta.env.SOLIX_PROPERTY_SEED);
   try {
     await fc.assert(property, {
       ...(numRuns === undefined ? {} : { numRuns }),
       ...(examples === undefined ? {} : { examples }),
-      ...(seed === undefined ? {} : { seed }),
+      ...(fixedSeed === undefined ? {} : { seed: fixedSeed }),
       ...(path === undefined ? {} : { path }),
       ...(endOnFailure === undefined ? {} : { endOnFailure }),
       ...(verbose === undefined ? {} : { verbose }),

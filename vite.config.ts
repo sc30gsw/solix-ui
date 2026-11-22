@@ -6,6 +6,7 @@ import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 import { storyControls } from "#/scripts/story-controls.ts";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
+import { seedVariable } from "#/tests/support/properties.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
@@ -219,6 +220,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
+    env: { [seedVariable]: process.env[seedVariable] ?? "" },
     testTimeout: 30_000,
     hookTimeout: 30_000,
     projects,
