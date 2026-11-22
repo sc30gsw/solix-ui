@@ -42,9 +42,11 @@ const conventionalTitle =
 const sessionUrl = /^https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+$/;
 const writtenCommit = /^(`?)([0-9a-fA-F]{7,40})\1(?![0-9a-fA-F])/;
 const confirmedLine = /Last confirmed against commit `[0-9a-f]{7,40}`/;
-const anyCommit = /\b[0-9a-f]{7,40}\b/g;
+const confirmedCommits = /(Last confirmed against commit `|git diff )[0-9a-f]{7,40}\b/g;
 const frontmatterFence = /^\s*---\s*$/;
 const directive = /^\s*%%/;
+const directiveStart = /^\s*%%\{/;
+const directiveEnd = /\}%%\s*$/;
 const diagramType =
   /^\s*(stateDiagram(-v2)?|flowchart|graph|sequenceDiagram|classDiagram|erDiagram|journey|gantt|pie|mindmap|timeline)\b/;
 
@@ -90,7 +92,15 @@ function diagramLine(lines: readonly string[]): string {
     const end = lines.findIndex((line, index) => index > at && frontmatterFence.test(line));
     at = end === -1 ? lines.length : end + 1;
   }
-  return lines.slice(at).find((line) => line.trim() !== "" && !directive.test(line)) ?? "";
+  let inDirective = false;
+  for (const line of lines.slice(at)) {
+    if (inDirective || directiveStart.test(line)) {
+      inDirective = !directiveEnd.test(line);
+      continue;
+    }
+    if (line.trim() !== "" && !directive.test(line)) return line;
+  }
+  return "";
 }
 
 function isChart({ info, lines, closed }: FencedBlock): boolean {
@@ -128,9 +138,14 @@ function reachableFrom(sha: string, commits: readonly PullRequestCommit[]): Set<
   return reached;
 }
 
+export function isSkillConfirmationFile(file: string): boolean {
+  return matchesGlob(file, filesAfterReview);
+}
+
 function onlyMovesItsConfirmation({ removed, added }: LineEdit): boolean {
-  const same = (line: string) => line.replace(anyCommit, "<commit>");
+  const same = (line: string) => line.replace(confirmedCommits, "$1<commit>");
   return (
+    removed.length > 0 &&
     removed.length === added.length &&
     removed.every(
       (line, index) =>
@@ -143,7 +158,7 @@ function onlyMovesItsConfirmation({ removed, added }: LineEdit): boolean {
 
 function unreviewedFilesOf({ parents, files, skillEdits }: PullRequestCommit): string[] {
   return files.filter((file) => {
-    if (parents.length > 1 || !matchesGlob(file, filesAfterReview)) return true;
+    if (parents.length > 1 || !isSkillConfirmationFile(file)) return true;
     const edit = skillEdits.find((each) => each.file === file);
     return edit === undefined || !onlyMovesItsConfirmation(edit);
   });

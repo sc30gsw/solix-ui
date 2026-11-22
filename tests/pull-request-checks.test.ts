@@ -242,6 +242,17 @@ describe("the text of a pull request", () => {
     );
     expect(counted(inVerification(underLimit, withFrontmatter))).toEqual([]);
     expect(counted(inVerification(underLimit, withInit))).toEqual([]);
+    const withLongInit = chartOf(30).replace(
+      "mermaid\n",
+      "mermaid\n%%{\n  init: { 'theme': 'neutral' }\n}%%\n",
+    );
+    expect(counted(inVerification(underLimit, withLongInit))).toEqual([]);
+  });
+
+  test("reads the review lines after a comment marker written inside a code span", () => {
+    const body = inVerification(bodyWith(minimal), "A comment opens with `<!--`.");
+
+    expect(problemsOf({ title, body }, unchanged)).toEqual([]);
   });
 
   test.each([
@@ -308,13 +319,19 @@ describe("the text of a pull request", () => {
       added: [confirmed("2222222").replace("what changed", "what moved")],
     };
     const prose = { file: skill, removed: ["Run it."], added: ["Run it twice."] };
+    const nothing = { file: skill, removed: [], added: [] };
+    const otherHash = {
+      file: skill,
+      removed: [`${confirmed("1111111")} See abcdef1.`],
+      added: [`${confirmed("2222222")} See abcdef2.`],
+    };
     const notInTheDiff = changesOf(["src/a.ts"], [["src/a.ts"]]);
     const after = (changes: PullRequestChanges) => problemsOf({ title, body }, changes);
 
     expect(after(changesOf(["src/a.ts"], [moved]))).toEqual([]);
     expect(after(changesOf(["src/a.ts"], [{ merge: [] }]))).toEqual([]);
     expect(after({ ...notInTheDiff, files: [] })).toEqual([]);
-    for (const edit of [reworded, prose, [skill]]) {
+    for (const edit of [reworded, prose, nothing, otherHash, [skill]]) {
       expect(after(changesOf(["src/a.ts"], [edit])).join("\n")).toContain(
         `own commits after it change ${skill}`,
       );
@@ -528,6 +545,50 @@ describe("the text check", () => {
     });
   });
 
+  test("counts a conflict that a merge after the review resolves with one side whole, and a skill's line edited after the review whatever it starts with", async () => {
+    await inScratchPullRequest(({ root, git, head, check }) => {
+      git("switch", "--quiet", "main");
+      writeFileSync(join(root, "src/a.ts"), "from main\n");
+      git("commit", "--quiet", "--all", "--message=main changes a");
+      git("update-ref", "refs/remotes/origin/main", "main");
+      git("switch", "--quiet", "topic");
+      spawnSync("git", ["merge", "--no-ff", "--no-edit", "main"], { cwd: root });
+      git("checkout", "--ours", "src/a.ts");
+      git("add", "--all");
+      git(
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "commit",
+        "--quiet",
+        "--no-edit",
+      );
+      const body = bodyWith(minimal, undefined, head);
+
+      expect(check({ title, body }, git("rev-parse", "HEAD")).stderr).toContain(
+        "own commits after it change src/a.ts",
+      );
+
+      git("reset", "--quiet", "--hard", head);
+      git("update-ref", "refs/remotes/origin/main", "main~1");
+      const skill = join(root, ".agents/skills/verify-tabs/SKILL.md");
+      mkdirSync(dirname(skill), { recursive: true });
+      writeFileSync(skill, "---\nname: verify-tabs\n---\n--flag one\n");
+      git("add", "--all");
+      git("commit", "--quiet", "--message=add skill");
+      const reviewedWithSkill = git("rev-parse", "HEAD");
+      writeFileSync(skill, "---\nname: verify-tabs\n---\n--flag two\n");
+      git("commit", "--quiet", "--all", "--message=edit a line that starts with --");
+      expect(
+        check(
+          { title, body: bodyWith(minimal, undefined, reviewedWithSkill) },
+          git("rev-parse", "HEAD"),
+        ).stderr,
+      ).toContain("own commits after it change .agents/skills/verify-tabs/SKILL.md");
+    });
+  });
+
   test("reads the base only from its remote-tracking branch, says so when it is missing, and still checks the text", async () => {
     await inScratchPullRequest(({ git, head, check }) => {
       git("tag", "release", "main");
@@ -542,7 +603,7 @@ describe("the text check", () => {
       );
       expect(run.stderr).toContain("is not a Conventional Commit");
       expect(check({ title, body: bodyWith(minimal, undefined, head), base: {} }).stderr).toContain(
-        "The event names no base branch.",
+        "The event names no base branch, so the changes cannot be read.",
       );
     });
   });

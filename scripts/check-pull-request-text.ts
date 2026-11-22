@@ -1,11 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { matchesGlob, join } from "node:path";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { tmpdir } from "node:os";
-import { commitsBetween, filesOf, gitRun } from "#/scripts/git.ts";
+import { changedLinesOf, commitsBetween, filesOf, gitRun } from "#/scripts/git.ts";
 import {
-  filesAfterReview,
+  isSkillConfirmationFile,
   type PullRequestChanges,
   type PullRequestText,
   problemsOf,
@@ -64,10 +64,7 @@ function readEvent(eventFile: string): Reading {
       baseBranch,
       head,
     },
-    problems: [
-      ...(head === undefined ? ["The event names no head commit."] : []),
-      ...(baseBranch === undefined ? ["The event names no base branch."] : []),
-    ],
+    problems: [],
   };
 }
 
@@ -76,42 +73,45 @@ function readFile(file: string, baseBranch: string): Reading {
   const head = commitOf("HEAD");
   return {
     pullRequest: { title, body: body.join("\n"), source: { kind: "file" }, baseBranch, head },
-    problems: [
-      ...(second.trim() === ""
+    problems:
+      second.trim() === ""
         ? []
         : [
             `${file}: line 2 is "${second}". Leave it blank, with the title on line 1 and the body from line 3.`,
-          ]),
-      ...(head === undefined ? ["git cannot read HEAD here, so the changes cannot be read."] : []),
-    ],
+          ],
   };
 }
 
-type ChangesReading = { changes: PullRequestChanges | undefined; problems: string[] };
+type ChangesReading = { changes: PullRequestChanges } | { cannotRead: string };
+
+function cannotRead(why: string): ChangesReading {
+  return { cannotRead: `${why}, so the changes cannot be read.` };
+}
 
 function changesOf({ baseBranch, head }: PullRequest): ChangesReading {
-  if (baseBranch === undefined || head === undefined) return { changes: undefined, problems: [] };
+  if (head === undefined) return cannotRead("There is no head commit to read");
+  if (baseBranch === undefined) return cannotRead("The event names no base branch");
   const remote = `refs/remotes/origin/${baseBranch}`;
   const base = commitOf(remote);
   if (base === undefined) {
-    return {
-      changes: undefined,
-      problems: [
-        `The base branch "${baseBranch}" has no ${remote} in this clone, so the changes cannot be read. Fetch it, or check out the whole history with fetch-depth: 0.`,
-      ],
-    };
+    return cannotRead(
+      `The base branch "${baseBranch}" has no ${remote} in this clone. Fetch it, or check out the whole history with fetch-depth: 0. Until then`,
+    );
   }
   const diff = gitRun(["diff", "--name-only", "--no-renames", "-z", `${base}...${head}`]);
-  if (diff.status !== 0) {
-    return { changes: undefined, problems: [`git cannot compare ${remote} with ${head}.`] };
-  }
-  return {
-    changes: {
-      files: filesOf(diff.stdout),
-      commits: commitsBetween(base, head, (file) => matchesGlob(file, filesAfterReview)),
-    },
-    problems: [],
-  };
+  if (diff.status !== 0) return cannotRead(`git cannot compare ${remote} with ${head}`);
+  const commits = commitsBetween(base, head).map(({ sha, parents, files }) => ({
+    sha,
+    parents,
+    files,
+    skillEdits:
+      parents.length > 1
+        ? []
+        : files
+            .filter(isSkillConfirmationFile)
+            .map((file) => ({ file, ...changedLinesOf(sha, file) })),
+  }));
+  return { changes: { files: filesOf(diff.stdout), commits } };
 }
 
 function privateTermProblems({ title, body, source }: PullRequest): string[] {
@@ -168,8 +168,8 @@ const { pullRequest } = reading;
 const read = changesOf(pullRequest);
 const problems = [
   ...reading.problems,
-  ...read.problems,
-  ...problemsOf(pullRequest, read.changes),
+  ...("cannotRead" in read ? [read.cannotRead] : []),
+  ...problemsOf(pullRequest, "changes" in read ? read.changes : undefined),
   ...privateTermProblems(pullRequest),
 ];
 for (const problem of problems) console.error(problem);
