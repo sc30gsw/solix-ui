@@ -30,7 +30,7 @@ It does if it edits any of these:
 | `vite.config.ts` | It sets the test include globs and the global setup. |
 | `playwright`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `9a5048b`. Run `git diff 9a5048b -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `d7d690f`. Run `git diff d7d690f -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 
@@ -72,4 +72,4 @@ No model checker runs on a Solid component, so this is not a proof. The test use
 - A new way to close the modal: add a command class to `steps`, with its precondition and the model change, and a fixed sequence to `everyActionInEachRun` that opens the modal and closes it that way.
 - A new element in the dialog that takes focus: keep the focus assertion as it is. It only forbids focus on the page behind.
 - Upgrading Solid, Playwright or fast-check: change the versions in the catalog in `pnpm-workspace.yaml`, then run the check.
-- Mutation check after editing the skill's covered code: remove `closedby="any"` from `Modal.tsx` on Chromium and run the test. It must fail on every run with `[[press the Open modal button,press outside the dialog]]`, the first fixed sequence. Restore the attribute afterwards.
+- Mutation check after editing the skill's covered code: remove `closedby="any"` from `Modal.tsx` on Chromium and run `SOLIX_PROPERTY_SEED=-2145203684 vp test apps/playground/tests/modal-protocol.test.ts`. It must fail on every run with `[[press the Open modal button,press outside the dialog]]`, the first fixed sequence. Restore the attribute afterwards.

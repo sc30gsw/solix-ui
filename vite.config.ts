@@ -5,12 +5,14 @@ import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 import { storyControls } from "#/scripts/story-controls.ts";
-import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
+import { nodeTestFiles, packagesBuiltFirst } from "#/tests/support/project-setups.ts";
+import { seedNotice, seedVariable } from "#/tests/support/property-seed.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
+const mutationInputsKeptAsWritten = ["apps/storybook/fixtures/mutation-inputs/**"];
 const storySpec = "apps/storybook/tests/story-spec.test.ts";
 const storyRecordsSetup = "apps/storybook/story-records-command.ts";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
@@ -46,6 +48,13 @@ const fastCheckRunnersOnlyThroughTheWrapper = {
   importNames: fastCheckRunners,
   message: runPropertiesThroughTheWrapper,
 };
+
+const seedNoticeShown = `${seedVariable}_NOTICE_SHOWN`;
+const seedNoticeText = seedNotice(process.env[seedVariable]);
+if (seedNoticeText !== undefined && process.env[seedNoticeShown] === undefined) {
+  process.env[seedNoticeShown] = "yes";
+  process.stderr.write(`${seedNoticeText}\n`);
+}
 
 const sequenceGroup = { browser: 1, others: 2, storySpec: 3 } as const;
 
@@ -92,11 +101,7 @@ const projects = [
       test: {
         name: "node",
         environment: "node",
-        include: [
-          "tests/**/*.test.ts",
-          "packages/*/tests/**/*.test.{ts,tsx}",
-          "apps/*/tests/**/*.test.{ts,tsx}",
-        ],
+        include: [...nodeTestFiles],
         exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules, storySpec],
         globalSetup: ["tests/support/global-setup.ts"],
         setupFiles: ["apps/playground/tests/support/console-check.ts"],
@@ -140,7 +145,12 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   fmt: {
-    ignorePatterns: [...filesOwnedByOtherTools, ...tablesKeptCompact, ...ruleFixtures],
+    ignorePatterns: [
+      ...filesOwnedByOtherTools,
+      ...tablesKeptCompact,
+      ...ruleFixtures,
+      ...mutationInputsKeptAsWritten,
+    ],
   },
   lint: {
     ignorePatterns: [...filesOwnedByOtherTools, ...ruleFixtures],
@@ -219,6 +229,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
   },
   test: {
+    env: { [seedVariable]: process.env[seedVariable] ?? "" },
     testTimeout: 30_000,
     hookTimeout: 30_000,
     projects,
