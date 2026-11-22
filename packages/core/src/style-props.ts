@@ -1,4 +1,4 @@
-import type { JSX } from "@solidjs/web";
+import { isServer, type JSX } from "@solidjs/web";
 import { createMemo, createSignal, onCleanup } from "solid-js";
 import {
   baseKey,
@@ -428,13 +428,17 @@ function keyOf([name, slot]: Used): string {
   return `${name} ${slot}`;
 }
 
+function announceToLaterMembersOnTheClient(member: Member): void {
+  if (!isServer) member.setChanged((count) => count + 1);
+}
+
 function createMember(members: Member[]): Member {
   const [changed, setChanged] = createSignal(0, { ownedWrite: true });
   const member: Member = { written: [], changed, setChanged };
   members.push(member);
   onCleanup(() => {
     members.splice(members.indexOf(member), 1);
-    setChanged((count) => count + 1);
+    announceToLaterMembersOnTheClient(member);
   });
   return member;
 }
@@ -452,7 +456,7 @@ function writtenBefore(members: readonly Member[], own: Member | undefined): Set
 function settle(own: Member | undefined, placed: readonly string[]): void {
   if (own === undefined || own.written.join() === placed.join()) return;
   own.written = placed;
-  own.setChanged((count) => count + 1);
+  announceToLaterMembersOnTheClient(own);
 }
 
 function queryContainer(
