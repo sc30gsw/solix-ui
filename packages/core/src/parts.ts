@@ -128,12 +128,10 @@ export type LiteralValues<D> = { readonly [K in keyof D]-?: OneLiteral<D[K]> };
 
 type ControlledKey = keyof ControlledProps<unknown>;
 
-type DefaultableKey<P> = Exclude<keyof P, ControlledKey>;
-
 type DefaultsFor<P, D> = {
-  readonly [K in keyof D]: [K] extends [ControlledKey]
+  readonly [K in keyof D]: K extends ControlledKey
     ? never
-    : K extends DefaultableKey<P>
+    : K extends keyof P
       ? OneLiteral<D[K]> & Exclude<P[K], undefined>
       : never;
 };
