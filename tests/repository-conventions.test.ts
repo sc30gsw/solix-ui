@@ -28,13 +28,12 @@ import { seedVariable } from "#/tests/support/property-seed.ts";
 import { isModelFile, modelFilePatterns } from "#/scripts/formal-verification.ts";
 import { formalSkillPrefix, verificationSkillPrefix } from "#/scripts/verification-skills.ts";
 import { tlaTsRunsOf } from "#/tests/support/formal-verification.ts";
-import { mutationEntriesOf } from "#/tests/support/skill-commands.ts";
+import { commandsOf, mutationEntriesOf } from "#/tests/support/skill-commands.ts";
 import { nodeTestFiles } from "#/tests/support/project-setups.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
 const agentsDirectory = join(repositoryRoot, ".claude/agents");
-const trailingPunctuation = /[:.,]$/;
 const verifyWithPrivateTerms =
   /- run: vp run verify\n\s+env:\n\s+SOLIX_PRIVATE_TERMS: \$\{\{ secrets\.SOLIX_PRIVATE_TERMS \}\}$/m;
 const notOneSpaceAtACellBorder = / {2,}\||\| {2,}|\S\||\|\S/;
@@ -107,36 +106,66 @@ test("every skill is named for its directory, described, and linked from .claude
   expect([...violations, ...dangling]).toEqual([]);
 });
 
-const repositoryPathInBackticks =
-  /`((?:\.agents|\.claude|\.github|\.vite-hooks|apps|packages|tests|scripts|docs)\/[^`\s]*)`/g;
-const lineNumber = /:\d+(?::\d+)?$/;
-const notOnePath = /[*?{}<>]/;
+const inBackticks = /`([^`\s]+)`/g;
+const trailingMarks = /(?:[:.,;]|\.\.\.|…)+$/;
+const lineSuffix = /(?::\d+(?:[-:]\d+)?|#L\d+(?:-L\d+)?)$/;
+const notOnePath = /[*?{}<>[\]$]/;
 const fileName = /\/[^/]+\.\w+$/;
 
-function missingPathsOf(text: string, exists: (path: string) => boolean): string[] {
-  const named = [...text.matchAll(repositoryPathInBackticks)].map(([, path]) =>
-    path.replace(lineNumber, "").replace(trailingPunctuation, ""),
+function trackedTopLevel(): string[] {
+  const tracked = gitInScratchRepository(repositoryRoot, ["ls-files", "-z"]).split("\0");
+  return [
+    ...new Set(
+      tracked
+        .filter((path) => path !== "")
+        .map((path) => (path.includes("/") ? `${path.slice(0, path.indexOf("/"))}/` : path)),
+    ),
+  ];
+}
+
+function missingPathsOf(
+  text: string,
+  topLevel: readonly string[],
+  exists: (path: string) => boolean,
+): string[] {
+  const named = [...text.matchAll(inBackticks)].map(([, token]) =>
+    token.replace(trailingMarks, "").replace(lineSuffix, "").replace(trailingMarks, ""),
   );
-  return [...new Set(named)].filter((path) => !notOnePath.test(path) && !exists(path));
+  const ofTheRepository = (path: string) =>
+    topLevel.some((entry) => (entry.endsWith("/") ? path.startsWith(entry) : path === entry));
+  return [...new Set(named)].filter(
+    (path) => ofTheRepository(path) && !notOnePath.test(path) && !exists(path),
+  );
 }
 
 function existsInTheRepository(path: string): boolean {
   return existsSync(join(repositoryRoot, path));
 }
 
-test("a path a skill or a rule names is missing when no file or folder holds it, and a glob, a placeholder or a line number is no path of its own", () => {
-  const text =
-    "`tests/support/model.ts`, `packages/a/src/b.ts:12`, `packages/*/src`, `tests/<file>.test.ts`, `packages/a/src/{a,b}.ts` and `apps/x/README.md`.";
-  const exists = (path: string) => path === "packages/a/src/b.ts";
+test("a path a skill or a rule names is checked when it starts with a folder or file git tracks at the top of the repository, after its line number, and a glob or a placeholder is no path", () => {
+  const topLevel = ["apps/", "packages/", "tests/", "vite.config.ts"];
+  const text = [
+    "`tests/support/model.ts`, `apps/x/README.md`.",
+    "`packages/a/src/b.ts:12`, `packages/a/src/b.ts:12-20`, `packages/a/src/b.ts:3:4`,",
+    "`packages/a/src/b.ts#L10`, `packages/a/src/b.ts#L10-L20`, `packages/a/src/b.ts:` and `packages/a/src/b.ts...`;",
+    "`packages/*/src`, `tests/<file>.test.ts`, `packages/a/src/{a,b}.ts`, `tests/[name].ts`, `tests/$file.ts`;",
+    "`docs/x.md` is under no tracked folder, `vite.config.ts` is tracked, and `preview.ts` is relative.",
+  ].join("\n");
+  const exists = (path: string) => path === "packages/a/src/b.ts" || path === "vite.config.ts";
 
-  expect(missingPathsOf(text, exists)).toEqual(["tests/support/model.ts", "apps/x/README.md"]);
+  expect(missingPathsOf(text, topLevel, exists)).toEqual([
+    "tests/support/model.ts",
+    "apps/x/README.md",
+  ]);
+  expect(missingPathsOf("`vite.config.ts`", topLevel, () => false)).toEqual(["vite.config.ts"]);
 });
 
-test("every repository path a project-owned skill names in backticks exists, so a step cannot name a file that moved or is gone", () => {
+test("every path a project-owned skill names in backticks under a tracked top-level folder, or as a tracked top-level file, exists, so a step cannot name a file that moved or is gone", () => {
   const copied = copiedOutsideSkills();
   const projectOwned = skillNames.filter((name) => !copied.includes(name));
+  const topLevel = trackedTopLevel();
   const violations = projectOwned.flatMap((name) =>
-    missingPathsOf(skillText(name), existsInTheRepository).map(
+    missingPathsOf(skillText(name), topLevel, existsInTheRepository).map(
       (path) => `.agents/skills/${name}/SKILL.md: ${path} does not exist. Point at its new path.`,
     ),
   );
@@ -149,7 +178,7 @@ test("every repository file the rules table in AGENTS.md names exists; a folder 
   const rows = read("AGENTS.md")
     .split("\n")
     .filter((line) => line.startsWith("|"));
-  const violations = missingPathsOf(rows.join("\n"), existsInTheRepository)
+  const violations = missingPathsOf(rows.join("\n"), trackedTopLevel(), existsInTheRepository)
     .filter((path) => fileName.test(path))
     .map((path) => `AGENTS.md: the table names ${path}, which does not exist.`);
 
@@ -506,6 +535,20 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\`, the
       .filter((name) => name.startsWith(verificationSkillPrefix))
       .flatMap((name) => mutationCommandProblems(name, skillText(name), tracked, read)),
   ).toEqual([]);
+});
+
+test("a skill's command line splits at a separator written alone or glued to a word, and a quoted separator stays a word", () => {
+  expect(commandsOf('vp test -t ";" a.test.ts')).toEqual([["vp", "test", "-t", ";", "a.test.ts"]]);
+  expect(commandsOf("vp test a.test.ts&&echo done|tee out.txt; ls")).toEqual([
+    ["vp", "test", "a.test.ts"],
+    ["echo", "done"],
+    ["tee", "out.txt"],
+    ["ls"],
+  ]);
+  expect(commandsOf("npx tla-ts 'models/My Tabs.tla' || true")).toEqual([
+    ["npx", "tla-ts", "models/My Tabs.tla"],
+    ["true"],
+  ]);
 });
 
 const coveredCodeHeader = "Covered code";

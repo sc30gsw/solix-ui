@@ -56,7 +56,7 @@ test("open-pull-request has its eight steps in order, with the verification skil
   expect(headings).toEqual(steps);
   expect(text).toContain(`\`${formalSkillPrefix}*\``);
   for (const pointer of pointers) expect(text).toContain(pointer);
-  for (const pattern of modelFilePatterns.flatMap(spellingsOf))
+  for (const pattern of modelFilePatterns.flatMap((each) => [each, ...spellingsOf(each)]))
     expect(text).not.toContain(pattern.replace("**/", ""));
   expect(text).not.toMatch(new RegExp(`\\b${lineLimit}\\b`));
 });

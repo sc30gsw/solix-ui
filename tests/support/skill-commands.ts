@@ -12,20 +12,21 @@ const testCommand = new RegExp(`\`(?:${seedVariable}=(-?\\d+) )?vp test ([^\`]+)
 const optionsWithAValue = new Set(["--project", "-t", "--testNamePattern"]);
 const subcommand = "run";
 
-const commandSeparator = new Set(["&&", "||", "|", ";", "&"]);
-
-export function wordsOf(line: string): string[] {
-  return (line.match(word) ?? []).map((each) => each.replace(/^["']|["']$/g, ""));
-}
+const separator = /(&&|\|\||\||;|&)/;
+const quoted = /^(["'])(.*)\1$/s;
 
 export function commandsOf(line: string): string[][] {
   const commands: string[][] = [[]];
-  for (const each of wordsOf(line)) {
-    const ends = each.endsWith(";") && each !== ";";
-    const own = ends ? each.slice(0, -1) : each;
-    if (commandSeparator.has(own)) commands.push([]);
-    else commands.at(-1)?.push(own);
-    if (ends) commands.push([]);
+  for (const raw of line.match(word) ?? []) {
+    const unquoted = quoted.exec(raw);
+    if (unquoted !== null) {
+      commands.at(-1)?.push(unquoted[2]);
+      continue;
+    }
+    for (const piece of raw.split(separator).filter((each) => each !== "")) {
+      if (separator.test(piece) && piece.replace(separator, "") === "") commands.push([]);
+      else commands.at(-1)?.push(piece);
+    }
   }
   return commands.filter((command) => command.length > 0);
 }
