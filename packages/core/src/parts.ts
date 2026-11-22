@@ -127,20 +127,16 @@ type OneLiteral<T> = [T] extends [string | number | boolean]
 
 export type LiteralValues<D> = { readonly [K in keyof D]-?: OneLiteral<D[K]> };
 
+type KeyWhereNullSelectsNothing = keyof ControlledProps<unknown>;
+
+type KeyThatTakesADefault<P> = Exclude<keyof P, KeyWhereNullSelectsNothing>;
+
 type DefaultsFor<P, D> = {
-  readonly [K in keyof D]: K extends keyof P
-    ? K extends keyof ControlledProps<unknown>
-      ? never
-      : OneLiteral<D[K]> & Exclude<P[K], undefined>
+  readonly [K in keyof D]: K extends KeyThatTakesADefault<P>
+    ? OneLiteral<D[K]> & Exclude<P[K], undefined>
     : never;
 };
 
-/**
- * Declares the defaults of the props type `P`, one literal for each prop that has one, as
- * `defaultsOf<P>()({ … })`. A key that is not a prop of `P` and a value that is not one literal of
- * the prop's type are refused. So are the props of `ControlledProps`: `withDefaults` gives the
- * default for `null` too, and `null` in `value` or `defaultValue`, as in Tabs, selects nothing.
- */
 export function defaultsOf<P extends object>() {
   return <const D extends object>(values: D & DefaultsFor<P, D>): Defaults<P, D> =>
     values as unknown as Defaults<P, D>;
