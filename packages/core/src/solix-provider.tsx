@@ -15,9 +15,9 @@ import { type DefaultValues, defaultsOf, type WithDefaults, withDefaults } from 
 
 export type SolixProviderProps = ColorSchemeOptions & {
   theme?: SolixTheme;
-  /** The nonce goes on every style the library adds at run time. */
+  /** The nonce goes on every style the library adds at run time; without it, a provider inside another uses the outer provider's nonce. */
   getStyleNonce?: GetStyleNonce;
-  /** The theme's custom properties go on what it selects, not on the children alone; with `withCssVariables` `false` the provider sets none. */
+  /** The theme's custom properties go on what it selects, not on the children alone. */
   cssVariablesSelector?: string;
   withCssVariables?: boolean;
   /** Uses `localStorage` unless given. */

@@ -48,7 +48,7 @@ export type SimpleGridProps = ElementProps<
   GridTypeProps<SimpleGridColumnProps<"media">, SimpleGridColumnProps<"container">> & {
     /** When given, the grid fits as many columns as its width allows, by `autoFlow`. */
     minColWidth?: VariableProp<typeof simpleGridVariables, "sg-min-col-width">;
-    /** It takes effect only with `minColWidth`. */
+    /** Ignored unless `minColWidth` is given. */
     autoFlow?: "auto-fit" | "auto-fill";
     autoRows?: VariableProp<typeof simpleGridVariables, "sg-auto-rows">;
   }

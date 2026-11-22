@@ -22,12 +22,11 @@ export type StylesApiProps<Styles> = {
   /** They go next to each part's own classes. */
   classes?: Partial<Record<keyof Styles, JSX.ClassValue>>;
   styles?: Partial<Record<keyof Styles, JSX.CSSProperties>>;
-  /** Every part keeps its behaviour. */
   unstyled?: boolean;
 };
 
 export type ControlledProps<V> = {
-  /** Giving it makes the component controlled: it changes only when this does. Where its type takes `null`, `null` selects nothing. */
+  /** Giving it makes the component controlled: the component changes only when it does. Giving `undefined` again makes it uncontrolled, with the value it had before it was controlled. Where its type takes `null`, `null` selects nothing. */
   value?: V;
   /** Where its type takes `null`, `null` selects nothing. */
   defaultValue?: V;
@@ -35,7 +34,7 @@ export type ControlledProps<V> = {
 };
 
 export type OpenedProps = {
-  /** The consumer sets it; `onClose`, the dialog's `close` event, also fires when the consumer sets it to `false`. */
+  /** `onClose`, the dialog's `close` event, fires both when the user closes the dialog and when the consumer sets this to `false`. */
   opened: boolean;
 };
 

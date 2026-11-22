@@ -17,7 +17,6 @@ export type TabsPanelProps = ElementProps<
   "div",
   typeof styles,
   {
-    /** The value of the tab that shows this panel. */
     value: string;
     /** `true` keeps this panel's content mounted even when the `Tabs` do not keep panels; `false` leaves it to the `Tabs`. */
     keepMounted?: boolean;

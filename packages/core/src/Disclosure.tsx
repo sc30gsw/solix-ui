@@ -30,14 +30,7 @@ const styles = stylex.create({
   },
 });
 
-export type DisclosureProps = ElementProps<
-  "details",
-  typeof styles,
-  {
-    /** The disclosure's summary, which opens and closes it. */
-    label: string;
-  }
->;
+export type DisclosureProps = ElementProps<"details", typeof styles, { label: string }>;
 
 export function Disclosure(props: DisclosureProps) {
   const { root, part } = createParts("Disclosure", styles, props, { keep: ["label", "children"] });
