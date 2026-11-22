@@ -34,7 +34,7 @@ const styles = stylex.create({
   },
 });
 
-type ColumnsFor<Type extends GridType> = {
+type SimpleGridColumnProps<Type extends GridType> = {
   /** Ignored when `minColWidth` is given. */
   cols?: GridTypeVariableProp<Type, typeof simpleGridVariables, "sg-cols", number>;
   /** The gap between columns, and between rows unless `verticalSpacing` is given. */
@@ -45,7 +45,7 @@ type ColumnsFor<Type extends GridType> = {
 export type SimpleGridProps = ElementProps<
   "div",
   typeof styles,
-  GridTypeProps<ColumnsFor<"media">, ColumnsFor<"container">> & {
+  GridTypeProps<SimpleGridColumnProps<"media">, SimpleGridColumnProps<"container">> & {
     /** When given, the grid fits as many columns as its width allows, by `autoFlow`. */
     minColWidth?: VariableProp<typeof simpleGridVariables, "sg-min-col-width">;
     /** It takes effect only with `minColWidth`. */

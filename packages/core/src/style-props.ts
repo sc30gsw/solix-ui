@@ -105,13 +105,6 @@ export type VariableProp<
   Value = DefaultValue<Of["rows"][Name]>,
 > = Of["rows"][Name]["responsive"] extends true ? StyleProp<Value> : Value | Absent;
 
-/** A prop that sets the responsive variable `Name` of a component's `Of`, keyed by container width. */
-export type ContainerVariableProp<
-  Of extends Variables,
-  Name extends keyof Of["rows"],
-  Value = DefaultValue<Of["rows"][Name]>,
-> = ContainerProp<Value>;
-
 export type GapProps<
   Of extends Variables,
   Gap extends keyof Of["rows"],
@@ -124,16 +117,12 @@ export type GapProps<
   columnGap?: VariableProp<Of, ColumnGap>;
 };
 
-export type GridType = "media" | "container";
-
 export type GridTypeVariableProp<
   Type extends GridType,
   Of extends Variables,
   Name extends keyof Of["rows"],
   Value = DefaultValue<Of["rows"][Name]>,
-> = Type extends "container"
-  ? ContainerVariableProp<Of, Name, Value>
-  : VariableProp<Of, Name, Value>;
+> = Type extends "container" ? ContainerProp<Value> : VariableProp<Of, Name, Value>;
 
 export type GridTypeProps<Media extends object, Container extends object> =
   | ({
@@ -143,6 +132,8 @@ export type GridTypeProps<Media extends object, Container extends object> =
   | ({
       type: "container";
     } & Container);
+
+export type GridType = NonNullable<GridTypeProps<object, object>["type"]>;
 
 export type VariableValue = Keyed<string | number>;
 
