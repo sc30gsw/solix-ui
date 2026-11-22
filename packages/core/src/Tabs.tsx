@@ -32,15 +32,13 @@ export type TabsProps = ElementProps<
   "div",
   typeof styles,
   ControlledProps<string | null> & {
-    /** Lays the tabs out in a row or a column; the arrow keys follow it. */
+    /** The arrow keys follow the orientation. */
     orientation?: TabsOrientation;
-    /** Lets the arrow keys wrap from the last tab to the first and back. */
     loop?: boolean;
     /** Selects a tab when the arrow keys move focus to it; otherwise Enter or Space selects it. */
     activateTabWithKeyboard?: boolean;
-    /** Lets a press on the selected tab deselect it. */
+    /** A press on the selected tab deselects it. */
     allowTabDeactivation?: boolean;
-    /** Keeps every panel's content in the page, hidden, while its tab is not selected. */
     keepMounted?: boolean;
   }
 >;

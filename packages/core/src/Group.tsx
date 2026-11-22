@@ -27,21 +27,16 @@ export type GroupProps = ElementProps<
   "div",
   typeof styles,
   {
-    /** How children spread along the row, as CSS `justify-content`. */
     justify?: VariableProp<
       typeof groupVariables,
       "group-justify",
       JSX.CSSProperties["justify-content"]
     >;
-    /** How children line up across the row, as CSS `align-items`. */
     align?: VariableProp<typeof groupVariables, "group-align", JSX.CSSProperties["align-items"]>;
-    /** Whether children wrap onto new rows, as CSS `flex-wrap`. */
     wrap?: VariableProp<typeof groupVariables, "group-wrap", JSX.CSSProperties["flex-wrap"]>;
-    /** The gap between children: a key of the `spacing` scale, a number of pixels or any CSS length. */
     gap?: VariableProp<typeof groupVariables, "group-gap">;
-    /** Makes every child grow to an equal share of the row. */
     grow?: boolean;
-    /** With `grow`, keeps each child to its share, so a long child does not push the others out; on unless set to `false`. */
+    /** With `grow`, keeps each child to its share, so a long child does not push the others out. */
     preventGrowOverflow?: boolean;
   }
 >;

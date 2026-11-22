@@ -120,10 +120,7 @@ const projects = [
 
 type NamedProject = { test?: { name?: unknown; browser?: unknown } };
 
-/**
- * The name of every project this config gives, as the runner names them: a project whose browser
- * is enabled once for each of its instances, as `name (engine)`.
- */
+/** A project whose browser is enabled is named once for each of its instances, as `name (engine)`. */
 export function configuredProjectNames(): string[] {
   return projects.flatMap(({ test }: NamedProject) => {
     const name = typeof test?.name === "string" ? test.name : "";

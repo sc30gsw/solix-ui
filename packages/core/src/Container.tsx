@@ -31,7 +31,6 @@ export type ContainerProps = ElementProps<
   "div",
   typeof styles,
   {
-    /** The widest the content gets: a key of the `container-size` scale, a number of pixels or any CSS length. */
     size?: VariableProp<typeof containerVariables, "container-size">;
     /** With `strategy` `block`, takes the whole width of its parent, whatever `size` says; with `grid`, the middle column keeps the `md` width. */
     fluid?: boolean;

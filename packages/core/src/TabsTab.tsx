@@ -96,9 +96,7 @@ export type TabsTabProps = ElementProps<
   {
     /** The value this tab selects, which its panel names. */
     value: string;
-    /** Content before the label, such as an icon. */
     leftSection?: JSX.Element;
-    /** Content after the label, such as a badge. */
     rightSection?: JSX.Element;
   }
 >;

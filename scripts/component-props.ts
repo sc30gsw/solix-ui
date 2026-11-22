@@ -346,7 +346,6 @@ function resolvedLibrary(entry: string): Library {
   return library;
 }
 
-/** Keeps the components a program that already read the library gave, so no other opens it. */
 export function rememberLibrary(entry: string, components: readonly LibraryComponent[]): void {
   if (!resolved.has(entry)) resolved.set(entry, libraryFrom(components));
 }

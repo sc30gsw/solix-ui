@@ -112,22 +112,18 @@ export type ContainerVariableProp<
   Value = DefaultValue<Of["rows"][Name]>,
 > = ContainerProp<Value>;
 
-/** The gap props of a component that lays its items out in rows and columns. */
 export type GapProps<
   Of extends Variables,
   Gap extends keyof Of["rows"],
   RowGap extends keyof Of["rows"],
   ColumnGap extends keyof Of["rows"],
 > = {
-  /** The gap between rows and between columns, unless `rowGap` or `columnGap` is given: a key of the `spacing` scale, a number of pixels or any CSS length. */
+  /** `rowGap` and `columnGap` override it. */
   gap?: VariableProp<Of, Gap>;
-  /** The gap between rows, over `gap`: a key of the `spacing` scale, a number of pixels or any CSS length. */
   rowGap?: VariableProp<Of, RowGap>;
-  /** The gap between columns, over `gap`: a key of the `spacing` scale, a number of pixels or any CSS length. */
   columnGap?: VariableProp<Of, ColumnGap>;
 };
 
-/** The `type` of a grid, with the props each type takes. */
 export type GridTypeProps<Media extends object, Container extends object> =
   | ({
       /** `media` keys responsive values by the viewport's width; `container` keys them by the grid's own width, through container queries. */

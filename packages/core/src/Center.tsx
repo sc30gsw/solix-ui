@@ -16,10 +16,7 @@ const styles = stylex.create({
 export type CenterProps<T extends ValidComponent = "div"> = PolymorphicProps<
   T,
   typeof styles,
-  {
-    /** Lays the root out as `inline-flex`, so it sits inside a line of text. */
-    inline?: boolean;
-  }
+  { inline?: boolean }
 >;
 
 const defaults = defaultsOf<CenterProps>()({ component: "div" });

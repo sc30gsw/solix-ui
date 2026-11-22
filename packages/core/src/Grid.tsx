@@ -42,29 +42,19 @@ const styles = stylex.create({
 export type GridProps = ElementProps<
   "div",
   typeof styles,
-  GridTypeProps<
-    { breakpoints?: never },
-    {
-      /** The container width each breakpoint stands for, with `type` `container`. */
-      breakpoints?: Record<Breakpoint, ContainerWidth>;
-    }
-  > &
+  GridTypeProps<{ breakpoints?: never }, { breakpoints?: Record<Breakpoint, ContainerWidth> }> &
     GapProps<typeof gridVariables, "grid-gap", "grid-row-gap", "grid-column-gap"> & {
       classes?: { col?: JSX.ClassValue };
       styles?: { col?: JSX.CSSProperties };
-      /** Lets the columns of a row that is not full grow to fill it. */
       grow?: boolean;
-      /** How columns spread along a row, as CSS `justify-content`. */
       justify?: VariableProp<
         typeof gridVariables,
         "grid-justify",
         JSX.CSSProperties["justify-content"]
       >;
-      /** How columns line up across a row, as CSS `align-items`. */
       align?: VariableProp<typeof gridVariables, "grid-align", JSX.CSSProperties["align-items"]>;
-      /** The number of columns a row holds, which `span` and `offset` count in. */
+      /** `span` and `offset` count in these columns. */
       columns?: number;
-      /** What the grid does with columns that overflow it, as CSS `overflow`. */
       overflow?: VariableProp<typeof gridVariables, "grid-overflow", JSX.CSSProperties["overflow"]>;
     }
 >;

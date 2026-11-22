@@ -19,11 +19,10 @@ import {
 export const rootPart = "root";
 
 export type StylesApiProps<Styles> = {
-  /** Classes for each part, by its name, next to the part's own. */
+  /** They go next to each part's own classes. */
   classes?: Partial<Record<keyof Styles, JSX.ClassValue>>;
-  /** Inline styles for each part, by its name. */
   styles?: Partial<Record<keyof Styles, JSX.CSSProperties>>;
-  /** Drops the library's look from every part, keeping its behaviour. */
+  /** Every part keeps its behaviour. */
   unstyled?: boolean;
 };
 
@@ -32,13 +31,12 @@ export type ControlledProps<V> = {
   value?: V;
   /** The value at first, while the component keeps its own. Where its type takes `null`, `null` selects nothing. */
   defaultValue?: V;
-  /** Called with the new value when the user changes it. */
+  /** Called when the user changes the value. */
   onChange?: (value: V) => void;
 };
 
-/** The prop that opens a component the consumer opens and closes, such as a dialog. */
 export type OpenedProps = {
-  /** Whether it is open; the consumer sets it, and `onClose` says when the user closed it. */
+  /** The consumer sets it, and `onClose` says when the user closed it. */
   opened: boolean;
 };
 
@@ -66,9 +64,9 @@ export const handledKeys = [
 export type HandledKey = (typeof handledKeys)[number];
 
 type Styling = {
-  /** Classes for the root, next to the component's own. */
+  /** They go on the root, next to the component's own classes. */
   class?: JSX.ClassValue;
-  /** Inline style for the root, over the component's own. */
+  /** It goes on the root, over the component's own style. */
   style?: JSX.CSSProperties | string;
 };
 
@@ -94,14 +92,7 @@ export type PolymorphicProps<
   T extends ValidComponent,
   Styles,
   OwnProps extends object = object,
-> = ElementProps<
-  T,
-  Styles,
-  OwnProps & {
-    /** The element or component rendered as the root. */
-    component?: T;
-  } & { [Key in RefusedBy<T>]?: never }
->;
+> = ElementProps<T, Styles, OwnProps & { component?: T } & { [Key in RefusedBy<T>]?: never }>;
 
 type Part = {
   readonly class: JSX.ClassValue;
@@ -118,10 +109,6 @@ type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
 
 declare const definedFor: unique symbol;
 
-/**
- * A component's defaults, as `defaultsOf` makes them: the props type they are for and the one
- * literal each prop takes when it is not given. Its values can be read only by `withDefaults`.
- */
 export type Defaults<P, D> = {
   readonly [definedFor]: { readonly props: P; readonly values: D };
 };
@@ -138,7 +125,6 @@ type OneLiteral<T> = [T] extends [string | number | boolean]
         : T
   : never;
 
-/** Each value is one literal: a widened type, a union or `undefined` is none. */
 export type LiteralValues<D> = { readonly [K in keyof D]-?: OneLiteral<D[K]> };
 
 type DefaultsFor<P, D> = {
@@ -160,18 +146,12 @@ export function defaultsOf<P extends object>() {
     values as unknown as Defaults<P, D>;
 }
 
-/** The values of defaults that `defaultsOf` made. */
 export type DefaultValues<T> = T extends Defaults<unknown, infer D> ? D : never;
 
 export type WithDefaults<P, D> = Omit<P, keyof D> & {
   [K in keyof D & keyof P]-?: Exclude<P[K], undefined> | D[K];
 };
 
-/**
- * A component's props with its defaults filled in: each prop of `defaults` reads as the consumer
- * gave it, or as `defaults` gives it where the consumer gave `undefined`, `null` or nothing. It
- * takes only defaults that `defaultsOf` made, so the controls read every default from its type.
- */
 export function withDefaults<P extends object, D extends LiteralValues<D>>(
   defaults: Defaults<unknown, D>,
   props: P,

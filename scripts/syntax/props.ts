@@ -245,7 +245,6 @@ export function brandedValuesAt(
   });
 }
 
-/** The nodes among `nodes` whose type has a property that `isBrand` names by its declaration. */
 export function nodesOfBrandedType<N extends ts.Node>(
   program: Program,
   nodes: readonly N[],

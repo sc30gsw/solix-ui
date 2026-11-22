@@ -15,7 +15,6 @@ import { PageNonceContext } from "#/src/run-time-style.ts";
 import { defaultsOf, withDefaults } from "#/src/parts.ts";
 
 export type ColorSchemeScriptOptions = ColorSchemeOptions & {
-  /** The `localStorage` key the stored colour scheme is read from. */
   localStorageKey?: string;
 };
 

@@ -14,19 +14,16 @@ import { type GetStyleNonce, PageNonceContext } from "#/src/run-time-style.ts";
 import { type DefaultValues, defaultsOf, type WithDefaults, withDefaults } from "#/src/parts.ts";
 
 export type SolixProviderProps = ColorSchemeOptions & {
-  /** The theme whose tokens the provider sets, made with `createTheme`. */
   theme?: SolixTheme;
-  /** Gives the Content Security Policy nonce for every style the library adds at run time. */
+  /** The nonce goes on every style the library adds at run time. */
   getStyleNonce?: GetStyleNonce;
-  /** The selector the theme's custom properties are set on; `:root` unless given. */
   cssVariablesSelector?: string;
-  /** Adds the theme's custom properties to the page; turn it off when the stylesheet already holds them. */
   withCssVariables?: boolean;
-  /** Stores the colour scheme the user picks and tells of changes; `localStorage` unless given. */
+  /** Uses `localStorage` unless given. */
   colorSchemeManager?: SolixColorSchemeManager;
-  /** Gives the element that carries the colour scheme; `<html>` unless given. */
+  /** `<html>` unless given. A provider inside another that is not given it passes on the outer provider's scheme, and throws if it is given `colorSchemeManager`, `defaultColorScheme` or `forceColorScheme`. */
   getRootElement?: () => HTMLElement | undefined;
-  /** The content that reads the provider's colour scheme and style nonce; the theme reaches whatever `cssVariablesSelector` selects. */
+  /** The theme reaches whatever `cssVariablesSelector` selects, not only the children. */
   children?: JSX.Element;
 };
 

@@ -49,7 +49,7 @@ export type ModalProps = ElementProps<
   "dialog",
   typeof styles,
   OpenedProps & {
-    /** The dialog's heading, which also gives the dialog its accessible name. */
+    /** It also gives the dialog its accessible name. */
     label: string;
     open?: never;
   } & Partial<Record<DisplayPropName, never>>

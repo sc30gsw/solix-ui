@@ -6,7 +6,6 @@ export type RecordedValue = string | number | boolean | null;
 export type Played = {
   readonly prop: string;
   readonly value?: RecordedValue;
-  /** Set when the run with this substitute did not end within the story's timeout: says which. */
   readonly timedOut?: string;
 };
 
