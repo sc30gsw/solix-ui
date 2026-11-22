@@ -117,13 +117,6 @@ export type GapProps<
   columnGap?: VariableProp<Of, ColumnGap>;
 };
 
-export type GridTypeVariableProp<
-  Type extends GridType,
-  Of extends Variables,
-  Name extends keyof Of["rows"],
-  Value = DefaultValue<Of["rows"][Name]>,
-> = Type extends "container" ? ContainerProp<Value> : VariableProp<Of, Name, Value>;
-
 export type GridTypeProps<Media extends object, Container extends object> =
   | ({
       /** `media` keys responsive values by the viewport's width; `container` keys them by the grid's own width, through container queries. */
@@ -134,6 +127,13 @@ export type GridTypeProps<Media extends object, Container extends object> =
     } & Container);
 
 export type GridType = NonNullable<GridTypeProps<object, object>["type"]>;
+
+export type GridTypeVariableProp<
+  Type extends GridType,
+  Of extends Variables,
+  Name extends keyof Of["rows"],
+  Value = DefaultValue<Of["rows"][Name]>,
+> = Type extends "container" ? ContainerProp<Value> : VariableProp<Of, Name, Value>;
 
 export type VariableValue = Keyed<string | number>;
 
