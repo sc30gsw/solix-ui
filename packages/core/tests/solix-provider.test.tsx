@@ -217,6 +217,30 @@ test("a provider given no getStyleNonce gives its theme style the nonce of the p
   ).toEqual([["outer"]]);
 });
 
+test.each(["", " "])(
+  "a provider whose getStyleNonce gives %j gives its theme style the nonce of the provider around it, as when it gives none",
+  (given) => {
+    const html = renderToString(() =>
+      createComponent(library.SolixProvider, {
+        getStyleNonce: () => "outer",
+        get children() {
+          return createComponent(library.SolixProvider, {
+            getStyleNonce: () => given,
+            theme: { spacing: { md: "1rem" } },
+            cssVariablesSelector: ".inner",
+          });
+        },
+      }),
+    );
+
+    expect(
+      elementsOf(html)
+        .filter(({ tag }) => tag === "style")
+        .map((style) => valuesOf(style, "nonce")),
+    ).toEqual([["outer"]]);
+  },
+);
+
 test("a theme's primaryColor writes every shade of the primary's alias from that palette, at no specificity in a scope rooted at the selector, on the root and on every element with a colour scheme inside it, so the nearest provider wins, and nothing for a value that names no palette or names the primary itself", async (context) => {
   const named = [...palettes, ...Object.keys(paletteAliases)];
   await assertProperty(
