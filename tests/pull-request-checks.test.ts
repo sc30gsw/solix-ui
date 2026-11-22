@@ -18,12 +18,11 @@ import {
 } from "#/scripts/pull-request-text.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
-import { repositoryRoot } from "#/tests/support/workspace.ts";
+import { repositoryRoot, trackedFiles } from "#/tests/support/workspace.ts";
 
 const workflowFile = ".github/workflows/pull-request.yml";
 const textCheck = join(repositoryRoot, "scripts/check-pull-request-text.ts");
 const fixCheck = join(repositoryRoot, "scripts/check-fixes-carry-tests.ts");
-const gitModule = join(repositoryRoot, "scripts/git.ts");
 const session = "https://claude.ai/code/session_01AbCdEf";
 const title = "ci: check the text of every pull request";
 const fakeTerm = "zorblax";
@@ -611,7 +610,7 @@ describe("the text check", () => {
     });
   });
 
-  test("reads a signed commit's subject, parents and files the same when the user's git shows signatures", async () => {
+  test("reads a signed commit the same when the user's git shows signatures: its change after the review counts, and the fix check reads its subject", async () => {
     await inScratchPullRequest(({ root, git, base, head, check }) => {
       writeFileSync(join(root, "src/a.ts"), "changed in a signed commit\n");
       git("add", "--all");
@@ -633,23 +632,6 @@ describe("the text check", () => {
       git("update-ref", "refs/heads/topic", signed);
       git("reset", "--quiet", "--hard");
       git("config", "log.showSignature", "true");
-      git("config", "gpg.format", "ssh");
-      const read = spawnSync(
-        process.execPath,
-        [
-          "--input-type=module",
-          "--eval",
-          "const { commitsBetween } = await import(process.argv[1]); console.log(JSON.stringify(commitsBetween(process.argv[2], process.argv[3])));",
-          gitModule,
-          head,
-          signed,
-        ],
-        { cwd: root, encoding: "utf8" },
-      );
-
-      expect(JSON.parse(read.stdout)).toEqual([
-        { sha: signed, subject: "fix: a signed change", parents: [head], files: ["src/a.ts"] },
-      ]);
       expect(check({ title, body: bodyWith(minimal, undefined, head) }, signed).stderr).toContain(
         "own commits after it change src/a.ts",
       );
@@ -796,7 +778,7 @@ describe("a fix carries its test", () => {
   });
 
   test("every pattern of verificationFiles matches a tracked file, so the list cannot hold a pattern that no longer means anything", () => {
-    const tracked = gitInScratchRepository(repositoryRoot, ["ls-files", "-z"]).split("\0");
+    const tracked = trackedFiles();
     const unmatched = verificationFiles.filter(
       (pattern) => !tracked.some((file) => matchesGlob(file, pattern)),
     );

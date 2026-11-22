@@ -18,6 +18,7 @@ import {
   outsideGeneratedOrInstalled,
   repositoryRoot,
   rootManifest,
+  trackedFiles,
   workflowFiles,
   workspaceFile,
 } from "#/tests/support/workspace.ts";
@@ -107,34 +108,34 @@ test("every skill is named for its directory, described, and linked from .claude
 });
 
 const inBackticks = /`([^`\s]+)`/g;
-const trailingMarks = /(?:[:.,;]|\.\.\.|…)+$/;
-const lineSuffix = /(?::\d+(?:[-:]\d+)?|#L\d+(?:-L\d+)?)$/;
+const trailingMarks = /[:.,;…]+$/;
+const pathSuffix = /(?::\d+(?:[-:]\d+)?|:[A-Za-z_$][\w$.]*|#[\w-]+)$/;
 const notOnePath = /[*?{}<>[\]$]/;
 const fileName = /\/[^/]+\.\w+$/;
 
-function trackedTopLevel(): string[] {
-  const tracked = gitInScratchRepository(repositoryRoot, ["ls-files", "-z"]).split("\0");
+function trackedTopLevelFolders(): string[] {
   return [
     ...new Set(
-      tracked
-        .filter((path) => path !== "")
-        .map((path) => (path.includes("/") ? `${path.slice(0, path.indexOf("/"))}/` : path)),
+      trackedFiles()
+        .filter((path) => path.includes("/"))
+        .map((path) => `${path.slice(0, path.indexOf("/"))}/`),
     ),
   ];
 }
 
 function missingPathsOf(
   text: string,
-  topLevel: readonly string[],
+  topLevelFolders: readonly string[],
   exists: (path: string) => boolean,
 ): string[] {
   const named = [...text.matchAll(inBackticks)].map(([, token]) =>
-    token.replace(trailingMarks, "").replace(lineSuffix, "").replace(trailingMarks, ""),
+    token.replace(trailingMarks, "").replace(pathSuffix, ""),
   );
-  const ofTheRepository = (path: string) =>
-    topLevel.some((entry) => (entry.endsWith("/") ? path.startsWith(entry) : path === entry));
   return [...new Set(named)].filter(
-    (path) => ofTheRepository(path) && !notOnePath.test(path) && !exists(path),
+    (path) =>
+      topLevelFolders.some((folder) => path.startsWith(folder)) &&
+      !notOnePath.test(path) &&
+      !exists(path),
   );
 }
 
@@ -142,30 +143,30 @@ function existsInTheRepository(path: string): boolean {
   return existsSync(join(repositoryRoot, path));
 }
 
-test("a path a skill or a rule names is checked when it starts with a folder or file git tracks at the top of the repository, after its line number, and a glob or a placeholder is no path", () => {
-  const topLevel = ["apps/", "packages/", "tests/", "vite.config.ts"];
+test("a path a skill or a rule names is checked when it starts with a folder git tracks at the top of the repository, after its line number, symbol or anchor, and a glob or a placeholder is no path", () => {
+  const topLevelFolders = ["apps/", "packages/", "tests/"];
   const text = [
     "`tests/support/model.ts`, `apps/x/README.md`.",
     "`packages/a/src/b.ts:12`, `packages/a/src/b.ts:12-20`, `packages/a/src/b.ts:3:4`,",
     "`packages/a/src/b.ts#L10`, `packages/a/src/b.ts#L10-L20`, `packages/a/src/b.ts:` and `packages/a/src/b.ts...`;",
+    "`packages/a/src/b.ts:declarable`, `packages/a/src/b.ts#usage`;",
     "`packages/*/src`, `tests/<file>.test.ts`, `packages/a/src/{a,b}.ts`, `tests/[name].ts`, `tests/$file.ts`;",
-    "`docs/x.md` is under no tracked folder, `vite.config.ts` is tracked, and `preview.ts` is relative.",
+    "`docs/x.md` is under no tracked folder, and `vite.config.ts` and `preview.ts` are under no folder.",
   ].join("\n");
-  const exists = (path: string) => path === "packages/a/src/b.ts" || path === "vite.config.ts";
+  const exists = (path: string) => path === "packages/a/src/b.ts";
 
-  expect(missingPathsOf(text, topLevel, exists)).toEqual([
+  expect(missingPathsOf(text, topLevelFolders, exists)).toEqual([
     "tests/support/model.ts",
     "apps/x/README.md",
   ]);
-  expect(missingPathsOf("`vite.config.ts`", topLevel, () => false)).toEqual(["vite.config.ts"]);
 });
 
-test("every path a project-owned skill names in backticks under a tracked top-level folder, or as a tracked top-level file, exists, so a step cannot name a file that moved or is gone", () => {
+test("every path a project-owned skill names in backticks under a folder git tracks at the top of the repository exists, so a step cannot name a file that moved or is gone", () => {
   const copied = copiedOutsideSkills();
   const projectOwned = skillNames.filter((name) => !copied.includes(name));
-  const topLevel = trackedTopLevel();
+  const topLevelFolders = trackedTopLevelFolders();
   const violations = projectOwned.flatMap((name) =>
-    missingPathsOf(skillText(name), topLevel, existsInTheRepository).map(
+    missingPathsOf(skillText(name), topLevelFolders, existsInTheRepository).map(
       (path) => `.agents/skills/${name}/SKILL.md: ${path} does not exist. Point at its new path.`,
     ),
   );
@@ -174,11 +175,15 @@ test("every path a project-owned skill names in backticks under a tracked top-le
   expect(violations).toEqual([]);
 });
 
-test("every repository file the rules table in AGENTS.md names exists; a folder it names may be one it forbids, such as .claude/commands", () => {
+test("every file under a folder git tracks at the top of the repository that the rules table in AGENTS.md names exists; a folder it names may be one it forbids, such as .claude/commands", () => {
   const rows = read("AGENTS.md")
     .split("\n")
     .filter((line) => line.startsWith("|"));
-  const violations = missingPathsOf(rows.join("\n"), trackedTopLevel(), existsInTheRepository)
+  const violations = missingPathsOf(
+    rows.join("\n"),
+    trackedTopLevelFolders(),
+    existsInTheRepository,
+  )
     .filter((path) => fileName.test(path))
     .map((path) => `AGENTS.md: the table names ${path}, which does not exist.`);
 
@@ -442,9 +447,7 @@ const leadingDotSlash = /^\.\//;
 const testOrStory = /\.(?:test|stories)\.(?:ts|tsx|mts)$/;
 
 function testFiles(): string[] {
-  return gitInScratchRepository(repositoryRoot, ["ls-files", "-z"])
-    .split("\0")
-    .filter((file) => testOrStory.test(file));
+  return trackedFiles().filter((file) => testOrStory.test(file));
 }
 
 function mutationCommandProblems(

@@ -9,6 +9,7 @@ import {
   scriptFilesInDotDirectoriesIn,
 } from "#/scripts/repository.ts";
 import { type TypeCheckedProject } from "#/scripts/syntax.ts";
+import { git, pathsIn } from "#/scripts/git.ts";
 
 export { workspaceFile } from "#/scripts/pnpm-settings.ts";
 export {
@@ -25,6 +26,10 @@ export {
   rootManifest,
   whyInstalled,
 } from "#/scripts/repository.ts";
+
+export function trackedFiles(): string[] {
+  return pathsIn(git(["-C", repositoryRoot, "ls-files", "-z"]));
+}
 
 export const libraryKindNames = ["primitives", "components", "logic"] as const;
 

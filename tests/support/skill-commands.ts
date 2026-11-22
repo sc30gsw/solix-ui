@@ -24,7 +24,7 @@ export function commandsOf(line: string): string[][] {
       continue;
     }
     for (const piece of raw.split(separator).filter((each) => each !== "")) {
-      if (separator.test(piece) && piece.replace(separator, "") === "") commands.push([]);
+      if (separator.test(piece)) commands.push([]);
       else commands.at(-1)?.push(piece);
     }
   }
