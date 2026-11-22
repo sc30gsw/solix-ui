@@ -2,6 +2,7 @@ import { afterEach, beforeEach, inject } from "vite-plus/test";
 import { commands, server } from "vite-plus/test/browser";
 import {
   type Mount,
+  type Played,
   startRecording,
   type Substitution,
   substitutionsOf,
@@ -81,13 +82,11 @@ function passedAgain(failure: unknown, when: string): void {
   );
 }
 
-type Outcome = { readonly played: boolean; readonly timedOutMessage?: string };
-
 async function failsInItsPlay(
   story: RunnableStory,
   timeout: number,
   substitution: Substitution,
-): Promise<Outcome> {
+): Promise<Pick<Played, "timedOutMessage"> | undefined> {
   const failure = await ranAgain(story, timeout, substitution);
   const failed = failure !== undefined;
   const { mounted, playReturned } = lastStoryRun();
@@ -96,10 +95,8 @@ async function failsInItsPlay(
     await ranAgain(story, timeout),
     `right after it ran with ${named(substitution)} substituted`,
   );
-  const played = failed && mounted && !playReturned && tookPlace;
-  return failure instanceof RanOutOfTime
-    ? { played, timedOutMessage: failure.message }
-    : { played };
+  if (!(failed && mounted && !playReturned && tookPlace)) return undefined;
+  return failure instanceof RanOutOfTime ? { timedOutMessage: failure.message } : {};
 }
 
 function keyOf({ component, prop, value }: Substitution): string {
@@ -121,14 +118,12 @@ async function substituted(
         ranBefore = true;
       }
       const outcome = await failsInItsPlay(story, timeout, substitution);
-      if (!outcome.played) continue;
+      if (outcome === undefined) continue;
       played.add(keyOf(substitution));
       mount.played.push({
         prop: substitution.prop,
         ...("value" in substitution ? { value: substitution.value } : {}),
-        ...(outcome.timedOutMessage === undefined
-          ? {}
-          : { timedOutMessage: outcome.timedOutMessage }),
+        ...outcome,
       });
     }
   }
