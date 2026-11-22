@@ -428,7 +428,7 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
   expect(styleText, "no value that holds a brace reaches style").not.toMatch(/[{}]/);
   expect(
     readByAClass.length,
-    "one class and one custom property for each kept value of a style prop at a breakpoint, and none for null or a value that holds ;, { or }",
+    "one class and one custom property for each kept value of a style prop at a breakpoint, and none for null, an empty or blank string or a value that holds ;, { or }",
   ).toBe(keptPairs.size);
   expect(
     styleClasses.length - readByAClass.length,
@@ -458,7 +458,7 @@ function expectStylePropsOnRoot(name: string, root: Element, generated: StylePro
 }
 
 test.for(components)(
-  "%s gives every kept style-prop value it takes one class and the one custom property that class reads, drops null and every value that holds ;, { or }, keeps the consumer's class and style on top, renders the element component names, and renders the same markup twice",
+  "%s gives every kept style-prop value it takes one class and the one custom property that class reads, drops null, an empty or blank string and every value that holds ;, { or }, keeps the consumer's class and style on top, renders the element component names, and renders the same markup twice",
   async ([name, { tag, takesDisplay, polymorphic }], context) => {
     await assertProperty(
       context,
@@ -756,7 +756,7 @@ test.each(builtComponents)(
   },
 );
 
-test("every variable drops null and a value that holds ;, { or }, and writes each value it keeps as one class and the custom property that class reads", async (context) => {
+test("every variable drops null, an empty or blank string and a value that holds ;, { or }, and writes each value it keeps as one class and the custom property that class reads", async (context) => {
   await assertProperty(
     context,
     fc.property(

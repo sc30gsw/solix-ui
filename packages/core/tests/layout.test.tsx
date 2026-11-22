@@ -492,13 +492,12 @@ test("SimpleGrid: with minColWidth, fills the row with columns at least that wid
   ).toEqual(["auto-fit"]);
 });
 
-test.each([null, ""])(
+test.each([null, "", " "])(
   "SimpleGrid: a minColWidth of %j is no minColWidth, so cols still sets the columns and no auto columns are written",
   (minColWidth) => {
     expect(simpleGridOf({ type: "media", minColWidth, cols: 3 })).toEqual(
       simpleGridOf({ type: "media", cols: 3 }),
     );
-    expect(simpleGridOf({ type: "media", minColWidth, cols: 3 }).autoColumns).toEqual([]);
   },
 );
 

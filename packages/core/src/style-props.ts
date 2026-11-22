@@ -194,6 +194,12 @@ export function tokenOf(scale: Scale, key: string): string | undefined {
   return Object.hasOwn(tokens, token) ? token : undefined;
 }
 
+export function isWritten<V>(value: V | Absent): value is V {
+  return (
+    value !== undefined && value !== null && (typeof value !== "string" || value.trim() !== "")
+  );
+}
+
 function cssValue(
   row: Pick<PropertyRow, "kind" | "scale">,
   written: string | number,
@@ -201,7 +207,7 @@ function cssValue(
   if (typeof written === "number") {
     return row.kind === "length" ? `${written / pixelsPerRem}rem` : String(written);
   }
-  if (characterThatEndsADeclaration.test(written)) return undefined;
+  if (!isWritten(written) || characterThatEndsADeclaration.test(written)) return undefined;
   const token = row.scale === undefined ? undefined : tokenOf(row.scale, written);
   if (token !== undefined) return `var(${token})`;
   return row.scale === colorScale ? (colorValueOf(written) ?? written) : written;
