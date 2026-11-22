@@ -24,6 +24,13 @@ import {
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { exportsOf, parse } from "#/scripts/syntax.ts";
+import {
+  formalSkillPrefix,
+  isModelFile,
+  modelFilePatterns,
+  tlaTsRunsOf,
+  verificationSkillPrefix,
+} from "#/scripts/formal-verification.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -204,6 +211,101 @@ test("every name a verification skill's covered-code cell gives after a source f
   expect(violations).toEqual([]);
 });
 
+type Skill = { name: string; text: string };
+
+function readRepositoryFile(path: string): string | undefined {
+  const file = join(repositoryRoot, path);
+  return existsSync(file) && statSync(file).isFile() ? readFileSync(file, "utf8") : undefined;
+}
+
+function formalNamingProblems(
+  skills: readonly Skill[],
+  readFile: (path: string) => string | undefined,
+): string[] {
+  return skills.flatMap(({ name, text }) => {
+    const runs = tlaTsRunsOf(text, readFile);
+    const formal = name.startsWith(formalSkillPrefix);
+    const where = `.agents/skills/${name}/SKILL.md`;
+    const problems: string[] = [];
+    if (runs.length > 0 && !formal)
+      problems.push(
+        `${where}: it runs tla-ts in \`${runs[0].line.trim()}\`, so it is formal verification. Name it ${formalSkillPrefix}${name.replace(verificationSkillPrefix, "")}.`,
+      );
+    if (formal && runs.length === 0)
+      problems.push(
+        `${where}: a ${formalSkillPrefix}* skill runs tla-ts in a fenced command, as \`npx tla-ts <model>\` or a script that imports from "tla-ts". Run it, or name the skill ${verificationSkillPrefix}*.`,
+      );
+    if (confirmedCommit.test(text) && !name.startsWith(verificationSkillPrefix))
+      problems.push(
+        `${where}: it records the commit it was last confirmed against, so it is a verification skill. Name it ${verificationSkillPrefix}*, or ${formalSkillPrefix}* if it runs tla-ts.`,
+      );
+    for (const file of runs.flatMap(({ files }) => files).filter((each) => !isModelFile(each)))
+      problems.push(
+        `${where}: it gives tla-ts ${file}. Name a model ${modelFilePatterns.join(", ")}, so the pull request check asks for its chart.`,
+      );
+    return problems;
+  });
+}
+
+test.each([
+  [
+    "a verify- skill that runs npx tla-ts",
+    { name: "verify-tabs", text: "```sh\nnpx tla-ts models/tabs.model.ts\n```\n" },
+    "Name it verify-formal-tabs",
+  ],
+  [
+    "a verify- skill that runs a test importing from tla-ts",
+    { name: "verify-tabs", text: "```sh\nvp test run models/tabs.test.ts\n```\n" },
+    "Name it verify-formal-tabs",
+  ],
+  [
+    "a verify-formal- skill that only names tla-ts in prose",
+    {
+      name: "verify-formal-tabs",
+      text: "Run tla-ts on the model.\n```sh\nvp test run tests/tabs.test.ts\n```\n",
+    },
+    "a verify-formal-* skill runs tla-ts",
+  ],
+  [
+    "a skill confirmed against a commit but not named verify-",
+    { name: "tabs-check", text: "Last confirmed against commit `0123abc`.\n" },
+    "Name it verify-*",
+  ],
+  [
+    "a verify-formal- skill that gives tla-ts a model the pull request check cannot see",
+    { name: "verify-formal-tabs", text: "```sh\nnpx tla-ts models/tabs.ts\n```\n" },
+    "it gives tla-ts models/tabs.ts",
+  ],
+])("the formal-verification naming rule fails %s", (_, skill, said) => {
+  const files: Record<string, string> = {
+    "models/tabs.test.ts": 'import { check } from "tla-ts";\n',
+    "tests/tabs.test.ts": 'import { test } from "vite-plus/test";\n',
+  };
+
+  expect(formalNamingProblems([skill], (path) => files[path]).join("\n")).toContain(said);
+});
+
+test("the formal-verification naming rule passes a verify-formal- skill that runs tla-ts on a model, and a verify- skill that does not", () => {
+  const skills = [
+    {
+      name: "verify-formal-tabs",
+      text: "Last confirmed against commit `0123abc`.\n```sh\nnpx tla-ts models/tabs.model.ts\nvp exec tla-ts models/Tabs.tla\n```\n",
+    },
+    {
+      name: "verify-tabs",
+      text: "No model checker, so tla-ts is not run.\n```sh\nvp test run\n```\n",
+    },
+  ];
+
+  expect(formalNamingProblems(skills, () => undefined)).toEqual([]);
+});
+
+test(`a skill whose check runs tla-ts is named ${formalSkillPrefix}*, a ${formalSkillPrefix}* skill runs tla-ts on a model file, and every other verification skill is named ${verificationSkillPrefix}*`, () => {
+  const skills = skillNames.map((name) => ({ name, text: skillText(name) }));
+
+  expect(formalNamingProblems(skills, readRepositoryFile)).toEqual([]);
+});
+
 test("every verification skill says which commit it was last confirmed against", () => {
   const violations = skillNames
     .filter((name) => name.startsWith("verify-"))
@@ -218,6 +320,35 @@ test("every verification skill says which commit it was last confirmed against",
     );
 
   expect(violations).toEqual([]);
+});
+
+const mutationCheck = /^- Mutation check\b.*$/gm;
+const reliesOnADraw = /\bgenerated\b|\bcounterexample\b/i;
+const fixedSeed = /`seed: -?\d+`/;
+
+function luckyMutationChecks(name: string, text: string): string[] {
+  return [...text.matchAll(mutationCheck)]
+    .map(([line]) => line)
+    .filter((line) => reliesOnADraw.test(line) && !fixedSeed.test(line))
+    .map(
+      (line) =>
+        `.agents/skills/${name}/SKILL.md: the mutation check "${line.slice(0, 80)}…" says a generated check fails but gives no \`seed: <n>\`. Run it, and name the seed it failed with on its first run, so the check cannot pass by the luck of the draw.`,
+    );
+}
+
+test("a mutation check that says a generated check fails names the seed it fails with", () => {
+  const lucky =
+    "- Mutation check after editing covered code: run it, and the generated check must fail with a sequence that presses an arrow towards a disabled tab.\n";
+
+  expect(luckyMutationChecks("verify-tabs", lucky)).toHaveLength(1);
+  expect(
+    luckyMutationChecks("verify-tabs", lucky.replace("fail", "fail with `seed: -42`")),
+  ).toEqual([]);
+  expect(
+    skillNames
+      .filter((name) => name.startsWith(verificationSkillPrefix))
+      .flatMap((name) => luckyMutationChecks(name, skillText(name))),
+  ).toEqual([]);
 });
 
 const coveredCodeHeader = "Covered code";

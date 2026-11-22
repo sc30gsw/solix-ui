@@ -27,6 +27,7 @@ import {
   memberDeclarations,
   memberRead,
   staticPropertyName,
+  parseText,
   type Program,
   symbolOf,
   ts,
@@ -882,4 +883,44 @@ test("no component falls back to a literal for a prop, with ??, ||, ??=, ||=, a 
   } finally {
     program.dispose();
   }
+});
+
+const trimMethods = new Set(["trim", "trimStart", "trimEnd"]);
+const booleanAttribute = "disabled";
+const sharedValueTests =
+  "Read a style value with `declarable` from `packages/core/src/css-syntax.ts` and a nonce with `nonceOf` from `packages/core/src/run-time-style.ts`, and fix an empty or blank value there, for every component at once.";
+
+function emptyOrBlankTests(source: ts.SourceFile, file: string): string[] {
+  return descendants(source).flatMap((node) => {
+    const trims =
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      trimMethods.has(node.expression.name.text);
+    const comparesWithEmpty =
+      ts.isBinaryExpression(node) &&
+      absenceComparisons.has(node.operatorToken.kind) &&
+      [node.left, node.right].some((side) => ts.isStringLiteral(side) && side.text === "") &&
+      ![node.left, node.right].some(
+        (side) => ts.isPropertyAccessExpression(side) && side.name.text === booleanAttribute,
+      );
+    return trims || comparesWithEmpty
+      ? [
+          `${file}:${lineOf(node)}: \`${node.getText(source)}\` tests a value for being empty or blank in a component. ${sharedValueTests}`,
+        ]
+      : [];
+  });
+}
+
+test("no component tests a value for being empty or blank itself: style values go through declarable and nonces through nonceOf, so a fix lands in the shared layer", () => {
+  const pastMistake = parseText(
+    'function hasMinColWidth(props: { minColWidth?: string | null }): boolean {\n  return props.minColWidth !== undefined && props.minColWidth !== null && props.minColWidth !== "";\n}\nconst nonce = (given: string) => given.trim();\nconst on = (props: { disabled?: boolean | "" }) => props.disabled === "";\n',
+    ".tsx",
+  );
+
+  expect(
+    emptyOrBlankTests(pastMistake, "SimpleGrid.tsx").map((problem) => problem.split(":")[1]),
+  ).toEqual(["2", "4"]);
+  expect(
+    components.flatMap(({ file, source }) => emptyOrBlankTests(source, relativePath(file))),
+  ).toEqual([]);
 });
