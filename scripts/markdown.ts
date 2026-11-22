@@ -5,29 +5,39 @@ export type FencedBlock = {
   closed: boolean;
 };
 
-export type Section = { heading: string; prose: string[]; blocks: FencedBlock[] };
+export type Section = { level: 1 | 2; heading: string; prose: string[]; blocks: FencedBlock[] };
 
-export type Markdown = {
-  sections: Section[];
-  blocks: FencedBlock[];
-  prose: string[];
-  lines: string[];
-};
+export type Markdown = { sections: Section[]; blocks: FencedBlock[]; lines: string[] };
 
 const opening = /^ {0,3}(`{3,}|~{3,})\s*([^\s`]*)/;
-const secondLevelHeading = /^## (.*?)\s*$/;
+const heading = /^(#{1,2}) (.*?)\s*$/;
+const commentStart = "<!--";
+const commentEnd = "-->";
 
 function closes(line: string, { fence }: FencedBlock): boolean {
-  const run = new RegExp(`^ {0,3}${fence[0]}{${fence.length},}\\s*$`);
-  return run.test(line);
+  return new RegExp(`^ {0,3}${fence[0]}{${fence.length},}\\s*$`).test(line);
+}
+
+function outsideComments(line: string, inComment: boolean): { text: string; inComment: boolean } {
+  let text = "";
+  let rest = line;
+  let inside = inComment;
+  for (;;) {
+    const marker = inside ? commentEnd : commentStart;
+    const at = rest.indexOf(marker);
+    if (at === -1) return { text: inside ? text : text + rest, inComment: inside };
+    if (!inside) text += rest.slice(0, at);
+    rest = rest.slice(at + marker.length);
+    inside = !inside;
+  }
 }
 
 export function parseMarkdown(text: string): Markdown {
   const lines = text.replaceAll("\r\n", "\n").split("\n");
   const blocks: FencedBlock[] = [];
-  const prose: string[] = [];
   const sections: Section[] = [];
   let open: FencedBlock | undefined;
+  let inComment = false;
   for (const line of lines) {
     if (open !== undefined) {
       if (closes(line, open)) {
@@ -38,17 +48,22 @@ export function parseMarkdown(text: string): Markdown {
       }
       continue;
     }
-    const fence = opening.exec(line);
+    const outside = outsideComments(line, inComment);
+    const wasInComment = inComment;
+    inComment = outside.inComment;
+    const fence = wasInComment ? null : opening.exec(outside.text);
     if (fence !== null) {
       open = { fence: fence[1], info: fence[2], lines: [], closed: false };
       blocks.push(open);
       sections.at(-1)?.blocks.push(open);
       continue;
     }
-    prose.push(line);
-    const heading = secondLevelHeading.exec(line);
-    if (heading !== null) sections.push({ heading: heading[1], prose: [], blocks: [] });
-    else sections.at(-1)?.prose.push(line);
+    const title = heading.exec(outside.text);
+    if (title !== null) {
+      sections.push({ level: title[1] === "#" ? 1 : 2, heading: title[2], prose: [], blocks: [] });
+    } else if (outside.text.trim() !== "" || outside.text === line) {
+      sections.at(-1)?.prose.push(outside.text);
+    }
   }
-  return { sections, blocks, prose, lines };
+  return { sections, blocks, lines };
 }

@@ -6,9 +6,11 @@ import { fixesWithoutATest, verificationFiles } from "#/scripts/fixes-carry-test
 import { parseMarkdown } from "#/scripts/markdown.ts";
 import {
   chartLineCap,
+  chartLinesCap,
   footer,
   lineLimit,
   type PullRequestChanges,
+  type LineEdit,
   type PullRequestCommit,
   problemsOf,
   reviewLines,
@@ -52,26 +54,31 @@ function shaOf(prefix: string): string {
   return prefix.padEnd(40, "0");
 }
 
+type After = readonly string[] | { merge: readonly string[] } | LineEdit;
+
 function changesOf(
   files: readonly string[],
-  after: readonly (readonly string[] | "merge")[] = [],
+  after: readonly After[] = [],
   extra: readonly PullRequestCommit[] = [],
 ): PullRequestChanges {
   const commits: PullRequestCommit[] = [
-    { sha: shaOf(reviewed), parents: [shaOf("b")], files: [...files] },
+    { sha: shaOf(reviewed), parents: [shaOf("b")], files: [...files], skillEdits: [] },
   ];
   for (const [index, changed] of after.entries()) {
+    const sha = shaOf(`a${index}`);
     const parent = commits.at(-1)?.sha ?? "";
-    commits.push(
-      changed === "merge"
-        ? { sha: shaOf(`a${index}`), parents: [parent, shaOf("c")], files: [] }
-        : { sha: shaOf(`a${index}`), parents: [parent], files: [...changed] },
-    );
+    if ("merge" in changed) {
+      commits.push({ sha, parents: [parent, shaOf("c")], files: changed.merge, skillEdits: [] });
+    } else if ("file" in changed) {
+      commits.push({ sha, parents: [parent], files: [changed.file], skillEdits: [changed] });
+    } else {
+      commits.push({ sha, parents: [parent], files: [...changed], skillEdits: [] });
+    }
   }
-  return {
-    files: [...new Set([...files, ...after.flatMap((each) => (each === "merge" ? [] : each))])],
-    commits: [...commits, ...extra],
-  };
+  const touched = after.flatMap((each) =>
+    "merge" in each ? each.merge : "file" in each ? [each.file] : each,
+  );
+  return { files: [...new Set([...files, ...touched])], commits: [...commits, ...extra] };
 }
 
 const unchanged = changesOf([]);
@@ -82,13 +89,28 @@ describe("the markdown of a body", () => {
       "## Why \n\nText.\n\n~~~\n```mermaid\n## Scope\n```\n~~~\n\n## Verification\n\n````mermaid\nstateDiagram-v2\n```\n````\n- a\n",
     );
 
-    expect(parsed.sections.map(({ heading }) => heading)).toEqual(["Why", "Verification"]);
+    expect(parsed.sections.map(({ level, heading }) => [level, heading])).toEqual([
+      [2, "Why"],
+      [2, "Verification"],
+    ]);
     expect(parsed.blocks.map(({ fence, info, closed }) => [fence, info, closed])).toEqual([
       ["~~~", "", true],
       ["````", "mermaid", true],
     ]);
     expect(parsed.sections[1]?.prose).toEqual(["", "- a", ""]);
-    expect(parsed.prose).not.toContain("## Scope");
+  });
+
+  test("ends a section at a heading of level 1 or 2, and reads no text inside an HTML comment", () => {
+    const parsed = parseMarkdown(
+      "## Verification\n\n- a <!-- hidden -->\n<!--\n- b\n-->\n- c\n# Notes\n\n- d\n### Deeper\n",
+    );
+
+    expect(parsed.sections.map(({ level, heading }) => [level, heading])).toEqual([
+      [2, "Verification"],
+      [1, "Notes"],
+    ]);
+    expect(parsed.sections[0]?.prose).toEqual(["", "- a ", "- c"]);
+    expect(parsed.sections[1]?.prose).toEqual(["", "- d", "### Deeper", ""]);
   });
 });
 
@@ -208,6 +230,18 @@ describe("the text of a pull request", () => {
       counted(inVerification(underLimit, "~~~\n```mermaid\nstateDiagram-v2\n```\n~~~")),
     ).toHaveLength(1);
     expect(counted(`${underLimit}\n${"```mermaid\nstateDiagram-v2\n".repeat(1)}`)).toHaveLength(1);
+    const fiveCharts = Array.from({ length: 5 }, () => chartOf(50)).join("\n");
+    expect(counted(inVerification(underLimit, fiveCharts))).toHaveLength(1);
+    const twoCharts = Array.from({ length: 2 }, () => chartOf(50)).join("\n");
+    expect(counted(inVerification(underLimit, twoCharts))).toEqual([]);
+    expect(chartLinesCap).toBeGreaterThanOrEqual(2 * 53);
+    const withFrontmatter = chartOf(30).replace("mermaid\n", "mermaid\n---\ntitle: Tabs\n---\n");
+    const withInit = chartOf(30).replace(
+      "mermaid\n",
+      "mermaid\n%%{init: {'theme': 'neutral'}}%%\n",
+    );
+    expect(counted(inVerification(underLimit, withFrontmatter))).toEqual([]);
+    expect(counted(inVerification(underLimit, withInit))).toEqual([]);
   });
 
   test.each([
@@ -250,6 +284,7 @@ describe("the text of a pull request", () => {
         sha: shaOf(prefix),
         parents: [shaOf("b")],
         files: [],
+        skillEdits: [],
       })),
     );
 
@@ -261,19 +296,73 @@ describe("the text of a pull request", () => {
     );
   });
 
-  test("fails a pull request whose own commits after the reviewed one change more than the verification skills, and leaves out merge commits and files the pull request does not change", () => {
+  test("fails a pull request whose own commits after the reviewed one change more than a verification skill's Last confirmed commit, a merge's own resolution included, and leaves out files the pull request does not change", () => {
     const body = bodyWith(minimal);
     const skill = ".agents/skills/verify-tabs/SKILL.md";
-
-    expect(problemsOf({ title, body }, changesOf(["src/a.ts"], [[skill]]))).toEqual([]);
-    expect(problemsOf({ title, body }, changesOf(["src/a.ts"], ["merge"]))).toEqual([]);
+    const confirmed = (commit: string) =>
+      `Last confirmed against commit \`${commit}\`. Run \`git diff ${commit} -- packages/core/src\` to see what changed since.`;
+    const moved = { file: skill, removed: [confirmed("1111111")], added: [confirmed("2222222")] };
+    const reworded = {
+      file: skill,
+      removed: [confirmed("1111111")],
+      added: [confirmed("2222222").replace("what changed", "what moved")],
+    };
+    const prose = { file: skill, removed: ["Run it."], added: ["Run it twice."] };
     const notInTheDiff = changesOf(["src/a.ts"], [["src/a.ts"]]);
-    expect(problemsOf({ title, body }, { ...notInTheDiff, files: [] })).toEqual([]);
-    const stale = problemsOf({ title, body }, changesOf(["src/a.ts"], [["src/a.ts", "AGENTS.md"]]));
-    expect(stale).toEqual([
-      "The comment-sicko line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md. Run comment-sicko again on those commits and name the last one.",
-      "The Thermos line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md. Run Thermos again on those commits and name the last one.",
+    const after = (changes: PullRequestChanges) => problemsOf({ title, body }, changes);
+
+    expect(after(changesOf(["src/a.ts"], [moved]))).toEqual([]);
+    expect(after(changesOf(["src/a.ts"], [{ merge: [] }]))).toEqual([]);
+    expect(after({ ...notInTheDiff, files: [] })).toEqual([]);
+    for (const edit of [reworded, prose, [skill]]) {
+      expect(after(changesOf(["src/a.ts"], [edit])).join("\n")).toContain(
+        `own commits after it change ${skill}`,
+      );
+    }
+    expect(after(changesOf(["src/a.ts"], [{ merge: ["src/a.ts"] }])).join("\n")).toContain(
+      "own commits after it change src/a.ts",
+    );
+    expect(after(changesOf(["src/a.ts"], [["src/a.ts", "AGENTS.md"]]))).toEqual([
+      "The comment-sicko line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md, beyond moving a verification skill's Last confirmed commit. Run comment-sicko again on those commits and name the last one.",
+      "The Thermos line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md, beyond moving a verification skill's Last confirmed commit. Run Thermos again on those commits and name the last one.",
     ]);
+  });
+
+  test("still runs every check of the text alone when git cannot read the changes", () => {
+    const problems = problemsOf(
+      { title: "no type", body: bodyWith(minimal, undefined, "PENDING") },
+      undefined,
+    ).join("\n");
+
+    expect(problems).toContain("is not a Conventional Commit");
+    expect(problems).toContain('gives "PENDING.');
+  });
+
+  test.each([
+    ["inside an HTML comment", (line: string) => `<!--\n${line}\n-->`],
+    ["under a level-1 heading after Verification", (line: string) => `# Notes\n\n${line}`],
+  ])("reads no review line %s", (_, hide) => {
+    const line = `${reviewLines["comment-sicko"]}${reviewed}.`;
+    const body = bodyWith(minimal)
+      .replace(line, "")
+      .replace(`${footer}`, `${hide(line)}\n\n${footer}`);
+
+    expect(problemsOf({ title, body }, unchanged).join("\n")).toContain(
+      `## Verification has no line that starts "${reviewLines["comment-sicko"]}"`,
+    );
+  });
+
+  test("fails a footer inside an HTML comment or an unclosed fence", () => {
+    const commented = bodyWith(minimal)
+      .replace(footer, `<!--\n${footer}`)
+      .replace(session, `${session}\n-->`);
+    const unclosed = bodyWith(minimal).replace(footer, `\`\`\`\n${footer}`);
+
+    for (const body of [commented, unclosed]) {
+      expect(problemsOf({ title, body }, unchanged).join("\n")).toContain(
+        "does not end with the line",
+      );
+    }
   });
 
   test.each([
@@ -336,6 +425,7 @@ async function inScratchPullRequest(use: (repository: ScratchPullRequest) => voi
     git("add", ".");
     git("commit", "--quiet", "--message=base");
     const base = git("rev-parse", "HEAD");
+    git("update-ref", "refs/remotes/origin/main", "main");
     git("switch", "--quiet", "--create", "topic");
     const head = commit("src/a.ts");
     const check = (pullRequest: object, to = head, environment = withTerms) => {
@@ -395,11 +485,65 @@ describe("the text check", () => {
     await inScratchPullRequest(({ git, head, commit, check }) => {
       git("switch", "--quiet", "main");
       commit("src/main.ts");
+      git("update-ref", "refs/remotes/origin/main", "main");
       git("switch", "--quiet", "topic");
       git("merge", "--quiet", "--no-ff", "--message=merge main", "main");
       const merged = git("rev-parse", "HEAD");
 
       expect(check({ title, body: bodyWith(minimal, undefined, head) }, merged).stderr).toBe("");
+    });
+  });
+
+  test("counts what a merge after the review resolves on its own, and a verification skill's edit beyond its Last confirmed commit", async () => {
+    await inScratchPullRequest(({ root, git, head, commit, check }) => {
+      git("switch", "--quiet", "main");
+      commit("src/main.ts");
+      git("update-ref", "refs/remotes/origin/main", "main");
+      git("switch", "--quiet", "topic");
+      git("merge", "--quiet", "--no-ff", "--no-commit", "main");
+      writeFileSync(join(root, "src/a.ts"), "unreviewed\n");
+      git("add", "--all");
+      git("commit", "--quiet", "--message=merge main");
+      const evil = git("rev-parse", "HEAD");
+      const skill = join(root, ".agents/skills/verify-tabs/SKILL.md");
+      const body = bodyWith(minimal, undefined, head);
+
+      expect(check({ title, body }, evil).stderr).toContain("own commits after it change src/a.ts");
+      git("reset", "--quiet", "--hard", head);
+      mkdirSync(dirname(skill), { recursive: true });
+      writeFileSync(skill, "Last confirmed against commit `1111111`.\nRun it.\n");
+      git("add", "--all");
+      git("commit", "--quiet", "--message=add skill");
+      const reviewedWithSkill = git("rev-parse", "HEAD");
+      writeFileSync(skill, "Last confirmed against commit `2222222`.\nRun it.\n");
+      git("commit", "--quiet", "--all", "--message=confirm");
+      const confirmed = git("rev-parse", "HEAD");
+      const withSkill = bodyWith(minimal, undefined, reviewedWithSkill);
+      expect(check({ title, body: withSkill }, confirmed).stderr).toBe("");
+      writeFileSync(skill, "Last confirmed against commit `2222222`.\nRun it twice.\n");
+      git("commit", "--quiet", "--all", "--message=edit");
+      expect(check({ title, body: withSkill }, git("rev-parse", "HEAD")).stderr).toContain(
+        "own commits after it change .agents/skills/verify-tabs/SKILL.md",
+      );
+    });
+  });
+
+  test("reads the base only from its remote-tracking branch, says so when it is missing, and still checks the text", async () => {
+    await inScratchPullRequest(({ git, head, check }) => {
+      git("tag", "release", "main");
+      const run = check({
+        title: "no type",
+        body: bodyWith(minimal, undefined, head),
+        base: { ref: "release" },
+      });
+
+      expect(run.stderr).toContain(
+        'The base branch "release" has no refs/remotes/origin/release in this clone',
+      );
+      expect(run.stderr).toContain("is not a Conventional Commit");
+      expect(check({ title, body: bodyWith(minimal, undefined, head), base: {} }).stderr).toContain(
+        "The event names no base branch.",
+      );
     });
   });
 
@@ -412,8 +556,8 @@ describe("the text check", () => {
       git("commit", "--quiet", "--message=move");
       const moved = git("rev-parse", "HEAD");
 
-      expect(check({ title, body: bodyWith(minimal, undefined, head) }, moved).stderr).toContain(
-        "own commits after it change src/a.ts",
+      expect(check({ title, body: bodyWith(minimal, undefined, head) }, moved).stderr).toMatch(
+        /own commits after it change \.agents\/skills\/verify-tabs\/SKILL\.md, src\/a\.ts,/,
       );
     });
   });
