@@ -56,10 +56,12 @@ export type SimpleGridProps = ElementProps<
 
 const defaults = defaultsOf<SimpleGridProps>()({ autoFlow: "auto-fill" });
 
+function hasMinColWidth(props: Pick<SimpleGridProps, "minColWidth">): boolean {
+  return props.minColWidth !== undefined && props.minColWidth !== null && props.minColWidth !== "";
+}
+
 export function SimpleGrid(rawProps: SimpleGridProps) {
   const props = withDefaults(defaults, rawProps);
-  const hasMinColWidth = ({ minColWidth }: SimpleGridProps) =>
-    minColWidth !== undefined && minColWidth !== null;
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const keyed = new Map([
@@ -69,19 +71,20 @@ export function SimpleGrid(rawProps: SimpleGridProps) {
     ]);
     return [...keyed.entries()];
   });
-  const autoColumns = () => hasMinColWidth(props);
   const { root, part } = createParts(simpleGridVariables, styles, props, {
     variables: {
       "sg-auto-rows": "autoRows",
       "sg-cols": (given) => (hasMinColWidth(given) ? undefined : given.cols),
-      "sg-min-col-width": "minColWidth",
+      "sg-min-col-width": (given) => (hasMinColWidth(given) ? given.minColWidth : undefined),
       "sg-spacing-x": "spacing",
       "sg-spacing-y": "verticalSpacing",
     },
     queries: container,
-    keep: ["autoFlow", "cols", "type"],
+    keep: ["autoFlow", "cols", "minColWidth", "type"],
   });
-  const grid = <div data-auto-cols={autoColumns() ? props.autoFlow : undefined} {...root} />;
+  const grid = (
+    <div data-auto-cols={hasMinColWidth(props) ? props.autoFlow : undefined} {...root} />
+  );
   return (
     <Show when={container.queries()} fallback={grid}>
       <Show when={container.rules()}>
