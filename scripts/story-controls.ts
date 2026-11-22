@@ -9,6 +9,7 @@ import {
   libraryEntry,
   librarySources,
 } from "#/scripts/component-props.ts";
+import { assertBuiltFromItsSources } from "#/scripts/source-digest.ts";
 import { insideOf } from "#/scripts/subpath.ts";
 import { storybookAppManifest } from "#/scripts/release-sources.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
@@ -92,6 +93,7 @@ export function storyControls(entry: string = libraryEntry): Plugin {
     resolveId: (id) => (id === storyControlsModule ? resolvedStoryControlsModule : undefined),
     async load(id) {
       if (id !== resolvedStoryControlsModule) return undefined;
+      assertBuiltFromItsSources(dirname(entry));
       const library = await this.resolve(libraryModule, storybookManifest);
       if (!library)
         throw new Error(`${storybookManifest}: ${libraryModule} does not resolve here.`);

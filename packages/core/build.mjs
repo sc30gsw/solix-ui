@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildSources } from "../../scripts/dist-specifiers.ts";
+import { writeSourceDigest } from "../../scripts/source-digest.ts";
 import {
   behaviourSdkHiddenRule,
   compileLibrarySource,
@@ -40,6 +41,7 @@ await writeFile(
     behaviourSdkHiddenRule(packageRoot),
   ),
 );
+writeSourceDigest(layout.sourceDirectory);
 console.log(
   `dist/styles.css: ${rules.length} rules, the style-prop rules and the SDK's hidden rule`,
 );

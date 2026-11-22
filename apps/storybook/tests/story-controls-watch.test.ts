@@ -1,8 +1,9 @@
 import { symlinkSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { createServer, type HotPayload } from "vite-plus";
 import { expect, test } from "vite-plus/test";
 import { repositoryRoot } from "../../../scripts/repository.ts";
+import { writeSourceDigest } from "../../../scripts/source-digest.ts";
 import { storyControls, storyControlsModule } from "../../../scripts/story-controls.ts";
 import { inTemporaryTree } from "../../../tests/support/temporary-tree.ts";
 
@@ -27,9 +28,13 @@ export { Probe };
 `;
 
 const servedWithin = 20_000;
+
+function built(entry: string): void {
+  writeSourceDigest(dirname(entry));
+}
 const optionsOfTone = /"tone":\{"control":\{"type":"select"\},"options":(\[[^\]]*\])/;
 
-test("the served controls follow the library's source outside the server's root: a change to a prop's type under a running server reaches the next load of the controls module, with no restart", async () => {
+test("the served controls follow the library's source outside the server's root: a change to a prop's type under a running server is refused until the library is rebuilt, and then reaches the next load of the controls module, with no restart", async () => {
   await inTemporaryTree(
     {
       "app/package.json": JSON.stringify({ name: "watched", type: "module" }),
@@ -38,6 +43,7 @@ test("the served controls follow the library's source outside the server's root:
     async (root) => {
       symlinkSync(join(repositoryRoot, "node_modules"), join(root, "node_modules"), "dir");
       const entry = join(root, "library/src/index.tsx");
+      built(entry);
       const server = await createServer({
         root: join(root, "app"),
         configFile: false,
@@ -52,6 +58,10 @@ test("the served controls follow the library's source outside the server's root:
       try {
         expect(await served()).toBe('["calm"]');
         writeFileSync(entry, libraryWith('"calm" | "loud"'));
+        await expect
+          .poll(() => served().catch((error: unknown) => String(error)), { timeout: servedWithin })
+          .toMatch(/dist was built from other sources than .* holds now/);
+        built(entry);
         await expect.poll(served, { timeout: servedWithin }).toBe('["calm","loud"]');
       } finally {
         await server.close();
@@ -70,6 +80,7 @@ test("a change to the library's source outside the root of a running server with
     async (root) => {
       symlinkSync(join(repositoryRoot, "node_modules"), join(root, "node_modules"), "dir");
       const entry = join(root, "library/src/index.tsx");
+      built(entry);
       const server = await createServer({
         root: join(root, "app"),
         configFile: false,
@@ -103,6 +114,7 @@ test("each served control carries its prop's doc comment as its description and 
     { "library/src/index.tsx": libraryWith('"calm" | "loud"') },
     async (root) => {
       symlinkSync(join(repositoryRoot, "node_modules"), join(root, "node_modules"), "dir");
+      built(join(root, "library/src/index.tsx"));
       const server = await createServer({
         root,
         configFile: false,
