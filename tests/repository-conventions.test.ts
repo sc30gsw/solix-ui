@@ -29,9 +29,9 @@ import {
   formalSkillPrefix,
   isModelFile,
   modelFilePatterns,
-  tlaTsRunsOf,
   verificationSkillPrefix,
 } from "#/scripts/formal-verification.ts";
+import { tlaTsRunsOf } from "#/tests/support/formal-verification.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -155,7 +155,7 @@ test("every agent is named for its file and is started by an installed skill", (
 
 test("every file a verification skill's covered-code table names exists", () => {
   const violations = skillNames
-    .filter((name) => name.startsWith("verify-"))
+    .filter((name) => name.startsWith(verificationSkillPrefix))
     .flatMap((name) => {
       const text = readFileSync(join(skillsDirectory, name, "SKILL.md"), "utf8");
       const tableRows = text.split("\n").filter((line) => line.startsWith("|"));
@@ -181,7 +181,7 @@ function exportedNamesOf(file: string): string[] {
 
 test("every name a verification skill's covered-code cell gives after a source file and a colon is exported by that file, so a rename or a move cannot leave the table naming what is gone", () => {
   const violations = skillNames
-    .filter((name) => name.startsWith("verify-"))
+    .filter((name) => name.startsWith(verificationSkillPrefix))
     .flatMap((name) => {
       const text = readFileSync(join(skillsDirectory, name, "SKILL.md"), "utf8");
       const coveredCells = text
@@ -240,65 +240,90 @@ function formalNamingProblems(
       problems.push(
         `${where}: it records the commit it was last confirmed against, so it is a verification skill. Name it ${verificationSkillPrefix}*, or ${formalSkillPrefix}* if it runs tla-ts.`,
       );
-    for (const file of runs.flatMap(({ files }) => files).filter((each) => !isModelFile(each)))
-      problems.push(
-        `${where}: it gives tla-ts ${file}. Name a model ${modelFilePatterns.join(", ")}, so the pull request check asks for its chart.`,
-      );
+    for (const run of runs)
+      for (const file of run.files.filter((each) => !isModelFile(each)))
+        problems.push(
+          run.kind === "command"
+            ? `${where}: it gives tla-ts ${file}. Name the model ${modelFilePatterns.join(", ")}, so the pull request check asks for its chart.`
+            : `${where}: it runs ${file}, which imports tla-ts. Name that script ${modelFilePatterns.join(", ")}, so the pull request check asks for its chart.`,
+        );
     return problems;
   });
 }
 
+const plain = `${verificationSkillPrefix}tabs`;
+const formal = `${formalSkillPrefix}tabs`;
+const scripts: Record<string, string> = {
+  "models/tabs.test.ts": 'import { check } from "tla-ts";\n',
+  "models/deep.test.ts": 'import { check } from "tla-ts/check";\n',
+  "models/lazy.test.ts": 'const { check } = await import("tla-ts");\n',
+  "models/tabs.model.ts": 'import { check } from "tla-ts";\n',
+  "tests/tabs.test.ts": 'import { test } from "vite-plus/test";\n',
+};
+
 test.each([
+  ["runs npx tla-ts", plain, "npx tla-ts models/tabs.model.ts", `Name it ${formal}`],
+  ["runs pnpm tla-ts", plain, "pnpm tla-ts models/Tabs.tla", `Name it ${formal}`],
+  ["runs bunx tla-ts", plain, "bunx tla-ts models/Tabs.tla", `Name it ${formal}`],
+  ["runs npx --yes tla-ts", plain, "npx --yes tla-ts models/Tabs.tla", `Name it ${formal}`],
   [
-    "a verify- skill that runs npx tla-ts",
-    { name: "verify-tabs", text: "```sh\nnpx tla-ts models/tabs.model.ts\n```\n" },
-    "Name it verify-formal-tabs",
+    "runs a test importing from tla-ts",
+    plain,
+    "vp test run models/tabs.test.ts",
+    `Name it ${formal}`,
   ],
   [
-    "a verify- skill that runs a test importing from tla-ts",
-    { name: "verify-tabs", text: "```sh\nvp test run models/tabs.test.ts\n```\n" },
-    "Name it verify-formal-tabs",
+    "runs a test importing tla-ts/check",
+    plain,
+    "vp test run models/deep.test.ts",
+    `Name it ${formal}`,
   ],
   [
-    "a verify-formal- skill that only names tla-ts in prose",
-    {
-      name: "verify-formal-tabs",
-      text: "Run tla-ts on the model.\n```sh\nvp test run tests/tabs.test.ts\n```\n",
-    },
-    "a verify-formal-* skill runs tla-ts",
+    'runs a test with import("tla-ts")',
+    plain,
+    "vp test run models/lazy.test.ts",
+    `Name it ${formal}`,
   ],
   [
-    "a skill confirmed against a commit but not named verify-",
-    { name: "tabs-check", text: "Last confirmed against commit `0123abc`.\n" },
-    "Name it verify-*",
+    "only names tla-ts in prose",
+    formal,
+    "vp test run tests/tabs.test.ts",
+    "runs tla-ts in a fenced command",
   ],
   [
-    "a verify-formal- skill that gives tla-ts a model the pull request check cannot see",
-    { name: "verify-formal-tabs", text: "```sh\nnpx tla-ts models/tabs.ts\n```\n" },
+    "gives tla-ts a file that is no model",
+    formal,
+    "npx tla-ts models/tabs.ts",
     "it gives tla-ts models/tabs.ts",
   ],
-])("the formal-verification naming rule fails %s", (_, skill, said) => {
-  const files: Record<string, string> = {
-    "models/tabs.test.ts": 'import { check } from "tla-ts";\n',
-    "tests/tabs.test.ts": 'import { test } from "vite-plus/test";\n',
-  };
+  [
+    "runs a script that is no model",
+    formal,
+    "vp test run models/tabs.test.ts",
+    "it runs models/tabs.test.ts, which imports tla-ts",
+  ],
+])("the formal-verification naming rule fails a skill that %s", (_, name, command, said) => {
+  const skill = { name, text: `Run tla-ts on the model.\n\`\`\`sh\n${command}\n\`\`\`\n` };
 
-  expect(formalNamingProblems([skill], (path) => files[path]).join("\n")).toContain(said);
+  expect(formalNamingProblems([skill], (path) => scripts[path]).join("\n")).toContain(said);
 });
 
-test("the formal-verification naming rule passes a verify-formal- skill that runs tla-ts on a model, and a verify- skill that does not", () => {
+test("the formal-verification naming rule fails a skill confirmed against a commit but not named for verification, and passes a formal skill on a model and a plain one with no tla-ts", () => {
   const skills = [
     {
-      name: "verify-formal-tabs",
-      text: "Last confirmed against commit `0123abc`.\n```sh\nnpx tla-ts models/tabs.model.ts\nvp exec tla-ts models/Tabs.tla\n```\n",
+      name: formal,
+      text: "```sh\nnpx tla-ts models/tabs.model.ts\nnode models/tabs.model.ts\n```\n",
     },
-    {
-      name: "verify-tabs",
-      text: "No model checker, so tla-ts is not run.\n```sh\nvp test run\n```\n",
-    },
+    { name: plain, text: "No model checker, so tla-ts is not run.\n```sh\nvp test run\n```\n" },
   ];
 
-  expect(formalNamingProblems(skills, () => undefined)).toEqual([]);
+  expect(
+    formalNamingProblems(
+      [{ name: "tabs-check", text: "Last confirmed against commit `0123abc`.\n" }],
+      () => undefined,
+    ).join("\n"),
+  ).toContain(`Name it ${verificationSkillPrefix}*`);
+  expect(formalNamingProblems(skills, (path) => scripts[path])).toEqual([]);
 });
 
 test(`a skill whose check runs tla-ts is named ${formalSkillPrefix}*, a ${formalSkillPrefix}* skill runs tla-ts on a model file, and every other verification skill is named ${verificationSkillPrefix}*`, () => {
@@ -309,7 +334,7 @@ test(`a skill whose check runs tla-ts is named ${formalSkillPrefix}*, a ${formal
 
 test("every verification skill says which commit it was last confirmed against", () => {
   const violations = skillNames
-    .filter((name) => name.startsWith("verify-"))
+    .filter((name) => name.startsWith(verificationSkillPrefix))
     .filter(
       (name) =>
         !/Last confirmed against commit `[0-9a-f]{7,40}`/.test(
@@ -344,12 +369,9 @@ test(`a mutation check that says a generated check fails runs it as \`${seedVari
     "- Focus mutation: the generated one fails with `seed: 42` added to its parameters.",
   ];
 
-  for (const entry of entries) expect(unseededMutationChecks("verify-tabs", entry)).toHaveLength(1);
+  for (const entry of entries) expect(unseededMutationChecks(plain, entry)).toHaveLength(1);
   expect(
-    unseededMutationChecks(
-      "verify-tabs",
-      entries[1].replace("`vp test", `\`${seedVariable}=-42 vp test`),
-    ),
+    unseededMutationChecks(plain, entries[1].replace("`vp test", `\`${seedVariable}=-42 vp test`)),
   ).toEqual([]);
   expect(
     skillNames
@@ -401,7 +423,7 @@ function filesUnder(path: string): string[] {
 
 test("every file a verification skill covers sits in one covered-code cell of its tables, so a change to it is described in one place", () => {
   const violations = skillNames
-    .filter((name) => name.startsWith("verify-"))
+    .filter((name) => name.startsWith(verificationSkillPrefix))
     .flatMap((name) => {
       const cells = coveredCellsOf(skillText(name)).map((paths) => [
         ...new Set(paths.flatMap(filesUnder)),
@@ -426,7 +448,7 @@ function covers(listed: string, path: string): boolean {
 
 test("every path a verification skill tells you to diff is in its covered-code table, and every path in the table is in the diff", () => {
   const violations = skillNames
-    .filter((name) => name.startsWith("verify-"))
+    .filter((name) => name.startsWith(verificationSkillPrefix))
     .flatMap((name) => {
       const text = skillText(name);
       const listed = diffPathList.exec(text)?.[1]?.split(" ") ?? [];
@@ -494,7 +516,7 @@ test("while a merge is being committed, a commit that HEAD or the merged commit 
 
 test("every verification skill was last confirmed against a commit that HEAD contains, or, while a merge is being committed, that the merged commit contains, and CI checks out the history to tell", () => {
   const violations = skillNames
-    .filter((name) => name.startsWith("verify-"))
+    .filter((name) => name.startsWith(verificationSkillPrefix))
     .flatMap((name) => {
       const commit = confirmedCommit.exec(skillText(name))?.[1];
       if (commit === undefined) return [];
