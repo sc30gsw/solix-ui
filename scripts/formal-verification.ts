@@ -1,8 +1,13 @@
 import { matchesGlob } from "node:path";
 
-export const verificationSkillPrefix = "verify-";
-export const formalSkillPrefix = `${verificationSkillPrefix}formal-`;
-export const modelFilePatterns = ["**/*.tla", "**/*.cfg", "**/*.model.ts"] as const;
+import { formalSkillPrefix } from "#/scripts/verification-skills.ts";
+
+export const modelFilePatterns = [
+  "**/*.tla",
+  "**/*.cfg",
+  "**/*.model.ts",
+  "**/*.model.test.ts",
+] as const;
 export const formalSkillFiles = `.agents/skills/${formalSkillPrefix}*/**`;
 
 export function isModelFile(path: string): boolean {

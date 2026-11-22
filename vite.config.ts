@@ -55,6 +55,12 @@ if (fixedSeed !== undefined && process.env[seedNoticeShown] === undefined) {
   process.stderr.write(`${fixedSeed}\n`);
 }
 
+export const nodeTestFiles = [
+  "tests/**/*.test.ts",
+  "packages/*/tests/**/*.test.{ts,tsx}",
+  "apps/*/tests/**/*.test.{ts,tsx}",
+] as const;
+
 const sequenceGroup = { browser: 1, others: 2, storySpec: 3 } as const;
 
 function inGroup(groupOrder: number) {
@@ -100,11 +106,7 @@ const projects = [
       test: {
         name: "node",
         environment: "node",
-        include: [
-          "tests/**/*.test.ts",
-          "packages/*/tests/**/*.test.{ts,tsx}",
-          "apps/*/tests/**/*.test.{ts,tsx}",
-        ],
+        include: [...nodeTestFiles],
         exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules, storySpec],
         globalSetup: ["tests/support/global-setup.ts"],
         setupFiles: ["apps/playground/tests/support/console-check.ts"],

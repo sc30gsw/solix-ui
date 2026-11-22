@@ -1,9 +1,6 @@
 import { matchesGlob } from "node:path";
-import {
-  isFormalVerificationFile,
-  isModelFile,
-  verificationSkillPrefix,
-} from "#/scripts/formal-verification.ts";
+import { isFormalVerificationFile, isModelFile } from "#/scripts/formal-verification.ts";
+import { verificationSkillPrefix } from "#/scripts/verification-skills.ts";
 import { type FencedBlock, type Markdown, parseMarkdown } from "#/scripts/markdown.ts";
 
 export type PullRequestText = { title: string; body: string };

@@ -9,7 +9,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, matchesGlob } from "node:path";
 import { expect, test } from "vite-plus/test";
 import { engineNames } from "#/scripts/browser-engines.mjs";
 import { frontMatterOf, outsideSkills } from "#/scripts/package-skills.ts";
@@ -25,13 +25,10 @@ import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { exportsOf, parse } from "#/scripts/syntax.ts";
 import { seedVariable } from "#/tests/support/property-seed.ts";
-import {
-  formalSkillPrefix,
-  isModelFile,
-  modelFilePatterns,
-  verificationSkillPrefix,
-} from "#/scripts/formal-verification.ts";
+import { isModelFile, modelFilePatterns } from "#/scripts/formal-verification.ts";
+import { formalSkillPrefix, verificationSkillPrefix } from "#/scripts/verification-skills.ts";
 import { tlaTsRunsOf } from "#/tests/support/formal-verification.ts";
+import { nodeTestFiles } from "#/vite.config.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
 const linkedSkillsDirectory = join(repositoryRoot, ".claude/skills");
@@ -240,6 +237,10 @@ function formalNamingProblems(
       problems.push(
         `${where}: it records the commit it was last confirmed against, so it is a verification skill. Name it ${verificationSkillPrefix}*, or ${formalSkillPrefix}* if it runs tla-ts.`,
       );
+    for (const run of runs.filter(({ kind, files }) => kind === "command" && files.length === 0))
+      problems.push(
+        `${where}: \`${run.line.trim()}\` runs tla-ts on no model. Give it the model file it checks.`,
+      );
     for (const run of runs)
       for (const file of run.files.filter((each) => !isModelFile(each)))
         problems.push(
@@ -258,6 +259,8 @@ const scripts: Record<string, string> = {
   "models/deep.test.ts": 'import { check } from "tla-ts/check";\n',
   "models/lazy.test.ts": 'const { check } = await import("tla-ts");\n',
   "models/tabs.model.ts": 'import { check } from "tla-ts";\n',
+  "models/required.test.ts": 'const { check } = require("tla-ts");\n',
+  "models/bare.test.ts": 'import "tla-ts";\n',
   "tests/tabs.test.ts": 'import { test } from "vite-plus/test";\n',
 };
 
@@ -302,8 +305,36 @@ test.each([
     "vp test run models/tabs.test.ts",
     "it runs models/tabs.test.ts, which imports tla-ts",
   ],
-])("the formal-verification naming rule fails a skill that %s", (_, name, command, said) => {
-  const skill = { name, text: `Run tla-ts on the model.\n\`\`\`sh\n${command}\n\`\`\`\n` };
+  ["runs a versioned tla-ts", plain, "npx tla-ts@0.0.10 models/Tabs.tla", `Name it ${formal}`],
+  [
+    "runs tla-ts from node_modules/.bin",
+    plain,
+    "node_modules/.bin/tla-ts models/Tabs.tla",
+    `Name it ${formal}`,
+  ],
+  [
+    'runs a test with require("tla-ts")',
+    plain,
+    "vp test run models/required.test.ts",
+    `Name it ${formal}`,
+  ],
+  [
+    'runs a test with a bare import "tla-ts"',
+    plain,
+    "vp test run models/bare.test.ts",
+    `Name it ${formal}`,
+  ],
+  ["runs tla-ts in a zsh block", plain, "zsh:npx tla-ts models/Tabs.tla", `Name it ${formal}`],
+  [
+    "gives tla-ts a quoted file that is no model",
+    formal,
+    'npx tla-ts "models/tabs.ts"',
+    "it gives tla-ts models/tabs.ts",
+  ],
+  ["runs tla-ts on no file", formal, "npx tla-ts", "runs tla-ts on no model"],
+])("the formal-verification naming rule fails a skill that %s", (_, name, written, said) => {
+  const [fence, command] = written.startsWith("zsh:") ? ["zsh", written.slice(4)] : ["sh", written];
+  const skill = { name, text: `Run tla-ts on the model.\n\`\`\`${fence}\n${command}\n\`\`\`\n` };
 
   expect(formalNamingProblems([skill], (path) => scripts[path]).join("\n")).toContain(said);
 });
@@ -312,7 +343,7 @@ test("the formal-verification naming rule fails a skill confirmed against a comm
   const skills = [
     {
       name: formal,
-      text: "```sh\nnpx tla-ts models/tabs.model.ts\nnode models/tabs.model.ts\n```\n",
+      text: "```sh\nnpx tla-ts models/tabs.model.ts\nnode models/tabs.model.ts\nnpx tla-ts models/Tabs.tla -workers 4 -dump dot,actionlabels states.dot > out.txt\n```\n",
     },
     { name: plain, text: "No model checker, so tla-ts is not run.\n```sh\nvp test run\n```\n" },
   ];
@@ -330,6 +361,16 @@ test(`a skill whose check runs tla-ts is named ${formalSkillPrefix}*, a ${formal
   const skills = skillNames.map((name) => ({ name, text: skillText(name) }));
 
   expect(formalNamingProblems(skills, readRepositoryFile)).toEqual([]);
+});
+
+test("a model test that tla-ts checks through Vitest is named *.model.test.ts, which is both a model file and a file the node project runs", () => {
+  const modelTest = "packages/core/tests/tabs.model.test.ts";
+
+  expect(isModelFile(modelTest)).toBe(true);
+  expect(nodeTestFiles.some((pattern) => matchesGlob(modelTest, pattern))).toBe(true);
+  expect(
+    nodeTestFiles.some((pattern) => matchesGlob("packages/core/tests/tabs.model.ts", pattern)),
+  ).toBe(false);
 });
 
 test("every verification skill says which commit it was last confirmed against", () => {
