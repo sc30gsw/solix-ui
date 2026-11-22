@@ -25,6 +25,7 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 const servedPageSkill = ".agents/skills/verify-served-page";
 const portHolders = [
   "vite.config.ts",
+  "e2e.config.ts",
   "{tests,packages/*/tests,apps/*/tests}/**/*.{ts,tsx,mjs}",
   "apps/*/*.ts",
   "apps/*/.storybook/*.ts",

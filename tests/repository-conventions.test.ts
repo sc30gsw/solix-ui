@@ -764,6 +764,7 @@ test("every check in the repository runs through vp run verify, before a commit,
     "vp run lint:solid",
     "vp run check:private-terms",
     "vp test",
+    "vp run test:e2e",
   ]);
   expect(read(".vite-hooks/pre-commit").trim()).toBe(
     "node scripts/check-working-tree.ts && vp staged --no-stash && node scripts/check-working-tree.ts && vp run verify",

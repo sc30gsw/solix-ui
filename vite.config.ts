@@ -214,6 +214,7 @@ export default defineConfig({
       {
         files: [
           "vite.config.ts",
+          "e2e.config.ts",
           "apps/*/vite.config.ts",
           "apps/*/src/App.tsx",
           "apps/playground/src/Document.tsx",

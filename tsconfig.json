@@ -6,6 +6,7 @@
   },
   "include": [
     "vite.config.ts",
+    "e2e.config.ts",
     "tests",
     "scripts",
     "packages/*/tests",

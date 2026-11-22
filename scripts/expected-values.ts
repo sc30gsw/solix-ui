@@ -68,35 +68,33 @@ function sentinelValues(names: string[]): Record<string, string> {
   ]);
 }
 
-function computedValues(
-  page: Page,
-  probes: Probe[],
-  rootRule: string | undefined,
-): Promise<Record<string, string>> {
-  return page.evaluate(
-    ({ written, injected }) => {
-      if (injected) {
-        const style = document.createElement("style");
-        style.nonce = document.querySelector<HTMLElement>("[nonce]")?.nonce ?? "";
-        style.textContent = injected;
-        document.head.append(style);
-      }
-      const computed: Record<string, string> = {};
-      for (const [name, property, value] of written) {
-        const probe = document.createElement("div");
-        probe.style.setProperty(property, value);
-        if (probe.style.getPropertyValue(property) === "") {
-          throw new Error(`${name}: "${value}" is not a valid ${property} in this browser.`);
-        }
-        document.body.append(probe);
-        computed[name] = getComputedStyle(probe).getPropertyValue(property);
-        probe.remove();
-      }
-      return computed;
-    },
-    { written: probes, injected: rootRule },
-  );
+type ProbeInput = { written: Probe[]; injected: string };
+
+function computedValues({ written, injected }: ProbeInput): Record<string, string> {
+  if (injected) {
+    const style = document.createElement("style");
+    style.nonce = document.querySelector<HTMLElement>("[nonce]")?.nonce ?? "";
+    style.textContent = injected;
+    document.head.append(style);
+  }
+  const computed: Record<string, string> = {};
+  for (const [name, property, value] of written) {
+    const probe = document.createElement("div");
+    probe.style.setProperty(property, value);
+    if (probe.style.getPropertyValue(property) === "") {
+      throw new Error(`${name}: "${value}" is not a valid ${property} in this browser.`);
+    }
+    document.body.append(probe);
+    computed[name] = getComputedStyle(probe).getPropertyValue(property);
+    probe.remove();
+  }
+  return computed;
 }
+
+export type ProbeReader = (
+  probe: typeof computedValues,
+  input: ProbeInput,
+) => Promise<Record<string, string>>;
 
 function sameValues(values: Record<string, string>): string[] {
   const names = Object.keys(values);
@@ -108,10 +106,19 @@ function sameValues(values: Record<string, string>): string[] {
   );
 }
 
-export async function expectedValues(
+export type Expected = (name: string) => string;
+
+export function expectedValues(
   page: Page,
+  options: { sentinels?: boolean } = {},
+): Promise<Expected> {
+  return expectedValuesRead((probe, input) => page.evaluate(probe, input), options);
+}
+
+export async function expectedValuesRead(
+  read: ProbeReader,
   { sentinels = false }: { sentinels?: boolean } = {},
-): Promise<(name: string) => string> {
+): Promise<Expected> {
   const tokens = tokenValues();
   const sentinelByName = sentinels ? sentinelValues(Object.keys(tokens)) : undefined;
   const probes: Probe[] = [
@@ -133,7 +140,7 @@ export async function expectedValues(
     `:root { ${Object.entries(sentinelByName)
       .map(([name, value]) => `${name}: ${value};`)
       .join(" ")} }`;
-  const values = await computedValues(page, probes, rootRule);
+  const values = await read(computedValues, { written: probes, injected: rootRule ?? "" });
 
   const collisions = sentinels ? sameValues(values) : [];
   if (collisions.length > 0) {
