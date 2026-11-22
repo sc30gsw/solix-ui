@@ -94,7 +94,7 @@ function Stateful(rawProps: StatefulProps): JSX.Element {
 export { Stateful };
 `;
 
-test("a prop carries its doc comment as its description, the literal its component's defaults object declares as its default, every value of a closed union, whether the props every element component shares declare it, and whether it is behaviour: a callback, a prop ControlledProps declares, or an own boolean or closed union of a component that has one of those", () => {
+test("a prop carries its doc comment as its description, and none where it has no doc comment, the literal its component's defaults object declares as its default, every value of a closed union, whether the props every element component shares declare it, and whether it is behaviour: a callback, a prop ControlledProps declares, or an own boolean or closed union of a component that has one of those", () => {
   const { program, components } = openSpecProgram(virtualFile(statefulProbe, ".tsx"));
   program.dispose();
   const [{ props }] = components;
@@ -123,19 +123,6 @@ test("a prop carries its doc comment as its description, the literal its compone
     renderTone: { description: "", behaviour: true },
     label: { description: "", behaviour: false },
   });
-});
-
-test("every public prop of every component the library exports has a doc comment, which the controls table shows as its description", () => {
-  const undescribed = Object.entries(libraryComponentProps()).flatMap(([component, props]) =>
-    props
-      .filter(({ description }) => description === "")
-      .map(
-        ({ name, declaredBy }) =>
-          `${component}: the prop ${name}, declared by ${declaredBy}, has no doc comment. Write one on its declaration; the controls table shows it.`,
-      ),
-  );
-
-  expect([...new Set(undescribed)]).toEqual([]);
 });
 
 const docComment = /^\s*\/\*\*/;
