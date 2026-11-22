@@ -138,7 +138,7 @@ test("the pre-paint script never holds the text that would end its <script> elem
   );
 });
 
-test("ColorSchemeScript renders one <script> with that text and nothing else in it, the nonce of the provider around it unless it is given one that is not undefined, null, empty or blank, none when it is given false, and the attributes it is given", () => {
+test("ColorSchemeScript renders one <script> with that text and nothing else in it, with its own nonce when that is a non-blank string, none when it is false, and otherwise the nonce of the provider around it, and the attributes it is given", () => {
   const options = { defaultColorScheme: "auto" as const, localStorageKey: "theme" };
   const inside = renderToString(() =>
     createComponent(library.SolixProvider, {
@@ -164,8 +164,7 @@ test("ColorSchemeScript renders one <script> with that text and nothing else in 
       },
     }),
   );
-  const nullNonce: unknown = null;
-  const withBlank = ["", " ", nullNonce as string].map((blank) =>
+  const withBlank = ["", " ", null].map((blank) =>
     renderToString(() =>
       createComponent(library.SolixProvider, {
         getStyleNonce: () => "page",

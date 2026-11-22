@@ -19,7 +19,11 @@ export type ColorSchemeScriptOptions = ColorSchemeOptions & {
 };
 
 export type ColorSchemeScriptProps = ColorSchemeScriptOptions &
-  Omit<JSX.ScriptHTMLAttributes<HTMLScriptElement>, "children" | "innerHTML" | "textContent"> & {
+  Omit<
+    JSX.ScriptHTMLAttributes<HTMLScriptElement>,
+    "children" | "innerHTML" | "nonce" | "textContent"
+  > & {
+    nonce?: string | null | false;
     children?: never;
     textContent?: never;
   };
