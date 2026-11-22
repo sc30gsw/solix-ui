@@ -27,16 +27,15 @@ export type StylesApiProps<Styles> = {
 };
 
 export type ControlledProps<V> = {
-  /** The current value, which makes the component controlled: it changes only when this does. Where its type takes `null`, `null` selects nothing. */
+  /** Giving it makes the component controlled: it changes only when this does. Where its type takes `null`, `null` selects nothing. */
   value?: V;
-  /** The value at first, while the component keeps its own. Where its type takes `null`, `null` selects nothing. */
+  /** Where its type takes `null`, `null` selects nothing. */
   defaultValue?: V;
-  /** Called when the user changes the value. */
   onChange?: (value: V) => void;
 };
 
 export type OpenedProps = {
-  /** The consumer sets it, and `onClose` says when the user closed it. */
+  /** The consumer sets it; `onClose`, the dialog's `close` event, also fires when the consumer sets it to `false`. */
   opened: boolean;
 };
 

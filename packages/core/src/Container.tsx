@@ -34,7 +34,7 @@ export type ContainerProps = ElementProps<
     size?: VariableProp<typeof containerVariables, "container-size">;
     /** With `strategy` `block`, takes the whole width of its parent, whatever `size` says; with `grid`, the middle column keeps the `md` width. */
     fluid?: boolean;
-    /** `block` centres the content with `size` as its widest; `grid` puts it in the middle column of a grid, so a child can reach the full width. */
+    /** `block` centres the content with `size` as its widest; `grid` puts each child in the middle column of a grid, and a child with `data-breakout` spans the full width. */
     strategy?: "block" | "grid";
   }
 >;

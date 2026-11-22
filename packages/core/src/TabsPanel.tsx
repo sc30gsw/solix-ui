@@ -19,7 +19,7 @@ export type TabsPanelProps = ElementProps<
   {
     /** The value of the tab that shows this panel. */
     value: string;
-    /** `true` keeps this panel's content mounted even under `<Tabs keepMounted={false}>`; `false` does not unmount what the `Tabs` keep, and the `Tabs` keep every panel by default. */
+    /** `true` keeps this panel's content mounted even when the `Tabs` do not keep panels; `false` leaves it to the `Tabs`. */
     keepMounted?: boolean;
   }
 >;

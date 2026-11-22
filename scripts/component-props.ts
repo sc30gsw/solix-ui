@@ -326,8 +326,9 @@ export function componentPropsOf(entry: string): ComponentProps {
 const resolvedLibraries = "solix:resolved-libraries";
 
 /**
- * One cache per process, kept on globalThis: the Vite config bundles this module and Storybook's
- * main.ts imports it on its own, so two instances of it read the library, and they share this.
+ * The Vite config bundles this module through `scripts/story-controls.ts`, and Storybook's
+ * `main.ts` imports that file on its own, so two instances of this module read the library and
+ * share this cache.
  */
 function sharedCache<V>(key: string): Map<string, V> {
   const symbol = Symbol.for(key);

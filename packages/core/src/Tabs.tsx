@@ -32,10 +32,9 @@ export type TabsProps = ElementProps<
   "div",
   typeof styles,
   ControlledProps<string | null> & {
-    /** The arrow keys follow the orientation. */
     orientation?: TabsOrientation;
     loop?: boolean;
-    /** Selects a tab when the arrow keys move focus to it; otherwise Enter or Space selects it. */
+    /** Selects a tab when the arrow keys, Home or End move focus to it; otherwise Enter or Space selects it. */
     activateTabWithKeyboard?: boolean;
     /** A press on the selected tab deselects it. */
     allowTabDeactivation?: boolean;

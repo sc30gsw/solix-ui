@@ -17,13 +17,13 @@ export type SolixProviderProps = ColorSchemeOptions & {
   theme?: SolixTheme;
   /** The nonce goes on every style the library adds at run time. */
   getStyleNonce?: GetStyleNonce;
+  /** The theme's custom properties go on what it selects, not on the children alone; with `withCssVariables` `false` the provider sets none. */
   cssVariablesSelector?: string;
   withCssVariables?: boolean;
   /** Uses `localStorage` unless given. */
   colorSchemeManager?: SolixColorSchemeManager;
   /** `<html>` unless given. A provider inside another that is not given it passes on the outer provider's scheme, and throws if it is given `colorSchemeManager`, `defaultColorScheme` or `forceColorScheme`. */
   getRootElement?: () => HTMLElement | undefined;
-  /** The theme reaches whatever `cssVariablesSelector` selects, not only the children. */
   children?: JSX.Element;
 };
 

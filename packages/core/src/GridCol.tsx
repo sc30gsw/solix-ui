@@ -37,7 +37,7 @@ export type GridColProps = ElementProps<
   "div",
   typeof styles,
   {
-    /** `auto` takes the space the others leave, and `content` its content's width. */
+    /** `auto` takes the space the others leave, and `content` its content's width; under a `Grid` with `grow`, every column grows to fill the row. */
     span?: StyleProp<Span>;
     order?: VariableProp<typeof gridColVariables, "col-order", number>;
     /** How many of the grid's columns to leave empty before it. */
