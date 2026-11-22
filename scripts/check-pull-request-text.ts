@@ -5,7 +5,6 @@ import { parseArgs } from "node:util";
 import { tmpdir } from "node:os";
 import { changedLinesOf, commitsBetween, filesOf, gitRun } from "#/scripts/git.ts";
 import {
-  isSkillConfirmationFile,
   type PullRequestChanges,
   type PullRequestText,
   problemsOf,
@@ -84,8 +83,10 @@ function readFile(file: string, baseBranch: string): Reading {
 
 type ChangesReading = { changes: PullRequestChanges } | { cannotRead: string };
 
-function cannotRead(why: string): ChangesReading {
-  return { cannotRead: `${why}, so the changes cannot be read.` };
+function cannotRead(why: string, remedy?: string): ChangesReading {
+  return {
+    cannotRead: `${why}, so the changes cannot be read.${remedy === undefined ? "" : ` ${remedy}`}`,
+  };
 }
 
 function changesOf({ baseBranch, head }: PullRequest): ChangesReading {
@@ -95,7 +96,8 @@ function changesOf({ baseBranch, head }: PullRequest): ChangesReading {
   const base = commitOf(remote);
   if (base === undefined) {
     return cannotRead(
-      `The base branch "${baseBranch}" has no ${remote} in this clone. Fetch it, or check out the whole history with fetch-depth: 0. Until then`,
+      `The base branch "${baseBranch}" has no ${remote} in this clone`,
+      "Fetch it, or check out the whole history with fetch-depth: 0.",
     );
   }
   const diff = gitRun(["diff", "--name-only", "--no-renames", "-z", `${base}...${head}`]);
@@ -104,12 +106,7 @@ function changesOf({ baseBranch, head }: PullRequest): ChangesReading {
     sha,
     parents,
     files,
-    skillEdits:
-      parents.length > 1
-        ? []
-        : files
-            .filter(isSkillConfirmationFile)
-            .map((file) => ({ file, ...changedLinesOf(sha, file) })),
+    linesOf: (file: string) => changedLinesOf(sha, file),
   }));
   return { changes: { files: filesOf(diff.stdout), commits } };
 }

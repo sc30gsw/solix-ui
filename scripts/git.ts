@@ -33,8 +33,9 @@ export function changedLinesOf(sha: string, file: string): ChangedLines {
     "--",
     file,
   ]).split("\n");
-  const body = patch.slice(patch.findIndex((line) => line.startsWith("@@")));
-  const content = body.filter((line) => !line.startsWith("@@"));
+  const firstHunk = patch.findIndex((line) => line.startsWith("@@"));
+  if (firstHunk === -1) return { removed: [], added: [] };
+  const content = patch.slice(firstHunk).filter((line) => !line.startsWith("@@"));
   return {
     removed: content.filter((line) => line.startsWith("-")).map((line) => line.slice(1)),
     added: content.filter((line) => line.startsWith("+")).map((line) => line.slice(1)),
@@ -51,18 +52,29 @@ export function commitsBetween(base: string, head: string): GitCommit[] {
       );
       const parents = parentList.split(" ").filter((parent) => parent.length > 0);
       const files = filesOf(
-        parents.length > 1
-          ? git(["show", "--remerge-diff", "--format=", "--name-only", "--no-renames", "-z", sha])
-          : git([
-              "diff-tree",
-              "-r",
-              "--root",
-              "--no-commit-id",
-              "--name-only",
-              "--no-renames",
-              "-z",
-              sha,
-            ]),
+        parents.length > 2
+          ? git(["diff-tree", "--cc", "--no-commit-id", "--name-only", "--no-renames", "-z", sha])
+          : parents.length === 2
+            ? git([
+                "show",
+                "--no-show-signature",
+                "--remerge-diff",
+                "--format=",
+                "--name-only",
+                "--no-renames",
+                "-z",
+                sha,
+              ])
+            : git([
+                "diff-tree",
+                "-r",
+                "--root",
+                "--no-commit-id",
+                "--name-only",
+                "--no-renames",
+                "-z",
+                sha,
+              ]),
       );
       return { sha, subject, parents, files };
     });

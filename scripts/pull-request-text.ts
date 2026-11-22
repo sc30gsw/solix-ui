@@ -4,12 +4,12 @@ import { verificationSkillPrefix } from "#/scripts/verification-skills.ts";
 import { type FencedBlock, type Markdown, parseMarkdown } from "#/scripts/markdown.ts";
 
 export type PullRequestText = { title: string; body: string };
-export type LineEdit = { file: string; removed: readonly string[]; added: readonly string[] };
+export type ChangedLines = { removed: readonly string[]; added: readonly string[] };
 export type PullRequestCommit = {
   sha: string;
   parents: readonly string[];
   files: readonly string[];
-  skillEdits: readonly LineEdit[];
+  linesOf: (file: string) => ChangedLines;
 };
 export type PullRequestChanges = {
   files: readonly string[];
@@ -142,7 +142,7 @@ export function isSkillConfirmationFile(file: string): boolean {
   return matchesGlob(file, filesAfterReview);
 }
 
-function onlyMovesItsConfirmation({ removed, added }: LineEdit): boolean {
+function onlyMovesItsConfirmation({ removed, added }: ChangedLines): boolean {
   const same = (line: string) => line.replace(confirmedCommits, "$1<commit>");
   return (
     removed.length > 0 &&
@@ -156,11 +156,10 @@ function onlyMovesItsConfirmation({ removed, added }: LineEdit): boolean {
   );
 }
 
-function unreviewedFilesOf({ parents, files, skillEdits }: PullRequestCommit): string[] {
+function unreviewedFilesOf({ parents, files, linesOf }: PullRequestCommit): string[] {
   return files.filter((file) => {
     if (parents.length > 1 || !isSkillConfirmationFile(file)) return true;
-    const edit = skillEdits.find((each) => each.file === file);
-    return edit === undefined || !onlyMovesItsConfirmation(edit);
+    return !onlyMovesItsConfirmation(linesOf(file));
   });
 }
 

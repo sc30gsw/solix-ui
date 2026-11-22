@@ -10,7 +10,6 @@ import {
   footer,
   lineLimit,
   type PullRequestChanges,
-  type LineEdit,
   type PullRequestCommit,
   problemsOf,
   reviewLines,
@@ -54,7 +53,10 @@ function shaOf(prefix: string): string {
   return prefix.padEnd(40, "0");
 }
 
-type After = readonly string[] | { merge: readonly string[] } | LineEdit;
+type Edit = { file: string; removed: readonly string[]; added: readonly string[] };
+type After = readonly string[] | { merge: readonly string[] } | Edit;
+
+const noLines = () => ({ removed: [], added: [] });
 
 function changesOf(
   files: readonly string[],
@@ -62,17 +64,17 @@ function changesOf(
   extra: readonly PullRequestCommit[] = [],
 ): PullRequestChanges {
   const commits: PullRequestCommit[] = [
-    { sha: shaOf(reviewed), parents: [shaOf("b")], files: [...files], skillEdits: [] },
+    { sha: shaOf(reviewed), parents: [shaOf("b")], files: [...files], linesOf: noLines },
   ];
   for (const [index, changed] of after.entries()) {
     const sha = shaOf(`a${index}`);
     const parent = commits.at(-1)?.sha ?? "";
     if ("merge" in changed) {
-      commits.push({ sha, parents: [parent, shaOf("c")], files: changed.merge, skillEdits: [] });
+      commits.push({ sha, parents: [parent, shaOf("c")], files: changed.merge, linesOf: noLines });
     } else if ("file" in changed) {
-      commits.push({ sha, parents: [parent], files: [changed.file], skillEdits: [changed] });
+      commits.push({ sha, parents: [parent], files: [changed.file], linesOf: () => changed });
     } else {
-      commits.push({ sha, parents: [parent], files: [...changed], skillEdits: [] });
+      commits.push({ sha, parents: [parent], files: [...changed], linesOf: noLines });
     }
   }
   const touched = after.flatMap((each) =>
@@ -295,7 +297,7 @@ describe("the text of a pull request", () => {
         sha: shaOf(prefix),
         parents: [shaOf("b")],
         files: [],
-        skillEdits: [],
+        linesOf: noLines,
       })),
     );
 
@@ -586,6 +588,34 @@ describe("the text check", () => {
           git("rev-parse", "HEAD"),
         ).stderr,
       ).toContain("own commits after it change .agents/skills/verify-tabs/SKILL.md");
+    });
+  });
+
+  test("counts what an octopus merge after the review resolves on its own, and reads a merge's files the same with signatures shown", async () => {
+    await inScratchPullRequest(({ root, git, head, commit, check }) => {
+      const body = bodyWith(minimal, undefined, head);
+      for (const branch of ["one", "two"]) {
+        git("switch", "--quiet", "--create", branch, head);
+        commit(`src/${branch}.ts`);
+      }
+      git("switch", "--quiet", "topic");
+      git("merge", "--quiet", "--no-ff", "--no-commit", "one", "two");
+      writeFileSync(join(root, "src/a.ts"), "unreviewed in the octopus\n");
+      git("add", "--all");
+      git("commit", "--quiet", "--message=octopus");
+      expect(check({ title, body }, git("rev-parse", "HEAD")).stderr).toContain(
+        "own commits after it change src/a.ts",
+      );
+
+      git("reset", "--quiet", "--hard", head);
+      git("config", "log.showSignature", "true");
+      git("merge", "--quiet", "--no-ff", "--no-commit", "one");
+      writeFileSync(join(root, "src/a.ts"), "unreviewed in the merge\n");
+      git("add", "--all");
+      git("commit", "--quiet", "--message=merge one");
+      const signed = check({ title, body }, git("rev-parse", "HEAD")).stderr;
+      expect(signed).toContain("own commits after it change src/a.ts, src/one.ts");
+      expect(signed).not.toContain("signature");
     });
   });
 
