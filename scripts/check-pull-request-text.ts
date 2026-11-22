@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { tmpdir } from "node:os";
-import { changedLinesOf, commitsBetween, filesOf, gitRun } from "#/scripts/git.ts";
+import { changedLinesOf, commitsBetween, gitRun, pathsIn } from "#/scripts/git.ts";
 import {
   type PullRequestChanges,
   type PullRequestText,
@@ -108,7 +108,7 @@ function changesOf({ baseBranch, head }: PullRequest): ChangesReading {
     files,
     linesOf: (file: string) => changedLinesOf(sha, file),
   }));
-  return { changes: { files: filesOf(diff.stdout), commits } };
+  return { changes: { files: pathsIn(diff.stdout), commits } };
 }
 
 function privateTermProblems({ title, body, source }: PullRequest): string[] {

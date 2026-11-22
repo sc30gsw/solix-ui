@@ -1,12 +1,16 @@
 import { spawnSync } from "node:child_process";
 
 export type GitCommit = { sha: string; subject: string; parents: string[]; files: string[] };
-export type ChangedLines = { removed: string[]; added: string[] };
+export type ChangedLines = { removed: readonly string[]; added: readonly string[] };
 
 const nulByte = "\0";
+const signaturesHidden = ["-c", "log.showSignature=false"];
 
 export function gitRun(args: readonly string[]): { status: number | null; stdout: string } {
-  const run = spawnSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  const run = spawnSync("git", [...signaturesHidden, ...args], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  });
   return { status: run.status, stdout: run.stdout };
 }
 
@@ -16,7 +20,7 @@ export function git(args: readonly string[]): string {
   return run.stdout;
 }
 
-export function filesOf(output: string): string[] {
+export function pathsIn(output: string): string[] {
   return output.split(nulByte).filter((path) => path.length > 0);
 }
 
@@ -42,6 +46,16 @@ export function changedLinesOf(sha: string, file: string): ChangedLines {
   };
 }
 
+function viewOf(parents: readonly string[]): string[] {
+  if (parents.length > 2) return ["diff-tree", "--cc", "-r", "--no-commit-id"];
+  if (parents.length === 2) return ["show", "--remerge-diff", "--format="];
+  return ["diff-tree", "-r", "--root", "--no-commit-id"];
+}
+
+function filesOf(sha: string, parents: readonly string[]): string[] {
+  return pathsIn(git([...viewOf(parents), "--name-only", "--no-renames", "-z", sha]));
+}
+
 export function commitsBetween(base: string, head: string): GitCommit[] {
   return git(["rev-list", `${base}..${head}`])
     .split("\n")
@@ -51,31 +65,6 @@ export function commitsBetween(base: string, head: string): GitCommit[] {
         "\n",
       );
       const parents = parentList.split(" ").filter((parent) => parent.length > 0);
-      const files = filesOf(
-        parents.length > 2
-          ? git(["diff-tree", "--cc", "--no-commit-id", "--name-only", "--no-renames", "-z", sha])
-          : parents.length === 2
-            ? git([
-                "show",
-                "--no-show-signature",
-                "--remerge-diff",
-                "--format=",
-                "--name-only",
-                "--no-renames",
-                "-z",
-                sha,
-              ])
-            : git([
-                "diff-tree",
-                "-r",
-                "--root",
-                "--no-commit-id",
-                "--name-only",
-                "--no-renames",
-                "-z",
-                sha,
-              ]),
-      );
-      return { sha, subject, parents, files };
+      return { sha, subject, parents, files: filesOf(sha, parents) };
     });
 }

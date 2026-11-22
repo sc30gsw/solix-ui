@@ -3,6 +3,7 @@ import { readFileSync, renameSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, matchesGlob } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { fixesWithoutATest, verificationFiles } from "#/scripts/fixes-carry-tests.ts";
+import type { ChangedLines } from "#/scripts/git.ts";
 import { parseMarkdown } from "#/scripts/markdown.ts";
 import {
   chartLineCap,
@@ -22,6 +23,7 @@ import { repositoryRoot } from "#/tests/support/workspace.ts";
 const workflowFile = ".github/workflows/pull-request.yml";
 const textCheck = join(repositoryRoot, "scripts/check-pull-request-text.ts");
 const fixCheck = join(repositoryRoot, "scripts/check-fixes-carry-tests.ts");
+const gitModule = join(repositoryRoot, "scripts/git.ts");
 const session = "https://claude.ai/code/session_01AbCdEf";
 const title = "ci: check the text of every pull request";
 const fakeTerm = "zorblax";
@@ -53,7 +55,7 @@ function shaOf(prefix: string): string {
   return prefix.padEnd(40, "0");
 }
 
-type Edit = { file: string; removed: readonly string[]; added: readonly string[] };
+type Edit = { file: string } & ChangedLines;
 type After = readonly string[] | { merge: readonly string[] } | Edit;
 
 const noLines = () => ({ removed: [], added: [] });
@@ -591,7 +593,7 @@ describe("the text check", () => {
     });
   });
 
-  test("counts what an octopus merge after the review resolves on its own, and reads a merge's files the same with signatures shown", async () => {
+  test("counts what an octopus merge after the review resolves on its own", async () => {
     await inScratchPullRequest(({ root, git, head, commit, check }) => {
       const body = bodyWith(minimal, undefined, head);
       for (const branch of ["one", "two"]) {
@@ -606,16 +608,59 @@ describe("the text check", () => {
       expect(check({ title, body }, git("rev-parse", "HEAD")).stderr).toContain(
         "own commits after it change src/a.ts",
       );
+    });
+  });
 
-      git("reset", "--quiet", "--hard", head);
-      git("config", "log.showSignature", "true");
-      git("merge", "--quiet", "--no-ff", "--no-commit", "one");
-      writeFileSync(join(root, "src/a.ts"), "unreviewed in the merge\n");
+  test("reads a signed commit's subject, parents and files the same when the user's git shows signatures", async () => {
+    await inScratchPullRequest(({ root, git, base, head, check }) => {
+      writeFileSync(join(root, "src/a.ts"), "changed in a signed commit\n");
       git("add", "--all");
-      git("commit", "--quiet", "--message=merge one");
-      const signed = check({ title, body }, git("rev-parse", "HEAD")).stderr;
-      expect(signed).toContain("own commits after it change src/a.ts, src/one.ts");
-      expect(signed).not.toContain("signature");
+      const commitObject = [
+        `tree ${git("write-tree")}`,
+        `parent ${head}`,
+        "author Test <test@example.com> 1700000000 +0000",
+        "committer Test <test@example.com> 1700000000 +0000",
+        "gpgsig -----BEGIN SSH SIGNATURE-----",
+        " U1NIU0lH",
+        " -----END SSH SIGNATURE-----",
+        "",
+        "fix: a signed change",
+        "",
+      ].join("\n");
+      const objectFile = join(root, ".git", "signed-commit.txt");
+      writeFileSync(objectFile, commitObject);
+      const signed = git("hash-object", "-t", "commit", "-w", objectFile);
+      git("update-ref", "refs/heads/topic", signed);
+      git("reset", "--quiet", "--hard");
+      git("config", "log.showSignature", "true");
+      git("config", "gpg.format", "ssh");
+      const read = spawnSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "--eval",
+          "const { commitsBetween } = await import(process.argv[1]); console.log(JSON.stringify(commitsBetween(process.argv[2], process.argv[3])));",
+          gitModule,
+          head,
+          signed,
+        ],
+        { cwd: root, encoding: "utf8" },
+      );
+
+      expect(JSON.parse(read.stdout)).toEqual([
+        { sha: signed, subject: "fix: a signed change", parents: [head], files: ["src/a.ts"] },
+      ]);
+      expect(check({ title, body: bodyWith(minimal, undefined, head) }, signed).stderr).toContain(
+        "own commits after it change src/a.ts",
+      );
+      const fixes = spawnSync(process.execPath, [fixCheck, base, signed], {
+        cwd: root,
+        encoding: "utf8",
+      });
+      expect([fixes.status, fixes.stderr]).toEqual([
+        1,
+        expect.stringContaining('"fix: a signed change" is a fix that changes no file'),
+      ]);
     });
   });
 
