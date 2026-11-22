@@ -1,10 +1,20 @@
 import { matchesGlob } from "node:path";
-import { isFormalVerificationFile, isModelFile } from "#/scripts/formal-verification.ts";
+import {
+  isFormalVerificationFile,
+  isModelFile,
+  verificationSkillPrefix,
+} from "#/scripts/formal-verification.ts";
+import { type FencedBlock, type Markdown, parseMarkdown } from "#/scripts/markdown.ts";
 
 export type PullRequestText = { title: string; body: string };
+export type PullRequestCommit = {
+  sha: string;
+  parents: readonly string[];
+  files: readonly string[];
+};
 export type PullRequestChanges = {
   files: readonly string[];
-  changedSince: (commit: string) => readonly string[] | undefined;
+  commits: readonly PullRequestCommit[];
 };
 
 export const sectionOrder = [
@@ -17,22 +27,24 @@ export const sectionOrder = [
 ] as const;
 export const requiredSections = ["Scope", "Verification"] as const;
 export const lineLimit = 40;
+export const chartLineCap = 60;
 export const reviewLines = {
   "comment-sicko": "- comment-sicko: clean at ",
   Thermos: "- Thermos: no Medium or higher at ",
 } as const;
-export const filesAfterReview = ".agents/skills/verify-*/SKILL.md";
+export const filesAfterReview = `.agents/skills/${verificationSkillPrefix}*/SKILL.md`;
 export const footer = "🤖 Generated with [Claude Code](https://claude.com/claude-code)";
+
+type SectionName = (typeof sectionOrder)[number];
 
 const conventionalTitle =
   /^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^()\s][^()]*\))?!?: \S/;
 const sessionUrl = /^https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+$/;
-const secondLevelHeading = /^## (.*?)\s*$/gm;
-const fence = /^\s*(```|~~~)/;
-const mermaidFence = /^\s*```mermaid\s*$/;
-const commitAtStart = /^([0-9a-f]{7,40})\b/;
+const writtenCommit = /^(`?)([0-9a-fA-F]{7,40})\1(?![0-9a-fA-F])/;
+const diagramType =
+  /^\s*(stateDiagram(-v2)?|flowchart|graph|sequenceDiagram|classDiagram|erDiagram|journey|gantt|pie|mindmap|timeline)\b/;
 
-function knownSection(heading: string): heading is (typeof sectionOrder)[number] {
+function knownSection(heading: string): heading is SectionName {
   return sectionOrder.some((section) => section === heading);
 }
 
@@ -44,24 +56,8 @@ function titleProblems(title: string): string[] {
       ];
 }
 
-function linesOutside(body: string, dropped: (opening: string) => boolean): string[] {
-  let opening: string | undefined;
-  return body.split("\n").filter((line) => {
-    const fenceLine = fence.test(line);
-    const inside = opening ?? (fenceLine ? line : undefined);
-    if (fenceLine) opening = opening === undefined ? line : undefined;
-    return inside === undefined || !dropped(inside);
-  });
-}
-
-function outsideFencedCode(body: string): string {
-  return linesOutside(body, () => true).join("\n");
-}
-
-function sectionProblems(body: string): string[] {
-  const headings = [...outsideFencedCode(body).matchAll(secondLevelHeading)].map(
-    ([, heading]) => heading,
-  );
+function sectionProblems({ sections }: Markdown): string[] {
+  const headings = sections.map(({ heading }) => heading);
   const unknown = headings
     .filter((heading) => !knownSection(heading))
     .map(
@@ -84,73 +80,108 @@ function sectionProblems(body: string): string[] {
   return [...missing, ...unknown, ...repeated, ...outOfOrder];
 }
 
-function lengthProblems(body: string): string[] {
-  const counted = linesOutside(body.trimEnd(), (opening) => mermaidFence.test(opening)).length;
+function isChart({ info, lines, closed }: FencedBlock): boolean {
+  return closed && info === "mermaid" && diagramType.test(lines[0] ?? "");
+}
+
+function lengthProblems({ blocks, lines }: Markdown): string[] {
+  const uncounted = blocks
+    .filter(isChart)
+    .reduce((sum, block) => sum + Math.min(block.lines.length + 2, chartLineCap), 0);
+  const counted = lines.length - uncounted;
   return counted < lineLimit
     ? []
     : [
-        `The body has ${counted} lines outside its mermaid charts. Keep it a one-minute briefing under ${lineLimit} lines, and keep the history of each review round in the coordinator's private notes.`,
+        `The body has ${counted} lines, not counting up to ${chartLineCap} lines of each mermaid chart. Keep it a one-minute briefing under ${lineLimit} lines, and keep the history of each review round in the coordinator's private notes.`,
       ];
 }
 
-function sectionText(body: string, section: string): string[] {
-  const lines = outsideFencedCode(body).split("\n");
-  const start = lines.indexOf(`## ${section}`);
-  if (start === -1) return [];
-  const end = lines.findIndex((line, index) => index > start && line.startsWith("## "));
-  return lines.slice(start + 1, end === -1 ? undefined : end);
+function verificationOf({ sections }: Markdown) {
+  return sections.find(({ heading }) => heading === "Verification");
 }
 
-function reviewProblems(body: string, changes: PullRequestChanges | undefined): string[] {
-  const verification = sectionText(body, "Verification");
+function reachableFrom(sha: string, commits: readonly PullRequestCommit[]): Set<string> {
+  const parentsOf = new Map(commits.map((commit) => [commit.sha, commit.parents]));
+  const reached = new Set<string>();
+  const pending = [sha];
+  for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
+    if (reached.has(next)) continue;
+    reached.add(next);
+    pending.push(...(parentsOf.get(next) ?? []));
+  }
+  return reached;
+}
+
+function changedAfter(sha: string, { files, commits }: PullRequestChanges): string[] {
+  const before = reachableFrom(sha, commits);
+  const changed = commits
+    .filter((commit) => !before.has(commit.sha) && commit.parents.length < 2)
+    .flatMap((commit) => commit.files)
+    .filter((file) => files.includes(file) && !matchesGlob(file, filesAfterReview));
+  return [...new Set(changed)];
+}
+
+function reviewProblems(markdown: Markdown, changes: PullRequestChanges): string[] {
+  const prose = verificationOf(markdown)?.prose ?? [];
   return Object.entries(reviewLines).flatMap(([review, prefix]) => {
-    const line = verification.find((each) => each.startsWith(prefix));
-    const commit = commitAtStart.exec(line?.slice(prefix.length) ?? "")?.[1];
-    if (commit === undefined) {
+    const line = prose.find((each) => each.startsWith(prefix));
+    if (line === undefined) {
       return [
-        `## Verification has no line "${prefix}<commit>". Run ${review} until it passes, then name the commit it reviewed.`,
+        `## Verification has no line that starts "${prefix}". Run ${review} until it passes, then write that line with the commit it reviewed.`,
       ];
     }
-    if (changes === undefined) return [];
-    const after = changes.changedSince(commit);
-    if (after === undefined) {
+    const rest = line.slice(prefix.length);
+    const written = writtenCommit.exec(rest)?.[2];
+    if (written === undefined) {
       return [
-        `The ${review} line names ${commit}, which is not a commit of this pull request. Name the commit it reviewed.`,
+        `The ${review} line gives "${rest.split(/\s/)[0]}" where it needs the hash of the commit it reviewed, 7 to 40 hexadecimal digits.`,
       ];
     }
-    const unreviewed = after.filter((file) => !matchesGlob(file, filesAfterReview));
-    return unreviewed.length === 0
+    const matches = changes.commits.filter(({ sha }) => sha.startsWith(written.toLowerCase()));
+    if (matches.length === 0) {
+      return [
+        `The ${review} line names ${written}, which is not a commit of this pull request. Name the commit it reviewed.`,
+      ];
+    }
+    if (matches.length > 1) {
+      return [
+        `The ${review} line names ${written}, which is the start of ${matches.length} commits of this pull request. Write more of its hash.`,
+      ];
+    }
+    const after = changedAfter(matches[0].sha, changes);
+    return after.length === 0
       ? []
       : [
-          `The ${review} line names ${commit}, but the pull request changes ${unreviewed.join(", ")} after it. Run ${review} again on the new commits and name the last one.`,
+          `The ${review} line names ${written}, but the pull request's own commits after it change ${after.join(", ")}. Run ${review} again on those commits and name the last one.`,
         ];
   });
 }
 
-function chartProblems(body: string, changes: PullRequestChanges | undefined): string[] {
-  const formal = (changes?.files ?? []).filter(isFormalVerificationFile);
+function chartProblems(markdown: Markdown, { files }: PullRequestChanges): string[] {
+  const formal = files.filter(isFormalVerificationFile);
   if (formal.length === 0) return [];
-  const charted = body.split("\n").some((line) => mermaidFence.test(line));
-  const unnamed = formal.filter(isModelFile).filter((file) => !body.includes(`\`${file}\``));
+  const verification = verificationOf(markdown);
+  const prose = verification?.prose.join("\n") ?? "";
   return [
-    ...(charted
+    ...(verification?.blocks.some(isChart) === true
       ? []
       : [
-          `The pull request changes ${formal.join(", ")} but its body has no \`\`\`mermaid chart. Check each model with pstack statechart and put its chart in ## Verification.`,
+          `The pull request changes ${formal.join(", ")}, but ## Verification has no mermaid chart. Check each model and put its chart there, as step 6 of open-pull-request says.`,
         ]),
-    ...unnamed.map(
-      (file) =>
-        `The pull request changes the model ${file} but its body does not name it. Name it in backticks beside its chart.`,
-    ),
+    ...formal
+      .filter((file) => isModelFile(file) && !prose.includes(`\`${file}\``))
+      .map(
+        (file) =>
+          `The pull request changes the model ${file}, but ## Verification does not name it in backticks beside its chart.`,
+      ),
   ];
 }
 
-function footerProblems(body: string): string[] {
-  const lines = body
-    .trimEnd()
-    .split("\n")
-    .filter((line) => line.trim() !== "");
-  const [beforeLast, last] = lines.slice(-2).map((line) => line.trim());
+function footerProblems({ lines }: Markdown): string[] {
+  const [beforeLast, last] = lines
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+    .slice(-2);
   return beforeLast === footer && sessionUrl.test(last ?? "")
     ? []
     : [
@@ -160,15 +191,15 @@ function footerProblems(body: string): string[] {
 
 export function problemsOf(
   { title, body }: PullRequestText,
-  changes?: PullRequestChanges,
+  changes: PullRequestChanges,
 ): string[] {
-  const text = body.replaceAll("\r\n", "\n");
+  const markdown = parseMarkdown(body.trimEnd());
   return [
     ...titleProblems(title.trim()),
-    ...sectionProblems(text),
-    ...lengthProblems(text),
-    ...reviewProblems(text, changes),
-    ...chartProblems(text, changes),
-    ...footerProblems(text),
+    ...sectionProblems(markdown),
+    ...lengthProblems(markdown),
+    ...reviewProblems(markdown, changes),
+    ...chartProblems(markdown, changes),
+    ...footerProblems(markdown),
   ];
 }

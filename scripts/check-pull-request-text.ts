@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { parseArgs } from "node:util";
+import { commitsBetween, filesOf, gitRun } from "#/scripts/git.ts";
 import {
   type PullRequestChanges,
   type PullRequestText,
@@ -11,103 +13,95 @@ import {
 const privateTermsCheck = join(import.meta.dirname, "check-private-terms.mjs");
 const privateTermsVariable = "SOLIX_PRIVATE_TERMS";
 const usage =
-  "usage: check-pull-request-text.ts <pull_request event JSON file>\n       check-pull-request-text.ts --file <title on line 1, body from line 3> --base <commit>";
+  "usage: check-pull-request-text.ts <pull_request event JSON file>\n       check-pull-request-text.ts --file <title on line 1, a blank line 2, the body from line 3> --base <base branch>";
 
-type Event = PullRequestText & {
+type PullRequest = PullRequestText & {
+  local: boolean;
   fromFork: boolean;
-  draft: boolean;
-  base: string | undefined;
-  head: string | undefined;
+  baseBranch: string;
+  head: string;
+  layout: string[];
 };
 
-function git(args: readonly string[]): { status: number | null; stdout: string } {
-  return spawnSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+function fieldAt(value: unknown, ...path: string[]): unknown {
+  return path.reduce<unknown>(
+    (at, key) => (typeof at === "object" && at !== null ? Reflect.get(at, key) : undefined),
+    value,
+  );
 }
 
-function filesOf(output: string): string[] {
-  return output.split("\0").filter((path) => path.length > 0);
+function text(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
-function isAncestor(commit: string, of: string): boolean {
-  return git(["merge-base", "--is-ancestor", commit, of]).status === 0;
-}
-
-function changesBetween(base: string, head: string): PullRequestChanges | string {
-  const diff = git(["diff", "--name-only", "-z", `${base}...${head}`]);
-  if (diff.status !== 0) {
-    return `git cannot compare ${base} with ${head}. Check out the whole history, with fetch-depth: 0.`;
-  }
-  return {
-    files: filesOf(diff.stdout),
-    changedSince: (given) => {
-      const commit = git(["rev-parse", "--verify", "--quiet", `${given}^{commit}`]).stdout.trim();
-      if (commit === "" || !isAncestor(commit, head) || isAncestor(commit, base)) return undefined;
-      return filesOf(git(["diff", "--name-only", "-z", commit, head]).stdout);
-    },
-  };
-}
-
-function shaOf(pullRequest: object, side: "head" | "base"): string | undefined {
-  const branch: unknown = Reflect.get(pullRequest, side);
-  const sha: unknown =
-    typeof branch === "object" && branch !== null ? Reflect.get(branch, "sha") : undefined;
-  return typeof sha === "string" ? sha : undefined;
-}
-
-function repositoryOf(pullRequest: object, side: "head" | "base"): unknown {
-  const branch: unknown = Reflect.get(pullRequest, side);
-  const repository: unknown =
-    typeof branch === "object" && branch !== null ? Reflect.get(branch, "repo") : undefined;
-  return typeof repository === "object" && repository !== null
-    ? Reflect.get(repository, "full_name")
-    : undefined;
-}
-
-function pullRequestIn(eventFile: string): Event {
-  const event: unknown = JSON.parse(readFileSync(eventFile, "utf8"));
-  const pullRequest: unknown =
-    typeof event === "object" && event !== null ? Reflect.get(event, "pull_request") : undefined;
+function pullRequestIn(eventFile: string): PullRequest {
+  const pullRequest = fieldAt(JSON.parse(readFileSync(eventFile, "utf8")), "pull_request");
   if (typeof pullRequest !== "object" || pullRequest === null) {
     throw new Error(
       `${eventFile}: the event holds no pull_request. Run this on a pull_request event.`,
     );
   }
-  const title: unknown = Reflect.get(pullRequest, "title");
-  const body: unknown = Reflect.get(pullRequest, "body");
   return {
-    title: typeof title === "string" ? title : "",
-    body: typeof body === "string" ? body : "",
-    fromFork: repositoryOf(pullRequest, "head") !== repositoryOf(pullRequest, "base"),
-    draft: Reflect.get(pullRequest, "draft") === true,
-    base: shaOf(pullRequest, "base"),
-    head: shaOf(pullRequest, "head"),
+    title: text(fieldAt(pullRequest, "title")),
+    body: text(fieldAt(pullRequest, "body")),
+    local: false,
+    fromFork:
+      fieldAt(pullRequest, "head", "repo", "full_name") !==
+      fieldAt(pullRequest, "base", "repo", "full_name"),
+    baseBranch: text(fieldAt(pullRequest, "base", "ref")),
+    head: text(fieldAt(pullRequest, "head", "sha")),
+    layout: [],
   };
 }
 
-function pullRequestInFile(file: string, base: string): Event {
-  const [title = "", , ...body] = readFileSync(file, "utf8").split("\n");
-  return { title, body: body.join("\n"), fromFork: false, draft: false, base, head: "HEAD" };
+function pullRequestInFile(file: string, baseBranch: string): PullRequest {
+  const [title = "", second = "", ...body] = readFileSync(file, "utf8").split("\n");
+  return {
+    title,
+    body: body.join("\n"),
+    local: true,
+    fromFork: false,
+    baseBranch,
+    head: "HEAD",
+    layout:
+      second.trim() === ""
+        ? []
+        : [
+            `${file}: line 2 is "${second}". Leave it blank, with the title on line 1 and the body from line 3.`,
+          ],
+  };
 }
 
-function textProblems(pullRequest: Event): string[] {
-  if (pullRequest.draft) {
-    console.log(
-      "The pull request is a draft, so only its private terms are checked. The rest is checked when it is marked ready for review.",
-    );
-    return [];
-  }
-  if (pullRequest.base === undefined || pullRequest.head === undefined) {
-    return ["The event names no base or head commit, so the changed files cannot be read."];
-  }
-  const changes = changesBetween(pullRequest.base, pullRequest.head);
-  return typeof changes === "string" ? [changes] : problemsOf(pullRequest, changes);
+function baseTip(branch: string): string | undefined {
+  return [`refs/remotes/origin/${branch}`, `refs/heads/${branch}`, branch]
+    .map((ref) => gitRun(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]).stdout.trim())
+    .find((sha) => sha !== "");
 }
 
-function privateTermProblems({ title, body, fromFork }: Event): string[] {
+function changesOf({ baseBranch, head }: PullRequest): PullRequestChanges | string {
+  if (head === "") return "The event names no head commit, so the changed files cannot be read.";
+  const base = baseTip(baseBranch);
+  if (base === undefined) {
+    return `The base branch "${baseBranch}" is not in this clone. Check out the whole history, with fetch-depth: 0.`;
+  }
+  const diff = gitRun(["diff", "--name-only", "--no-renames", "-z", `${base}...${head}`]);
+  if (diff.status !== 0) return `git cannot compare ${baseBranch} with ${head}.`;
+  return { files: filesOf(diff.stdout), commits: commitsBetween(base, head) };
+}
+
+function textProblems(pullRequest: PullRequest): string[] {
+  const changes = changesOf(pullRequest);
+  return [
+    ...pullRequest.layout,
+    ...(typeof changes === "string" ? [changes] : problemsOf(pullRequest, changes)),
+  ];
+}
+
+function privateTermProblems({ title, body, fromFork, local }: PullRequest): string[] {
   if ((process.env[privateTermsVariable] ?? "").trim() === "") {
-    if (fromFork) {
+    if (fromFork || local) {
       console.log(
-        `The private terms were not checked: GitHub gives ${privateTermsVariable} to no pull request from a fork. Check the title and the body before merging.`,
+        `The private terms were not checked: ${privateTermsVariable} is not set${fromFork ? ", and GitHub gives it to no pull request from a fork" : ""}. Check the title and the body before merging.`,
       );
       return [];
     }
@@ -132,17 +126,27 @@ function privateTermProblems({ title, body, fromFork }: Event): string[] {
   }
 }
 
-const [first, ...rest] = process.argv.slice(2);
-const fileMode = first === "--file" && rest.length === 3 && rest[1] === "--base";
-if (
-  first === undefined ||
-  (first.startsWith("--") && !fileMode) ||
-  (!fileMode && rest.length > 0)
-) {
+function pullRequestFromArguments(): PullRequest | undefined {
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    strict: false,
+    options: { file: { type: "string" }, base: { type: "string" } },
+  });
+  const { file, base, ...unknown } = values;
+  if (Object.keys(unknown).length > 0) return undefined;
+  if (typeof file === "string" && typeof base === "string" && positionals.length === 0) {
+    return pullRequestInFile(file, base);
+  }
+  return file === undefined && base === undefined && positionals.length === 1
+    ? pullRequestIn(positionals[0])
+    : undefined;
+}
+
+const pullRequest = pullRequestFromArguments();
+if (pullRequest === undefined) {
   console.error(usage);
   process.exit(2);
 }
-const pullRequest = fileMode ? pullRequestInFile(rest[0], rest[2]) : pullRequestIn(first);
 const problems = [...textProblems(pullRequest), ...privateTermProblems(pullRequest)];
 for (const problem of problems) console.error(problem);
 process.exit(problems.length === 0 ? 0 : 1);

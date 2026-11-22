@@ -1,12 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { join, matchesGlob } from "node:path";
+import { readFileSync, renameSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join, matchesGlob } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
 import { fixesWithoutATest, verificationFiles } from "#/scripts/fixes-carry-tests.ts";
+import { parseMarkdown } from "#/scripts/markdown.ts";
 import {
+  chartLineCap,
   footer,
   lineLimit,
   type PullRequestChanges,
+  type PullRequestCommit,
   problemsOf,
   reviewLines,
   sectionOrder,
@@ -41,9 +44,53 @@ function bodyWith(
 
 const minimal = ["Scope", "Verification"] as const;
 
-function changesOf(files: readonly string[], after: readonly string[] = []): PullRequestChanges {
-  return { files, changedSince: (commit) => (commit === reviewed ? after : undefined) };
+function inVerification(body: string, text: string): string {
+  return body.replace("## Verification\n\n", `## Verification\n\n${text}\n`);
 }
+
+function shaOf(prefix: string): string {
+  return prefix.padEnd(40, "0");
+}
+
+function changesOf(
+  files: readonly string[],
+  after: readonly (readonly string[] | "merge")[] = [],
+  extra: readonly PullRequestCommit[] = [],
+): PullRequestChanges {
+  const commits: PullRequestCommit[] = [
+    { sha: shaOf(reviewed), parents: [shaOf("b")], files: [...files] },
+  ];
+  for (const [index, changed] of after.entries()) {
+    const parent = commits.at(-1)?.sha ?? "";
+    commits.push(
+      changed === "merge"
+        ? { sha: shaOf(`a${index}`), parents: [parent, shaOf("c")], files: [] }
+        : { sha: shaOf(`a${index}`), parents: [parent], files: [...changed] },
+    );
+  }
+  return {
+    files: [...new Set([...files, ...after.flatMap((each) => (each === "merge" ? [] : each))])],
+    commits: [...commits, ...extra],
+  };
+}
+
+const unchanged = changesOf([]);
+
+describe("the markdown of a body", () => {
+  test("is read once into sections, fenced blocks of either fence and the prose outside them", () => {
+    const parsed = parseMarkdown(
+      "## Why \n\nText.\n\n~~~\n```mermaid\n## Scope\n```\n~~~\n\n## Verification\n\n````mermaid\nstateDiagram-v2\n```\n````\n- a\n",
+    );
+
+    expect(parsed.sections.map(({ heading }) => heading)).toEqual(["Why", "Verification"]);
+    expect(parsed.blocks.map(({ fence, info, closed }) => [fence, info, closed])).toEqual([
+      ["~~~", "", true],
+      ["````", "mermaid", true],
+    ]);
+    expect(parsed.sections[1]?.prose).toEqual(["", "- a", ""]);
+    expect(parsed.prose).not.toContain("## Scope");
+  });
+});
 
 describe("the text of a pull request", () => {
   test("reads no heading inside fenced code", () => {
@@ -52,15 +99,21 @@ describe("the text of a pull request", () => {
       "## Verification\n\n```md\n## Notes\n## Why\n```\n\n~~~\n## Scope\n~~~\n",
     );
 
-    expect(problemsOf({ title, body })).toEqual([]);
+    expect(problemsOf({ title, body }, unchanged)).toEqual([]);
   });
 
   test("passes with a Conventional title, its sections in order and the footer last, with any section but Scope and Verification dropped", () => {
-    expect(problemsOf({ title, body: bodyWith(sectionOrder) })).toEqual([]);
-    expect(problemsOf({ title: "fix(core)!: x", body: bodyWith(minimal) })).toEqual([]);
-    expect(problemsOf({ title, body: bodyWith(sectionOrder).replaceAll("\n", "\r\n") })).toEqual(
-      [],
-    );
+    expect(problemsOf({ title, body: bodyWith(sectionOrder) }, unchanged)).toEqual([]);
+    expect(problemsOf({ title: "fix(core)!: x", body: bodyWith(minimal) }, unchanged)).toEqual([]);
+    expect(
+      problemsOf({ title, body: bodyWith(sectionOrder).replaceAll("\n", "\r\n") }, unchanged),
+    ).toEqual([]);
+  });
+
+  test("reads a heading with trailing spaces as the section it names", () => {
+    const body = bodyWith(minimal).replace("## Verification\n", "## Verification  \n");
+
+    expect(problemsOf({ title, body }, unchanged)).toEqual([]);
   });
 
   test.each([
@@ -80,9 +133,9 @@ describe("the text of a pull request", () => {
       "is not a Conventional Commit",
     ],
   ])("fails %s", (_, badTitle, said) => {
-    expect(problemsOf({ title: badTitle, body: bodyWith(sectionOrder) }).join("\n")).toContain(
-      said,
-    );
+    expect(
+      problemsOf({ title: badTitle, body: bodyWith(sectionOrder) }, unchanged).join("\n"),
+    ).toContain(said);
   });
 
   test.each([
@@ -123,39 +176,38 @@ describe("the text of a pull request", () => {
       "does not end with the line",
     ],
   ])("fails a body with %s", (_, body, said) => {
-    expect(problemsOf({ title, body }).join("\n")).toContain(said);
+    expect(problemsOf({ title, body }, unchanged).join("\n")).toContain(said);
   });
 
-  test(`fails a body of ${lineLimit} lines or more, counting every line but those of a mermaid chart`, () => {
+  test(`fails a body of ${lineLimit} lines or more, leaving out the lines of each closed mermaid chart up to ${chartLineCap}`, () => {
     const filler = (lines: number) => "Text.\n".repeat(lines);
     const spare = lineLimit - bodyWith(minimal).trimEnd().split("\n").length;
-    const atLimit = bodyWith(minimal).replace(
-      "## Scope\n\nText.\n",
-      `## Scope\n\n${filler(spare + 1)}`,
-    );
-    const underLimit = bodyWith(minimal).replace(
-      "## Scope\n\nText.\n",
-      `## Scope\n\n${filler(spare)}`,
-    );
-    const longChart = [
-      "```mermaid",
-      "stateDiagram-v2",
-      ...Array.from({ length: 30 }, () => "  Open --> Closed: you press close"),
-      "```",
-    ].join("\n");
-    const charted = underLimit.replace("## Verification\n\n", `## Verification\n\n${longChart}\n`);
-    const otherFence = underLimit.replace(
-      "## Verification\n\n",
-      "## Verification\n\n```\na\n```\n",
-    );
+    const withScope = (text: string) =>
+      bodyWith(minimal).replace("## Scope\n\nText.\n", `## Scope\n\n${text}`);
+    const chartOf = (arrows: number, fence = "```") =>
+      [
+        `${fence}mermaid`,
+        "stateDiagram-v2",
+        ...Array.from({ length: arrows }, () => "  Open --> Closed: you press close"),
+        fence,
+      ].join("\n");
+    const atLimit = withScope(filler(spare + 1));
+    const underLimit = withScope(filler(spare));
+    const counted = (body: string) =>
+      problemsOf({ title, body }, unchanged).filter((problem) => problem.includes("lines"));
 
     expect(atLimit.trimEnd().split("\n").length).toBe(lineLimit);
-    expect(problemsOf({ title, body: atLimit }).join("\n")).toContain(`under ${lineLimit} lines`);
-    expect(problemsOf({ title, body: underLimit })).toEqual([]);
-    expect(problemsOf({ title, body: charted })).toEqual([]);
-    expect(problemsOf({ title, body: otherFence }).join("\n")).toContain(
-      `under ${lineLimit} lines`,
-    );
+    expect(counted(atLimit).join("\n")).toContain(`under ${lineLimit} lines`);
+    expect(counted(underLimit)).toEqual([]);
+    expect(counted(inVerification(underLimit, chartOf(30)))).toEqual([]);
+    expect(counted(inVerification(underLimit, chartOf(30, "~~~")))).toEqual([]);
+    expect(counted(inVerification(underLimit, chartOf(chartLineCap)))).toHaveLength(1);
+    expect(counted(inVerification(underLimit, "```\na\n```"))).toHaveLength(1);
+    expect(counted(inVerification(underLimit, "```mermaid\nnot a diagram\n```"))).toHaveLength(1);
+    expect(
+      counted(inVerification(underLimit, "~~~\n```mermaid\nstateDiagram-v2\n```\n~~~")),
+    ).toHaveLength(1);
+    expect(counted(`${underLimit}\n${"```mermaid\nstateDiagram-v2\n".repeat(1)}`)).toHaveLength(1);
   });
 
   test.each([
@@ -171,27 +223,57 @@ describe("the text of a pull request", () => {
       const pending = bodyWith(minimal).replace(`${line}${reviewed}`, `${line}PENDING`);
       const elsewhere = `## Why\n\n${line}${reviewed}.\n\n${without}`;
 
-      for (const body of [without, pending, elsewhere]) {
-        expect(problemsOf({ title, body }).join("\n")).toContain(`has no line "${line}<commit>"`);
+      for (const body of [without, elsewhere]) {
+        expect(problemsOf({ title, body }, unchanged).join("\n")).toContain(
+          `## Verification has no line that starts "${line}"`,
+        );
       }
+      expect(problemsOf({ title, body: pending }, unchanged).join("\n")).toContain(
+        `gives "PENDING`,
+      );
     },
   );
 
-  test("fails a review line that names no commit of the pull request, or one after which the pull request changes more than the verification skills", () => {
-    const body = bodyWith(minimal);
+  test("reads a reviewed commit written in backticks or upper case", () => {
+    for (const written of [`\`${reviewed}\``, reviewed.toUpperCase()]) {
+      expect(problemsOf({ title, body: bodyWith(minimal, undefined, written) }, unchanged)).toEqual(
+        [],
+      );
+    }
+  });
 
-    expect(problemsOf({ title, body }, changesOf(["src/a.ts"]))).toEqual([]);
+  test("fails a review line that names no commit of the pull request, or a prefix that more than one commit has", () => {
+    const twins = changesOf(
+      [],
+      [],
+      [`${reviewed}1`, `${reviewed}2`].map((prefix) => ({
+        sha: shaOf(prefix),
+        parents: [shaOf("b")],
+        files: [],
+      })),
+    );
+
     expect(
-      problemsOf({ title, body }, changesOf(["src/a.ts"], [".agents/skills/verify-tabs/SKILL.md"])),
-    ).toEqual([]);
-    expect(
-      problemsOf({ title, body: bodyWith(minimal, undefined, "fedcba9") }, changesOf([])).join(
-        "\n",
-      ),
-    ).toContain("which is not a commit of this pull request");
-    const stale = problemsOf({ title, body }, changesOf(["src/a.ts"], ["src/a.ts", "AGENTS.md"]));
-    expect(stale.join("\n")).toContain("changes src/a.ts, AGENTS.md after it");
-    expect(stale.length).toBe(2);
+      problemsOf({ title, body: bodyWith(minimal, undefined, "fedcba9") }, unchanged).join("\n"),
+    ).toContain("names fedcba9, which is not a commit of this pull request");
+    expect(problemsOf({ title, body: bodyWith(minimal) }, twins).join("\n")).toContain(
+      "names 0123abc, which is the start of 3 commits of this pull request",
+    );
+  });
+
+  test("fails a pull request whose own commits after the reviewed one change more than the verification skills, and leaves out merge commits and files the pull request does not change", () => {
+    const body = bodyWith(minimal);
+    const skill = ".agents/skills/verify-tabs/SKILL.md";
+
+    expect(problemsOf({ title, body }, changesOf(["src/a.ts"], [[skill]]))).toEqual([]);
+    expect(problemsOf({ title, body }, changesOf(["src/a.ts"], ["merge"]))).toEqual([]);
+    const notInTheDiff = changesOf(["src/a.ts"], [["src/a.ts"]]);
+    expect(problemsOf({ title, body }, { ...notInTheDiff, files: [] })).toEqual([]);
+    const stale = problemsOf({ title, body }, changesOf(["src/a.ts"], [["src/a.ts", "AGENTS.md"]]));
+    expect(stale).toEqual([
+      "The comment-sicko line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md. Run comment-sicko again on those commits and name the last one.",
+      "The Thermos line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md. Run Thermos again on those commits and name the last one.",
+    ]);
   });
 
   test.each([
@@ -200,23 +282,26 @@ describe("the text of a pull request", () => {
     ["models/Tabs.tla", true],
     ["models/Tabs.cfg", true],
   ])(
-    "fails a pull request that changes %s with no mermaid chart, or without naming the model",
+    "fails a pull request that changes %s with no mermaid chart in Verification, or without naming the model there",
     (file, isModel) => {
-      const charted = bodyWith(minimal).replace(
-        "## Verification\n\n",
-        `## Verification\n\n${chart}\n`,
-      );
-      const named = charted.replace("## Verification\n\n", `## Verification\n\n\`${file}\`:\n`);
+      const changes = changesOf([file]);
+      const charted = inVerification(bodyWith(minimal), chart);
+      const named = inVerification(charted, `\`${file}\`:`);
+      const namedElsewhere = charted.replace("## Scope\n\nText.", `## Scope\n\n\`${file}\``);
+      const chartElsewhere = bodyWith(minimal).replace("## Scope\n\nText.", `## Scope\n\n${chart}`);
 
-      expect(
-        problemsOf({ title, body: bodyWith(minimal) }, changesOf([file])).join("\n"),
-      ).toContain("has no ```mermaid chart");
-      expect(problemsOf({ title, body: charted }, changesOf([file])).join("\n")).toBe(
-        isModel
-          ? `The pull request changes the model ${file} but its body does not name it. Name it in backticks beside its chart.`
-          : "",
+      expect(problemsOf({ title, body: bodyWith(minimal) }, changes).join("\n")).toContain(
+        "## Verification has no mermaid chart",
       );
-      expect(problemsOf({ title, body: named }, changesOf([file]))).toEqual([]);
+      expect(problemsOf({ title, body: chartElsewhere }, changes).join("\n")).toContain(
+        "## Verification has no mermaid chart",
+      );
+      const unnamed = `The pull request changes the model ${file}, but ## Verification does not name it in backticks beside its chart.`;
+      expect(problemsOf({ title, body: charted }, changes)).toEqual(isModel ? [unnamed] : []);
+      expect(problemsOf({ title, body: namedElsewhere }, changes)).toEqual(
+        isModel ? [unnamed] : [],
+      );
+      expect(problemsOf({ title, body: named }, changes)).toEqual([]);
       expect(problemsOf({ title, body: bodyWith(minimal) }, changesOf(["models/tabs.ts"]))).toEqual(
         [],
       );
@@ -226,20 +311,24 @@ describe("the text of a pull request", () => {
 
 type Run = { status: number | null; stdout: string; stderr: string };
 
-async function inScratchPullRequest(
-  use: (repository: {
-    root: string;
-    base: string;
-    head: string;
-    commit: (file: string) => string;
-    check: (pullRequest: object, environment?: NodeJS.ProcessEnv) => Run;
-  }) => void,
-): Promise<void> {
+type ScratchPullRequest = {
+  root: string;
+  git: (...args: string[]) => string;
+  base: string;
+  head: string;
+  commit: (file: string) => string;
+  check: (pullRequest: object, head?: string, environment?: NodeJS.ProcessEnv) => Run;
+};
+
+const withTerms: NodeJS.ProcessEnv = { ...process.env, SOLIX_PRIVATE_TERMS: fakeTerm };
+
+async function inScratchPullRequest(use: (repository: ScratchPullRequest) => void): Promise<void> {
   await inTemporaryTree({ "src/a.ts": "a\n" }, (root) => {
     const git = (...args: string[]) => gitInScratchRepository(root, args).trim();
     const commit = (file: string) => {
-      writeFileSync(join(root, file), `${file} ${Math.random()}\n`);
-      git("add", ".");
+      mkdirSync(dirname(join(root, file)), { recursive: true });
+      writeFileSync(join(root, file), `${file} ${git("rev-list", "--all", "--count")}\n`);
+      git("add", "--all");
       git("commit", "--quiet", `--message=change ${file}`);
       return git("rev-parse", "HEAD");
     };
@@ -247,13 +336,14 @@ async function inScratchPullRequest(
     git("add", ".");
     git("commit", "--quiet", "--message=base");
     const base = git("rev-parse", "HEAD");
+    git("switch", "--quiet", "--create", "topic");
     const head = commit("src/a.ts");
-    const check = (pullRequest: object, environment: NodeJS.ProcessEnv = process.env) => {
-      const event = join(root, `${Math.random()}-event.json`);
+    const check = (pullRequest: object, to = head, environment = withTerms) => {
+      const event = join(root, ".git", "event.json");
       writeFileSync(
         event,
         JSON.stringify({
-          pull_request: { base: { sha: base }, head: { sha: head }, ...pullRequest },
+          pull_request: { base: { sha: base, ref: "main" }, head: { sha: to }, ...pullRequest },
         }),
       );
       return spawnSync(process.execPath, [textCheck, event], {
@@ -262,19 +352,17 @@ async function inScratchPullRequest(
         env: environment,
       });
     };
-    use({ root, base, head, commit, check });
+    use({ root, git, base, head, commit, check });
   });
 }
 
 describe("the text check", () => {
-  const withTerms = { ...process.env, SOLIX_PRIVATE_TERMS: fakeTerm };
-
   test("reads the pull_request event, and fails on a private term in the title or the body without printing it", async () => {
     await inScratchPullRequest(({ head, check }) => {
       const body = bodyWith(sectionOrder, undefined, head.slice(0, 7));
-      const clean = check({ title, body }, withTerms);
-      const named = check({ title, body: body.replace("Text.", `Like ${fakeTerm}.`) }, withTerms);
-      const badTitle = check({ title: `ci: like ${fakeTerm}`, body }, withTerms);
+      const clean = check({ title, body });
+      const named = check({ title, body: body.replace("Text.", `Like ${fakeTerm}.`) });
+      const badTitle = check({ title: `ci: like ${fakeTerm}`, body });
 
       expect([clean.status, clean.stderr]).toEqual([0, ""]);
       for (const failed of [named, badTitle]) {
@@ -285,85 +373,77 @@ describe("the text check", () => {
     });
   });
 
-  test("reads the changed files and the reviewed commit from git: a commit after the reviewed one fails, and a chart is asked for when a model changes", async () => {
-    await inScratchPullRequest(({ root, base, head, commit }) => {
-      const reviewedHead = head;
-      const skillConfirmed = (() => {
-        writeFileSync(join(root, "SKILL.md"), "x\n");
-        return commit("SKILL.md");
-      })();
-      const check = (pullRequest: object, to: string) => {
-        const event = join(root, `${Math.random()}-event.json`);
-        writeFileSync(
-          event,
-          JSON.stringify({
-            pull_request: { base: { sha: base }, head: { sha: to }, ...pullRequest },
-          }),
-        );
-        return spawnSync(process.execPath, [textCheck, event], {
-          cwd: root,
-          encoding: "utf8",
-          env: withTerms,
-        });
-      };
-      const body = bodyWith(minimal, undefined, reviewedHead);
+  test("reads the pull request's own commits from git: a commit after the reviewed one fails, and a chart is asked for when a model changes", async () => {
+    await inScratchPullRequest(({ base, head, commit, check }) => {
+      const body = bodyWith(minimal, undefined, head);
 
-      expect(check({ title, body }, reviewedHead).status).toBe(0);
-      const afterReview = check({ title, body }, skillConfirmed);
+      expect(check({ title, body }).status).toBe(0);
+      const afterReview = check({ title, body }, commit("docs/notes.md"));
       expect(afterReview.status).toBe(1);
-      expect(afterReview.stderr).toContain("changes SKILL.md after it");
-      const notInThePullRequest = check(
-        { title, body: bodyWith(minimal, undefined, base) },
-        reviewedHead,
-      );
+      expect(afterReview.stderr).toContain("own commits after it change docs/notes.md");
+      const notInThePullRequest = check({ title, body: bodyWith(minimal, undefined, base) }, head);
       expect(notInThePullRequest.stderr).toContain("which is not a commit of this pull request");
       const model = commit("Tabs.tla");
-      const unchartered = check({ title, body: bodyWith(minimal, undefined, model) }, model);
-      expect(unchartered.stderr).toContain("changes Tabs.tla but its body has no ```mermaid chart");
+      const uncharted = check({ title, body: bodyWith(minimal, undefined, model) }, model);
+      expect(uncharted.stderr).toContain(
+        "changes Tabs.tla, but ## Verification has no mermaid chart",
+      );
     });
   });
 
-  test("checks only the private terms of a draft, and the rest once it is marked ready", async () => {
-    await inScratchPullRequest(({ check }) => {
-      const draft = check(
-        { title: "Draft", body: "Generated by Claude Code", draft: true },
-        withTerms,
-      );
-      const named = check({ title: "Draft", body: `Like ${fakeTerm}.`, draft: true }, withTerms);
-      const ready = check(
-        { title: "Draft", body: "Generated by Claude Code", draft: false },
-        withTerms,
-      );
+  test("counts nothing that a merge from the base branch brings in after the review, read from the base branch's tip, not the event's base commit", async () => {
+    await inScratchPullRequest(({ git, head, commit, check }) => {
+      git("switch", "--quiet", "main");
+      commit("src/main.ts");
+      git("switch", "--quiet", "topic");
+      git("merge", "--quiet", "--no-ff", "--message=merge main", "main");
+      const merged = git("rev-parse", "HEAD");
 
-      expect([draft.status, draft.stdout]).toEqual([0, expect.stringContaining("is a draft")]);
-      expect([named.status, named.stderr]).toEqual([
-        1,
-        expect.stringContaining("names a private term"),
-      ]);
-      expect(ready.status).toBe(1);
-      expect(ready.stderr).toContain("is not a Conventional Commit");
+      expect(check({ title, body: bodyWith(minimal, undefined, head) }, merged).stderr).toBe("");
     });
   });
 
-  test("checks a file with the title on line 1 and the body from line 3 against HEAD, as it would the opened pull request", async () => {
-    await inScratchPullRequest(({ root, base, head }) => {
-      const file = join(root, `${Math.random()}-pull-request.md`);
-      const run = (text: string) => {
+  test("counts a reviewed file renamed after the review into a verification skill", async () => {
+    await inScratchPullRequest(({ root, git, head, check }) => {
+      const skill = ".agents/skills/verify-tabs/SKILL.md";
+      mkdirSync(dirname(join(root, skill)), { recursive: true });
+      renameSync(join(root, "src/a.ts"), join(root, skill));
+      git("add", "--all");
+      git("commit", "--quiet", "--message=move");
+      const moved = git("rev-parse", "HEAD");
+
+      expect(check({ title, body: bodyWith(minimal, undefined, head) }, moved).stderr).toContain(
+        "own commits after it change src/a.ts",
+      );
+    });
+  });
+
+  test("checks a file with the title on line 1, a blank line 2 and the body from line 3 against HEAD, as it would the opened pull request", async () => {
+    await inScratchPullRequest(({ root, head }) => {
+      const file = join(root, ".git", "pull-request.md");
+      const run = (text: string, args = ["--file", file, "--base", "main"], env = withTerms) => {
         writeFileSync(file, text);
-        return spawnSync(process.execPath, [textCheck, "--file", file, "--base", base], {
+        return spawnSync(process.execPath, [textCheck, ...args], {
           cwd: root,
           encoding: "utf8",
-          env: withTerms,
+          env,
         });
       };
+      const text = `${title}\n\n${bodyWith(minimal, undefined, head)}`;
+      const withoutTerms: NodeJS.ProcessEnv = { ...process.env };
+      delete withoutTerms.SOLIX_PRIVATE_TERMS;
 
-      expect(run(`${title}\n\n${bodyWith(minimal, undefined, head)}`).status).toBe(0);
-      expect(run(`${title}\n\n${bodyWith(minimal, undefined, base)}`).stderr).toContain(
-        "which is not a commit of this pull request",
-      );
-      expect(
-        spawnSync(process.execPath, [textCheck, "--file", file], { encoding: "utf8" }).status,
-      ).toBe(2);
+      expect([run(text).status, run(text).stderr]).toEqual([0, ""]);
+      expect(run(text.replace(head, "main")).stderr).toContain('gives "main."');
+      const noBlank = run(text.replace("\n\n", "\nX\n"));
+      expect([noBlank.status, noBlank.stderr]).toEqual([1, expect.stringContaining("line 2")]);
+      const local = run(text, undefined, withoutTerms);
+      expect([local.status, local.stdout]).toEqual([
+        0,
+        expect.stringContaining("were not checked"),
+      ]);
+      expect(run(text, ["--file", file]).status).toBe(2);
+      expect(run(text, ["--base", "main"]).status).toBe(2);
     });
   });
 });
@@ -401,9 +481,10 @@ describe("the text check where the private terms are not given", () => {
         {
           title,
           body: bodyWith(sectionOrder, undefined, head),
-          base: { ...repositories.base, sha: base },
+          base: { ...repositories.base, sha: base, ref: "main" },
           head: { ...repositories.head, sha: head },
         },
+        head,
         environment,
       );
 
@@ -476,11 +557,11 @@ describe("a fix carries its test", () => {
   });
 });
 
-test("the pull request workflow runs both checks on every open, edit, push, reopening and mark as ready, in steps that only call the scripts", () => {
+test("the pull request workflow runs both checks on every open, edit, push and reopening, in steps that only call the scripts", () => {
   const workflow = readFileSync(join(repositoryRoot, workflowFile), "utf8");
 
   expect(workflow).toContain(
-    "  pull_request:\n    types: [opened, edited, synchronize, reopened, ready_for_review]\n",
+    "  pull_request:\n    types: [opened, edited, synchronize, reopened]\n",
   );
   expect(workflow).toContain(
     '      - run: node scripts/check-pull-request-text.ts "$GITHUB_EVENT_PATH"\n        env:\n          SOLIX_PRIVATE_TERMS: ${{ secrets.SOLIX_PRIVATE_TERMS }}\n',
