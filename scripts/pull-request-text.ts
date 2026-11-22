@@ -89,7 +89,7 @@ function lengthProblems(body: string): string[] {
   return counted < lineLimit
     ? []
     : [
-        `The body has ${counted} lines outside its mermaid charts. Keep it a one-minute briefing under ${lineLimit} lines, and keep the history of each review round in the docs repository.`,
+        `The body has ${counted} lines outside its mermaid charts. Keep it a one-minute briefing under ${lineLimit} lines, and keep the history of each review round in the coordinator's private notes.`,
       ];
 }
 
