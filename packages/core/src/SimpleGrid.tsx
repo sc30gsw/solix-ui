@@ -4,10 +4,11 @@ import { LibraryStyle } from "#/src/library-style.tsx";
 import { createParts, defaultsOf, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { simpleGridVariables } from "#/src/SimpleGrid.variables.ts";
 import {
-  type ContainerVariableProp,
   containerKeysOf,
   createQueryContainer,
+  type GridType,
   type GridTypeProps,
+  type GridTypeVariableProp,
   type VariableProp,
 } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
@@ -33,26 +34,21 @@ const styles = stylex.create({
   },
 });
 
+type ColumnsFor<Type extends GridType> = {
+  /** Ignored when `minColWidth` is given. */
+  cols?: GridTypeVariableProp<Type, typeof simpleGridVariables, "sg-cols", number>;
+  /** The gap between columns, and between rows unless `verticalSpacing` is given. */
+  spacing?: GridTypeVariableProp<Type, typeof simpleGridVariables, "sg-spacing-x">;
+  verticalSpacing?: GridTypeVariableProp<Type, typeof simpleGridVariables, "sg-spacing-y">;
+};
+
 export type SimpleGridProps = ElementProps<
   "div",
   typeof styles,
-  GridTypeProps<
-    {
-      /** Ignored when `minColWidth` is given. */
-      cols?: VariableProp<typeof simpleGridVariables, "sg-cols", number>;
-      /** Also the gap between rows, unless `verticalSpacing` is given. */
-      spacing?: VariableProp<typeof simpleGridVariables, "sg-spacing-x">;
-      verticalSpacing?: VariableProp<typeof simpleGridVariables, "sg-spacing-y">;
-    },
-    {
-      cols?: ContainerVariableProp<typeof simpleGridVariables, "sg-cols", number>;
-      spacing?: ContainerVariableProp<typeof simpleGridVariables, "sg-spacing-x">;
-      verticalSpacing?: ContainerVariableProp<typeof simpleGridVariables, "sg-spacing-y">;
-    }
-  > & {
+  GridTypeProps<ColumnsFor<"media">, ColumnsFor<"container">> & {
     /** When given, the grid fits as many columns as its width allows, by `autoFlow`. */
     minColWidth?: VariableProp<typeof simpleGridVariables, "sg-min-col-width">;
-    /** With `minColWidth`, `auto-fill` keeps the empty columns of a short row and `auto-fit` collapses them. */
+    /** It takes effect only with `minColWidth`. */
     autoFlow?: "auto-fit" | "auto-fill";
     autoRows?: VariableProp<typeof simpleGridVariables, "sg-auto-rows">;
   }
