@@ -4,10 +4,11 @@ import { expect, test } from "vite-plus/test";
 import { sharedSkills } from "#/scripts/agent-kit.ts";
 import { formalSkillPrefix, modelFilePatterns } from "#/scripts/formal-verification.ts";
 import { kitSkills } from "#/scripts/package-skills.ts";
+import { lineLimit } from "#/scripts/pull-request-text.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
 
 const openPullRequest = ".agents/skills/open-pull-request/SKILL.md";
-const reviewStep = /^(## 4\. [\s\S]*?)(?=^## )/m;
+const reviewStep = /^(## 5\. Review[\s\S]*?)(?=^## )/m;
 const rubrics = [
   ".agents/skills/thermo-nuclear-review/SKILL.md",
   ".agents/skills/thermo-nuclear-code-quality-review/SKILL.md",
@@ -18,19 +19,25 @@ const reviewChecklist = "## Review checklist";
 const steps = [
   "1. Verify",
   "2. Correct",
-  "3. No comments",
-  "4. Review",
-  "5. Verification skills",
+  "3. Verification skills",
+  "4. No comments",
+  "5. Review",
   "6. Statechart",
   "7. Open it",
   "8. Reflect",
+];
+const pointers = [
+  "`AGENTS.md`",
+  "`modelFilePatterns` in `scripts/formal-verification.ts`",
+  "`reviewLines` in `scripts/pull-request-text.ts`",
+  "`pstack/skills/poteto-mode/playbooks/opening-a-pr.md`",
 ];
 
 function read(path: string): string {
   return readFileSync(join(repositoryRoot, path), "utf8");
 }
 
-test("open-pull-request has its eight steps in order, names the formal-verification prefix, and the model files the pull request check asks a chart for", () => {
+test("open-pull-request has its eight steps in order, with the verification skills before the review, and points at the rules the checks hold instead of copying them", () => {
   const text = read(openPullRequest);
   const headings = text
     .split("\n")
@@ -39,11 +46,12 @@ test("open-pull-request has its eight steps in order, names the formal-verificat
 
   expect(headings).toEqual(steps);
   expect(text).toContain(`\`${formalSkillPrefix}*\``);
-  for (const pattern of modelFilePatterns)
-    expect(text).toContain(`\`${pattern.replace("**/", "")}\``);
+  for (const pointer of pointers) expect(text).toContain(pointer);
+  for (const pattern of modelFilePatterns) expect(text).not.toContain(pattern.replace("**/", ""));
+  expect(text).not.toContain(String(lineLimit));
 });
 
-test("step 4 of open-pull-request starts each reviewer from its rubric's path, so any agent can run it, and reviews the diff with review-solid2", () => {
+test("the review step of open-pull-request starts each reviewer from its rubric's path, so any agent can run it, and reviews the diff with review-solid2", () => {
   const step = reviewStep.exec(read(openPullRequest))?.[1] ?? "";
   const firstInstruction = /first instruction[^.`]* is to read and follow `([^`]+)`/g;
 

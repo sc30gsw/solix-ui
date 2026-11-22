@@ -1,6 +1,6 @@
 ---
 name: review-solid2
-description: Reviews a diff for the Solid 2.0 mistakes that no pattern can see, against the review checklist of the kit's solid-2 skill. Use beside the Thermos reviewers in step 4 of open-pull-request, or whenever a change adds or edits Solid code.
+description: Reviews a diff for the Solid 2.0 mistakes that no pattern can see, against the review checklist of the kit's solid-2 skill. Use beside the Thermos reviewers in the review step of open-pull-request, or whenever a change adds or edits Solid code.
 ---
 
 # Review Solid 2.0
