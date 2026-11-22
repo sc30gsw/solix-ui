@@ -1,18 +1,8 @@
 import fc from "fast-check";
 import type { TestContext } from "vite-plus/test";
-
-declare global {
-  interface ImportMeta {
-    readonly env: ImportMetaEnv;
-  }
-  interface ImportMetaEnv {
-    readonly SOLIX_PROPERTY_SEED?: string;
-  }
-}
+import { seedFrom } from "#/tests/support/property-seed.ts";
 
 const shareOfTheTestTimeout = 0.9;
-export const seedVariable = "SOLIX_PROPERTY_SEED";
-const integer = /^-?\d+$/;
 const shareBeforeTheTestTimesOut = 0.97;
 
 export type PropertyParameters<Ts> = Pick<
@@ -109,16 +99,6 @@ function withTheRunsStillGoing(failure: unknown, going: number): unknown {
     `${message}\n${runs} still going when the test's time ran out, and may still act on the page.`,
     { cause: failure },
   );
-}
-
-export function seedFrom(given: unknown): number | undefined {
-  if (given === undefined || given === "") return undefined;
-  if (typeof given !== "string" || !integer.test(given.trim())) {
-    throw new Error(
-      `${seedVariable} is ${JSON.stringify(given)}. Set it to an integer seed, or leave it unset.`,
-    );
-  }
-  return Number(given.trim());
 }
 
 export async function assertProperty<Ts>(

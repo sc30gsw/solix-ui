@@ -4,9 +4,8 @@ import {
   assertProperty,
   propertyRunsGoing,
   type PropertyParameters,
-  seedFrom,
-  seedVariable,
 } from "#/tests/support/properties.ts";
+import { seedFrom, seedNotice, seedVariable } from "#/tests/support/property-seed.ts";
 
 const shortTimeout = 4_000;
 const longTimeout = 12_000;
@@ -44,6 +43,8 @@ export function definePropertyRunnerTests(): void {
       -7,
     ]);
     expect(() => seedFrom("4.2")).toThrow(`${seedVariable} is "4.2"`);
+    expect([seedNotice(""), seedNotice(undefined)]).toEqual([undefined, undefined]);
+    expect(seedNotice("42")).toContain("every generated property of this run draws from seed 42");
   });
 
   test(

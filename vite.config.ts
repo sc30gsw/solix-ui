@@ -6,7 +6,7 @@ import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
 import { storyControls } from "#/scripts/story-controls.ts";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
-import { seedVariable } from "#/tests/support/properties.ts";
+import { seedNotice, seedVariable } from "#/tests/support/property-seed.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
@@ -47,6 +47,13 @@ const fastCheckRunnersOnlyThroughTheWrapper = {
   importNames: fastCheckRunners,
   message: runPropertiesThroughTheWrapper,
 };
+
+const seedNoticeShown = `${seedVariable}_NOTICE_SHOWN`;
+const fixedSeed = seedNotice(process.env[seedVariable]);
+if (fixedSeed !== undefined && process.env[seedNoticeShown] === undefined) {
+  process.env[seedNoticeShown] = "yes";
+  process.stderr.write(`${fixedSeed}\n`);
+}
 
 const sequenceGroup = { browser: 1, others: 2, storySpec: 3 } as const;
 

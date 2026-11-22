@@ -72,4 +72,4 @@ No model checker runs on a Solid component, so this is not a proof. The test use
 - A new way to close the modal: add a command class to `steps`, with its precondition and the model change, and a fixed sequence to `everyActionInEachRun` that opens the modal and closes it that way.
 - A new element in the dialog that takes focus: keep the focus assertion as it is. It only forbids focus on the page behind.
 - Upgrading Solid, Playwright or fast-check: change the versions in the catalog in `pnpm-workspace.yaml`, then run the check.
-- Mutation check after editing the skill's covered code: remove `closedby="any"` from `Modal.tsx` on Chromium and run the test. It must fail on every run with `[[press the Open modal button,press outside the dialog]]`, the first fixed sequence. Restore the attribute afterwards.
+- Mutation check after editing the skill's covered code: remove `closedby="any"` from `Modal.tsx` on Chromium and run `SOLIX_PROPERTY_SEED=-2145203684 vp test apps/playground/tests/modal-protocol.test.ts`. It must fail on every run with `[[press the Open modal button,press outside the dialog]]`, the first fixed sequence. Restore the attribute afterwards.
