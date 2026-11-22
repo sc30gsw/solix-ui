@@ -12,12 +12,26 @@ const testCommand = new RegExp(`\`(?:${seedVariable}=(-?\\d+) )?vp test ([^\`]+)
 const optionsWithAValue = new Set(["--project", "-t", "--testNamePattern"]);
 const subcommand = "run";
 
+const commandSeparator = new Set(["&&", "||", "|", ";", "&"]);
+
 export function wordsOf(line: string): string[] {
   return (line.match(word) ?? []).map((each) => each.replace(/^["']|["']$/g, ""));
 }
 
+export function commandsOf(line: string): string[][] {
+  const commands: string[][] = [[]];
+  for (const each of wordsOf(line)) {
+    const ends = each.endsWith(";") && each !== ";";
+    const own = ends ? each.slice(0, -1) : each;
+    if (commandSeparator.has(own)) commands.push([]);
+    else commands.at(-1)?.push(own);
+    if (ends) commands.push([]);
+  }
+  return commands.filter((command) => command.length > 0);
+}
+
 function filtersOf(command: string): string[] {
-  const words = wordsOf(command);
+  const words = commandsOf(command)[0] ?? [];
   return words.filter(
     (each, index) =>
       !(index === 0 && each === subcommand) &&

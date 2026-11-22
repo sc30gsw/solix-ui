@@ -1,4 +1,4 @@
-export const seedVariable = "SOLIX_PROPERTY_SEED";
+export const seedVariable = "SOLIX_PROPERTY_SEED" satisfies keyof ImportMetaEnv;
 
 export function seedOfThisRun(): string | undefined {
   return import.meta.env.SOLIX_PROPERTY_SEED;

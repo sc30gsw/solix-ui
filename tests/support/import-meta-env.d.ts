@@ -1,5 +1,5 @@
 interface ImportMetaEnv {
-  readonly [name: string]: string | undefined;
+  readonly SOLIX_PROPERTY_SEED?: string;
 }
 
 interface ImportMeta {

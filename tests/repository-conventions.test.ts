@@ -356,7 +356,7 @@ test("the formal-verification naming rule fails a skill confirmed against a comm
   const skills = [
     {
       name: formal,
-      text: "```sh\nnpx tla-ts models/tabs.model.ts\nnode models/tabs.model.ts\nnpx tla-ts models/Tabs.tla -workers 4 -dump dot,actionlabels states.dot > out.txt\n```\n",
+      text: "```sh\nnpx tla-ts models/tabs.model.ts\nnode models/tabs.model.ts\nnpx tla-ts models/Tabs.tla -workers 4 -dump dot,actionlabels states.dot > out.txt\nnpx tla-ts models/Tabs.tla; echo done.txt\n```\n",
     },
     { name: plain, text: "No model checker, so tla-ts is not run.\n```sh\nvp test run\n```\n" },
   ];
@@ -404,6 +404,7 @@ test("every verification skill says which commit it was last confirmed against",
 });
 
 const runsAProperty = /\bassertProperty\(/;
+const leadingDotSlash = /^\.\//;
 const testOrStory = /\.(?:test|stories)\.(?:ts|tsx|mts)$/;
 
 function testFiles(): string[] {
@@ -432,7 +433,10 @@ function mutationCommandProblems(
           `${where}: ${named} runs \`${written}\`, which names no file, so it runs every test of its projects. Name the files it runs.`,
         ];
       }
-      const resolved = filters.map((filter) => files.filter((file) => file.includes(filter)));
+      const resolved = filters.map((filter) => {
+        const sought = filter.replace(leadingDotSlash, "").toLowerCase();
+        return files.filter((file) => file.toLowerCase().includes(sought));
+      });
       const unmatched = filters.filter((_, index) => resolved[index].length === 0);
       if (unmatched.length > 0) {
         return [
@@ -486,6 +490,8 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\`, the
     `* Quoted mutation: run ${seeded('"packages/a/tests/a.test.ts"')}.`,
     "1. Hydration mutation: run `vp test packages/b/tests/b.test.ts --project node`.",
     '- Story mutation: run `vp test --project "stories*" packages/b`.',
+    `- Case mutation: run ${seeded("./Packages/A/tests/a.test.ts")}.`,
+    "- Chained mutation: run `vp test packages/b/tests/b.test.ts && echo done`.",
   ]) {
     expect(problems(passed), passed).toEqual([]);
   }
