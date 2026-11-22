@@ -58,6 +58,8 @@ const defaults = defaultsOf<SimpleGridProps>()({ autoFlow: "auto-fill" });
 
 export function SimpleGrid(rawProps: SimpleGridProps) {
   const props = withDefaults(defaults, rawProps);
+  const hasMinColWidth = ({ minColWidth }: SimpleGridProps) =>
+    minColWidth !== undefined && minColWidth !== null;
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const keyed = new Map([
@@ -67,11 +69,11 @@ export function SimpleGrid(rawProps: SimpleGridProps) {
     ]);
     return [...keyed.entries()];
   });
-  const autoColumns = () => props.minColWidth !== undefined;
+  const autoColumns = () => hasMinColWidth(props);
   const { root, part } = createParts(simpleGridVariables, styles, props, {
     variables: {
       "sg-auto-rows": "autoRows",
-      "sg-cols": (given) => (given.minColWidth === undefined ? given.cols : undefined),
+      "sg-cols": (given) => (hasMinColWidth(given) ? undefined : given.cols),
       "sg-min-col-width": "minColWidth",
       "sg-spacing-x": "spacing",
       "sg-spacing-y": "verticalSpacing",

@@ -492,6 +492,13 @@ test("SimpleGrid: with minColWidth, fills the row with columns at least that wid
   ).toEqual(["auto-fit"]);
 });
 
+test("SimpleGrid: a minColWidth of null is no minColWidth, so cols still sets the columns and no auto columns are written", () => {
+  expect(simpleGridOf({ type: "media", minColWidth: null, cols: 3 })).toEqual(
+    simpleGridOf({ type: "media", cols: 3 }),
+  );
+  expect(simpleGridOf({ type: "media", minColWidth: null, cols: 3 }).autoColumns).toEqual([]);
+});
+
 test("SimpleGrid: two grids with container queries in one page scope their classes and rules apart", () => {
   const Built = library.SimpleGrid;
   const given = { type: "container", cols: { base: 1, "30em": 2 } } as const;
