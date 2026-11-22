@@ -9,7 +9,7 @@ export type ServedApp = {
   environment?: Record<string, string>;
 };
 
-export type RunningServer = { url: string; stop: () => Promise<void> };
+export type RunningServer = { url: string; printed: () => string; stop: () => Promise<void> };
 
 export const localHost = "127.0.0.1";
 export const anyFreePort = 0;
@@ -71,7 +71,7 @@ export async function startServer({
     const port = announcedUrl.exec(printed())?.[1];
     const url = port === undefined ? undefined : localUrl(Number(port));
     const reply = url === undefined ? undefined : await replyFrom(url);
-    if (url !== undefined && reply?.ok) return { url, stop };
+    if (url !== undefined && reply?.ok) return { url, printed, stop };
     if (reply) return failed(`the server at ${url} answered ${reply.said}`);
     if (running.exitCode !== null || running.signalCode !== null)
       return failed("the server exited before it answered.");
