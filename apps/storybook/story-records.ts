@@ -6,7 +6,7 @@ export type RecordedValue = string | number | boolean | null;
 export type Played = {
   readonly prop: string;
   readonly value?: RecordedValue;
-  readonly timedOut?: string;
+  readonly timedOutMessage?: string;
 };
 
 export type Mount = {

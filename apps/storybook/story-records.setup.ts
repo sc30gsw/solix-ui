@@ -81,7 +81,7 @@ function passedAgain(failure: unknown, when: string): void {
   );
 }
 
-type Outcome = { readonly played: boolean; readonly timedOut?: string };
+type Outcome = { readonly played: boolean; readonly timedOutMessage?: string };
 
 async function failsInItsPlay(
   story: RunnableStory,
@@ -97,7 +97,9 @@ async function failsInItsPlay(
     `right after it ran with ${named(substitution)} substituted`,
   );
   const played = failed && mounted && !playReturned && tookPlace;
-  return failure instanceof RanOutOfTime ? { played, timedOut: failure.message } : { played };
+  return failure instanceof RanOutOfTime
+    ? { played, timedOutMessage: failure.message }
+    : { played };
 }
 
 function keyOf({ component, prop, value }: Substitution): string {
@@ -124,7 +126,9 @@ async function substituted(
       mount.played.push({
         prop: substitution.prop,
         ...("value" in substitution ? { value: substitution.value } : {}),
-        ...(outcome.timedOut === undefined ? {} : { timedOut: outcome.timedOut }),
+        ...(outcome.timedOutMessage === undefined
+          ? {}
+          : { timedOutMessage: outcome.timedOutMessage }),
       });
     }
   }
