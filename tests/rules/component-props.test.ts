@@ -127,21 +127,20 @@ test("a prop carries its doc comment as its description, and none where it has n
 
 const docComment = /^\s*\/\*\*/;
 
-test("each public prop of every component the library exports is documented on one declaration, so its description is one comment and not several run together", () => {
+test("each public prop of every component the library exports has at most one documented declaration, so its description is one comment and not several run together", () => {
   const { program, components } = openSpecProgram();
   try {
     const twice = components.flatMap(({ name, props }) =>
-      props
-        .filter(
-          ({ declarations }) =>
-            new Set(
-              declarations.filter((declaration) => docComment.test(declaration.getFullText())),
-            ).size > 1,
-        )
-        .map(
-          ({ name: prop, declarations }) =>
-            `${name}: the prop ${prop} is documented on ${declarations.length} declarations, so its description runs their comments together. Declare it once, on the type that gives it.`,
-        ),
+      props.flatMap(({ name: prop, declarations }) => {
+        const documented = new Set(
+          declarations.filter((declaration) => docComment.test(declaration.getFullText())),
+        ).size;
+        return documented > 1
+          ? [
+              `${name}: the prop ${prop} is documented on ${documented} declarations, so its description runs their comments together. Document it on one declaration, the type that gives it.`,
+            ]
+          : [];
+      }),
     );
 
     expect(components.length).toBeGreaterThan(0);
