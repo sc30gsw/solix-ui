@@ -1,6 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import type { JSX } from "@solidjs/web";
 import { children, Show } from "solid-js";
+import { booleanAttribute } from "#/src/css-syntax.ts";
 import { partId } from "#/src/headless.ts";
 import { createParts, type ElementProps } from "#/src/parts.ts";
 import { rendersSomething } from "#/src/renders-something.ts";
@@ -108,7 +109,7 @@ export function TabsTab(props: TabsTabProps) {
         slot: "tab",
         props: () => ({
           value: props.value,
-          disabled: props.disabled === true || props.disabled === "",
+          disabled: booleanAttribute(props.disabled),
         }),
         own: {
           get id() {
