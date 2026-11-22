@@ -555,18 +555,11 @@ describe("the text check", () => {
       git("commit", "--quiet", "--all", "--message=main changes a");
       git("update-ref", "refs/remotes/origin/main", "main");
       git("switch", "--quiet", "topic");
-      spawnSync("git", ["merge", "--no-ff", "--no-edit", "main"], { cwd: root });
+      const conflicted = 1;
+      gitInScratchRepository(root, ["merge", "--no-ff", "--no-edit", "main"], conflicted);
       git("checkout", "--ours", "src/a.ts");
       git("add", "--all");
-      git(
-        "-c",
-        "user.name=Test",
-        "-c",
-        "user.email=test@example.com",
-        "commit",
-        "--quiet",
-        "--no-edit",
-      );
+      git("commit", "--quiet", "--no-edit");
       const body = bodyWith(minimal, undefined, head);
 
       expect(check({ title, body }, git("rev-parse", "HEAD")).stderr).toContain(
