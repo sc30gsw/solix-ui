@@ -2,6 +2,8 @@ import { Button, colorSchemeAttribute } from "@solix/core";
 import { createEffect, onCleanup } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect } from "storybook/test";
+import { argTypesOf } from "virtual:story-controls";
+import { everyValueOf } from "#/every-value.tsx";
 
 const meta = {
   component: Button,
@@ -116,6 +118,28 @@ export const PlayTurnsTheCheckOff: Story = {
 export const NamelessLinkAfterAWrite: Story = {
   render: () => <a href="#after-a-write" />,
 };
+
+const withControls = { ...meta, argTypes: argTypesOf(Button) };
+
+const ignoringItsVariant = {
+  ...withControls,
+  render: (args: Readonly<Record<string, unknown>>) => (
+    <Button ref={(element: Element) => element.setAttribute("variant", String(args.variant))}>
+      Save
+    </Button>
+  ),
+};
+
+export const VariantOnlyAsAnAttribute = everyValueOf(ignoringItsVariant, "variant");
+
+export const KnownOpenThatNoLongerHolds = everyValueOf(
+  withControls,
+  "unstyled",
+  {},
+  {
+    knownOpen: { followUp: "a follow-up already merged", alike: [["true", "false"]] },
+  },
+);
 
 export const SetsTheOtherScheme: Story = {
   play: async () => {

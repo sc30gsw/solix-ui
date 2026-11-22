@@ -32,6 +32,8 @@ const reasonOf: { [Story in BrokenStory]: string } = {
   RenderedWhereTheScanDoesNotLook: "the canvas holds .sb-wrapper",
   PlayTurnsTheCheckOff: 'while it ran:\na11y.test is "off"',
   NamelessLinkAfterAWrite: "link-name",
+  VariantOnlyAsAnAttribute: "render alike in every computed style",
+  KnownOpenThatNoLongerHolds: "alike, but they render differently",
   SetsTheOtherScheme: "leaves the colour scheme of its project",
 };
 

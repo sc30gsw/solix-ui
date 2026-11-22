@@ -104,3 +104,20 @@ export const AsALink: Story = {
 };
 
 export const EveryUnstyled: Story = everyValueOf(meta, "unstyled");
+
+const withTheDisabledAttribute = {
+  ...meta,
+  argTypes: { ...meta.argTypes, disabled: { control: { type: "boolean" } } },
+};
+
+export const EveryDisabled: Story = everyValueOf(
+  withTheDisabledAttribute,
+  "disabled",
+  {},
+  {
+    knownOpen: {
+      followUp: "Button's spec pull request gives a disabled button its own look (Q182)",
+      alike: [["true", "false"]],
+    },
+  },
+);

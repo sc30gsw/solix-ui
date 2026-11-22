@@ -172,7 +172,7 @@ function systemPrefers(scheme: SolixComputedColorScheme): () => void {
 }
 
 export const EveryDefaultColorScheme: Story = {
-  ...everyValueOf(meta, "defaultColorScheme", {}, { auto: "dark" }),
+  ...everyValueOf(meta, "defaultColorScheme", {}, { rendersAs: { auto: "dark" } }),
   beforeEach: () => systemPrefers("dark"),
 };
 

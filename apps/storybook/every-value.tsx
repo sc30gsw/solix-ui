@@ -1,4 +1,5 @@
 import type { JSX } from "@solidjs/web";
+import { colorSchemeAttribute, type SolixComputedColorScheme } from "@solix/core";
 import { For } from "solid-js";
 import type { ComponentStory } from "#/story-meta.ts";
 import { playOfEveryValueStarted } from "#/story-run.ts";
@@ -55,31 +56,105 @@ type ValuesMeta = {
   readonly render?: Render;
 };
 
-const generatedIdentities = new Set([
-  "id",
-  "for",
-  "aria-controls",
-  "aria-labelledby",
-  "aria-describedby",
-]);
+const lookedAt = [undefined, "::before", "::after", "::placeholder", "::marker"];
 
 function lookOf(element: Element): string {
-  const attributes = [...element.attributes]
-    .filter(({ name }) => !generatedIdentities.has(name))
-    .map(({ name, value }) => `${name}=${value}`)
-    .toSorted();
-  const style = getComputedStyle(element);
-  const computed = [...style].map((property) => `${property}:${style.getPropertyValue(property)}`);
-  const script = element instanceof HTMLScriptElement ? [element.text] : [];
-  return [element.tagName, ...attributes, ...script, ...computed].join(";");
+  return lookedAt
+    .map((pseudo) => {
+      const style = getComputedStyle(element, pseudo);
+      return [...style].map((property) => `${property}:${style.getPropertyValue(property)}`);
+    })
+    .join("|");
+}
+
+function renderedOf(item: Element): Element[] {
+  return [...item.children].slice(1);
 }
 
 function renderedLooks(item: Element): string {
-  return [...item.children]
-    .slice(1)
+  return renderedOf(item)
     .flatMap((rendered) => [rendered, ...rendered.querySelectorAll("*")])
     .map(lookOf)
-    .join("|");
+    .join("||");
+}
+
+type Scheme = SolixComputedColorScheme;
+type AlikeGroups<V> = readonly (readonly V[])[];
+
+export type AlikeValues<V extends string> = {
+  readonly rendersAs?: Partial<Record<V, V>>;
+  readonly inScheme?: Partial<Record<Scheme, AlikeGroups<V>>>;
+  readonly atWidth?: { readonly width: number; readonly alike: AlikeGroups<V> };
+  readonly byEffect?: { readonly effect: string; readonly of: (rendered: Element) => string };
+  readonly knownOpen?: { readonly followUp: string; readonly alike: AlikeGroups<V> };
+};
+
+type Declared = { readonly kind: string; readonly pairs: readonly (readonly [string, string])[] };
+
+const viewportHeight = 900;
+
+function pairsIn(groups: AlikeGroups<string>): [string, string][] {
+  return groups.flatMap((group) =>
+    group.flatMap((value, at) =>
+      group.slice(at + 1).map((other): [string, string] => [value, other]),
+    ),
+  );
+}
+
+function groupsRenderedAs(rendersAs: Readonly<Record<string, string | undefined>>): string[][] {
+  const finalOf = (value: string, seen: readonly string[] = []): string => {
+    const as = rendersAs[value];
+    return as === undefined || seen.includes(as) ? value : finalOf(as, [...seen, value]);
+  };
+  const groups = Map.groupBy(
+    [...new Set(Object.entries(rendersAs).flatMap(([value, as]) => [value, as ?? value]))],
+    (value) => finalOf(value),
+  );
+  return [...groups.values()];
+}
+
+export const cssWideKeywords = {
+  initial: "inherit",
+  revert: "inherit",
+  "revert-layer": "inherit",
+  unset: "inherit",
+} as const;
+
+function schemeOf(element: Element): Scheme {
+  const scheme = element.closest(`[${colorSchemeAttribute}]`)?.getAttribute(colorSchemeAttribute);
+  if (scheme === "dark" || scheme === "light") return scheme;
+  if (scheme === "auto" && matchMedia("(prefers-color-scheme: dark)").matches) return "dark";
+  return "light";
+}
+
+function declaredAlike(
+  alike: AlikeValues<string>,
+  scheme: Scheme,
+  knownOpen: string,
+): readonly Declared[] {
+  return [
+    {
+      kind: "rendersAs",
+      pairs: pairsIn(groupsRenderedAs(alike.rendersAs ?? {})),
+    },
+    { kind: `inScheme.${scheme}`, pairs: pairsIn(alike.inScheme?.[scheme] ?? []) },
+    { kind: `atWidth ${alike.atWidth?.width}px`, pairs: pairsIn(alike.atWidth?.alike ?? []) },
+    { kind: knownOpen, pairs: pairsIn(alike.knownOpen?.alike ?? []) },
+  ].filter(({ pairs }) => pairs.length > 0);
+}
+
+function viewportOf(width: number): object {
+  const name = `${width}px`;
+  return {
+    parameters: {
+      viewport: {
+        options: {
+          [name]: { name, styles: { width: name, height: `${viewportHeight}px` }, type: "desktop" },
+        },
+      },
+    },
+    globals: { viewport: { value: name, isRotated: false } },
+  };
 }
 
 const bothBooleans = [true, false];
@@ -126,17 +201,19 @@ export function everyValueOf<
   meta: M,
   prop: K,
   args?: Partial<PropsOf<M["component"]>>,
-  rendersAs?: Partial<Record<ValueOf<M["component"], K>, ValueOf<M["component"], K>>>,
+  alike?: AlikeValues<ValueOf<M["component"], K>>,
 ): ComponentStory<M>;
 export function everyValueOf(
   meta: ValuesMeta,
   prop: string,
   args: Args = {},
-  rendersAs: Readonly<Record<string, string | undefined>> = {},
+  alike: AlikeValues<string> = {},
 ): object {
   const label = `Every ${prop}`;
   const renderOne = renderOf(meta);
+  const knownOpen = `knownOpen, until ${alike.knownOpen?.followUp}`;
   return {
+    ...(alike.atWidth === undefined ? {} : viewportOf(alike.atWidth.width)),
     args,
     render: (given: Args, context: Context) => (
       <ul aria-label={label}>
@@ -152,29 +229,65 @@ export function everyValueOf(
     ),
     play: ({ canvasElement }: { readonly canvasElement: Element }) => {
       playOfEveryValueStarted();
-      const values = valuesOf(meta, prop);
+      const width = alike.atWidth?.width;
+      if (width !== undefined && window.innerWidth !== width) {
+        throw new Error(
+          `everyValueOf(meta, "${prop}") declares the values alike at ${width}px, but the page is ${window.innerWidth}px wide. Run the story at the viewport it sets.`,
+        );
+      }
+      const values = valuesOf(meta, prop).map(String);
       const items = [...canvasElement.querySelectorAll(`ul[aria-label="${label}"] > li`)];
       const looks = items.map(renderedLooks);
-      const lookOfValue = (value: Option) => looks[values.indexOf(value)];
-      const alike = values.flatMap((value, at) =>
-        values
-          .slice(at + 1)
-          .filter((other) => looks[at] === lookOfValue(other))
-          .filter((other) => rendersAs[String(value)] !== String(other))
-          .filter((other) => rendersAs[String(other)] !== String(value))
-          .map((other) => `${String(value)} and ${String(other)}`),
+      const effect = alike.byEffect;
+      const effects = items.map((item) =>
+        effect === undefined ? "" : renderedOf(item).map(effect.of).join("|"),
       );
-      const unlike = Object.entries(rendersAs)
-        .filter(
-          ([value, as]) =>
-            as !== undefined &&
-            looks[values.map(String).indexOf(value)] !== looks[values.map(String).indexOf(as)],
-        )
-        .map(([value, as]) => `${value} as ${as}`);
-      if (items.length !== values.length || alike.length > 0 || unlike.length > 0) {
-        throw new Error(
-          `everyValueOf(meta, "${prop}") renders ${items.length} of ${values.length} values; alike in every attribute and computed style: ${alike.join("; ") || "none"}; not rendered as given: ${unlike.join("; ") || "none"}. Give the story, as its third argument, the args that make each value show.`,
+      const at = (value: string) => values.indexOf(value);
+      const declared = declaredAlike(alike, schemeOf(canvasElement), knownOpen);
+      const isDeclared = (value: string, other: string) =>
+        declared.some(({ pairs }) =>
+          pairs.some(([a, b]) => (a === value && b === other) || (a === other && b === value)),
         );
+      const pairs = values.flatMap((value, index) =>
+        values.slice(index + 1).map((other) => [value, other] as const),
+      );
+      const named = ([value, other]: readonly [string, string]) => `${value} and ${other}`;
+      const alikeInLook = (value: string, other: string) => looks[at(value)] === looks[at(other)];
+      const tellsApart = (value: string, other: string) =>
+        effect === undefined
+          ? !alikeInLook(value, other)
+          : effects[at(value)] !== effects[at(other)];
+      const undeclared = pairs.filter(
+        ([value, other]) => !tellsApart(value, other) && !isDeclared(value, other),
+      );
+      const unneeded = declared.flatMap(({ kind, pairs: given }) =>
+        given
+          .filter(([value, other]) => !alikeInLook(value, other))
+          .map((pair) => `${kind}: ${named(pair)}`),
+      );
+      const shownApart =
+        effect === undefined
+          ? []
+          : pairs
+              .filter(([value, other]) => !alikeInLook(value, other))
+              .map((pair) => `byEffect: ${named(pair)}`);
+      const problems = [
+        items.length === values.length
+          ? []
+          : [`it renders ${items.length} of ${values.length} values`],
+        undeclared.length === 0
+          ? []
+          : [
+              `${undeclared.map(named).join("; ")} render alike in every computed style${effect === undefined ? "" : ` and in ${effect.effect}`}, and no exception declares them alike. Give the story, as its third argument, the args that make each value show`,
+            ],
+        [...unneeded, ...shownApart].length === 0
+          ? []
+          : [
+              `the exceptions declare ${[...unneeded, ...shownApart].join("; ")} alike, but they render differently. Remove them from the exception`,
+            ],
+      ].flat();
+      if (problems.length > 0) {
+        throw new Error(`everyValueOf(meta, "${prop}"): ${problems.join("; and ")}.`);
       }
     },
   };

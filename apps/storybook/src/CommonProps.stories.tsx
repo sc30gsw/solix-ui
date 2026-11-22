@@ -1,6 +1,6 @@
 import { Box, Stack } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
-import { everyValueOf } from "#/every-value.tsx";
+import { cssWideKeywords, everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -203,14 +203,109 @@ export const ConsumerStyling: Story = {
   ),
 };
 
-export const EveryTextAlign: Story = everyValueOf(meta, "ta");
+export const EveryTextAlign: Story = everyValueOf(meta, "ta", {}, { rendersAs: cssWideKeywords });
 
-export const EveryPosition: Story = everyValueOf(meta, "pos");
+export const EveryPosition: Story = everyValueOf(meta, "pos", {}, { rendersAs: cssWideKeywords });
 
-export const EveryHiddenFrom: Story = everyValueOf(meta, "hiddenFrom");
+const breakpointsAlikeAt = {
+  700: [["sm", "md", "lg", "xl"]],
+  900: [
+    ["xs", "sm"],
+    ["md", "lg", "xl"],
+  ],
+  1100: [
+    ["xs", "sm", "md"],
+    ["lg", "xl"],
+  ],
+  1300: [["xs", "sm", "md", "lg"]],
+} as const;
 
-export const EveryVisibleFrom: Story = everyValueOf(meta, "visibleFrom");
+export const EveryHiddenFromAt700px: Story = everyValueOf(
+  meta,
+  "hiddenFrom",
+  {},
+  {
+    atWidth: { width: 700, alike: breakpointsAlikeAt[700] },
+  },
+);
 
-export const EveryLightHidden: Story = everyValueOf(meta, "lightHidden");
+export const EveryHiddenFromAt900px: Story = everyValueOf(
+  meta,
+  "hiddenFrom",
+  {},
+  {
+    atWidth: { width: 900, alike: breakpointsAlikeAt[900] },
+  },
+);
 
-export const EveryDarkHidden: Story = everyValueOf(meta, "darkHidden");
+export const EveryHiddenFromAt1100px: Story = everyValueOf(
+  meta,
+  "hiddenFrom",
+  {},
+  {
+    atWidth: { width: 1100, alike: breakpointsAlikeAt[1100] },
+  },
+);
+
+export const EveryHiddenFromAt1300px: Story = everyValueOf(
+  meta,
+  "hiddenFrom",
+  {},
+  {
+    atWidth: { width: 1300, alike: breakpointsAlikeAt[1300] },
+  },
+);
+
+export const EveryVisibleFromAt700px: Story = everyValueOf(
+  meta,
+  "visibleFrom",
+  {},
+  {
+    atWidth: { width: 700, alike: breakpointsAlikeAt[700] },
+  },
+);
+
+export const EveryVisibleFromAt900px: Story = everyValueOf(
+  meta,
+  "visibleFrom",
+  {},
+  {
+    atWidth: { width: 900, alike: breakpointsAlikeAt[900] },
+  },
+);
+
+export const EveryVisibleFromAt1100px: Story = everyValueOf(
+  meta,
+  "visibleFrom",
+  {},
+  {
+    atWidth: { width: 1100, alike: breakpointsAlikeAt[1100] },
+  },
+);
+
+export const EveryVisibleFromAt1300px: Story = everyValueOf(
+  meta,
+  "visibleFrom",
+  {},
+  {
+    atWidth: { width: 1300, alike: breakpointsAlikeAt[1300] },
+  },
+);
+
+export const EveryLightHidden: Story = everyValueOf(
+  meta,
+  "lightHidden",
+  {},
+  {
+    inScheme: { dark: [["true", "false"]] },
+  },
+);
+
+export const EveryDarkHidden: Story = everyValueOf(
+  meta,
+  "darkHidden",
+  {},
+  {
+    inScheme: { light: [["true", "false"]] },
+  },
+);

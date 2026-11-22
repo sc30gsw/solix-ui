@@ -1,4 +1,4 @@
-import { ColorSchemeScript } from "@solix/core";
+import { ColorSchemeScript, colorSchemeAttribute } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
 import { expect } from "storybook/test";
 import { everyValueOf } from "#/every-value.tsx";
@@ -65,6 +65,45 @@ export const ForcedLight: Story = {
   },
 };
 
-export const EveryDefaultColorScheme: Story = everyValueOf(meta, "defaultColorScheme");
+const systemSchemes = ["light", "dark"] as const;
 
-export const EveryForcedColorScheme: Story = everyValueOf(meta, "forceColorScheme");
+function schemeSetIn(system: (typeof systemSchemes)[number], text: string): string {
+  const frame = document.createElement("iframe");
+  document.body.append(frame);
+  try {
+    const page = frame.contentWindow;
+    const scripted = frame.contentDocument;
+    if (page === null || scripted === null) return "no page to run it in";
+    Reflect.set(page, "matchMedia", () => ({ matches: system === "dark" }));
+    const script = scripted.createElement("script");
+    script.text = text;
+    scripted.head.append(script);
+    return scripted.documentElement.getAttribute(colorSchemeAttribute) ?? "nothing";
+  } finally {
+    frame.remove();
+  }
+}
+
+function schemesTheScriptSets(rendered: Element): string {
+  return systemSchemes
+    .map((system) => `${schemeSetIn(system, rendered.textContent ?? "")} under a ${system} system`)
+    .join(", ");
+}
+
+const bySchemeItSets = {
+  byEffect: { effect: "the scheme its script sets", of: schemesTheScriptSets },
+};
+
+export const EveryDefaultColorScheme: Story = everyValueOf(
+  meta,
+  "defaultColorScheme",
+  {},
+  bySchemeItSets,
+);
+
+export const EveryForcedColorScheme: Story = everyValueOf(
+  meta,
+  "forceColorScheme",
+  {},
+  bySchemeItSets,
+);

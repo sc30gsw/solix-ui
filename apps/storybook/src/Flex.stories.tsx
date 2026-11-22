@@ -1,6 +1,6 @@
 import { Box, Flex } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
-import { everyValueOf } from "#/every-value.tsx";
+import { cssWideKeywords, everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -43,6 +43,20 @@ export const WrappedInASection: Story = {
   ),
 };
 
-export const EveryWrap: Story = everyValueOf(meta, "wrap");
+export const EveryWrap: Story = everyValueOf(
+  meta,
+  "wrap",
+  {},
+  {
+    rendersAs: cssWideKeywords,
+  },
+);
 
-export const EveryDirection: Story = everyValueOf(meta, "direction");
+export const EveryDirection: Story = everyValueOf(
+  meta,
+  "direction",
+  {},
+  {
+    rendersAs: cssWideKeywords,
+  },
+);
