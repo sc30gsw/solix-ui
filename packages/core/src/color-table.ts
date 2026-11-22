@@ -4,7 +4,7 @@ import {
   hexDigits,
   isCssColorKeyword,
 } from "#/src/css-colors.ts";
-import { written } from "#/src/css-syntax.ts";
+import { declarable } from "#/src/css-syntax.ts";
 
 export const palettes = [
   "dark",
@@ -221,7 +221,7 @@ export type ParsedColor =
   | { readonly kind: "colour"; readonly value: string };
 
 export function parseColor(given: unknown): ParsedColor | undefined {
-  const text = typeof given === "string" ? written(given) : undefined;
+  const text = typeof given === "string" ? declarable(given) : undefined;
   if (text === undefined) return undefined;
   if (isPalette(text)) return { kind: "palette", palette: text };
   const at = text.lastIndexOf(shadeSeparator);

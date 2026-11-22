@@ -31,7 +31,7 @@ import {
 import { layerOrder, libraryCascadeLayer, containerQueryLayer } from "#/src/layers.ts";
 import { type VariableRow, type Variables } from "#/src/variables.ts";
 import { colorValueOf } from "#/src/color-table.ts";
-import { written } from "#/src/css-syntax.ts";
+import { declarable } from "#/src/css-syntax.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const pixelsPerRem = 16;
@@ -179,13 +179,13 @@ function keyedEntries<Key extends string>(
   value: VariableValue,
   keys: readonly Key[],
 ): [typeof baseKey | Key, string | number][] {
-  const given = written(value);
+  const given = declarable(value);
   if (given === undefined) return [];
   if (typeof given !== "object") return [[baseKey, given]];
   const keyed: Partial<Record<string, string | number | Absent>> = given;
   const every: (typeof baseKey | Key)[] = [baseKey, ...keys];
   return every.flatMap((key): [typeof baseKey | Key, string | number][] => {
-    const each = written(keyed[key]);
+    const each = declarable(keyed[key]);
     return each === undefined ? [] : [[key, each]];
   });
 }
@@ -260,22 +260,22 @@ export function eachValue<V extends string | number>(
   value: Keyed<V>,
   write: (given: V) => string | undefined,
 ): Keyed<string> {
-  const given = written(value);
+  const given = declarable(value);
   if (given === undefined) return undefined;
   if (typeof given !== "object") return write(given);
   return Object.fromEntries(
     Object.entries(given).map(([key, each]) => {
-      const kept = written(each);
+      const kept = declarable(each);
       return [key, kept === undefined ? kept : write(kept)];
     }),
   );
 }
 
 export function withBase<V extends string | number>(value: Keyed<V>, base: V): Keyed<V> {
-  const given = written(value);
+  const given = declarable(value);
   if (given === undefined) return base;
   if (typeof given !== "object") return given;
-  return { ...given, [baseKey]: written(given[baseKey]) ?? base };
+  return { ...given, [baseKey]: declarable(given[baseKey]) ?? base };
 }
 
 function placed(
