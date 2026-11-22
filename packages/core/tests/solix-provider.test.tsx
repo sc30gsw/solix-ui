@@ -199,11 +199,14 @@ test("given no cssVariablesSelector, the provider writes its theme under a selec
   );
 });
 
+const nullNonce: unknown = null;
+
 test.each([
   ["no getStyleNonce", {}],
   ["a getStyleNonce that gives undefined", { getStyleNonce: () => undefined }],
   ['a getStyleNonce that gives ""', { getStyleNonce: () => "" }],
   ['a getStyleNonce that gives " "', { getStyleNonce: () => " " }],
+  ["a getStyleNonce that gives null", { getStyleNonce: () => nullNonce as string }],
 ])(
   "a provider given %s gives its theme style the nonce of the provider around it",
   (_, own: { getStyleNonce?: () => string | undefined }) => {

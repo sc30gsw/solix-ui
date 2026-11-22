@@ -138,7 +138,7 @@ test("the pre-paint script never holds the text that would end its <script> elem
   );
 });
 
-test("ColorSchemeScript renders one <script> with that text and nothing else in it, the nonce of the provider around it unless it is given one that is not undefined, empty or blank, and the attributes it is given", () => {
+test("ColorSchemeScript renders one <script> with that text and nothing else in it, the nonce of the provider around it unless it is given one that is not undefined, null, empty or blank, none when it is given false, and the attributes it is given", () => {
   const options = { defaultColorScheme: "auto" as const, localStorageKey: "theme" };
   const inside = renderToString(() =>
     createComponent(library.SolixProvider, {
@@ -164,7 +164,8 @@ test("ColorSchemeScript renders one <script> with that text and nothing else in 
       },
     }),
   );
-  const withBlank = ["", " "].map((blank) =>
+  const nullNonce: unknown = null;
+  const withBlank = ["", " ", nullNonce as string].map((blank) =>
     renderToString(() =>
       createComponent(library.SolixProvider, {
         getStyleNonce: () => "page",
@@ -174,6 +175,22 @@ test("ColorSchemeScript renders one <script> with that text and nothing else in 
       }),
     ),
   );
+  const withFalse = [true, false].map((inAProvider) => {
+    const script = () => createComponent(library.ColorSchemeScript, { ...options, nonce: false });
+    const html = renderToString(() =>
+      inAProvider
+        ? createComponent(library.SolixProvider, {
+            getStyleNonce: () => "page",
+            get children() {
+              return script();
+            },
+          })
+        : script(),
+    );
+    return elementsOf(html)
+      .filter(({ tag }) => tag === "script")
+      .map((found) => valuesOf(found, "nonce"));
+  });
   const [script] = elementsOf(inside).filter(({ tag }) => tag === "script");
   const [ownScript] = elementsOf(own).filter(({ tag }) => tag === "script");
 
@@ -182,7 +199,8 @@ test("ColorSchemeScript renders one <script> with that text and nothing else in 
     inside,
   );
   expect(valuesOf(script, "nonce")).toEqual(["page"]);
-  expect(withBlank, "an empty or blank nonce is no nonce").toEqual([inside, inside]);
+  expect(withBlank, "a null, empty or blank nonce is no nonce").toEqual([inside, inside, inside]);
+  expect(withFalse, "false renders no nonce, in a provider or not").toEqual([[[]], [[]]]);
   expect(valuesOf(ownScript, "nonce")).toEqual(["own"]);
   expect(valuesOf(ownScript, "id")).toEqual(["scheme"]);
   expect(valuesOf(script, "defaultcolorscheme")).toEqual([]);
