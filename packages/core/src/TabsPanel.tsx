@@ -16,7 +16,11 @@ const styles = stylex.create({
 export type TabsPanelProps = ElementProps<
   "div",
   typeof styles,
-  { value: string; keepMounted?: boolean }
+  {
+    value: string;
+    /** `true` keeps this panel's content mounted even when the `Tabs` do not keep panels; `false` leaves it to the `Tabs`. */
+    keepMounted?: boolean;
+  }
 >;
 
 export function TabsPanel(props: TabsPanelProps) {

@@ -4,7 +4,7 @@ import {
   hexDigits,
   isCssColorKeyword,
 } from "#/src/css-colors.ts";
-import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
+import { declarable } from "#/src/css-syntax.ts";
 
 export const palettes = [
   "dark",
@@ -220,17 +220,18 @@ export type ParsedColor =
   | { readonly kind: "shade"; readonly palette: Palette; readonly value: string }
   | { readonly kind: "colour"; readonly value: string };
 
-export function parseColor(written: unknown): ParsedColor | undefined {
-  if (typeof written !== "string" || characterThatEndsADeclaration.test(written)) return undefined;
-  if (isPalette(written)) return { kind: "palette", palette: written };
-  const at = written.lastIndexOf(shadeSeparator);
-  const palette = written.slice(0, at);
-  const shade = written.slice(at + 1);
+export function parseColor(given: unknown): ParsedColor | undefined {
+  const text = typeof given === "string" ? declarable(given) : undefined;
+  if (text === undefined) return undefined;
+  if (isPalette(text)) return { kind: "palette", palette: text };
+  const at = text.lastIndexOf(shadeSeparator);
+  const palette = text.slice(0, at);
+  const shade = text.slice(at + 1);
   if (at > 0 && isPalette(palette) && isShade(shade)) {
     return { kind: "shade", palette, value: `var(${shadeSource(palette, shade)})` };
   }
-  return isCssColorKeyword(written) || colourSyntax.test(written)
-    ? { kind: "colour", value: written }
+  return isCssColorKeyword(text) || colourSyntax.test(text)
+    ? { kind: "colour", value: text }
     : undefined;
 }
 

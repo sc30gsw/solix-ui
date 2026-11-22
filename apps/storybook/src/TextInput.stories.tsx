@@ -1,15 +1,17 @@
 import { TextInput } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect, userEvent } from "storybook/test";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: TextInput,
+  argTypes: argTypesOf(TextInput),
   args: { "aria-label": "Email", type: "email", placeholder: "you@example.com" },
-} satisfies Meta<typeof TextInput>;
+} satisfies ComponentMeta<typeof TextInput>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 

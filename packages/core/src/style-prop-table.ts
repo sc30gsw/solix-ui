@@ -104,6 +104,8 @@ const visibilityTable = {
 export const baseKey = "base";
 
 type Rows = typeof stylePropTable;
+export type StylePropRows = Rows;
+export type VisibilityRows = typeof visibilityTable;
 export type StylePropName = keyof Rows;
 export type CanonicalStylePropName = {
   [Name in StylePropName]: Rows[Name] extends AliasRow ? never : Name;
@@ -115,9 +117,9 @@ export type RowOf<Name extends StylePropName> = Rows[Name] extends {
   : Rows[Name];
 export type Breakpoint = keyof typeof breakpointWidths;
 export type ResponsiveKey = typeof baseKey | Breakpoint;
-export type VisibilityPropName = keyof typeof visibilityTable;
+export type VisibilityPropName = keyof VisibilityRows;
 export type VisibilityValue<Name extends VisibilityPropName> = Name extends VisibilityPropName
-  ? (typeof visibilityTable)[Name] extends HiddenAtAWidth
+  ? VisibilityRows[Name] extends HiddenAtAWidth
     ? Breakpoint
     : boolean
   : never;

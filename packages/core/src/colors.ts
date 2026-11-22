@@ -27,6 +27,7 @@ export type SolixColor =
 export type ColorProps<Variant extends ColorVariant = ColorVariant> = {
   color?: SolixColor;
   variant?: Variant;
+  /** With the `filled` variant, picks a text colour that meets its contrast on `color`. */
   autoContrast?: boolean;
 };
 

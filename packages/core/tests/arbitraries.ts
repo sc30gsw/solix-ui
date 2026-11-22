@@ -144,6 +144,10 @@ const drawnValue: fc.Arbitrary<Drawn> = fc.oneof(
   },
   { arbitrary: fc.constant({ value: null, kept: false }), weight: 1 },
   { arbitrary: valueThatEndsADeclaration.map((value) => ({ value, kept: false })), weight: 1 },
+  {
+    arbitrary: fc.constantFrom("", " ", "\t", "\n").map((value) => ({ value, kept: false })),
+    weight: 1,
+  },
 );
 
 export const declaredStyleProp: fc.Arbitrary<DeclaredStyleProp> = fc.oneof(

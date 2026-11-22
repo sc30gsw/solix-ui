@@ -34,6 +34,8 @@ const sizes = [
   "__proto__",
 ];
 const refusedValues = [
+  "",
+  " ",
   "1rem;color:red",
   "1rem}",
   "{",
@@ -47,7 +49,7 @@ const refusedValues = [
   "a /* b",
   "a\\b",
 ];
-const refusedSelectors = ["a{", "b}", ":root;", "<x>", ":not(.a", "[data-x"];
+const refusedSelectors = ["", " ", "a{", "b}", ":root;", "<x>", ":not(.a", "[data-x"];
 const writable = fc.oneof(
   fc.stringMatching(/^[a-z0-9.%]{1,12}$/),
   fc.constantFrom(
@@ -197,25 +199,35 @@ test("given no cssVariablesSelector, the provider writes its theme under a selec
   );
 });
 
-test("a provider given no getStyleNonce gives its theme style the nonce of the provider around it", () => {
-  const html = renderToString(() =>
-    createComponent(library.SolixProvider, {
-      getStyleNonce: () => "outer",
-      get children() {
-        return createComponent(library.SolixProvider, {
-          theme: { spacing: { md: "1rem" } },
-          cssVariablesSelector: ".inner",
-        });
-      },
-    }),
-  );
+test.each([
+  ["no getStyleNonce", {}],
+  ["a getStyleNonce that gives undefined", { getStyleNonce: () => undefined }],
+  ['a getStyleNonce that gives ""', { getStyleNonce: () => "" }],
+  ['a getStyleNonce that gives " "', { getStyleNonce: () => " " }],
+  ["a getStyleNonce that gives null", { getStyleNonce: () => null }],
+])(
+  "a provider given %s gives its theme style the nonce of the provider around it",
+  (_, own: { getStyleNonce?: () => string | null | undefined }) => {
+    const html = renderToString(() =>
+      createComponent(library.SolixProvider, {
+        getStyleNonce: () => "outer",
+        get children() {
+          return createComponent(library.SolixProvider, {
+            ...own,
+            theme: { spacing: { md: "1rem" } },
+            cssVariablesSelector: ".inner",
+          });
+        },
+      }),
+    );
 
-  expect(
-    elementsOf(html)
-      .filter(({ tag }) => tag === "style")
-      .map((style) => valuesOf(style, "nonce")),
-  ).toEqual([["outer"]]);
-});
+    expect(
+      elementsOf(html)
+        .filter(({ tag }) => tag === "style")
+        .map((style) => valuesOf(style, "nonce")),
+    ).toEqual([["outer"]]);
+  },
+);
 
 test("a theme's primaryColor writes every shade of the primary's alias from that palette, at no specificity in a scope rooted at the selector, on the root and on every element with a colour scheme inside it, so the nearest provider wins, and nothing for a value that names no palette or names the primary itself", async (context) => {
   const named = [...palettes, ...Object.keys(paletteAliases)];

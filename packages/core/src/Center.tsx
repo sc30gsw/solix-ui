@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 import { dynamic, type JSX, type ValidComponent } from "@solidjs/web";
-import { createParts, type PolymorphicProps } from "#/src/parts.ts";
+import { createParts, defaultsOf, type PolymorphicProps, withDefaults } from "#/src/parts.ts";
 
 const styles = stylex.create({
   root: {
@@ -19,10 +19,13 @@ export type CenterProps<T extends ValidComponent = "div"> = PolymorphicProps<
   { inline?: boolean }
 >;
 
+const defaults = defaultsOf<CenterProps>()({ component: "div" });
+
 export function Center<T extends ValidComponent = "div">(props: CenterProps<T>): JSX.Element;
 export function Center(props: CenterProps): JSX.Element;
-export function Center<T extends ValidComponent = "div">(props: CenterProps<T>) {
+export function Center<T extends ValidComponent = "div">(rawProps: CenterProps<T>) {
+  const props = withDefaults(defaults, rawProps);
   const { root } = createParts("Center", styles, props, { keep: ["inline"] });
-  const Root = dynamic(() => props.component ?? "div");
+  const Root = dynamic(() => props.component);
   return <Root data-inline={props.inline ? "true" : undefined} {...root} />;
 }

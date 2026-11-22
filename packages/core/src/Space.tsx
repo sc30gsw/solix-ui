@@ -16,8 +16,8 @@ export type SpaceProps = ElementProps<"div", typeof styles>;
 export function Space(props: SpaceProps) {
   const { root } = createParts(spaceVariables, styles, props, {
     variables: {
-      "space-min-height": (given) => given.mih ?? given.h,
-      "space-min-width": (given) => given.miw ?? given.w,
+      "space-min-height": (given) => given.h,
+      "space-min-width": (given) => given.w,
     },
   });
   return <div {...root} />;

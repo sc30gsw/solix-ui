@@ -4,12 +4,15 @@ import { join } from "node:path";
 import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
 import { browserInEveryEngine } from "#/scripts/browser-instances.ts";
+import { storyControls } from "#/scripts/story-controls.ts";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 import { anyFreePort } from "#/tests/support/server-process.ts";
 
 const filesOwnedByOtherTools = [".agents/**", ".claude/**", "skills-lock.json"];
 const tablesKeptCompact = ["AGENTS.md"];
 const ruleFixtures = ["tests/fixtures/**"];
+const storySpec = "apps/storybook/tests/story-spec.test.ts";
+const storyRecordsSetup = "apps/storybook/story-records-command.ts";
 const browserTests = "packages/primitives/tests/**/*.browser.test.{ts,tsx}";
 const checkerRules = "tests/rules/**/*.test.ts";
 const programOpeners = [
@@ -44,8 +47,13 @@ const fastCheckRunnersOnlyThroughTheWrapper = {
   message: runPropertiesThroughTheWrapper,
 };
 
-function afterTheRules<P extends { test?: object }>(project: P) {
-  return { ...project, test: { ...project.test, sequence: { groupOrder: 1 } } };
+const sequenceGroup = { browser: 1, others: 2, storySpec: 3 } as const;
+
+function inGroup(groupOrder: number) {
+  return <P extends { test?: object }>(project: P) => ({
+    ...project,
+    test: { ...project.test, sequence: { groupOrder } },
+  });
 }
 
 function withPackagesBuiltFirst<P extends { test?: object }>(project: P) {
@@ -56,6 +64,74 @@ function withPackagesBuiltFirst<P extends { test?: object }>(project: P) {
     join(import.meta.dirname, file),
   );
   return { ...project, test: { ...project.test, globalSetup } };
+}
+
+const projects = [
+  {
+    extends: true,
+    test: {
+      name: "rules",
+      environment: "node",
+      include: [checkerRules],
+    },
+  },
+  inGroup(sequenceGroup.browser)({
+    extends: true,
+    optimizeDeps: { include: preBundledForBrowserTests },
+    test: {
+      name: "browser",
+      include: [browserTests],
+      api: { port: anyFreePort, strictPort: true },
+      browser: browserInEveryEngine(),
+    },
+  }),
+  ...[
+    {
+      extends: true,
+      plugins: [storyControls()],
+      test: {
+        name: "node",
+        environment: "node",
+        include: [
+          "tests/**/*.test.ts",
+          "packages/*/tests/**/*.test.{ts,tsx}",
+          "apps/*/tests/**/*.test.{ts,tsx}",
+        ],
+        exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules, storySpec],
+        globalSetup: ["tests/support/global-setup.ts"],
+        setupFiles: ["apps/playground/tests/support/console-check.ts"],
+      },
+    },
+    ...storiesServers.map((server) => ({
+      extends: false as const,
+      ...storiesProject(server, storybookConfigDirectory),
+    })),
+  ].map(inGroup(sequenceGroup.others)),
+  inGroup(sequenceGroup.storySpec)({
+    extends: true,
+    test: {
+      name: "story spec",
+      environment: "node",
+      include: [storySpec],
+      globalSetup: [storyRecordsSetup],
+    },
+  }),
+].map(withPackagesBuiltFirst);
+
+type NamedProject = { test?: { name?: unknown; browser?: unknown } };
+
+export function configuredProjectNames(): string[] {
+  return projects.flatMap(({ test }: NamedProject) => {
+    const name = typeof test?.name === "string" ? test.name : "";
+    const browser: unknown = test?.browser;
+    const enabled =
+      typeof browser === "object" && browser !== null && Reflect.get(browser, "enabled") === true;
+    const instances: unknown = enabled ? Reflect.get(browser, "instances") : undefined;
+    if (!Array.isArray(instances)) return [name];
+    return instances.map(
+      (instance: unknown) => `${name} (${String(Reflect.get(Object(instance), "browser"))})`,
+    );
+  });
 }
 
 export default defineConfig({
@@ -145,46 +221,6 @@ export default defineConfig({
   test: {
     testTimeout: 30_000,
     hookTimeout: 30_000,
-    projects: [
-      {
-        extends: true,
-        test: {
-          name: "rules",
-          environment: "node",
-          include: [checkerRules],
-        },
-      },
-      ...[
-        {
-          extends: true,
-          test: {
-            name: "node",
-            environment: "node",
-            include: [
-              "tests/**/*.test.ts",
-              "packages/*/tests/**/*.test.{ts,tsx}",
-              "apps/*/tests/**/*.test.{ts,tsx}",
-            ],
-            exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules],
-            globalSetup: ["tests/support/global-setup.ts"],
-            setupFiles: ["apps/playground/tests/support/console-check.ts"],
-          },
-        },
-        {
-          extends: true,
-          optimizeDeps: { include: preBundledForBrowserTests },
-          test: {
-            name: "browser",
-            include: [browserTests],
-            api: { port: anyFreePort, strictPort: true },
-            browser: browserInEveryEngine(),
-          },
-        },
-        ...storiesServers.map((server) => ({
-          extends: false as const,
-          ...storiesProject(server, storybookConfigDirectory),
-        })),
-      ].map(afterTheRules),
-    ].map(withPackagesBuiltFirst),
+    projects,
   },
 });

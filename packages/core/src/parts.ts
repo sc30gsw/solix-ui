@@ -19,9 +19,23 @@ import {
 export const rootPart = "root";
 
 export type StylesApiProps<Styles> = {
+  /** They go next to each part's own classes. */
   classes?: Partial<Record<keyof Styles, JSX.ClassValue>>;
   styles?: Partial<Record<keyof Styles, JSX.CSSProperties>>;
   unstyled?: boolean;
+};
+
+export type ControlledProps<V> = {
+  /** Giving it makes the component controlled: the component changes only when it does. Giving `undefined` again makes it uncontrolled, with the value it had before it was controlled. Where its type takes `null`, `null` selects nothing. */
+  value?: V;
+  /** Where its type takes `null`, `null` selects nothing. */
+  defaultValue?: V;
+  onChange?: (value: V) => void;
+};
+
+export type OpenedProps = {
+  /** `onClose`, the dialog's `close` event, fires both when the user closes the dialog and when the consumer sets this to `false`. */
+  opened: boolean;
 };
 
 type StylesApiPropKey = keyof StylesApiProps<object>;
@@ -47,7 +61,12 @@ export const handledKeys = [
 
 export type HandledKey = (typeof handledKeys)[number];
 
-type Styling = { class?: JSX.ClassValue; style?: JSX.CSSProperties | string };
+type Styling = {
+  /** They go on the root, next to the component's own classes. */
+  class?: JSX.ClassValue;
+  /** It goes on the root, over the component's own style. */
+  style?: JSX.CSSProperties | string;
+};
 
 type RefusedBy<T extends ValidComponent> = {
   [Key in keyof ComponentProps<T> & keyof StyleProps]-?: [
@@ -85,6 +104,61 @@ type RootProps<Props, KeptOffRoot extends keyof Props> = Omit<Props, HandledKey 
   Part;
 
 type OtherPart<Styles> = Exclude<keyof Styles, typeof rootPart> & string;
+
+declare const definedFor: unique symbol;
+
+export type Defaults<P, D> = {
+  readonly [definedFor]: { readonly props: P; readonly values: D };
+};
+
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
+
+type OneLiteral<T> = [T] extends [string | number | boolean]
+  ? true extends IsUnion<T>
+    ? never
+    : string extends T
+      ? never
+      : number extends T
+        ? never
+        : T
+  : never;
+
+export type LiteralValues<D> = { readonly [K in keyof D]-?: OneLiteral<D[K]> };
+
+type ControlledKey = keyof ControlledProps<unknown>;
+
+type DefaultsFor<P, D> = {
+  readonly [K in keyof D]: K extends ControlledKey
+    ? never
+    : K extends keyof P
+      ? OneLiteral<D[K]> & Exclude<P[K], undefined>
+      : never;
+};
+
+export function defaultsOf<P extends object>() {
+  return <const D extends object>(values: D & DefaultsFor<P, D>): Defaults<P, D> =>
+    values as unknown as Defaults<P, D>;
+}
+
+export type DefaultValues<T> = T extends Defaults<unknown, infer D> ? D : never;
+
+export type WithDefaults<P, D> = Omit<P, keyof D> & {
+  [K in keyof D & keyof P]-?: Exclude<P[K], undefined> | D[K];
+};
+
+export function withDefaults<P extends object, D extends LiteralValues<D>>(
+  defaults: Defaults<unknown, D>,
+  props: P,
+): WithDefaults<P, D> {
+  const filled: Record<string, unknown> = {};
+  for (const key of Object.keys(defaults)) {
+    Object.defineProperty(filled, key, {
+      enumerable: true,
+      get: () => Reflect.get(props, key) ?? Reflect.get(defaults, key),
+    });
+  }
+  return merge(props, filled) as WithDefaults<P, D>;
+}
 
 export type CarriedStyling = {
   readonly class: () => JSX.ClassValue;

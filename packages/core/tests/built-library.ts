@@ -11,14 +11,10 @@ import type * as StableClass from "#/src/stable-class.ts";
 import type * as StyleProps from "#/src/style-props.ts";
 import type { VariableRow, Variables } from "#/src/variables.ts";
 import {
-  aliasDeclarationsOfTypeAt,
-  aliasDeclarationsReturnedBy,
-  openProgram,
-  parse,
-  staticPropertyName,
-  ts,
-  virtualFile,
-} from "../../../scripts/syntax";
+  exportsReturningAJsxElement,
+  openLibraryProgram,
+} from "../../../scripts/component-props.ts";
+import { parse, staticPropertyName, ts } from "../../../scripts/syntax";
 import { memberMarkupOf } from "#/tests/markup.ts";
 
 export type ConsumerProps = Record<string, unknown>;
@@ -83,58 +79,17 @@ export function builtSource(name: string): string {
 
 const builtByName: Record<string, unknown> = library;
 
-const libraryEntry = join(import.meta.dirname, "../src/index.ts");
-const jsxElementSource = "export const jsxElement = <></>;\n";
-
-function namedValueExports(source: ts.SourceFile): ts.Identifier[] {
-  return source.statements.flatMap((statement) =>
-    ts.isExportDeclaration(statement) &&
-    statement.exportClause &&
-    ts.isNamedExports(statement.exportClause)
-      ? statement.exportClause.elements.flatMap((element) =>
-          element.isTypeOnly || !ts.isIdentifier(element.name) ? [] : [element.name],
-        )
-      : [],
-  );
-}
-
-function declaredValues(source: ts.SourceFile): ts.Identifier[] {
-  return source.statements
-    .filter(ts.isVariableStatement)
-    .flatMap((statement) => [...statement.declarationList.declarations])
-    .flatMap(({ name }) => (ts.isIdentifier(name) ? [name] : []));
-}
-
 function exportsReturningTheJsxElement(): string[] {
-  const elementFile = virtualFile(jsxElementSource, ".tsx");
-  const program = openProgram([libraryEntry, elementFile]);
+  const { program, elementFile } = openLibraryProgram();
   try {
-    const entry = program.sourceFile(libraryEntry);
-    const element = program.sourceFile(elementFile);
-    const unread = [...(entry ? [] : [libraryEntry]), ...(element ? [] : [elementFile])];
-    if (!entry || !element) {
-      throw new Error(`${unread.join(", ")}: TypeScript could not read this file.`);
-    }
-    const jsxElementAliases = declaredValues(element).flatMap((name) =>
-      aliasDeclarationsOfTypeAt(program, name),
-    );
-    if (jsxElementAliases.length === 0) {
-      throw new Error("TypeScript gives no type alias for a JSX element of this project.");
-    }
-    return namedValueExports(entry)
-      .filter((name) =>
-        aliasDeclarationsReturnedBy(program, name).some((returned) =>
-          jsxElementAliases.includes(returned),
-        ),
-      )
-      .map(({ text }) => {
-        if (!(text in builtByName)) {
-          throw new Error(
-            `packages/core/dist/index.js: the source entry exports ${text}, which the build does not. Build the library again.`,
-          );
-        }
-        return text;
-      });
+    return exportsReturningAJsxElement(program, elementFile).map(({ text }) => {
+      if (!(text in builtByName)) {
+        throw new Error(
+          `packages/core/dist/index.js: the source entry exports ${text}, which the build does not. Build the library again.`,
+        );
+      }
+      return text;
+    });
   } finally {
     program.dispose();
   }

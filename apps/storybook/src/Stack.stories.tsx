@@ -1,8 +1,10 @@
 import { Box, Stack } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Stack,
+  argTypes: argTypesOf(Stack),
   args: { gap: "md" },
   render: (args) => (
     <Stack {...args}>
@@ -11,14 +13,18 @@ const meta = {
       <Box>Third</Box>
     </Stack>
   ),
-} satisfies Meta<typeof Stack>;
+} satisfies ComponentMeta<typeof Stack>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Default: Story = {};
 
 export const Centred: Story = {
   args: { align: "center" },
+};
+
+export const PushedToTheEnd: Story = {
+  args: { justify: "flex-end", h: 240 },
 };

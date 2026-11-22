@@ -1,15 +1,17 @@
 import { Disclosure } from "@solix/core";
-import type { Meta, StoryObj } from "storybook-solidjs-vite";
+import { argTypesOf } from "virtual:story-controls";
 import { expect, userEvent } from "storybook/test";
+import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
   component: Disclosure,
+  argTypes: argTypesOf(Disclosure),
   args: { label: "Details", children: "Content shown when open" },
-} satisfies Meta<typeof Disclosure>;
+} satisfies ComponentMeta<typeof Disclosure>;
 
 export default meta;
 
-type Story = StoryObj<typeof meta>;
+type Story = ComponentStory<typeof meta>;
 
 export const Closed: Story = {};
 

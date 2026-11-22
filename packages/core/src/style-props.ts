@@ -17,19 +17,21 @@ import {
   stylePropClass,
   stylePropKeys,
   type StylePropName,
+  type StylePropRows,
   stylePropNames,
   stylePropTable,
   variableClass,
   variableProperty,
   visibilityClass,
   type VisibilityPropName,
+  type VisibilityRows,
   type VisibilityValue,
   visibilityPropNames,
 } from "#/src/style-prop-table.ts";
 import { layerOrder, libraryCascadeLayer, containerQueryLayer } from "#/src/layers.ts";
 import { type VariableRow, type Variables } from "#/src/variables.ts";
 import { colorValueOf } from "#/src/color-table.ts";
-import { characterThatEndsADeclaration } from "#/src/css-syntax.ts";
+import { declarable } from "#/src/css-syntax.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const pixelsPerRem = 16;
@@ -103,12 +105,35 @@ export type VariableProp<
   Value = DefaultValue<Of["rows"][Name]>,
 > = Of["rows"][Name]["responsive"] extends true ? StyleProp<Value> : Value | Absent;
 
-/** A prop that sets the responsive variable `Name` of a component's `Of`, keyed by container width. */
-export type ContainerVariableProp<
+export type GapProps<
+  Of extends Variables,
+  Gap extends keyof Of["rows"],
+  RowGap extends keyof Of["rows"],
+  ColumnGap extends keyof Of["rows"],
+> = {
+  /** `rowGap` and `columnGap` override it. */
+  gap?: VariableProp<Of, Gap>;
+  rowGap?: VariableProp<Of, RowGap>;
+  columnGap?: VariableProp<Of, ColumnGap>;
+};
+
+export type GridTypeProps<Media extends object, Container extends object> =
+  | ({
+      /** `media` keys responsive values by the viewport's width; `container` keys them by the grid's own width, through container queries. */
+      type?: "media";
+    } & Media)
+  | ({
+      type: "container";
+    } & Container);
+
+export type GridType = NonNullable<GridTypeProps<object, object>["type"]>;
+
+export type GridTypeVariableProp<
+  Type extends GridType,
   Of extends Variables,
   Name extends keyof Of["rows"],
   Value = DefaultValue<Of["rows"][Name]>,
-> = ContainerProp<Value>;
+> = Type extends "container" ? ContainerProp<Value> : VariableProp<Of, Name, Value>;
 
 export type VariableValue = Keyed<string | number>;
 
@@ -128,9 +153,14 @@ export type QueryContainer = {
 
 export type ResolvedVariables = Resolved & { readonly used: readonly Used[] };
 
-export type StyleProps = {
-  [Name in StylePropName]?: StyleProp<ValueOf<RowOf<Name>>>;
-} & { [Name in VisibilityPropName]?: VisibilityValue<Name> | Absent };
+type StylePropsOf<Table extends StylePropRows> = {
+  -readonly [Name in keyof Table]?: StyleProp<ValueOf<RowOf<Name & StylePropName>>>;
+};
+type VisibilityPropsOf<Table extends VisibilityRows> = {
+  -readonly [Name in keyof Table]?: VisibilityValue<Name & VisibilityPropName> | Absent;
+};
+
+export type StyleProps = StylePropsOf<StylePropRows> & VisibilityPropsOf<VisibilityRows>;
 
 export type Resolved = {
   readonly classes: readonly string[];
@@ -149,14 +179,19 @@ function keyedEntries<Key extends string>(
   value: VariableValue,
   keys: readonly Key[],
 ): [typeof baseKey | Key, string | number][] {
-  if (value === undefined || value === null) return [];
-  if (typeof value !== "object") return [[baseKey, value]];
-  const keyed: Partial<Record<string, string | number | Absent>> = value;
+  const given = declarable(value);
+  if (given === undefined) return [];
+  if (typeof given !== "object") return [[baseKey, given]];
+  const keyed: Partial<Record<string, string | number | Absent>> = given;
   const every: (typeof baseKey | Key)[] = [baseKey, ...keys];
   return every.flatMap((key): [typeof baseKey | Key, string | number][] => {
-    const written = keyed[key];
-    return written === undefined || written === null ? [] : [[key, written]];
+    const each = declarable(keyed[key]);
+    return each === undefined ? [] : [[key, each]];
   });
+}
+
+export function declaresAValue(value: VariableValue): boolean {
+  return keyedEntries(value, breakpoints).length > 0;
 }
 
 export function tokenOf(scale: Scale, key: string): string | undefined {
@@ -171,7 +206,6 @@ function cssValue(
   if (typeof written === "number") {
     return row.kind === "length" ? `${written / pixelsPerRem}rem` : String(written);
   }
-  if (characterThatEndsADeclaration.test(written)) return undefined;
   const token = row.scale === undefined ? undefined : tokenOf(row.scale, written);
   if (token !== undefined) return `var(${token})`;
   return row.scale === colorScale ? (colorValueOf(written) ?? written) : written;
@@ -230,20 +264,22 @@ export function eachValue<V extends string | number>(
   value: Keyed<V>,
   write: (given: V) => string | undefined,
 ): Keyed<string> {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value !== "object") return write(value);
+  const given = declarable(value);
+  if (given === undefined) return undefined;
+  if (typeof given !== "object") return write(given);
   return Object.fromEntries(
-    Object.entries(value).map(([key, given]) => [
-      key,
-      given === undefined || given === null ? given : write(given),
-    ]),
+    Object.entries(given).map(([key, each]) => {
+      const kept = declarable(each);
+      return [key, kept === undefined ? kept : write(kept)];
+    }),
   );
 }
 
 export function withBase<V extends string | number>(value: Keyed<V>, base: V): Keyed<V> {
-  if (value === undefined || value === null) return base;
-  if (typeof value !== "object") return value;
-  return { ...value, [baseKey]: value[baseKey] ?? base };
+  const given = declarable(value);
+  if (given === undefined) return base;
+  if (typeof given !== "object") return given;
+  return { ...given, [baseKey]: declarable(given[baseKey]) ?? base };
 }
 
 function placed(

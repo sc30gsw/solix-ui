@@ -1,12 +1,15 @@
 import * as stylex from "@stylexjs/stylex";
 import { createUniqueId, Show } from "solid-js";
 import { LibraryStyle } from "#/src/library-style.tsx";
-import { createParts, type ElementProps } from "#/src/parts.ts";
+import { createParts, defaultsOf, type ElementProps, withDefaults } from "#/src/parts.ts";
 import { simpleGridVariables } from "#/src/SimpleGrid.variables.ts";
 import {
-  type ContainerVariableProp,
   containerKeysOf,
+  declaresAValue,
   createQueryContainer,
+  type GridType,
+  type GridTypeProps,
+  type GridTypeVariableProp,
   type VariableProp,
 } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
@@ -32,30 +35,31 @@ const styles = stylex.create({
   },
 });
 
+type SimpleGridColumnProps<Type extends GridType> = {
+  /** Ignored when `minColWidth` is given. */
+  cols?: GridTypeVariableProp<Type, typeof simpleGridVariables, "sg-cols", number>;
+  /** The gap between columns, and between rows unless `verticalSpacing` is given. */
+  spacing?: GridTypeVariableProp<Type, typeof simpleGridVariables, "sg-spacing-x">;
+  verticalSpacing?: GridTypeVariableProp<Type, typeof simpleGridVariables, "sg-spacing-y">;
+};
+
 export type SimpleGridProps = ElementProps<
   "div",
   typeof styles,
-  (
-    | {
-        type?: "media";
-        cols?: VariableProp<typeof simpleGridVariables, "sg-cols", number>;
-        spacing?: VariableProp<typeof simpleGridVariables, "sg-spacing-x">;
-        verticalSpacing?: VariableProp<typeof simpleGridVariables, "sg-spacing-y">;
-      }
-    | {
-        type: "container";
-        cols?: ContainerVariableProp<typeof simpleGridVariables, "sg-cols", number>;
-        spacing?: ContainerVariableProp<typeof simpleGridVariables, "sg-spacing-x">;
-        verticalSpacing?: ContainerVariableProp<typeof simpleGridVariables, "sg-spacing-y">;
-      }
-  ) & {
+  GridTypeProps<SimpleGridColumnProps<"media">, SimpleGridColumnProps<"container">> & {
+    /** When given, the grid fits as many columns as its width allows, by `autoFlow`. */
     minColWidth?: VariableProp<typeof simpleGridVariables, "sg-min-col-width">;
+    /** Ignored unless `minColWidth` is given. */
     autoFlow?: "auto-fit" | "auto-fill";
     autoRows?: VariableProp<typeof simpleGridVariables, "sg-auto-rows">;
   }
 >;
 
-export function SimpleGrid(props: SimpleGridProps) {
+const defaults = defaultsOf<SimpleGridProps>()({ autoFlow: "auto-fill" });
+
+export function SimpleGrid(rawProps: SimpleGridProps) {
+  const props = withDefaults(defaults, rawProps);
+  const fitsColumns = () => declaresAValue(props.minColWidth);
   const container = createQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const keyed = new Map([
@@ -65,11 +69,10 @@ export function SimpleGrid(props: SimpleGridProps) {
     ]);
     return [...keyed.entries()];
   });
-  const autoColumns = () => props.minColWidth !== undefined;
   const { root, part } = createParts(simpleGridVariables, styles, props, {
     variables: {
       "sg-auto-rows": "autoRows",
-      "sg-cols": (given) => (given.minColWidth === undefined ? given.cols : undefined),
+      "sg-cols": (given) => (fitsColumns() ? undefined : given.cols),
       "sg-min-col-width": "minColWidth",
       "sg-spacing-x": "spacing",
       "sg-spacing-y": "verticalSpacing",
@@ -77,9 +80,7 @@ export function SimpleGrid(props: SimpleGridProps) {
     queries: container,
     keep: ["autoFlow", "cols", "type"],
   });
-  const grid = (
-    <div data-auto-cols={autoColumns() ? (props.autoFlow ?? "auto-fill") : undefined} {...root} />
-  );
+  const grid = <div data-auto-cols={fitsColumns() ? props.autoFlow : undefined} {...root} />;
   return (
     <Show when={container.queries()} fallback={grid}>
       <Show when={container.rules()}>

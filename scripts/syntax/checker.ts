@@ -47,7 +47,7 @@ export function isDomLibraryFile(file: string): boolean {
   return domLibraryFile.test(file);
 }
 
-function declarationsOfSymbol(symbol: CheckerSymbol | undefined): ts.Node[] {
+export function declarationsOfSymbol(symbol: CheckerSymbol | undefined): ts.Node[] {
   return (symbol?.declarations ?? []).flatMap((handle) => {
     const declaration = handle.resolve();
     return declaration ? [declaration] : [];
@@ -58,7 +58,7 @@ function partsOf(type: Type): readonly Type[] {
   return (type.isUnionType() || type.isIntersectionType() ? type.getTypes() : undefined) ?? [type];
 }
 
-function unionMembersOf(type: Type): readonly Type[] {
+export function unionMembersOf(type: Type): readonly Type[] {
   return (type.isUnionType() ? type.getTypes() : undefined) ?? [type];
 }
 
@@ -149,6 +149,13 @@ function readsByName(declaration: ts.Node): boolean {
     ts.isFunctionDeclaration(declaration) &&
     declaration.name?.text === reflectiveRead &&
     isDefaultLibraryFile(fileOf(declaration))
+  );
+}
+
+export function hasCallSignature(program: Program, node: ts.Node | undefined): boolean {
+  const type = node && program.checker.getTypeAtLocation(node);
+  return (
+    type !== undefined && program.checker.getSignaturesOfType(type, SignatureKind.Call).length > 0
   );
 }
 

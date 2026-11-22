@@ -1,5 +1,9 @@
 import { createContext } from "solid-js";
 
-export type GetStyleNonce = () => string | undefined;
+export type GetStyleNonce = () => string | null | undefined;
 
-export const PageNonceContext = createContext<GetStyleNonce>(() => undefined);
+export function nonceOf(given: string | null | undefined): string | undefined {
+  return typeof given !== "string" || given.trim() === "" ? undefined : given;
+}
+
+export const PageNonceContext = createContext<() => string | undefined>(() => undefined);
