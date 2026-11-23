@@ -451,7 +451,7 @@ test("every verification skill says which commit it was last confirmed against",
 
 const runsAProperty = /\bassertProperty\(/;
 const leadingDotSlash = /^\.\//;
-const testOrStory = /\.(?:test|stories)\.(?:ts|tsx|mts)$/;
+const testOrStory = /\.(?:test|stories|e2e)\.(?:ts|tsx|mts)$/;
 
 function testFiles(): string[] {
   return trackedFiles().filter((file) => testOrStory.test(file));
@@ -468,7 +468,7 @@ function mutationCommandProblems(
     const named = `the mutation entry "${entry.trim().slice(0, 60)}…"`;
     if (commands.length === 0) {
       return [
-        `${where}: ${named} gives no \`vp test <files>\` command. Write the command it runs.`,
+        `${where}: ${named} gives no \`vp test <files>\` or \`npx e2e run <files>\` command. Write the command it runs.`,
       ];
     }
     return commands.flatMap(({ written, seed, filters }) => {
@@ -503,10 +503,11 @@ function mutationCommandProblems(
   });
 }
 
-test(`a mutation entry of any name and list marker runs \`vp test <files>\`, the files read as Vitest reads them, with \`${seedVariable}=<n>\` exactly when one of them runs a generated property`, () => {
+test(`a mutation entry of any name and list marker runs \`vp test <files>\` or \`npx e2e run <files>\`, the files read as Vitest and e2e read them, with \`${seedVariable}=<n>\` exactly when one of them runs a generated property`, () => {
   const fixtureFiles: Record<string, string> = {
     "packages/a/tests/a.test.ts": "await assertProperty(context, property);\n",
     "packages/b/tests/b.test.ts": 'test("fixed", () => {});\n',
+    "apps/c/tests/c.e2e.ts": 'test("served", async () => {});\n',
   };
   const files = Object.keys(fixtureFiles);
   const readFixture = (file: string) => fixtureFiles[file] ?? "";
@@ -526,6 +527,8 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\`, the
     '- Project mutation: run `vp test --project "stories*"`.',
     `- Focus mutation: run ${seeded("packages/b/tests/b.test.ts")}.`,
     "- Focus mutation: run `vp test packages/c/tests/c.test.ts`.",
+    "- Served mutation: run `npx e2e run apps/d/tests/d.e2e.ts`.",
+    `- Served mutation: run \`${seedVariable}=-42 npx e2e run apps/c/tests/c.e2e.ts\`.`,
   ]) {
     expect(problems(refused), refused).toHaveLength(1);
   }
@@ -536,6 +539,7 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\`, the
     '- Story mutation: run `vp test --project "stories*" packages/b`.',
     `- Case mutation: run ${seeded("./Packages/A/tests/a.test.ts")}.`,
     "- Chained mutation: run `vp test packages/b/tests/b.test.ts && echo done`.",
+    "- Served mutation: run `npx e2e run apps/c/tests/c.e2e.ts`.",
   ]) {
     expect(problems(passed), passed).toEqual([]);
   }

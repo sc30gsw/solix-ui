@@ -8,7 +8,10 @@ const item = /^(\s*)(?:[-*]|\d+\.)\s+/;
 const mutationItem = new RegExp(
   `${item.source}(?:[^:\\n]*?\\s)?[Mm]utation(?: check)?\\b[^:\\n]*:`,
 );
-const testCommand = new RegExp(`\`(?:${seedVariable}=(-?\\d+) )?vp test ([^\`]+)\``, "g");
+const testCommand = new RegExp(
+  `\`(?:${seedVariable}=(-?\\d+) )?(?:vp test|npx e2e run) ([^\`]+)\``,
+  "g",
+);
 const optionsWithAValue = new Set(["--project", "-t", "--testNamePattern"]);
 const subcommand = "run";
 
