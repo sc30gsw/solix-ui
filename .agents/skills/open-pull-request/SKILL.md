@@ -9,6 +9,8 @@ Run the steps in order. Batch the fixes a step finds into as few commits as you 
 
 The pstack skills come from the pstack plugin that `.claude/settings.json` enables. Only a person can start them as commands, so read `pstack/skills/<name>/SKILL.md` and follow it, from the installed plugin or from a clone of `cursor/plugins`. When a skill starts an agent that `.claude/agents` does not hold, start a general-purpose agent whose first instruction is to read `pstack/agents/<agent>.md` from the same place and act as it. A session that cannot start agents asks the person who started it to run steps 4 and 5, and leaves their lines in the body unfilled.
 
+Read every skill, this one included, from the branch's own checkout: a copy the session loaded earlier may come from an older one.
+
 ## 1. Verify
 
 ```bash
@@ -40,7 +42,7 @@ Start two reviewers, each an agent of its own. The first instruction of one is t
 - There is no round limit. Resolve every finding at Medium or higher. A presumptive blocker of the quality rubric counts as Medium.
 - Judge each finding below Medium as fixed, follow-up or dismissed with a reason. You may open the pull request with them open. Record every judgement, every follow-up and the history of each round only in the coordinator's private notes, never in an issue or in this repository. The body gives only their counts.
 - Fix all the findings of one round together, run step 3 for any covered code they change, then step 4 on the fixes.
-- Set the scope of each next round and state it in the reviewers' brief: the fix delta, and every caller, shared layer and use of the same pattern in the pull request that a fix touches. When a fix changes structure, the scope is the whole pull request.
+- Set the scope of each next round and state it in the reviewers' brief: the fix delta, and every caller, shared layer and use of the same pattern in the pull request that a fix touches. When a fix changes structure, the scope is the whole pull request. The brief also asks the reviewers to check that each row of `AGENTS.md` the branch adds or changes states no more than the check it names.
 - Stop once a round finds nothing at Medium or higher and comment-sicko is clean on the same commit. What may follow it is what `filesAfterReview` in `scripts/pull-request-text.ts` and the text check allow; anything else goes through steps 4 and 5 again, scoped to what it adds.
 
 ## 6. Statechart
