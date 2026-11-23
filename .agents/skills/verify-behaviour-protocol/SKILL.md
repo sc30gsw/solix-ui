@@ -35,9 +35,9 @@ It does if it edits a file the table above names, or any of these:
 | --- | --- |
 | `packages/core/src/headless.ts`: `createBehaviour`, `bindSlot` | A component's own handler for an event runs before the SDK's, and the SDK's does not run once the default is prevented. |
 | `packages/core/src/step-over-disabled.ts`: `stepOverDisabled` | It returns `onKeyDown` for the list, which runs before the SDK's key handler, and `item(value)`, a ref by which each item registers its value. It reads the orientation from `data-orientation` on the list and the direction from the list's computed style, moves focus past a disabled item, prevents the default so the SDK leaves the key alone, and calls `activate` with the value the focused item registered. |
-| `tests/support` | It builds the library and the app in production mode before any test and starts the built playground once. |
+| `tests/support` | It builds the library and the app in production mode before any test and starts the built playground once. `solid-diagnostics-check.ts`, a setup file of the node project, fails each of these tests that raises a Solid development diagnostic in its own process, a server render included; what the served page and the development server report is `verify-served-page`'s. |
 | `scripts/browser-engines.mjs` | It lists the engines the checks run on. |
-| `vite.config.ts` | It sets the test include globs, the global setup and the Solid plugin. |
+| `vite.config.ts` | It sets the test include globs, the global setup, the node project's setup files and the Solid plugin. |
 | `@ui-sdk/core`, `@ui-sdk/solid`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin`, `playwright` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
 Last confirmed against commit `d7d690f`. Run `git diff d7d690f -- packages/core/src apps/playground/src/sections apps/playground/tests tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the tables before you trust a pass. Move the commit forward only after you have confirmed that the tables and the checks still describe the code at the new commit.
