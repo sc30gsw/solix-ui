@@ -1,10 +1,14 @@
 import { expect } from "vite-plus/test";
 import { defineSpec, dom, type Fixture, style } from "#/spec/format.ts";
 
-function tabs(panelProps: Fixture["props"], tabProps: Fixture["props"] = {}): Fixture {
+function tabs(
+  panelProps: Fixture["props"],
+  tabProps: Fixture["props"] = {},
+  rootProps: Fixture["props"] = { defaultValue: "a" },
+): Fixture {
   return {
     component: "Tabs",
-    props: { defaultValue: "a" },
+    props: rootProps,
     children: [
       {
         component: "TabsList",
@@ -31,6 +35,51 @@ function modal(props: Fixture["props"]): Fixture {
 const box: Fixture = { component: "Box", children: "Content" };
 
 export const spec = defineSpec("decisions", [
+  {
+    says: "Q168: a horizontal tab list carries no aria-orientation, horizontal being the default",
+    promise: { kind: "attribute", attribute: "aria-orientation" },
+    check: dom(tabs({}), ({ part }) => {
+      expect(part("root", "TabsList").hasAttribute("aria-orientation")).toBe(false);
+    }),
+    status: "holds",
+  },
+  {
+    says: 'Q168: a vertical tab list carries aria-orientation="vertical"',
+    promise: { kind: "attribute", attribute: "aria-orientation" },
+    check: dom(tabs({}, {}, { defaultValue: "a", orientation: "vertical" }), ({ part }) => {
+      expect(part("root", "TabsList").getAttribute("aria-orientation")).toBe("vertical");
+    }),
+    status: "holds",
+  },
+  {
+    says: "Q168: with no tab selected, the first enabled tab is the list's one tab stop",
+    promise: { kind: "behaviour" },
+    check: dom(tabs({}, { disabled: true }, { defaultValue: null }), ({ parts }) => {
+      expect(parts("root", "TabsTab").map((tab) => tab.tabIndex)).toEqual([-1, 0]);
+    }),
+    status: "holds",
+  },
+  {
+    says: "Q168: Tab from the selected tab moves focus to its panel, which takes focus",
+    promise: { kind: "behaviour" },
+    check: dom(tabs({}), async ({ part, user }) => {
+      part("root", "TabsTab").focus();
+      await user.tab();
+      expect(document.activeElement).toBe(part("root", "TabsPanel"));
+    }),
+    status: "holds",
+  },
+  {
+    says: "Q168: once mounted, each tab names its panel by aria-controls",
+    promise: { kind: "attribute", attribute: "aria-controls" },
+    check: dom(tabs({}), ({ parts }) => {
+      const panels = parts("root", "TabsPanel").map((panel) => panel.id);
+      expect(parts("root", "TabsTab").map((tab) => tab.getAttribute("aria-controls"))).toEqual(
+        panels,
+      );
+    }),
+    status: "holds",
+  },
   {
     says: 'Q171: keepMountedMode="display-none" keeps an inactive panel\'s content mounted and writes display: none on the panel',
     promise: { kind: "prop", prop: "keepMountedMode", value: "display-none" },
