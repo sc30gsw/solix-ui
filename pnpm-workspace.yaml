@@ -24,6 +24,7 @@ catalog:
   "@ui-sdk/solid": 0.1.0-beta.13
   "@vitest/browser-playwright": 5.1.0
   axe-core: 4.14.1
+  fallow: 3.46.0
   fast-check: 4.10.3
   modern-web-guidance: 1.0.1
   playwright: 1.65.1
@@ -58,6 +59,8 @@ peerDependencyRules:
     vite: "*"
 permissions:
   "@ui-sdk/core":
+    skills: false
+  fallow:
     skills: false
   "@solidjs/web":
     skills:

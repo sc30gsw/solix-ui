@@ -9,6 +9,7 @@
   "scripts": {
     "check:lockfile": "pnpm install --frozen-lockfile --lockfile-only",
     "check:private-terms": "node scripts/check-private-terms.mjs",
+    "fallow": "fallow",
     "lint:solid": "solid2-kit check . apps/storybook/.storybook apps/storybook/fixtures/.storybook && solid2-kit doctor",
     "migrate:subpath-imports": "node scripts/migrate-to-subpath-imports.ts",
     "prepare": "vp config --no-agent",
@@ -22,6 +23,7 @@
     "@types/semver": "catalog:",
     "@vitest/browser-playwright": "catalog:",
     "axe-core": "catalog:",
+    "fallow": "catalog:",
     "fast-check": "catalog:",
     "modern-web-guidance": "catalog:",
     "playwright": "catalog:",

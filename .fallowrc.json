@@ -1,0 +1,48 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  "entry": [
+    "apps/playground/src/App.tsx",
+    "apps/playground/src/Document.tsx",
+    "apps/playground/src/middleware.ts"
+  ],
+  "supportEntry": [
+    "scripts/check-working-tree.ts",
+    "scripts/copy-kit-skills.ts",
+    "tests/support/git-free-environment.ts",
+    "tests/support/build-packages.ts",
+    "tests/support/global-setup.ts",
+    "apps/playground/tests/support/console-check.ts",
+    "apps/storybook/story-records-command.ts",
+    "apps/storybook/tests/support/story-reporter.ts"
+  ],
+  "ignoreUnresolvedImports": ["#/tests/fixtures/primitive-rules/*/tests/support/*"],
+  "ignoreDependencyOverrides": [
+    { "package": "@solidjs/start", "source": "pnpm-workspace.yaml" },
+    { "package": "eslint-plugin-solid", "source": "pnpm-workspace.yaml" },
+    { "package": "next", "source": "pnpm-workspace.yaml" },
+    { "package": "react-dom", "source": "pnpm-workspace.yaml" },
+    { "package": "solid-app-router", "source": "pnpm-workspace.yaml" },
+    { "package": "solid-start", "source": "pnpm-workspace.yaml" },
+    { "package": "vinxi", "source": "pnpm-workspace.yaml" },
+    { "package": "vite-plugin-solid", "source": "pnpm-workspace.yaml" }
+  ],
+  "ignoreExports": [
+    { "file": "apps/storybook/story-records.ts", "exports": ["instrumented"] },
+    { "file": "scripts/component-props.ts", "exports": ["defaultsAt", "defaultsBrandAt"] },
+    {
+      "file": "packages/core/tests/built-library.ts",
+      "exports": [
+        "handledKeys",
+        "rootPart",
+        "scaleOfThemeKey",
+        "themeStyleSheet",
+        "stableClass",
+        "isContainerWidth",
+        "resolveVariables"
+      ]
+    }
+  ],
+  "rules": {
+    "complexity-crap": "off"
+  }
+}
