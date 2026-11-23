@@ -17,3 +17,5 @@ export function isModelFile(path: string): boolean {
 export function isFormalVerificationFile(path: string): boolean {
   return isModelFile(path) || matchesGlob(path, formalSkillFiles);
 }
+
+export const kernelModules = ["packages/core/src/roving-step.ts"] as const;

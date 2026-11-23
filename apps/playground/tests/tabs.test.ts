@@ -21,7 +21,6 @@ import {
   setupOf,
   stateOf,
   tabList,
-  tabLists,
   tabNamed,
   tabNames,
   tabsRegion,
@@ -30,7 +29,6 @@ import {
   valueOf,
   vertical,
 } from "#/tests/support/tabs.ts";
-import { pathBetween, singleSteps } from "#/tests/support/roving-list-model.ts";
 
 const url = inject("playgroundUrl");
 const { overview, billing, members, security } = tabNames.account;
@@ -485,30 +483,6 @@ inEveryEngine((browser) => {
 
       expect(found).toEqual([]);
     });
-
-    test.each(tabLists.flatMap(singleSteps))(
-      "in $list.name, with $from.selected selected and focus on $from.focused, after $key $to.selected is selected and focus is on $to.focused",
-      async ({ list: rovingList, from, key, to }) => {
-        const list = rovingList.name;
-        const { selected, focused } = await stateOf(onPage.page, list);
-        for (const action of pathBetween(rovingList, { selected, focused }, from)) {
-          if ("click" in action) await tabNamed(onPage.page, list, action.click).click();
-          else await onPage.page.keyboard.press(action.key);
-        }
-        await expect.poll(() => stateOf(onPage.page, list)).toMatchObject(from);
-
-        await onPage.page.keyboard.press(key);
-
-        await expect
-          .poll(() => stateOf(onPage.page, list))
-          .toMatchObject({ ...to, shown: to.selected === null ? [] : [panelOf(to.selected)] });
-        const { tabStops } = await stateOf(onPage.page, list);
-        expect(tabStops, "the list has one tab stop").toHaveLength(1);
-        if (to.selected !== null) {
-          expect(tabStops, "the tab stop is the selected tab").toEqual([to.selected]);
-        }
-      },
-    );
   });
 
   describe("Tabs for a user who asks for less motion or forced colours", () => {

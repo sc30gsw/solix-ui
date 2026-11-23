@@ -1,15 +1,5 @@
 import type { Locator, Page } from "playwright";
-import {
-  account,
-  manual,
-  optional,
-  rightToLeft,
-  tabNames,
-  tabNamesOf,
-  type TabsSetup,
-  tabsSetups,
-  vertical,
-} from "#/src/sections/tabs-setups.ts";
+import { tabNamesOf, type TabsSetup, tabsSetups } from "#/src/sections/tabs-setups.ts";
 import { type DocumentSnapshot, snapshotOfDocument } from "#/tests/support/opening.ts";
 import type { RovingList } from "#/tests/support/roving-list-model.ts";
 
@@ -26,6 +16,7 @@ export {
   rightToLeft,
   setupOf,
   tabNames,
+  tabNamesOf,
   type TabsSetup,
   tabsSetups,
   valueOf,
@@ -52,85 +43,30 @@ export function rovingListOf(setup: TabsSetup): RovingList {
 
 export const tabLists: RovingList[] = tabsSetups.map(rovingListOf);
 
-export type KeyboardCase = {
-  list: string;
-  start: string;
-  keys: string[];
-  focused: string;
-  selected: string;
+export type ModelConfig = {
+  size: number;
+  disabled: number[];
+  vertical: boolean;
+  rightToLeft: boolean;
+  loop: boolean;
+  selectsOnMove: boolean;
+  deselects: boolean;
+  initial: number | null;
 };
 
-const { overview, members, security } = tabNames.account;
-const { one, two, three } = tabNames.manual;
-const { alpha, beta, gamma } = tabNames.vertical;
-const { notes, files } = tabNames.optional;
-const { north, south, west } = tabNames.rightToLeft;
-
-export const keyboardTable: KeyboardCase[] = [
-  {
-    list: account,
-    start: overview,
-    keys: ["ArrowRight"],
-    focused: members,
-    selected: members,
-  },
-  {
-    list: account,
-    start: members,
-    keys: ["ArrowLeft"],
-    focused: overview,
-    selected: overview,
-  },
-  {
-    list: account,
-    start: overview,
-    keys: ["ArrowLeft"],
-    focused: security,
-    selected: security,
-  },
-  {
-    list: account,
-    start: security,
-    keys: ["ArrowRight"],
-    focused: overview,
-    selected: overview,
-  },
-  { list: account, start: members, keys: ["Home"], focused: overview, selected: overview },
-  { list: account, start: overview, keys: ["End"], focused: security, selected: security },
-  { list: account, start: members, keys: ["ArrowDown"], focused: members, selected: members },
-  { list: account, start: members, keys: ["ArrowUp"], focused: members, selected: members },
-  {
-    list: account,
-    start: overview,
-    keys: ["ArrowRight", "ArrowRight"],
-    focused: security,
-    selected: security,
-  },
-  { list: rightToLeft, start: north, keys: ["ArrowLeft"], focused: south, selected: south },
-  { list: rightToLeft, start: south, keys: ["ArrowRight"], focused: north, selected: north },
-  { list: rightToLeft, start: north, keys: ["ArrowRight"], focused: west, selected: west },
-  { list: rightToLeft, start: west, keys: ["ArrowLeft"], focused: north, selected: north },
-  { list: rightToLeft, start: south, keys: ["Home"], focused: north, selected: north },
-  { list: rightToLeft, start: south, keys: ["End"], focused: west, selected: west },
-  { list: manual, start: two, keys: ["ArrowDown"], focused: three, selected: two },
-  { list: manual, start: two, keys: ["ArrowDown", "Enter"], focused: three, selected: three },
-  { list: manual, start: two, keys: ["ArrowUp", "Space"], focused: one, selected: one },
-  { list: manual, start: three, keys: ["ArrowDown"], focused: three, selected: three },
-  { list: manual, start: one, keys: ["ArrowUp"], focused: one, selected: one },
-  { list: manual, start: two, keys: ["ArrowRight"], focused: two, selected: two },
-  { list: manual, start: two, keys: ["Home"], focused: one, selected: two },
-  { list: manual, start: two, keys: ["End"], focused: three, selected: two },
-  { list: vertical, start: beta, keys: ["ArrowUp"], focused: alpha, selected: alpha },
-  { list: vertical, start: alpha, keys: ["ArrowUp"], focused: gamma, selected: gamma },
-  { list: vertical, start: gamma, keys: ["ArrowDown"], focused: alpha, selected: alpha },
-  { list: vertical, start: alpha, keys: ["ArrowDown"], focused: beta, selected: beta },
-  { list: vertical, start: beta, keys: ["ArrowLeft"], focused: beta, selected: beta },
-  { list: vertical, start: alpha, keys: ["End"], focused: gamma, selected: gamma },
-  { list: optional, start: files, keys: ["Home"], focused: notes, selected: notes },
-  { list: optional, start: notes, keys: ["End"], focused: files, selected: files },
-  { list: optional, start: files, keys: ["ArrowRight"], focused: notes, selected: notes },
-  { list: optional, start: notes, keys: ["ArrowLeft"], focused: files, selected: files },
-];
+export function modelConfigOf(setup: TabsSetup): ModelConfig {
+  return {
+    size: setup.tabs.length,
+    disabled: setup.tabs.flatMap(({ disabled }, index) => (disabled ? [index] : [])),
+    vertical: setup.orientation === "vertical",
+    rightToLeft: setup.direction === "rtl",
+    loop: setup.loop,
+    selectsOnMove: setup.selectsOnArrow,
+    deselects: setup.deselects,
+    initial:
+      setup.initial === null ? null : setup.tabs.findIndex(({ name }) => name === setup.initial),
+  };
+}
 
 export type TabsState = {
   selected: string | null;
