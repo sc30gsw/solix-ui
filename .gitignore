@@ -6,3 +6,6 @@ docs/verification
 .ADR
 docs/adr
 GLOSSARY.md
+formal/**/*Model.tla
+formal/**/*Model.cfg
+formal/**/*_TTrace_*.tla
