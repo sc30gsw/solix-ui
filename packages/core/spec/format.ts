@@ -1,29 +1,14 @@
-import type * as Library from "#/src/index.ts";
+import type { ComponentName, GapItem } from "#/spec/gaps.ts";
 
-type LibraryExports = typeof Library;
-
-export type ComponentName = {
-  [Name in keyof LibraryExports]: Name extends Capitalize<Name>
-    ? LibraryExports[Name] extends (...args: never[]) => unknown
-      ? Name
-      : never
-    : never;
-}[keyof LibraryExports];
+export type { ComponentName, GapItem } from "#/spec/gaps.ts";
 
 export type ComponentPath = ComponentName | `${ComponentName}.${string}`;
 
-export type GapSection =
-  | "foundations"
-  | "Box"
-  | "Button"
-  | "Tabs"
-  | "Modal"
-  | "TextInput"
-  | "Disclosure"
-  | "ColorSchemeScript"
-  | "SolixProvider";
-
-export type GapItem = `${GapSection} ${number}` | `step ${number}`;
+export type Reference = {
+  readonly props: readonly string[];
+  readonly parts: readonly string[];
+  readonly variables: readonly `--${string}`[];
+};
 
 export type Literal = string | number | boolean | null;
 
@@ -40,6 +25,8 @@ export type Fixture = {
   readonly within?: Within;
 };
 
+export type Address = { readonly of?: ComponentPath; readonly part: string };
+
 export type SpecUser = {
   readonly click: (element: Element) => Promise<void>;
   readonly hover: (element: Element) => Promise<void>;
@@ -51,14 +38,18 @@ export type Rendered = {
   readonly root: HTMLElement;
   readonly container: HTMLElement;
   readonly exports: Readonly<Record<string, unknown>>;
-  readonly part: (name: string, component?: string) => HTMLElement;
-  readonly parts: (name: string, component?: string) => HTMLElement[];
+  readonly at: (address: Address) => HTMLElement;
+  readonly all: (address: Address) => HTMLElement[];
   readonly update: (props: Props) => void;
   readonly axe: () => Promise<string[]>;
   readonly user: SpecUser;
 };
 
-export type State = "rest" | "hover" | "pressed" | "focus-visible" | "reduced-motion";
+export type State = "rest" | "hover" | "pressed" | "focus-visible";
+
+export type Media = { readonly reducedMotion?: true; readonly width?: number };
+
+export type Comparison = "colour" | "length" | "text";
 
 export type DomCheck = {
   readonly by: "dom";
@@ -69,59 +60,84 @@ export type DomCheck = {
 export type StyleCheck = {
   readonly by: "style";
   readonly fixture: Fixture;
-  readonly part?: string;
-  readonly of?: string;
+  readonly at?: Address;
+  readonly interactWith?: Address;
   readonly state?: State;
   readonly scheme?: Scheme;
-  readonly width?: number;
+  readonly media?: Media;
+  readonly given?: Readonly<Record<string, string>>;
   readonly property: string;
   readonly value: string | null;
+  readonly as?: Comparison;
 };
 
-export type StoryCheck = {
-  readonly by: "story";
-  readonly stories: ComponentName;
-  readonly story: string;
-};
+export type Check = DomCheck | StyleCheck;
 
-export type Check = DomCheck | StyleCheck | StoryCheck;
-
-export type Promised =
-  | { readonly kind: "prop"; readonly prop: string; readonly value?: Literal }
-  | { readonly kind: "part"; readonly part: string }
+export type Promised<R extends Reference> =
+  | { readonly kind: "prop"; readonly prop: R["props"][number]; readonly value?: Literal }
+  | { readonly kind: "default"; readonly prop: R["props"][number]; readonly value: Literal }
+  | { readonly kind: "part"; readonly part: R["parts"][number] }
+  | { readonly kind: "parts" }
+  | { readonly kind: "variable"; readonly variable: R["variables"][number] }
   | { readonly kind: "attribute"; readonly attribute: string }
-  | { readonly kind: "variable"; readonly variable: `--${string}` }
+  | { readonly kind: "shared"; readonly promise: string }
   | { readonly kind: "behaviour" }
-  | { readonly kind: "default"; readonly prop: string; readonly value: Literal }
   | { readonly kind: "look"; readonly property: string };
 
 export type Status =
   | { readonly status: "holds" }
-  | { readonly status: "pending"; readonly until: GapItem };
+  | { readonly status: "pending"; readonly until: GapItem; readonly failsWith: string };
 
-export type SpecEntry<C extends Check = Check> = Status & {
+export type SpecEntry<R extends Reference = Reference, C extends Check = Check> = Status & {
   readonly says: string;
-  readonly promise: Promised;
+  readonly promise: Promised<R>;
   readonly check: C;
-  readonly ported?: string;
+  readonly decision?: `Q${number}`;
 };
 
-export type Spec<C extends Check = Check> = {
-  readonly name: string;
-  readonly entries: readonly SpecEntry<C>[];
+const specMark = Symbol.for("solix.spec");
+
+export type Spec<R extends Reference = Reference> = {
+  readonly [specMark]: "function";
+  readonly reference: R;
+  readonly entries: readonly SpecEntry<R>[];
 };
 
-export type LookSpec = Spec<StyleCheck>;
+export type LookEntry = SpecEntry<Reference, StyleCheck>;
 
-export function defineSpec(name: string, entries: readonly SpecEntry[]): Spec {
-  return { name, entries };
+export type LookSpec = {
+  readonly [specMark]: "look";
+  readonly entries: readonly SpecEntry<Reference, StyleCheck>[];
+};
+
+export function defineReference<const R extends Reference>(reference: R): R {
+  return reference;
 }
 
-export function defineLook(name: string, entries: readonly SpecEntry<StyleCheck>[]): LookSpec {
-  return { name, entries };
+export function defineSpec<R extends Reference>(
+  reference: R,
+  entries: readonly SpecEntry<R>[],
+): Spec<R> {
+  return { [specMark]: "function", reference, entries };
+}
+
+export function defineLook(entries: readonly SpecEntry<Reference, StyleCheck>[]): LookSpec {
+  return { [specMark]: "look", entries };
+}
+
+export function isSpec(value: unknown): value is Spec | LookSpec {
+  return typeof value === "object" && value !== null && specMark in value;
+}
+
+export class SpecError extends Error {
+  override name = "SpecError";
 }
 
 export const nowHolds = "now holds: mark it holds";
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export async function held(entry: SpecEntry, run: () => void | Promise<void>): Promise<void> {
   const outcome = await Promise.resolve()
@@ -130,6 +146,7 @@ export async function held(entry: SpecEntry, run: () => void | Promise<void>): P
       () => ({ passed: true as const }),
       (error: unknown) => ({ passed: false as const, error }),
     );
+  if (!outcome.passed && outcome.error instanceof SpecError) throw outcome.error;
   if (entry.status === "holds") {
     if (!outcome.passed) throw outcome.error;
     return;
@@ -139,26 +156,19 @@ export async function held(entry: SpecEntry, run: () => void | Promise<void>): P
       `${nowHolds}. "${entry.says}" is pending until ${entry.until}, and its check passes.`,
     );
   }
+  if (!messageOf(outcome.error).includes(entry.failsWith)) {
+    throw new Error(
+      `"${entry.says}" is pending until ${entry.until} and fails, but not with "${entry.failsWith}": ${messageOf(outcome.error)}`,
+      { cause: outcome.error },
+    );
+  }
 }
-
-export function checksBy<By extends Check["by"]>(
-  spec: Spec,
-  by: By,
-): SpecEntry<Extract<Check, { by: By }>>[] {
-  return spec.entries.filter((entry): entry is SpecEntry<Extract<Check, { by: By }>> =>
-    isBy(entry.check, by),
-  );
-}
-
-function isBy<By extends Check["by"]>(check: Check, by: By): check is Extract<Check, { by: By }> {
-  return check.by === by;
-}
-
-export type StyleOptions = Partial<Pick<StyleCheck, "part" | "of" | "state" | "scheme" | "width">>;
 
 export function dom(fixture: Fixture, assert: DomCheck["assert"]): DomCheck {
   return { by: "dom", fixture, assert };
 }
+
+export type StyleOptions = Omit<StyleCheck, "by" | "fixture" | "property" | "value">;
 
 export function style(
   fixture: Fixture,
@@ -169,6 +179,44 @@ export function style(
   return { by: "style", fixture, property, value, ...options };
 }
 
-export function story(stories: ComponentName, name: string): StoryCheck {
-  return { by: "story", stories, story: name };
+export function differs(check: Pick<StyleCheck, "property" | "value">): string {
+  return `${check.property}: expected ${check.value ?? "it unset"}`;
+}
+
+const describedTypes = new Set(["string", "number", "boolean"]);
+
+function described(fixture: Fixture): string {
+  const props = Object.entries(fixture.props ?? {})
+    .filter(([, value]) => describedTypes.has(typeof value))
+    .map(([name, value]) => `${name}=${String(value)}`);
+  const within = Object.keys(fixture.within ?? {}).map((wrapper) => `in a ${wrapper}`);
+  return [fixture.component, ...props, ...within].join(" ");
+}
+
+export type LookOptions = { readonly until?: GapItem; readonly failsWith?: string };
+
+export function lookEntry(
+  check: StyleCheck,
+  options: LookOptions = {},
+): SpecEntry<Reference, StyleCheck> {
+  const where = [
+    described(check.fixture),
+    check.at === undefined ? "" : `${check.at.of ?? ""} ${check.at.part}`.trim(),
+    check.state ?? "rest",
+    check.scheme ?? "light",
+    check.media?.width === undefined ? "" : `${check.media.width}px wide`,
+    check.media?.reducedMotion === undefined ? "" : "reduced motion",
+  ].filter((part) => part !== "");
+  const says = `${where.join(", ")}: ${check.property} is ${check.value ?? "unset"}`;
+  const promise = { kind: "look", property: check.property } as const;
+  return options.until === undefined
+    ? { says, promise, check, status: "holds" }
+    : {
+        says,
+        promise,
+        check,
+        status: "pending",
+        until: options.until,
+        failsWith: options.failsWith ?? differs(check),
+      };
 }

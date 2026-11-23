@@ -1,5 +1,6 @@
 import solid from "@solidjs/vite-plugin";
 import { defineConfig, lazyPlugins } from "vite-plus";
+import type { BrowserCommand } from "vite-plus/test/node";
 import { join } from "node:path";
 import { storiesProject } from "#/apps/storybook/stories-project.ts";
 import { storiesServers } from "#/apps/storybook/tests/support/test-servers.ts";
@@ -81,6 +82,36 @@ function withPackagesBuiltFirst<P extends { test?: object }>(project: P) {
   return { ...project, test: { ...project.test, globalSetup } };
 }
 
+type InEveryEngine = {
+  name: string;
+  include: string;
+  preBundled: readonly string[];
+  root?: string;
+  leftToTheLinkedBuild?: readonly string[];
+  commands?: Readonly<Record<string, BrowserCommand<never[]>>>;
+};
+
+function inEveryEngine({
+  name,
+  include,
+  preBundled,
+  root,
+  leftToTheLinkedBuild = [],
+  commands = {},
+}: InEveryEngine) {
+  return {
+    extends: true,
+    ...(root === undefined ? {} : { root }),
+    optimizeDeps: { include: [...preBundled], exclude: [...leftToTheLinkedBuild] },
+    test: {
+      name,
+      include: [include],
+      api: { port: anyFreePort, strictPort: true },
+      browser: Object.assign(browserInEveryEngine(), { commands }),
+    },
+  };
+}
+
 const projects = [
   {
     extends: true,
@@ -90,16 +121,13 @@ const projects = [
       include: [checkerRules],
     },
   },
-  inGroup(sequenceGroup.browser)({
-    extends: true,
-    optimizeDeps: { include: preBundledForBrowserTests },
-    test: {
+  inGroup(sequenceGroup.browser)(
+    inEveryEngine({
       name: "browser",
-      include: [browserTests],
-      api: { port: anyFreePort, strictPort: true },
-      browser: browserInEveryEngine(),
-    },
-  }),
+      include: browserTests,
+      preBundled: preBundledForBrowserTests,
+    }),
+  ),
   ...[
     {
       extends: true,
@@ -120,20 +148,14 @@ const projects = [
         setupFiles: ["apps/playground/tests/support/console-check.ts"],
       },
     },
-    {
-      extends: true,
+    inEveryEngine({
+      name: "component spec",
       root: specRoot,
-      optimizeDeps: {
-        include: preBundledForSpecTests,
-        exclude: allowedRuntimeDependencyNames(),
-      },
-      test: {
-        name: "component spec",
-        include: [specTestsInTheirRoot],
-        api: { port: anyFreePort, strictPort: true },
-        browser: Object.assign(browserInEveryEngine(), { commands: specCommands }),
-      },
-    },
+      include: specTestsInTheirRoot,
+      preBundled: preBundledForSpecTests,
+      leftToTheLinkedBuild: allowedRuntimeDependencyNames(),
+      commands: specCommands,
+    }),
     ...storiesServers.map((server) => ({
       extends: false as const,
       ...storiesProject(server, storybookConfigDirectory),
