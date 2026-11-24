@@ -506,7 +506,7 @@ const pullRequestWorkflow = ".github/workflows/pull-request.yml";
 const fallowAudit = 'node scripts/check-fallow-audit.ts "$PULL_REQUEST_BASE"';
 const fallowGateOptions = {
   checkoutWith: { ref: "${{ github.event.pull_request.head.sha }}" },
-  env: { PULL_REQUEST_BASE: "${{ github.event.pull_request.base.sha }}" },
+  env: { PULL_REQUEST_BASE: "refs/remotes/origin/${{ github.event.pull_request.base.ref }}" },
 };
 
 function fallowJobProblems(workflow: Workflow): string[] {
@@ -516,51 +516,57 @@ function fallowJobProblems(workflow: Workflow): string[] {
   ];
 }
 
-test(`on every pull request, the fallow job of ${pullRequestWorkflow} is a read-only gate job running ${fallowAudit} against the event's base, reading no secret`, () => {
-  const workflow = workflowAt(pullRequestWorkflow);
+const parsedPullRequestWorkflow = workflowAt(pullRequestWorkflow);
 
-  expect(fallowJobProblems(workflow)).toEqual([]);
+function withFallowStep(indexToEdit: number, update: (step: Step) => Step): Workflow {
+  return {
+    ...parsedPullRequestWorkflow,
+    jobs: {
+      fallow: {
+        ...parsedPullRequestWorkflow.jobs?.fallow,
+        steps: parsedPullRequestWorkflow.jobs?.fallow?.steps?.map((step, index) =>
+          index === indexToEdit ? update(step) : step,
+        ),
+      },
+    },
+  };
+}
+
+test(`on every pull request, the fallow job of ${pullRequestWorkflow} is a read-only gate job running ${fallowAudit} against the event's base, reading no secret`, () => {
+  expect(fallowJobProblems(parsedPullRequestWorkflow)).toEqual([]);
 });
 
 const wrongFallowWorkflows: [string, Workflow, string][] = [
   [
-    "a pull_request trigger narrowed by paths",
-    {
-      ...workflowAt(pullRequestWorkflow),
-      on: { pull_request: { paths: ["docs/**"] } },
-    },
-    "pull_request sets paths, so some pull requests skip the check.",
+    "a checkout step omitting ref",
+    withFallowStep(0, (step) => ({ ...step, with: { "fetch-depth": 0 } })),
+    'step 1 of the fallow job has with {"fetch-depth":0}, not {"ref":"${{ github.event.pull_request.head.sha }}","fetch-depth":0};',
   ],
   [
-    "a fallow job gated off with if: false",
-    {
-      ...workflowAt(pullRequestWorkflow),
-      jobs: { fallow: { ...workflowAt(pullRequestWorkflow).jobs?.fallow, if: false } },
-    },
-    "the fallow job sets if; a gate job sets only runs-on, timeout-minutes, steps, permissions.",
+    "a checkout step with a wrong ref",
+    withFallowStep(0, (step) => ({
+      ...step,
+      with: { "fetch-depth": 0, ref: "main" },
+    })),
+    'step 1 of the fallow job has with {"fetch-depth":0,"ref":"main"}, not {"ref":"${{ github.event.pull_request.head.sha }}","fetch-depth":0};',
   ],
   [
     "a workflow-level env on the fallow workflow",
     {
-      ...workflowAt(pullRequestWorkflow),
+      ...parsedPullRequestWorkflow,
       env: { NODE_OPTIONS: "--version" },
-    } as Workflow,
+    },
     "the workflow of the fallow job sets env; a gate job's workflow sets only name, on, permissions, jobs.",
   ],
   [
+    "a fallow audit step omitting env",
+    withFallowStep(2, ({ run }) => ({ run })),
+    'step 3 of the fallow job has env {}, not {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}"};',
+  ],
+  [
     "a fallow audit step with a wrong PULL_REQUEST_BASE env",
-    {
-      ...workflowAt(pullRequestWorkflow),
-      jobs: {
-        fallow: {
-          ...workflowAt(pullRequestWorkflow).jobs?.fallow,
-          steps: workflowAt(pullRequestWorkflow).jobs?.fallow?.steps?.map((step, index) =>
-            index === 2 ? { ...step, env: { PULL_REQUEST_BASE: "HEAD" } } : step,
-          ),
-        },
-      },
-    },
-    'step 3 of the fallow job has env {"PULL_REQUEST_BASE":"HEAD"}, not {"PULL_REQUEST_BASE":"${{ github.event.pull_request.base.sha }}"};',
+    withFallowStep(2, (step) => ({ ...step, env: { PULL_REQUEST_BASE: "HEAD" } })),
+    'step 3 of the fallow job has env {"PULL_REQUEST_BASE":"HEAD"}, not {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}"};',
   ],
 ];
 

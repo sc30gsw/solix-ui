@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, test } from "vite-plus/test";
-import { emptyChangesetProblems } from "#/scripts/fallow-audit.ts";
+import { emptyChangesetProblems, unusedFilesIn } from "#/scripts/fallow-audit.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { repositoryRoot } from "#/tests/support/workspace.ts";
@@ -37,6 +37,20 @@ describe("emptyChangesetProblems", () => {
     ]);
     expect(emptyChangesetProblems(0, [])).toEqual([]);
     expect(emptyChangesetProblems(2, ["src/a.ts", "README.md"])).toEqual([]);
+  });
+});
+
+describe("unusedFilesIn", () => {
+  test("returns unused file paths relative to the project root, in the format trackedFiles uses", async () => {
+    await inTemporaryTree(
+      {
+        ...project,
+        "src/orphan.ts": "export const orphan = 1;\n",
+      },
+      (root) => {
+        expect(unusedFilesIn(root)).toEqual(["src/orphan.ts"]);
+      },
+    );
   });
 });
 
@@ -101,7 +115,7 @@ describe("the fallow audit check", () => {
     });
   });
 
-  test("refuses a flag passed as the base revision instead of letting git treat it as an option", async () => {
+  test("refuses a flag or an empty string passed as the base revision", async () => {
     await inTemporaryTree(project, (root) => {
       onABranch(root, (at) =>
         writeFileSync(
@@ -109,10 +123,13 @@ describe("the fallow audit check", () => {
           "export const used = 1;\nexport const unused = 2;\n",
         ),
       );
-      const run = audited(root, "--independent");
+      const flagged = audited(root, "--independent");
+      const empty = audited(root, "");
 
-      expect(run.status).toBe(2);
-      expect(run.stderr).toContain("usage:");
+      expect(flagged.status).toBe(2);
+      expect(flagged.stderr).toContain("usage:");
+      expect(empty.status).toBe(2);
+      expect(empty.stderr).toContain("usage:");
     });
   });
 
@@ -123,6 +140,16 @@ describe("the fallow audit check", () => {
 
       expect(missing.status).toBe(2);
       expect(missing.stderr).toContain("git finds no commit for origin/main");
+
+      const git = (...args: string[]) => gitInScratchRepository(root, args);
+      git("switch", "--quiet", "--orphan", "unrelated");
+      writeFileSync(join(root, "README.md"), "Unrelated.\n");
+      git("add", "README.md");
+      git("commit", "--quiet", "--message=unrelated");
+      const noBase = audited(root, "main");
+
+      expect(noBase.status).toBe(2);
+      expect(noBase.stderr).toContain("git finds no merge-base of main and HEAD");
     });
   });
 });

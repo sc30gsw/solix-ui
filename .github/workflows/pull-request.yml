@@ -54,4 +54,4 @@ jobs:
           cache: true
       - run: node scripts/check-fallow-audit.ts "$PULL_REQUEST_BASE"
         env:
-          PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
+          PULL_REQUEST_BASE: refs/remotes/origin/${{ github.event.pull_request.base.ref }}

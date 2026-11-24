@@ -18,7 +18,7 @@ export type Workflow<On = unknown> = {
   on?: On;
   permissions?: unknown;
   jobs?: Record<string, Job>;
-};
+} & Record<string, unknown>;
 
 export function workflowAt<On = unknown>(file: string): Workflow<On> {
   return parseYaml(readFileSync(join(repositoryRoot, file), "utf8")) as Workflow<On>;
@@ -91,7 +91,7 @@ type GateJobOptions = {
 function setUpStepsWith(options?: GateJobOptions): readonly SetUpStep[] {
   if (!options?.checkoutWith) return setUpSteps;
   const [checkout, ...rest] = setUpSteps;
-  return [{ ...checkout, with: { ...checkout.with, ...options.checkoutWith } }, ...rest];
+  return [{ ...checkout, with: { ...options.checkoutWith, ...checkout.with } }, ...rest];
 }
 
 function gateStepsFor(

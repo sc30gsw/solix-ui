@@ -1,16 +1,10 @@
-import { spawnSync } from "node:child_process";
-import {
-  emptyChangesetProblems,
-  fallowEnv,
-  fallowJson,
-  installedFallow,
-} from "#/scripts/fallow-audit.ts";
+import { auditFallow, emptyChangesetProblems, printFallowAudit } from "#/scripts/fallow-audit.ts";
 import { git, gitRun, pathsIn } from "#/scripts/git.ts";
 
 const usage = "usage: check-fallow-audit.ts [<base revision>, origin/main when left out]";
 
 const [base = "origin/main", ...extra] = process.argv.slice(2);
-if (extra.length > 0 || base.startsWith("-")) {
+if (extra.length > 0 || base === "" || base.startsWith("-")) {
   console.error(usage);
   process.exit(2);
 }
@@ -53,30 +47,22 @@ if (mergeBase.status !== 0) {
 const from = mergeBase.stdout.trim();
 const changed = pathsIn(git(["diff", "--name-only", "--no-renames", "-z", `${from}..HEAD`]));
 
-let audited: number | undefined;
 try {
-  const report = fallowJson(["audit", "--base", from]);
-  const count =
-    typeof report === "object" && report !== null
-      ? Reflect.get(report, "changed_files_count")
-      : undefined;
-  audited = typeof count === "number" ? count : undefined;
+  const result = auditFallow(from);
+  const problems = emptyChangesetProblems(result.changedFilesCount, changed);
+  if (problems.length > 0) {
+    for (const problem of problems) console.error(problem);
+    process.exit(1);
+  }
+  if (result.verdict === "pass" && result.status === 0) {
+    console.log(
+      `fallow audit: pass (${result.changedFilesCount} changed ${result.changedFilesCount === 1 ? "file" : "files"} vs ${from.slice(0, 7)})`,
+    );
+    process.exit(0);
+  }
+  printFallowAudit(from);
+  process.exit(result.status);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(2);
 }
-if (audited === undefined) {
-  console.error("fallow audit --format json gave no numeric changed_files_count.");
-  process.exit(2);
-}
-const problems = emptyChangesetProblems(audited, changed);
-if (problems.length > 0) {
-  for (const problem of problems) console.error(problem);
-  process.exit(1);
-}
-
-const audit = spawnSync(installedFallow, ["audit", "--base", from], {
-  stdio: "inherit",
-  env: fallowEnv,
-});
-process.exit(audit.status ?? 1);
