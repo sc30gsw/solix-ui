@@ -12,11 +12,11 @@ import {
   stableClass,
   themeStyleSheet,
 } from "../../../packages/core/tests/built-library";
-import { lookOf } from "../../../scripts/expected-values";
 import { nestedThemeNames, nestedThemes } from "#/src/sections/theme-setups.ts";
 import {
   computed,
   inEveryEngine,
+  lookOf,
   openPage,
   type OpenPage,
   scriptModes,

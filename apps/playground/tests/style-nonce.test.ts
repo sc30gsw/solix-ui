@@ -8,7 +8,7 @@ import { elementsOf, valuesOf } from "../../../packages/core/tests/markup";
 import { policyHeader } from "#/src/middleware.ts";
 import { themedByTheProvider, themedSpacing, themeNames } from "#/src/sections/theme-setups.ts";
 import { opened } from "#/tests/support/opening.ts";
-import { computed, inEveryEngine } from "#/tests/support/playground.ts";
+import { computed, inEveryEngine, readerOf } from "#/tests/support/playground.ts";
 
 const url = inject("playgroundUrl");
 const policyNonce = /'nonce-([^']+)'/;
@@ -120,7 +120,7 @@ inEveryEngine((browser) => {
           "padding-top",
         ),
       };
-      const expected = await expectedValues(page);
+      const expected = await expectedValues(readerOf(page), { sentinels: false });
       await close();
 
       expect(styles.map((style) => style.nonce)).toEqual(styles.map(() => nonce));

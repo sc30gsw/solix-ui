@@ -14,7 +14,7 @@ Open `/` and scroll to the colour-scheme section.
 
 ## Driving it with e2e
 
-No e2e test yet. `apps/playground/tests/color-scheme.test.ts` drives it in Playwright, with scripts on and off and a second page of the same origin. `browser.emulateMedia({ colorScheme })` sets the system's scheme; `browser.newTab()` opens the second page. Read names from `schemeButtons`, `schemeTexts` and `forcedSection`, never as strings.
+`apps/playground/tests/color-scheme.test.ts` drives it, and `MIGRATION.md` says whether it has moved to e2e, with scripts on and off and a second page of the same origin. `browser.emulateMedia({ colorScheme })` sets the system's scheme; `browser.newTab()` opens the second page. Read names from `schemeButtons`, `schemeTexts` and `forcedSection`, never as strings.
 
 ## Proof
 

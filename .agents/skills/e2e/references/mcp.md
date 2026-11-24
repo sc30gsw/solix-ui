@@ -12,16 +12,14 @@ screen where it failed.
 - Setup
 - Tools
 - Workflow
-- Attaching to a held test
 - Fixing a failing test
 - Rules
 
 ## Setup
 
 The server ships with the project's `e2e` dependency. The e2e plugin for
-Codex and Cursor registers it too, as `npx -y e2e@<version> mcp`, pinned to the plugin's release (it runs that release even when the project has another e2e version); with
-that plugin installed there is nothing to add. The Claude Code plugin does
-not register it. Otherwise `e2e init` offers to register it for Claude Code,
+Claude Code, Codex, and Cursor registers it too, as `npx -y e2e@<version> mcp`, pinned to the plugin's release (it runs that release even when the project has another e2e version); with
+the plugin installed there is nothing to add. Otherwise `e2e init` offers to register it for Claude Code,
 Cursor, and Codex. Reuse an existing registration; when adding one, use the project's
 config so it starts in the project it drives. Install dependencies and start
 the MCP client in that directory so `npx` uses the installed e2e version. In a
@@ -88,7 +86,8 @@ sets how many sessions may be open at once (default 4, 1 through 16; one on Bun)
 
 Four tools, all on the server registered as `e2e`; everything a session can
 do is a catalog behind `call`. Clients show them with the server name, such
-as `mcp__e2e__open_session` in Claude Code; when another MCP server offers a
+as `mcp__e2e__open_session` in Claude Code (`mcp__plugin_e2e_e2e__open_session`
+from the plugin); when another MCP server offers a
 tool with the same name, use the `e2e` server's.
 
 | Tool | Does |
@@ -237,28 +236,6 @@ Resources: `e2e://guide` and `e2e://guide/<topic>` hold this skill.
    session closes and the app commands stop. To look at another project or
    config, `open_session {config: "path/to/e2e.config.ts"}` (absolute, or
    relative to the server's working directory); no restart needed.
-
-## Attaching to a held test
-
-Pass only `attach` to `open_session`, using the ID from the pause header.
-Run MCP from the test run's directory with the same e2e version.
-
-```txt
-open_session {attach: "k3f9"}
-```
-
-An attached session has the same tools as a normal session on that target.
-Use `start_recording` and `stop_recording` to save a video under
-`<output>/videos/<session>/`. If the run already records the attempt,
-`start_recording` returns an error with the run's video directory.
-
-Use `close_session` to detach and leave the test held. The reply includes
-the path of any recording saved on detach.
-
-Press Enter or run `npx e2e run --step next` to resume the test and end the
-attachment right away. Any recording still running saves in the background.
-The runner logs the saved path or the error. The MCP server logs the same
-result if it's still connected.
 
 ## Fixing a failing test
 

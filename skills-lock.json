@@ -16,10 +16,11 @@
     },
     "e2e": {
       "source": "e2e-inc/e2e",
-      "commit": "5acb82235d7e88364d614cbd23b96d2b9e8233a6",
+      "ref": "0e9d58ec98dd4522929766c533f8078239fa72f9",
+      "commit": "0e9d58ec98dd4522929766c533f8078239fa72f9",
       "sourceType": "github",
       "skillPath": "skills/e2e/SKILL.md",
-      "computedHash": "cbd6b9c5f5315251824327fc58f1b6bd235ca7ea80c88100e820261f0de686cf"
+      "computedHash": "09b8aa25cf6d06a4f93db05120c293456a2ddeaeaf701af41e8d48677bd51512"
     },
     "grill-with-docs": {
       "source": "mattpocock/skills",

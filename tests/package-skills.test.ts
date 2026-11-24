@@ -21,8 +21,8 @@ import {
   reviewedSkillsFile,
   reviewProblems,
   skillDirectories,
+  lockHashOf,
   vendoredSkillProblems,
-  vendoredSkills,
 } from "#/scripts/package-skills.ts";
 import { repositoryRoot, workflowFiles, workspaceFile } from "#/tests/support/workspace.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
@@ -158,26 +158,54 @@ test(`${reviewedSkillsFile} records a reviewed hash for exactly the package skil
   ]);
 });
 
-test("every skill vendoredSkills names is in skills-lock.json and installed in .agents/skills and .claude/skills, and the lock file holds no other", () => {
-  expect(vendoredSkillProblems(repositoryRoot, vendoredSkills)).toEqual([]);
+test("every skill skills-lock.json vendors has its SKILL.md, a link from .claude/skills, the files whose hash the lock records and, where an installed package ships it too, the package's files", () => {
+  expect(vendoredSkillProblems(repositoryRoot)).toEqual([]);
 });
 
-test("a vendored skill that is missing, one the lock file does not hold, and a locked skill the list leaves out each fail", async () => {
-  const lock = JSON.stringify({ skills: { kept: {}, gone: {}, unlisted: {} } });
+test("a vendored skill without its SKILL.md, without its link, with a file the lock's hash does not hold, or unlike the copy its package ships, fails", async () => {
+  const skill = { "SKILL.md": skillText, "references/more.md": "More." };
+  const folder = (name: string, files: Record<string, string>) =>
+    Object.fromEntries(
+      Object.entries(files).map(([path, text]) => [`.agents/skills/${name}/${path}`, text]),
+    );
   await inTemporaryTree(
     {
-      "skills-lock.json": lock,
-      ".agents/skills/kept/SKILL.md": skillText,
-      ".claude/skills/kept/SKILL.md": skillText,
-      ".agents/skills/gone/SKILL.md": skillText,
+      ...folder("kept", skill),
+      ...folder("unlinked", skill),
+      ...folder("edited", skill),
+      ...folder("shipped", skill),
+      ".agents/skills/gone/references/more.md": "More.",
+      "node_modules/e2e/skills/shipped/SKILL.md": `${skillText}Another release.\n`,
+      "node_modules/e2e/skills/shipped/references/more.md": "More.",
     },
     (root) => {
-      expect(vendoredSkillProblems(root, ["kept", "gone", "unlocked"])).toEqual([
-        "skills-lock.json: vendoredSkills in scripts/package-skills.ts names unlocked, which this lock file does not hold. Install it with npx skills add, or drop it from the list.",
-        "scripts/package-skills.ts: skills-lock.json holds unlisted, so name it in vendoredSkills.",
-        ".claude/skills/gone: vendoredSkills in scripts/package-skills.ts names this skill, but its SKILL.md is missing. Install it again with npx skills add.",
-        ".agents/skills/unlocked: vendoredSkills in scripts/package-skills.ts names this skill, but its SKILL.md is missing. Install it again with npx skills add.",
-        ".claude/skills/unlocked: vendoredSkills in scripts/package-skills.ts names this skill, but its SKILL.md is missing. Install it again with npx skills add.",
+      const hash = lockHashOf(join(root, ".agents/skills/kept"));
+      const lock = (source: string) => ({ source, computedHash: hash });
+      writeFileSync(
+        join(root, "skills-lock.json"),
+        JSON.stringify({
+          skills: {
+            kept: lock("someone/skills"),
+            unlinked: lock("someone/skills"),
+            edited: lock("someone/skills"),
+            shipped: lock("e2e-inc/e2e"),
+            gone: lock("someone/skills"),
+          },
+        }),
+      );
+      mkdirSync(join(root, ".claude/skills"), { recursive: true });
+      for (const name of ["kept", "edited", "shipped", "gone"]) {
+        symlinkSync(`../../.agents/skills/${name}`, join(root, ".claude/skills", name));
+      }
+      writeFileSync(join(root, ".agents/skills/edited/references/more.md"), "Edited.");
+
+      expect(vendoredSkillProblems(root)).toEqual([
+        ".claude/skills/unlinked: make it a symbolic link to ../../.agents/skills/unlinked.",
+        expect.stringContaining(".agents/skills/edited: its files hash to"),
+        expect.stringContaining(
+          ".agents/skills/shipped: it differs from the copy the installed e2e package ships",
+        ),
+        ".agents/skills/gone: skills-lock.json vendors this skill, but its SKILL.md is missing. Install it again with npx skills add.",
       ]);
     },
   );

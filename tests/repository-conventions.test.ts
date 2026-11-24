@@ -29,7 +29,13 @@ import { seedVariable } from "#/tests/support/property-seed.ts";
 import { isModelFile, modelFilePatterns } from "#/scripts/formal-verification.ts";
 import { formalSkillPrefix, verificationSkillPrefix } from "#/scripts/verification-skills.ts";
 import { tlaTsRunsOf } from "#/tests/support/formal-verification.ts";
-import { commandsOf, mutationEntriesOf } from "#/tests/support/skill-commands.ts";
+import {
+  commandsOf,
+  e2eRunCommand,
+  mutationEntriesOf,
+  type Runner,
+} from "#/tests/support/skill-commands.ts";
+import e2eConfig from "#/e2e.config.ts";
 import { nodeTestFiles } from "#/tests/support/project-setups.ts";
 
 const skillsDirectory = join(repositoryRoot, ".agents/skills");
@@ -451,16 +457,27 @@ test("every verification skill says which commit it was last confirmed against",
 
 const runsAProperty = /\bassertProperty\(/;
 const leadingDotSlash = /^\.\//;
-const testOrStory = /\.(?:test|stories|e2e)\.(?:ts|tsx|mts)$/;
+const testOrStory = /\.(?:test|stories)\.(?:ts|tsx|mts)$/;
+const e2eTest = /\.e2e\.ts$/;
 
-function testFiles(): string[] {
-  return trackedFiles().filter((file) => testOrStory.test(file));
+type FilesOfEachRunner = Readonly<Record<Runner, readonly string[]>>;
+
+function testFiles(): FilesOfEachRunner {
+  return {
+    vitest: trackedFiles().filter((file) => testOrStory.test(file) && !e2eTest.test(file)),
+    e2e: globSync(e2eConfig.tests, { cwd: repositoryRoot }).filter((file) => e2eTest.test(file)),
+  };
 }
+
+const runnerFiles: Readonly<Record<Runner, string>> = {
+  vitest: "Vitest test or story file",
+  e2e: "e2e test file that the tests glob of e2e.config.ts takes",
+};
 
 function mutationCommandProblems(
   name: string,
   text: string,
-  files: readonly string[],
+  files: FilesOfEachRunner,
   read: (file: string) => string,
 ): string[] {
   const where = `.agents/skills/${name}/SKILL.md`;
@@ -468,10 +485,10 @@ function mutationCommandProblems(
     const named = `the mutation entry "${entry.trim().slice(0, 60)}…"`;
     if (commands.length === 0) {
       return [
-        `${where}: ${named} gives no \`vp test <files>\` or \`npx e2e run <files>\` command. Write the command it runs.`,
+        `${where}: ${named} gives no \`vp test <files>\` or \`${e2eRunCommand} <files>\` command. Write the command it runs.`,
       ];
     }
-    return commands.flatMap(({ written, seed, filters }) => {
+    return commands.flatMap(({ runner, written, seed, filters }) => {
       if (filters.length === 0) {
         return [
           `${where}: ${named} runs \`${written}\`, which names no file, so it runs every test of its projects. Name the files it runs.`,
@@ -479,12 +496,12 @@ function mutationCommandProblems(
       }
       const resolved = filters.map((filter) => {
         const sought = filter.replace(leadingDotSlash, "").toLowerCase();
-        return files.filter((file) => file.toLowerCase().includes(sought));
+        return files[runner].filter((file) => file.toLowerCase().includes(sought));
       });
       const unmatched = filters.filter((_, index) => resolved[index].length === 0);
       if (unmatched.length > 0) {
         return [
-          `${where}: ${named} runs \`${written}\`, whose ${unmatched.join(", ")} is in no test file's path.`,
+          `${where}: ${named} runs \`${written}\`, whose ${unmatched.join(", ")} is in the path of no ${runnerFiles[runner]}.`,
         ];
       }
       const property = resolved.flat().some((file) => runsAProperty.test(read(file)));
@@ -509,7 +526,10 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\` or \
     "packages/b/tests/b.test.ts": 'test("fixed", () => {});\n',
     "apps/c/tests/c.e2e.ts": 'test("served", async () => {});\n',
   };
-  const files = Object.keys(fixtureFiles);
+  const files = {
+    vitest: Object.keys(fixtureFiles).filter((file) => !e2eTest.test(file)),
+    e2e: Object.keys(fixtureFiles).filter((file) => e2eTest.test(file)),
+  };
   const readFixture = (file: string) => fixtureFiles[file] ?? "";
   const problems = (entry: string) => mutationCommandProblems(plain, entry, files, readFixture);
   const seeded = (filter: string) => `\`${seedVariable}=-42 vp test ${filter}\``;
@@ -527,8 +547,11 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\` or \
     '- Project mutation: run `vp test --project "stories*"`.',
     `- Focus mutation: run ${seeded("packages/b/tests/b.test.ts")}.`,
     "- Focus mutation: run `vp test packages/c/tests/c.test.ts`.",
-    "- Served mutation: run `npx e2e run apps/d/tests/d.e2e.ts`.",
-    `- Served mutation: run \`${seedVariable}=-42 npx e2e run apps/c/tests/c.e2e.ts\`.`,
+    "- Served mutation: run `vp run e2e run apps/d/tests/d.e2e.ts`.",
+    `- Served mutation: run \`${seedVariable}=-42 vp run e2e run apps/c/tests/c.e2e.ts\`.`,
+    "- Bare mutation: run `npx e2e run apps/c/tests/c.e2e.ts`.",
+    "- Crossed mutation: run `vp test apps/c/tests/c.e2e.ts`.",
+    "- Crossed mutation: run `vp run e2e run packages/b/tests/b.test.ts`.",
   ]) {
     expect(problems(refused), refused).toHaveLength(1);
   }
@@ -539,7 +562,7 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\` or \
     '- Story mutation: run `vp test --project "stories*" packages/b`.',
     `- Case mutation: run ${seeded("./Packages/A/tests/a.test.ts")}.`,
     "- Chained mutation: run `vp test packages/b/tests/b.test.ts && echo done`.",
-    "- Served mutation: run `npx e2e run apps/c/tests/c.e2e.ts`.",
+    "- Served mutation: run `vp run e2e run apps/c/tests/c.e2e.ts --target webkit`.",
   ]) {
     expect(problems(passed), passed).toEqual([]);
   }
@@ -549,6 +572,75 @@ test(`a mutation entry of any name and list marker runs \`vp test <files>\` or \
       .filter((name) => name.startsWith(verificationSkillPrefix))
       .flatMap((name) => mutationCommandProblems(name, skillText(name), tracked, read)),
   ).toEqual([]);
+});
+
+const inlineCode = /`([^`\n]+)`/g;
+const fence = /^\s*```/;
+const commandSeparator = /&&|\|\||;|\|/;
+const leadingAssignments = /^(?:[A-Z][A-Z0-9_]*=\S*\s+)*/;
+const bareE2eCommand = /^(?:(?:npx|bunx)\s+(?:--yes\s+)?|pnpm\s+(?:exec\s+|dlx\s+)?)?e2e\s+\S/;
+
+function codeOf(text: string): string[] {
+  let fenced = false;
+  return text.split("\n").flatMap((line) => {
+    if (fence.test(line)) {
+      fenced = !fenced;
+      return [];
+    }
+    return fenced ? [line] : [...line.matchAll(inlineCode)].map(([, code]) => code);
+  });
+}
+
+function bareE2eCommandsIn(text: string): string[] {
+  return codeOf(text).filter((code) =>
+    code
+      .split(commandSeparator)
+      .some((command) => bareE2eCommand.test(command.trim().replace(leadingAssignments, ""))),
+  );
+}
+
+function filesUnderFolder(folder: string): string[] {
+  return readdirSync(join(repositoryRoot, folder), { recursive: true, encoding: "utf8" })
+    .map((path) => `${folder}/${path}`)
+    .filter((path) => statSync(join(repositoryRoot, path)).isFile());
+}
+
+test(`every e2e command a project skill or MIGRATION.md gives runs through the root e2e script, \`${e2eRunCommand}\` and its siblings, which turns e2e's telemetry off`, () => {
+  for (const refused of [
+    "Run `npx e2e run apps/a.e2e.ts`.",
+    "Run `npx --yes e2e list`.",
+    "Run `pnpm exec e2e doctor`.",
+    "Run `E2E_TELEMETRY_DISABLED=1 npx e2e guide setup`.",
+    "Bug bash it with `e2e explore`.",
+    "```bash\nnpx e2e run apps/a.e2e.ts\n```",
+  ]) {
+    expect(bareE2eCommandsIn(refused), refused).toHaveLength(1);
+  }
+  for (const passed of [
+    "Run `vp run e2e run apps/a.e2e.ts`.",
+    "Run `vp run e2e doctor`.",
+    "The e2e run needs all three engines, and `@e2e-dev/web` drives them.",
+    "Read `.agents/skills/e2e/SKILL.md`.",
+    "Read the `e2e` skill first.",
+    "```bash\nvp run e2e list\n```",
+  ]) {
+    expect(bareE2eCommandsIn(passed), passed).toEqual([]);
+  }
+  const copied = copiedOutsideSkills();
+  const files = [
+    ...skillNames
+      .filter((name) => !copied.includes(name))
+      .flatMap((name) => filesUnderFolder(`.agents/skills/${name}`)),
+    "MIGRATION.md",
+  ];
+  const violations = files.flatMap((file) =>
+    bareE2eCommandsIn(read(file)).map(
+      (line) =>
+        `${file}: run e2e through the root script, as \`vp run e2e <command>\`, which turns its telemetry off: ${line.trim()}`,
+    ),
+  );
+
+  expect(violations).toEqual([]);
 });
 
 test("a skill's command line splits at a separator written alone or glued to a word, and a quoted separator stays a word", () => {
@@ -767,8 +859,9 @@ test("every check in the repository runs through vp run verify, before a commit,
     "vp check --deny-warnings",
     "vp run lint:solid",
     "vp run check:private-terms",
-    "vp test",
-    "vp run test:e2e",
+    "vp run build:packages",
+    "SOLIX_PACKAGES_BUILT=production vp test",
+    "vp run e2e run",
   ]);
   expect(read(".vite-hooks/pre-commit").trim()).toBe(
     "node scripts/check-working-tree.ts && vp staged --no-stash && node scripts/check-working-tree.ts && vp run verify",

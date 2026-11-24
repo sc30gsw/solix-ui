@@ -14,7 +14,7 @@ Open `/`; the button sits after the text inputs.
 
 ## Driving it with e2e
 
-No e2e test yet. `apps/playground/tests/modal.test.ts` and the generated `apps/playground/tests/modal-protocol.test.ts` drive it in Playwright; `verify-modal-protocol` owns the protocol. Locators: `screen.getByRole('button', 'Open modal')`, `screen.getByRole('dialog', 'Settings')`, `screen.getByRole('textbox', 'Name')`.
+`apps/playground/tests/modal.test.ts` and the generated `apps/playground/tests/modal-protocol.test.ts` drive it, and `MIGRATION.md` says whether they have moved to e2e; `verify-modal-protocol` owns the protocol. Locators: `screen.getByRole('button', 'Open modal')`, `screen.getByRole('dialog', 'Settings')`, `screen.getByRole('textbox', 'Name')`.
 
 ## Proof
 

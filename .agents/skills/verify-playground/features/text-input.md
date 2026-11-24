@@ -16,7 +16,7 @@ Open `/` and scroll to the inputs below the disclosure. No account.
 
 ## Driving it with e2e
 
-`apps/playground/tests/text-input.e2e.ts` pins every sub-feature in each engine. Locators: `screen.getByRole('textbox', 'Email')`, `screen.getByRole('textbox', 'Overridden input')`, `screen.getByRole('textbox', 'Disabled input')`, and `screen.getByRole('button', 'Default')`, the first button, which takes focus to commit a value. Styles: `styleOf(labelled('Email'), 'border-top-color')` against `expected('--solix-color-error')`, and the other tokens the test names.
+`apps/playground/tests/text-input.e2e.ts` pins every sub-feature in each engine. Targets: `{ role: "textbox", name: "Email" }`, `"Overridden input"` and `"Disabled input"`, and `{ role: "button", name: "Default" }`, the first button, which `committed` focuses to commit a value. Styles: `styleOf(email, "border-top-color")` against `expected("--solix-color-error")`, and the other tokens the test names.
 
 ## Proof
 

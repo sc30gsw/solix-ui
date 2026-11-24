@@ -14,7 +14,7 @@ Open `/`; the disclosure sits after the buttons.
 
 ## Driving it with e2e
 
-No e2e test yet. `apps/playground/tests/disclosure.test.ts` drives it in Playwright, with scripts on and off. Locators: the summary by its text `Toggle`, the content by `Hidden content`.
+`apps/playground/tests/disclosure.test.ts` drives it, with scripts on and off; `MIGRATION.md` says whether it has moved to e2e. Targets: the summary has no role in the tree, so it is `{ text: "Toggle" }`, as `apps/playground/tests/targets.e2e.ts` holds; the content by `Hidden content`.
 
 ## Proof
 

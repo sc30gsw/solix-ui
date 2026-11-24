@@ -1,20 +1,16 @@
 import type { ConsoleMessage, Page } from "playwright";
+import {
+  consoleProblemsKey,
+  type ExpectedReport,
+  isExpected,
+  recordConsoleProblems,
+} from "../../../../tests/support/console-recorder";
 import { hydratedMark } from "#/src/hydrated-mark.ts";
+import { hydrationTimeout, notReady, pageDidNotBecomeReady } from "#/tests/support/readiness.ts";
 
 export type OpenedUntil = "hydrated" | "stylesheetsLoaded" | "commit" | "load";
 
-export const pageDidNotBecomeReady = "the page did not become ready";
-
-export const hydrationTimeout = 10_000;
-
-export type ExpectedReport = string | RegExp;
-
 type Heard = { problems: string[]; asked: number; expected?: ExpectedReport };
-
-function isExpected(problem: string, expected: ExpectedReport | undefined): boolean {
-  if (expected === undefined) return false;
-  return typeof expected === "string" ? problem === expected : expected.test(problem);
-}
 
 const heardOnEachPage = new Map<Page, Heard>();
 
@@ -23,9 +19,10 @@ function problemOf(message: ConsoleMessage): string | undefined {
   return type === "error" || type === "warning" ? `${type}: ${message.text()}` : undefined;
 }
 
-function keepListening(page: Page, expected: ExpectedReport | undefined): void {
+async function keepListening(page: Page, expected: ExpectedReport | undefined): Promise<void> {
   let heard = heardOnEachPage.get(page);
   if (heard === undefined) {
+    await page.addInitScript(recordConsoleProblems, consoleProblemsKey);
     const kept: Heard = { problems: [], asked: 0 };
     page.on("console", (message) => {
       const problem = problemOf(message);
@@ -65,13 +62,6 @@ function heardFrom(page: Page): { said: string[]; stop: () => void } {
       page.off("pageerror", onError);
     },
   };
-}
-
-function notReady(timeout: number, said: string[], cause: unknown): Error {
-  return new Error(
-    `${pageDidNotBecomeReady}: its client script has not marked <html> with ${hydratedMark} within ${timeout} ms, so it has not hydrated the page. The page said: ${said.join(" | ") || "nothing"}`,
-    { cause },
-  );
 }
 
 function withWhatThePageSaid(said: string[], cause: unknown): Error {
@@ -216,7 +206,7 @@ export async function opened(
     reportsToTheConsole,
   }: { timeout?: number; reportsToTheConsole?: ExpectedReport } = {},
 ): Promise<void> {
-  keepListening(page, reportsToTheConsole);
+  await keepListening(page, reportsToTheConsole);
   if (until === "stylesheetsLoaded") {
     await watchStylesheets(page);
     const deadline = Date.now() + timeout;

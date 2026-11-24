@@ -1,51 +1,24 @@
 import { type Browser, test as base } from "@e2e-dev/web";
-import type { App } from "e2e";
-import { type Expected, expectedValuesRead } from "../../../../scripts/expected-values";
+import { type App, expect, type Locator, type Screen } from "e2e";
+import { type Expected, expectedValues } from "../../../../scripts/expected-values";
+import {
+  consoleProblemsKey,
+  type ExpectedReport,
+  isExpected,
+  recordConsoleProblems,
+  recordedConsoleProblems,
+  recorderDidNotRun,
+} from "../../../../tests/support/console-recorder";
 import { hydratedMark } from "#/src/hydrated-mark.ts";
-import { hydrationTimeout, pageDidNotBecomeReady } from "#/tests/support/opening.ts";
+import { hydrationTimeout, notReady } from "#/tests/support/readiness.ts";
+import { readTarget, type Target } from "#/tests/support/targets.ts";
 
-const consoleProblemsKey = "__solixConsoleProblems";
+export type StyleOf = (target: Target, property: string) => Promise<string>;
 
-function recordConsoleProblems(key: string): void {
-  const problems: string[] = [];
-  const sink = window.console;
-  Object.defineProperty(window, key, { value: problems });
-  for (const [method, type] of [
-    ["error", "error"],
-    ["warn", "warning"],
-  ] as const) {
-    const original = sink[method];
-    sink[method] = (...data: unknown[]) => {
-      problems.push(`${type}: ${data.map(String).join(" ")}`);
-      original.apply(sink, data);
-    };
-  }
-  window.addEventListener(
-    "error",
-    (event) => {
-      problems.push(
-        event.target instanceof Element
-          ? `error: ${event.target.outerHTML} did not load`
-          : `pageerror: ${String(event.error ?? event.message)}`,
-      );
-    },
-    true,
-  );
-  window.addEventListener("unhandledrejection", (event) => {
-    problems.push(`pageerror: ${String(event.reason)}`);
-  });
-  document.addEventListener("securitypolicyviolation", (event) => {
-    problems.push(`error: ${event.violatedDirective} refused ${event.blockedURI || "inline"}`);
-  });
-}
+const commitTarget: Target = { role: "button", name: "Default" };
 
-export function consoleProblems(browser: Browser): Promise<string[]> {
-  return browser.evaluate((key) => {
-    const kept: unknown = Reflect.get(window, key);
-    return Array.isArray(kept)
-      ? kept.map(String)
-      : ["the console recorder did not run before the page's own scripts"];
-  }, consoleProblemsKey);
+function consoleProblems(browser: Browser): Promise<string[]> {
+  return browser.evaluate(recordedConsoleProblems, [consoleProblemsKey, recorderDidNotRun]);
 }
 
 export async function openedHydrated(app: App, browser: Browser): Promise<void> {
@@ -56,42 +29,47 @@ export async function openedHydrated(app: App, browser: Browser): Promise<void> 
       .locator(`html[${hydratedMark}]`)
       .waitFor({ state: "attached", timeout: hydrationTimeout });
   } catch (cause) {
-    const said = await consoleProblems(browser);
-    throw new Error(
-      `${pageDidNotBecomeReady}: its client script has not marked <html> with ${hydratedMark} within ${hydrationTimeout} ms, so it has not hydrated the page. The page said: ${said.join(" | ") || "nothing"}`,
-      { cause },
-    );
+    throw notReady(hydrationTimeout, await consoleProblems(browser), cause);
   }
 }
 
-function styleIn(browser: Browser, selector: string, property: string): Promise<string> {
-  return browser.evaluate(
-    ([target, name]) => {
-      const found = document.querySelectorAll(target);
-      if (found.length !== 1) {
-        throw new Error(`${target} matches ${found.length} elements, not one.`);
-      }
-      return getComputedStyle(found[0]).getPropertyValue(name);
-    },
-    [selector, property],
-  );
+export function located(screen: Screen, target: Target): Locator {
+  return "text" in target
+    ? screen.getByText(target.text)
+    : screen.getByRole(target.role, target.name);
 }
 
-export function labelled(name: string): string {
-  return `[aria-label="${name}"]`;
+export async function committed(screen: Screen, field: Target, value: string): Promise<void> {
+  await located(screen, field).fill(value);
+  await located(screen, commitTarget).focus();
 }
 
-export type HydratedPlayground = {
+export const test = base.extend<{
+  reportsToTheConsole: ExpectedReport | undefined;
+  hydrated: Browser;
   expected: Expected;
-  styleOf: (selector: string, property: string) => Promise<string>;
-};
-
-export const test = base.extend<{ playground: HydratedPlayground }>({
-  playground: async ({ app, browser }, use) => {
-    await openedHydrated(app, browser);
-    const expected = await expectedValuesRead((probe, input) => browser.evaluate(probe, input), {
-      sentinels: true,
-    });
-    await use({ expected, styleOf: (selector, property) => styleIn(browser, selector, property) });
+  styleOf: StyleOf;
+}>({
+  reportsToTheConsole: async ({ platform: _platform }, use) => {
+    await use(undefined);
+  },
+  hydrated: [
+    async ({ app, browser, reportsToTheConsole }, use) => {
+      await openedHydrated(app, browser);
+      await use(browser);
+      expect(
+        (await consoleProblems(browser)).filter(
+          (problem) => !isExpected(problem, reportsToTheConsole),
+        ),
+        "the console errors, warnings and page errors the page reported during this test. Fix their cause, or give the test the message it must report as reportsToTheConsole.",
+      ).toEqual([]);
+    },
+    { auto: true },
+  ],
+  expected: async ({ hydrated }, use) => {
+    await use(await expectedValues((probe, input) => hydrated.evaluate(probe, input)));
+  },
+  styleOf: async ({ hydrated }, use) => {
+    await use((target, property) => hydrated.evaluate(readTarget, { target, style: property }));
   },
 });

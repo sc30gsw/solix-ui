@@ -15,7 +15,7 @@ Open `/`; the buttons come first, under `Solix playground`.
 
 ## Driving it with e2e
 
-No e2e test yet. `apps/playground/tests/button.test.ts` drives it in Playwright, with scripts on and off. Locators: `screen.getByRole('button', 'Default')`, `screen.getByTestId('overridden')`; the nested buttons' names are in `nestedThemeNames` of `apps/playground/src/sections/theme-setups.ts`.
+`apps/playground/tests/button.test.ts` drives it, with scripts on and off; `MIGRATION.md` says whether it has moved to e2e. Locators: `screen.getByRole('button', 'Default')`, `screen.getByTestId('overridden')`; the nested buttons' names are in `nestedThemeNames` of `apps/playground/src/sections/theme-setups.ts`.
 
 ## Proof
 

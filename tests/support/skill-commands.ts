@@ -1,6 +1,12 @@
 import { seedVariable } from "#/tests/support/property-seed.ts";
 
-export type TestCommand = { written: string; seed: number | undefined; filters: string[] };
+export type Runner = "vitest" | "e2e";
+export type TestCommand = {
+  runner: Runner;
+  written: string;
+  seed: number | undefined;
+  filters: string[];
+};
 export type MutationEntry = { text: string; commands: TestCommand[] };
 
 const word = /"[^"]*"|'[^']*'|\S+/g;
@@ -8,11 +14,19 @@ const item = /^(\s*)(?:[-*]|\d+\.)\s+/;
 const mutationItem = new RegExp(
   `${item.source}(?:[^:\\n]*?\\s)?[Mm]utation(?: check)?\\b[^:\\n]*:`,
 );
+export const e2eRunCommand = "vp run e2e run";
+const runnerOfCommand: Readonly<Record<string, Runner>> = {
+  "vp test": "vitest",
+  [e2eRunCommand]: "e2e",
+};
 const testCommand = new RegExp(
-  `\`(?:${seedVariable}=(-?\\d+) )?(?:vp test|npx e2e run) ([^\`]+)\``,
+  `\`(?:${seedVariable}=(-?\\d+) )?(${Object.keys(runnerOfCommand).join("|")}) ([^\`]+)\``,
   "g",
 );
-const optionsWithAValue = new Set(["--project", "-t", "--testNamePattern"]);
+const optionsWithAValue: Readonly<Record<Runner, readonly string[]>> = {
+  vitest: ["--project", "-t", "--testNamePattern"],
+  e2e: ["--output", "--trace", "--target"],
+};
 const subcommand = "run";
 
 const separator = /(&&|\|\||\||;|&)/;
@@ -34,13 +48,13 @@ export function commandsOf(line: string): string[][] {
   return commands.filter((command) => command.length > 0);
 }
 
-function filtersOf(command: string): string[] {
+function filtersOf(command: string, runner: Runner): string[] {
   const words = commandsOf(command)[0] ?? [];
   return words.filter(
     (each, index) =>
-      !(index === 0 && each === subcommand) &&
+      !(runner === "vitest" && index === 0 && each === subcommand) &&
       !each.startsWith("-") &&
-      !optionsWithAValue.has(words[index - 1] ?? ""),
+      !optionsWithAValue[runner].includes(words[index - 1] ?? ""),
   );
 }
 
@@ -60,11 +74,15 @@ export function mutationEntriesOf(skill: string): MutationEntry[] {
   return lines.flatMap((line, start) => {
     if (!mutationItem.test(line)) return [];
     const text = entryLines(lines, start).join("\n");
-    const commands = [...text.matchAll(testCommand)].map(([written, seed, rest]) => ({
-      written: written.slice(1, -1),
-      seed: seed === undefined ? undefined : Number(seed),
-      filters: filtersOf(rest),
-    }));
+    const commands = [...text.matchAll(testCommand)].map(([written, seed, command, rest]) => {
+      const runner = runnerOfCommand[command] ?? "vitest";
+      return {
+        runner,
+        written: written.slice(1, -1),
+        seed: seed === undefined ? undefined : Number(seed),
+        filters: filtersOf(rest, runner),
+      };
+    });
     return [{ text, commands }];
   });
 }

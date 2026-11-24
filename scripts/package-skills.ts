@@ -14,17 +14,6 @@ import { repositoryRoot } from "#/scripts/repository.ts";
 export const reviewedSkillsFile = "scripts/reviewed-skills.json";
 const skillsLockFile = "skills-lock.json";
 export const kitSkills: readonly string[] = ["solid-2"];
-export const vendoredSkills: readonly string[] = [
-  "create-verification-skill",
-  "domain-modeling",
-  "e2e",
-  "grill-with-docs",
-  "grilling",
-  "migrate-to-e2e",
-  "thermo-nuclear-code-quality-review",
-  "thermo-nuclear-review",
-  "thermos",
-];
 export const skillDirectories = [".agents/skills", ".claude/skills"];
 const skillFile = "SKILL.md";
 
@@ -39,41 +28,103 @@ export function approvedSkills(): PackageSkill[] {
 
 type OutsideSkill = { name: string; source: "package" | "vendored" | "kit" };
 
+type LockedSkill = { source: string; computedHash: string };
+
+const lockedSourcePackages: Readonly<Record<string, string>> = { "e2e-inc/e2e": "e2e" };
+const lockExcludedFiles = ["metadata.json"];
+const lockExcludedFolders = [".git", "__pycache__", "__pypackages__"];
+
+function lockedSkills(root: string): Record<string, LockedSkill> {
+  const lock: { skills: Record<string, LockedSkill> } = JSON.parse(
+    readFileSync(join(root, skillsLockFile), "utf8"),
+  );
+  return lock.skills;
+}
+
 export function outsideSkills(): OutsideSkill[] {
   return [
     ...approvedSkills().map(({ name }) => ({ name, source: "package" as const })),
-    ...vendoredSkills.map((name) => ({ name, source: "vendored" as const })),
+    ...Object.keys(lockedSkills(repositoryRoot)).map((name) => ({
+      name,
+      source: "vendored" as const,
+    })),
     ...kitSkills.map((name) => ({ name, source: "kit" as const })),
   ];
 }
 
-export function vendoredSkillProblems(root: string, vendored: readonly string[]): string[] {
-  const lock: { skills: Record<string, unknown> } = JSON.parse(
-    readFileSync(join(root, skillsLockFile), "utf8"),
-  );
-  const locked = Object.keys(lock.skills);
-  return [
-    ...vendored
-      .filter((name) => !locked.includes(name))
-      .map(
-        (name) =>
-          `${skillsLockFile}: vendoredSkills in scripts/package-skills.ts names ${name}, which this lock file does not hold. Install it with npx skills add, or drop it from the list.`,
-      ),
-    ...locked
-      .filter((name) => !vendored.includes(name))
-      .map(
-        (name) =>
-          `scripts/package-skills.ts: ${skillsLockFile} holds ${name}, so name it in vendoredSkills.`,
-      ),
-    ...vendored.flatMap((name) =>
-      skillDirectories
-        .filter((directory) => !existsSync(join(root, directory, name, skillFile)))
-        .map(
-          (directory) =>
-            `${directory}/${name}: vendoredSkills in scripts/package-skills.ts names this skill, but its ${skillFile} is missing. Install it again with npx skills add.`,
-        ),
-    ),
-  ];
+function lockFilesOf(folder: string, prefix = ""): string[] {
+  return readdirSync(join(folder, prefix), { withFileTypes: true }).flatMap((entry) => {
+    const path = `${prefix}${entry.name}`;
+    if (lockExcludedFiles.includes(entry.name)) return [];
+    if (entry.isDirectory()) {
+      return lockExcludedFolders.includes(entry.name) ? [] : lockFilesOf(folder, `${path}/`);
+    }
+    return entry.isFile() ? [path] : [];
+  });
+}
+
+function withUnixLineEnds(content: Buffer): Buffer {
+  if (content.includes(0) || !content.includes("\r\n")) return content;
+  return Buffer.from(content.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
+}
+
+export function lockHashOf(folder: string): string {
+  const entries = lockFilesOf(folder)
+    .map((path) => ({
+      path: Buffer.from(path),
+      content: withUnixLineEnds(readFileSync(join(folder, path))),
+    }))
+    .sort((left, right) => Buffer.compare(left.path, right.path));
+  const hash = createHash("sha256");
+  for (const { path, content } of entries) {
+    for (const part of [
+      path,
+      Buffer.from("\0"),
+      Buffer.from(String(content.length)),
+      Buffer.from("\0"),
+      content,
+    ]) {
+      hash.update(part);
+    }
+  }
+  return hash.digest("hex");
+}
+
+export function vendoredSkillProblems(root: string): string[] {
+  const [agentsDirectory, linksDirectory] = skillDirectories;
+  return Object.entries(lockedSkills(root)).flatMap(([name, { source, computedHash }]) => {
+    const folder = join(root, agentsDirectory, name);
+    if (!existsSync(join(folder, skillFile))) {
+      return [
+        `${agentsDirectory}/${name}: ${skillsLockFile} vendors this skill, but its ${skillFile} is missing. Install it again with npx skills add.`,
+      ];
+    }
+    const link = join(root, linksDirectory, name);
+    const linked =
+      existsSync(link) &&
+      lstatSync(link).isSymbolicLink() &&
+      readlinkSync(link) === `../../${agentsDirectory}/${name}`;
+    const hash = lockHashOf(folder);
+    const pack = lockedSourcePackages[source];
+    const shipped = pack === undefined ? "" : join(root, "node_modules", pack, "skills", name);
+    return [
+      ...(linked
+        ? []
+        : [
+            `${linksDirectory}/${name}: make it a symbolic link to ../../${agentsDirectory}/${name}.`,
+          ]),
+      ...(hash === computedHash
+        ? []
+        : [
+            `${agentsDirectory}/${name}: its files hash to ${hash}, not the ${computedHash} ${skillsLockFile} records, so it changed since it was vendored. Install it again with npx skills add, never by hand.`,
+          ]),
+      ...(shipped !== "" && existsSync(shipped) && lockHashOf(shipped) !== hash
+        ? [
+            `${agentsDirectory}/${name}: it differs from the copy the installed ${pack} package ships, so it documents another release. Vendor it from the upstream commit of the pinned release.`,
+          ]
+        : []),
+    ];
+  });
 }
 
 export function reviewedHashes(): ReviewedHashes {

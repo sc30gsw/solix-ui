@@ -1,7 +1,8 @@
 import fc from "fast-check";
 import type { Page } from "playwright";
 import { expect, inject, test } from "vite-plus/test";
-import { hydrationTimeout, opened, pageDidNotBecomeReady } from "#/tests/support/opening.ts";
+import { opened } from "#/tests/support/opening.ts";
+import { hydrationTimeout, pageDidNotBecomeReady } from "#/tests/support/readiness.ts";
 import { inEveryEngine } from "#/tests/support/playground.ts";
 import {
   clickMissedItsTab,

@@ -1,23 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Locator, Page } from "playwright";
 import postcss from "postcss";
 import { themedSpacing } from "#/apps/playground/src/sections/theme-setups.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 import { type TokenKind, tokenKind, tokenValues } from "#/scripts/tokens.ts";
 
 const playgroundStylesheet = "apps/playground/src/app.css";
-const sides = ["top", "right", "bottom", "left"];
-const corners = ["top-left", "top-right", "bottom-right", "bottom-left"];
-const lookProperties = [
-  "background-color",
-  "color",
-  ...sides.flatMap((side) => ["width", "style", "color"].map((part) => `border-${side}-${part}`)),
-  ...corners.map((corner) => `border-${corner}-radius`),
-  "height",
-  ...sides.map((side) => `padding-${side}`),
-];
-
 const probedProperty = {
   colour: "color",
   radius: "border-top-left-radius",
@@ -68,7 +56,7 @@ function sentinelValues(names: string[]): Record<string, string> {
   ]);
 }
 
-type ProbeInput = { written: Probe[]; injected: string };
+export type ProbeInput = { written: Probe[]; injected: string };
 
 function computedValues({ written, injected }: ProbeInput): Record<string, string> {
   if (injected) {
@@ -108,16 +96,9 @@ function sameValues(values: Record<string, string>): string[] {
 
 export type Expected = (name: string) => string;
 
-export function expectedValues(
-  page: Page,
-  options: { sentinels?: boolean } = {},
-): Promise<Expected> {
-  return expectedValuesRead((probe, input) => page.evaluate(probe, input), options);
-}
-
-export async function expectedValuesRead(
+export async function expectedValues(
   read: ProbeReader,
-  { sentinels = false }: { sentinels?: boolean } = {},
+  { sentinels = true }: { sentinels?: boolean } = {},
 ): Promise<Expected> {
   const tokens = tokenValues();
   const sentinelByName = sentinels ? sentinelValues(Object.keys(tokens)) : undefined;
@@ -156,14 +137,4 @@ export async function expectedValuesRead(
     }
     return values[name];
   };
-}
-
-export function lookOf(element: Locator): Promise<Record<string, string>> {
-  return element.evaluate(
-    (node, properties) =>
-      Object.fromEntries(
-        properties.map((property) => [property, getComputedStyle(node).getPropertyValue(property)]),
-      ),
-    lookProperties,
-  );
 }
