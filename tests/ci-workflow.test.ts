@@ -504,29 +504,71 @@ test.for(wrongRuns)(
 
 const pullRequestWorkflow = ".github/workflows/pull-request.yml";
 const fallowAudit = 'node scripts/check-fallow-audit.ts "$PULL_REQUEST_BASE"';
+const fallowGateOptions = {
+  checkoutWith: { ref: "${{ github.event.pull_request.head.sha }}" },
+  env: { PULL_REQUEST_BASE: "${{ github.event.pull_request.base.sha }}" },
+};
 
-test(`on every pull request, the fallow job of ${pullRequestWorkflow} checks out the head with its whole history, sets up vp, and runs ${fallowAudit} against the event's base, reading no secret`, () => {
-  const { on, jobs = {} } = workflowAt<{ pull_request?: { types?: string[] } }>(
-    pullRequestWorkflow,
-  );
-  const job = jobs.fallow;
+function fallowJobProblems(workflow: Workflow): string[] {
+  return [
+    ...pullRequestTriggerProblems(workflow.on),
+    ...gateJobProblems(workflow, "fallow", fallowAudit, fallowGateOptions),
+  ];
+}
 
-  expect(on?.pull_request?.types).toEqual(["opened", "edited", "synchronize", "reopened"]);
-  expect(job, `${pullRequestWorkflow}: add a fallow job`).toBeDefined();
-  expect(typeof job?.["timeout-minutes"]).toBe("number");
-  expect(job?.steps?.map((step) => ({ ...step, uses: actionOf(step) }))).toEqual([
-    {
-      uses: "actions/checkout",
-      with: { ref: "${{ github.event.pull_request.head.sha }}", "fetch-depth": 0 },
-    },
-    {
-      uses: "voidzero-dev/setup-vp",
-      with: { "node-version-file": "package.json", cache: true },
-    },
-    {
-      run: fallowAudit,
-      env: { PULL_REQUEST_BASE: "${{ github.event.pull_request.base.sha }}" },
-    },
-  ]);
-  expect(secretsNamedIn(job)).toEqual([]);
+test(`on every pull request, the fallow job of ${pullRequestWorkflow} is a read-only gate job running ${fallowAudit} against the event's base, reading no secret`, () => {
+  const workflow = workflowAt(pullRequestWorkflow);
+
+  expect(fallowJobProblems(workflow)).toEqual([]);
 });
+
+const wrongFallowWorkflows: [string, Workflow, string][] = [
+  [
+    "a pull_request trigger narrowed by paths",
+    {
+      ...workflowAt(pullRequestWorkflow),
+      on: { pull_request: { paths: ["docs/**"] } },
+    },
+    "pull_request sets paths, so some pull requests skip the check.",
+  ],
+  [
+    "a fallow job gated off with if: false",
+    {
+      ...workflowAt(pullRequestWorkflow),
+      jobs: { fallow: { ...workflowAt(pullRequestWorkflow).jobs?.fallow, if: false } },
+    },
+    "the fallow job sets if; a gate job sets only runs-on, timeout-minutes, steps, permissions.",
+  ],
+  [
+    "a workflow-level env on the fallow workflow",
+    {
+      ...workflowAt(pullRequestWorkflow),
+      env: { NODE_OPTIONS: "--version" },
+    } as Workflow,
+    "the workflow of the fallow job sets env; a gate job's workflow sets only name, on, permissions, jobs.",
+  ],
+  [
+    "a fallow audit step with a wrong PULL_REQUEST_BASE env",
+    {
+      ...workflowAt(pullRequestWorkflow),
+      jobs: {
+        fallow: {
+          ...workflowAt(pullRequestWorkflow).jobs?.fallow,
+          steps: workflowAt(pullRequestWorkflow).jobs?.fallow?.steps?.map((step, index) =>
+            index === 2 ? { ...step, env: { PULL_REQUEST_BASE: "HEAD" } } : step,
+          ),
+        },
+      },
+    },
+    'step 3 of the fallow job has env {"PULL_REQUEST_BASE":"HEAD"}, not {"PULL_REQUEST_BASE":"${{ github.event.pull_request.base.sha }}"};',
+  ],
+];
+
+test.for(wrongFallowWorkflows)(
+  "the fallow gate rule refuses %s",
+  ([, workflow, expectedProblem]) => {
+    expect(fallowJobProblems(workflow).some((problem) => problem.includes(expectedProblem))).toBe(
+      true,
+    );
+  },
+);

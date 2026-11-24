@@ -31,8 +31,5 @@
     { "package": "vite-plugin-solid" }
   ],
   "ignoreExports": [{ "file": "apps/storybook/story-records.ts", "exports": ["instrumented"] }],
-  "health": { "maxCrap": 0 },
-  "rules": {
-    "complexity-crap": "off"
-  }
+  "health": { "maxCrap": 0 }
 }

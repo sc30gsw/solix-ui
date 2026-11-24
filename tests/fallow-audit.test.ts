@@ -84,39 +84,45 @@ describe("the fallow audit check", () => {
     );
   });
 
-  test("refuses an unstaged change, an untracked file and a staged change before it runs fallow", async () => {
+  test("refuses unstaged, staged and untracked changes together before it runs fallow", async () => {
     await inTemporaryTree(project, (root) => {
       onABranch(root, (at) => writeFileSync(join(at, "README.md"), "A small project.\n"));
-      writeFileSync(join(root, "README.md"), "Changed again.\n");
-      const unstaged = audited(root, "main");
+      writeFileSync(join(root, "README.md"), "Staged edit.\n");
       gitInScratchRepository(root, ["add", "README.md"]);
-      const staged = audited(root, "main");
-      gitInScratchRepository(root, ["commit", "--quiet", "--message=again"]);
+      writeFileSync(join(root, "src/used.ts"), "export const used = 2;\n");
       writeFileSync(join(root, "notes.txt"), "notes\n");
-      const untracked = audited(root, "main");
+      const all = audited(root, "main");
 
-      expect([unstaged.status, unstaged.stderr]).toEqual([
-        1,
-        expect.stringContaining("unstaged change: README.md"),
-      ]);
-      expect([staged.status, staged.stderr]).toEqual([
-        1,
-        expect.stringContaining("staged change: README.md"),
-      ]);
-      expect([untracked.status, untracked.stderr]).toEqual([
-        1,
-        expect.stringContaining("untracked file: notes.txt"),
-      ]);
+      expect(all.status).toBe(1);
+      expect(all.stderr).toContain("unstaged change: src/used.ts");
+      expect(all.stderr).toContain("staged change: README.md");
+      expect(all.stderr).toContain("untracked file: notes.txt");
+      expect(all.stderr).not.toContain("git add");
     });
   });
 
-  test("says so when git finds no merge-base with the base it is given", async () => {
+  test("refuses a flag passed as the base revision instead of letting git treat it as an option", async () => {
     await inTemporaryTree(project, (root) => {
-      onABranch(root, (at) => writeFileSync(join(at, "README.md"), "A small project.\n"));
-      const run = audited(root, "origin/main");
+      onABranch(root, (at) =>
+        writeFileSync(
+          join(at, "src/used.ts"),
+          "export const used = 1;\nexport const unused = 2;\n",
+        ),
+      );
+      const run = audited(root, "--independent");
 
       expect(run.status).toBe(2);
-      expect(run.stderr).toContain("git finds no merge-base of origin/main and HEAD");
+      expect(run.stderr).toContain("usage:");
+    });
+  });
+
+  test("says so when git finds no commit or merge-base with the base it is given", async () => {
+    await inTemporaryTree(project, (root) => {
+      onABranch(root, (at) => writeFileSync(join(at, "README.md"), "A small project.\n"));
+      const missing = audited(root, "origin/main");
+
+      expect(missing.status).toBe(2);
+      expect(missing.stderr).toContain("git finds no commit for origin/main");
     });
   });
 });
