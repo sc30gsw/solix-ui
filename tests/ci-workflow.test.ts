@@ -501,3 +501,32 @@ test.for(wrongRuns)(
     expect(newestCheckProblems(workflow)).toContain(problem);
   },
 );
+
+const pullRequestWorkflow = ".github/workflows/pull-request.yml";
+const fallowAudit = 'node scripts/check-fallow-audit.ts "$PULL_REQUEST_BASE"';
+
+test(`on every pull request, the fallow job of ${pullRequestWorkflow} checks out the head with its whole history, sets up vp, and runs ${fallowAudit} against the event's base, reading no secret`, () => {
+  const { on, jobs = {} } = workflowAt<{ pull_request?: { types?: string[] } }>(
+    pullRequestWorkflow,
+  );
+  const job = jobs.fallow;
+
+  expect(on?.pull_request?.types).toEqual(["opened", "edited", "synchronize", "reopened"]);
+  expect(job, `${pullRequestWorkflow}: add a fallow job`).toBeDefined();
+  expect(typeof job?.["timeout-minutes"]).toBe("number");
+  expect(job?.steps?.map((step) => ({ ...step, uses: actionOf(step) }))).toEqual([
+    {
+      uses: "actions/checkout",
+      with: { ref: "${{ github.event.pull_request.head.sha }}", "fetch-depth": 0 },
+    },
+    {
+      uses: "voidzero-dev/setup-vp",
+      with: { "node-version-file": "package.json", cache: true },
+    },
+    {
+      run: fallowAudit,
+      env: { PULL_REQUEST_BASE: "${{ github.event.pull_request.base.sha }}" },
+    },
+  ]);
+  expect(secretsNamedIn(job)).toEqual([]);
+});
