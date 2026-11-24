@@ -15,6 +15,7 @@
     "apps/storybook/story-records-command.ts",
     "apps/storybook/tests/support/story-reporter.ts"
   ],
+  "ignoreFindings": ["tests/fixtures/tarball-consumer/**"],
   "ignoreUnresolvedImports": ["#/tests/fixtures/primitive-rules/*/tests/support/*"],
   "ignoreDependencyOverrides": [
     { "package": "@solidjs/start", "source": "pnpm-workspace.yaml" },
