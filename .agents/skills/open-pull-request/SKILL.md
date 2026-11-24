@@ -17,6 +17,14 @@ vp run verify
 
 Then run the `Run it` command of each `verify-*` skill whose covered-code table covers a file the branch changes.
 
+Last, with nothing left uncommitted, run fallow's audit of what the branch changes:
+
+```bash
+vp run fallow audit --base origin/<base branch>
+```
+
+It fails on each error the branch brings in, such as an unused export or file, or a function too complex. Fix every one. Judge each warning as step 5 judges a finding below Medium, and give their count on the fallow line of the body. A file that runs but that nothing imports gets an entry in `.fallowrc.json`. Turn a rule off or add an ignore there only for a finding that is wrong, and say why in the commit message. Never do it, or write a `fallow-ignore` comment, to make a real finding pass.
+
 ## 2. Correct
 
 Follow pstack `correct` over this branch: its commits, its review findings and every correction the operator gave. A rule you add gets a row in `AGENTS.md` that names its check, and that check fails first on the mistake.
