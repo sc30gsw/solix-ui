@@ -7,11 +7,14 @@
   ],
   "supportEntry": [
     "scripts/check-working-tree.ts",
+    "scripts/check-private-terms.mjs",
     "scripts/copy-kit-skills.ts",
     "tests/support/git-free-environment.ts",
     "tests/support/build-packages.ts",
     "tests/support/global-setup.ts",
     "apps/playground/tests/support/console-check.ts",
+    "apps/storybook/story-color-scheme.setup.ts",
+    "apps/storybook/story-records.setup.ts",
     "apps/storybook/story-records-command.ts",
     "apps/storybook/tests/support/story-reporter.ts"
   ],
