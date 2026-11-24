@@ -1,14 +1,23 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import { installedVp } from "../../../scripts/repository";
 import {
+  type PrintedLine,
   type RunningServer,
   startServer,
   viteOnAFreePort,
 } from "../../../tests/support/server-process";
+import {
+  describeSolidDiagnostic,
+  isCoveredBy,
+  isUpstream,
+  problemsPrinted,
+  type SolidDiagnostic,
+} from "../../../tests/support/solid-diagnostics.ts";
+import { upstreamExceptions } from "../../../tests/support/upstream-diagnostic-exceptions.ts";
+import { diagnosticProbeMessage, diagnosticProbeParameter } from "#/src/diagnostic-probe.tsx";
 import { opened } from "#/tests/support/opening.ts";
 import { account, optional, panelOf, tabNamed, tabNames } from "#/tests/support/tabs.ts";
 
@@ -17,58 +26,40 @@ const { notes } = tabNames.optional;
 
 const appDirectory = join(import.meta.dirname, "..");
 
-type UpstreamException = {
-  code: string;
-  reportedUnder: string;
-  package: string;
-  reachedThrough: string;
-  reason: string;
-  expires: string;
-};
+const server: { running?: RunningServer; printed: readonly PrintedLine[] } = { printed: [] };
+const reportedInEveryEngine: SolidDiagnostic[] = [];
 
-const upstreamExceptions = JSON.parse(
-  readFileSync(join(import.meta.dirname, "upstream-diagnostic-exceptions.json"), "utf8"),
-) as UpstreamException[];
+function devUrl(): string {
+  if (server.running === undefined) throw new Error("The development server did not start.");
+  return server.running.url;
+}
 
-function isCoveredBy(exception: UpstreamException, diagnostic: string): boolean {
+function unexpectedIn(text: string): string[] {
+  const { diagnostics, otherLines } = problemsPrinted(text);
+  return [
+    ...diagnostics.filter((diagnostic) => !isUpstream(diagnostic)).map(describeSolidDiagnostic),
+    ...otherLines,
+  ];
+}
+
+function isTheProbe(diagnostic: SolidDiagnostic): boolean {
   return (
-    diagnostic.startsWith(`[${exception.code}]`) && diagnostic.includes(exception.reportedUnder)
+    diagnostic.code === "SSR_RENDER_ERROR_CONTAINED" &&
+    diagnostic.message.includes(diagnosticProbeMessage)
   );
 }
 
-function unexpectedAmong(diagnostics: readonly string[]): string[] {
-  return diagnostics.filter(
-    (diagnostic) => !upstreamExceptions.some((exception) => isCoveredBy(exception, diagnostic)),
-  );
+function printedAfterTheAddress(stream: PrintedLine["stream"]): string {
+  const announced = server.printed.findIndex(({ text }) => text.includes(devUrl()));
+  return server.printed
+    .slice(announced + 1)
+    .filter((line) => line.stream === stream)
+    .map(({ text }) => text)
+    .join("\n");
 }
-
-const diagnosticCode = /^\[([A-Z][A-Z0-9_]*)\]/;
-const continuedLine = /^\s/;
-
-function diagnosticsPrinted(printed: string): string[] {
-  const reports: string[][] = [];
-  let open: { code: string; lines: string[] } | undefined;
-  for (const line of printed.split("\n")) {
-    const code = diagnosticCode.exec(line)?.[1];
-    const continuesOpen =
-      open !== undefined &&
-      (code === open.code || (code === undefined && continuedLine.test(line)));
-    if (continuesOpen) {
-      open?.lines.push(line);
-    } else if (code === undefined) {
-      open = undefined;
-    } else {
-      open = { code, lines: [line] };
-      reports.push(open.lines);
-    }
-  }
-  return reports.map((lines) => lines.join("\n"));
-}
-
-let devServer: RunningServer | undefined;
 
 beforeAll(async () => {
-  devServer = await startServer({
+  server.running = await startServer({
     directory: appDirectory,
     command: [installedVp, "dev", "--force", ...viteOnAFreePort],
     environment: { NODE_ENV: "development" },
@@ -76,35 +67,22 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await devServer?.stop();
+  await server.running?.stop();
 });
-
-function startedServer(): RunningServer {
-  if (devServer === undefined) throw new Error("The development server did not start.");
-  return devServer;
-}
-
-function devUrl(): string {
-  return startedServer().url;
-}
-
-function diagnosticsTheServerPrinted(): string[] {
-  return diagnosticsPrinted(startedServer().printed());
-}
 
 describe.each(enginesToVerify())("in %s", (engine) => {
   let browser: Browser;
-  const diagnostics: string[] = [];
+  const reported: string[] = [];
 
   beforeAll(async () => {
     browser = await browserType(engine).launch();
     const page = await browser.newPage();
     page.on("console", (message) => {
       if (message.type() === "error" || message.type() === "warning") {
-        diagnostics.push(message.text());
+        reported.push(message.text());
       }
     });
-    page.on("pageerror", (error) => diagnostics.push(String(error)));
+    page.on("pageerror", (error) => reported.push(String(error)));
 
     await opened(page, devUrl(), "hydrated");
     const summary = page.locator("summary").filter({ hasText: "Toggle" });
@@ -131,48 +109,55 @@ describe.each(enginesToVerify())("in %s", (engine) => {
 
   afterAll(async () => {
     await browser.close();
+    reportedInEveryEngine.push(...reported.flatMap((text) => problemsPrinted(text).diagnostics));
   });
 
-  test("Solid's development build reports no diagnostics from our own code", () => {
-    expect(unexpectedAmong(diagnostics)).toEqual([]);
+  test("the page reports no console error or warning, nor a diagnostic of Solid's development build from our own code", () => {
+    expect(reported.flatMap(unexpectedIn)).toEqual([]);
+  });
+});
+
+describe("the development server", () => {
+  beforeAll(async () => {
+    await (await fetch(devUrl())).text();
+    await (await fetch(`${devUrl()}?${diagnosticProbeParameter}`)).text();
+    await server.running?.stop();
+    server.printed = server.running?.printedLines() ?? [];
   });
 
-  test("every upstream exception still describes a diagnostic that is reported, in the browser or by the server", () => {
-    const reported = [...diagnostics, ...diagnosticsTheServerPrinted()];
-    const noLongerReported = upstreamExceptions.filter(
+  test("prints its address, and the report Solid's development build makes of the diagnostic probe, so what it printed is read and its render runs that build", () => {
+    const printed = server.printed.map(({ text }) => text).join("\n");
+
+    expect(printed).toContain(devUrl());
+    expect(
+      problemsPrinted(printedAfterTheAddress("stderr")).diagnostics.filter(isTheProbe),
+    ).toHaveLength(1);
+  });
+
+  test("prints no error, warning or diagnostic of Solid's from our own code while it renders the page", () => {
+    const errors = problemsPrinted(printedAfterTheAddress("stderr"));
+    const logged = problemsPrinted(printedAfterTheAddress("stdout"));
+
+    expect([
+      ...[...errors.diagnostics, ...logged.diagnostics]
+        .filter((diagnostic) => !isTheProbe(diagnostic) && !isUpstream(diagnostic))
+        .map(describeSolidDiagnostic),
+      ...errors.otherLines,
+    ]).toEqual([]);
+  });
+});
+
+test("every upstream exception still describes a diagnostic that is reported, in a browser or by the development server", () => {
+  const reported = [
+    ...reportedInEveryEngine,
+    ...problemsPrinted(server.printed.map(({ text }) => text).join("\n")).diagnostics,
+  ];
+
+  expect(
+    upstreamExceptions.filter(
       (exception) => !reported.some((diagnostic) => isCoveredBy(exception, diagnostic)),
-    );
-
-    expect(noLongerReported).toEqual([]);
-  });
-});
-
-test("the development server prints no diagnostic of Solid's from our own code while it renders the page every engine loaded", () => {
-  expect(startedServer().printed(), "what the development server printed").toContain(devUrl());
-  expect(unexpectedAmong(diagnosticsTheServerPrinted())).toEqual([]);
-});
-
-test("a diagnostic the server prints is read with the lines that continue it, apart from what the server prints around it", () => {
-  const printed = [
-    "10:09:33 PM [vite+] (ssr) connected.",
-    "[SERVER_WRITE] Writing a signal on the server is deprecated.",
-    "  in <App> › <Grid.Col>",
-    "  at ../../packages/core/dist/GridCol.jsx:68:7",
-    "[SERVER_WRITE] what it means and how to fix it: https://docs.solidjs.com",
-    "10:09:35 PM [vite+] (client) dependency optimized: @stylexjs/stylex",
-    "  ➜  Network: use --host to expose",
-    "[STRICT_READ_UNTRACKED] A read outside a tracked scope.",
-  ].join("\n");
-
-  expect(diagnosticsPrinted(printed)).toEqual([
-    [
-      "[SERVER_WRITE] Writing a signal on the server is deprecated.",
-      "  in <App> › <Grid.Col>",
-      "  at ../../packages/core/dist/GridCol.jsx:68:7",
-      "[SERVER_WRITE] what it means and how to fix it: https://docs.solidjs.com",
-    ].join("\n"),
-    "[STRICT_READ_UNTRACKED] A read outside a tracked scope.",
-  ]);
+    ),
+  ).toEqual([]);
 });
 
 test("no upstream exception is past its expiry date", () => {

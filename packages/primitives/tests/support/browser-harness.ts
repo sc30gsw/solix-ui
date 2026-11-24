@@ -2,9 +2,11 @@ import { createEffect, createRoot, flush as flushSolid } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
 import { propertyRunsGoing } from "../../../../tests/support/properties.ts";
 import {
-  captureSolidDiagnostics,
+  describeSolidDiagnostic,
+  openSolidDiagnosticsGateForOneTest,
+  type SolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
-} from "../../../../tests/support/browser-gates.ts";
+} from "../../../../tests/support/solid-diagnostics.ts";
 import type { EventOf } from "#/src/internal-listener.ts";
 import type { RefSetter } from "#/src/types.ts";
 import {
@@ -42,7 +44,13 @@ const disposers: (() => void)[] = [];
 const recorders: (() => void)[] = [];
 const scope = { depth: 0 };
 const journals = new Set<Attachments>();
-let diagnosticsRaised: () => string[] = () => [];
+const diagnostics: { gate?: SolidDiagnosticsGate } = {};
+
+function diagnosticsRaised(): string[] {
+  const raised = diagnostics.gate?.finish() ?? [];
+  diagnostics.gate = undefined;
+  return raised.map(describeSolidDiagnostic);
+}
 
 function inScope(): boolean {
   return scope.depth > 0;
@@ -270,7 +278,8 @@ function startRecording(): void {
   liveTimers.clear();
   liveObservations.clear();
   liveHandlers.clear();
-  diagnosticsRaised = captureSolidDiagnostics();
+  diagnosticsRaised();
+  diagnostics.gate = openSolidDiagnosticsGateForOneTest();
 }
 
 export function mount<T>(create: () => T): T {

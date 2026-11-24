@@ -1,35 +1,51 @@
-import { afterEach, beforeEach, expect } from "vite-plus/test";
+import { afterAll, afterEach, beforeEach, expect, onTestFinished } from "vite-plus/test";
 import {
-  captureSolidDiagnostics,
+  describeSolidDiagnostic,
+  openSolidDiagnosticsGate,
+  openSolidDiagnosticsGateForOneTest,
+  type SolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
-} from "#/tests/support/browser-gates.ts";
+} from "#/tests/support/solid-diagnostics.ts";
 
-let diagnosticsRaised: (() => string[]) | undefined;
-const codesRaisedOnPurpose = new Set<string>();
+const gates: { outsideTests: SolidDiagnosticsGate; test?: SolidDiagnosticsGate } = {
+  outsideTests: openSolidDiagnosticsGate(),
+};
 
-export function raisesSolidDiagnosticOnPurpose(code: string): void {
-  codesRaisedOnPurpose.add(code);
-}
-
-function raisedOnPurpose(diagnostic: string): boolean {
-  return [...codesRaisedOnPurpose].some((code) => diagnostic.startsWith(`${code}: `));
+function finishTheTestsGate(): string[] {
+  const raised = gates.test?.finish() ?? [];
+  gates.test = undefined;
+  gates.outsideTests = openSolidDiagnosticsGate();
+  return raised.map(describeSolidDiagnostic);
 }
 
 beforeEach(() => {
+  const raisedOutsideTests = gates.outsideTests.finish().map(describeSolidDiagnostic);
+  gates.test = openSolidDiagnosticsGateForOneTest();
+  onTestFinished(() => {
+    if (gates.test !== undefined) finishTheTestsGate();
+  });
   expect(
     solidDevelopmentBuildLoaded(),
     "the node project loads Solid's development build, whose diagnostics this check reads",
   ).toBe(true);
-  codesRaisedOnPurpose.clear();
-  diagnosticsRaised = captureSolidDiagnostics();
+  expect(
+    raisedOutsideTests,
+    "the Solid development diagnostics raised outside a test since the last one ended: at the top level of the test file or in a hook outside the test",
+  ).toEqual([]);
 });
 
 afterEach(() => {
-  const raised = (diagnosticsRaised?.() ?? []).filter((diagnostic) => !raisedOnPurpose(diagnostic));
-  diagnosticsRaised = undefined;
-  codesRaisedOnPurpose.clear();
+  expect
+    .soft(
+      finishTheTestsGate(),
+      "the Solid development diagnostics this test raised, in a server render or anywhere else in its body, but those it ran inside expectingSolidDiagnostic",
+    )
+    .toEqual([]);
+});
+
+afterAll(() => {
   expect(
-    raised,
-    "the Solid development diagnostics this test raised, in a server render or anywhere else in its body, but those whose codes it gave raisesSolidDiagnosticOnPurpose. Solid reports each kind once per process, so fix its cause before you read the next test's.",
+    gates.outsideTests.finish().map(describeSolidDiagnostic),
+    "the Solid development diagnostics raised after the file's last test",
   ).toEqual([]);
 });

@@ -9,7 +9,15 @@ export type ServedApp = {
   environment?: Record<string, string>;
 };
 
-export type RunningServer = { url: string; printed: () => string; stop: () => Promise<void> };
+export type PrintedStream = "stdout" | "stderr";
+
+export type PrintedLine = { readonly stream: PrintedStream; readonly text: string };
+
+export type RunningServer = {
+  url: string;
+  printedLines: () => readonly PrintedLine[];
+  stop: () => Promise<void>;
+};
 
 export const localHost = "127.0.0.1";
 export const anyFreePort = 0;
@@ -51,11 +59,28 @@ export async function startServer({
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,
   });
-  const output: string[] = [];
-  for (const stream of [running.stdout, running.stderr]) {
-    stream.on("data", (chunk: Buffer) => output.push(String(chunk)));
+  const lines: PrintedLine[] = [];
+  const unfinished: Record<PrintedStream, string> = { stdout: "", stderr: "" };
+  const streams = [
+    ["stdout", running.stdout],
+    ["stderr", running.stderr],
+  ] as const;
+  for (const [stream, source] of streams) {
+    source.setEncoding("utf8");
+    source.on("data", (chunk: string) => {
+      const pieces = `${unfinished[stream]}${chunk}`.split("\n");
+      unfinished[stream] = pieces.pop() ?? "";
+      lines.push(...pieces.map((text) => ({ stream, text })));
+    });
   }
-  const printed = () => stripVTControlCharacters(output.join(""));
+  const printedLines = (): PrintedLine[] =>
+    [...lines, ...streams.map(([stream]) => ({ stream, text: unfinished[stream] }))]
+      .map(({ stream, text }) => ({ stream, text: stripVTControlCharacters(text) }))
+      .filter(({ text }) => text !== "");
+  const printed = () =>
+    printedLines()
+      .map(({ text }) => text)
+      .join("\n");
   const shown = () => `\nWhat the server printed:\n${printed().slice(-outputShown) || "nothing"}`;
   const exited = new Promise<void>((resolve) => running.once("exit", () => resolve()));
   const stop = async () => {
@@ -71,7 +96,7 @@ export async function startServer({
     const port = announcedUrl.exec(printed())?.[1];
     const url = port === undefined ? undefined : localUrl(Number(port));
     const reply = url === undefined ? undefined : await replyFrom(url);
-    if (url !== undefined && reply?.ok) return { url, printed, stop };
+    if (url !== undefined && reply?.ok) return { url, printedLines, stop };
     if (reply) return failed(`the server at ${url} answered ${reply.said}`);
     if (running.exitCode !== null || running.signalCode !== null)
       return failed("the server exited before it answered.");

@@ -55,7 +55,7 @@ Contrast is arithmetic on the token values, so a node test computes it from the 
 
 - Every pair the contrast test finds, in both schemes; every colour token's two values in sRGB.
 - `generatedRuns` pages for the script, as `color-scheme.test.tsx` sets it.
-- That no server render of `SolixProvider` or `ColorSchemeScript` in `color-scheme.test.tsx` raises a Solid development diagnostic, which `tests/support/solid-diagnostics-check.ts`, a setup file of the node project, holds after each test; what the playground's development server prints is held by `verify-served-page`.
+- That no server render of `SolixProvider` or `ColorSchemeScript` in `color-scheme.test.tsx` raises a Solid development diagnostic, which the node project holds through `tests/support/solid-diagnostics.ts`; what the playground's development server prints is held by `verify-served-page`.
 - In each installed engine, for a system in each scheme: the page with scripts off, the page with only the pre-paint script, a hydrated page with nothing stored and with a scheme stored, every button, a change of the system's scheme, another page's set, removal and `clear()` and its change of another key, a storage that throws when read and one whose methods throw, the order of the writes on `<html>`, the forced section with a manager it must not touch, and, on pages of the built stylesheet alone, every nesting of the attribute's values for the two hiding props and a consumer's token override under a nested scheme.
 - Every story Storybook indexes, in each installed engine, in both schemes.
 
