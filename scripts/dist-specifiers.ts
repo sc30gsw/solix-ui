@@ -1,4 +1,5 @@
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readdirSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, extname, join, relative } from "node:path";
 import {
   insideOf,
@@ -100,6 +101,21 @@ export function distSpecifiers(layout: SourceLayout) {
   };
 }
 
+export function compiledSourcesOf(layout: SourceLayout): string[] {
+  return readdirSync(layout.sourceDirectory, { recursive: true, withFileTypes: true })
+    .filter((entry) => {
+      const path = join(entry.parentPath, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error(
+          `${relative(layout.packageRoot, path)} is a symbolic link. The build compiles only files of its own sources; put the file itself there.`,
+        );
+      }
+      return entry.isFile() && Object.hasOwn(layout.outputExtensions, extname(entry.name));
+    })
+    .map((entry) => relative(layout.sourceDirectory, join(entry.parentPath, entry.name)))
+    .sort();
+}
+
 export async function buildSources(
   layout: SourceLayout,
   compile: (filename: string, source: string) => Promise<string>,
@@ -107,9 +123,7 @@ export async function buildSources(
 ): Promise<void> {
   await rm(layout.outputDirectory, { recursive: true, force: true });
   await mkdir(layout.outputDirectory, { recursive: true });
-  const names = await readdir(layout.sourceDirectory, { recursive: true });
-  for (const name of names.toSorted()) {
-    if (!Object.hasOwn(layout.outputExtensions, extname(name))) continue;
+  for (const name of compiledSourcesOf(layout)) {
     const filename = join(layout.sourceDirectory, name);
     const output = outputPathOf(filename, layout);
     await mkdir(dirname(output), { recursive: true });

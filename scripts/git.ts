@@ -5,6 +5,7 @@ export type ChangedLines = { removed: readonly string[]; added: readonly string[
 
 const nulByte = "\0";
 const signaturesHidden = ["-c", "log.showSignature=false"];
+const outputBuffer = 64 * 1024 * 1024;
 
 export function gitRun(args: readonly string[]): {
   status: number | null;
@@ -13,12 +14,14 @@ export function gitRun(args: readonly string[]): {
 } {
   const run = spawnSync("git", [...signaturesHidden, ...args], {
     encoding: "utf8",
-    maxBuffer: 64 * 1024 * 1024,
+    maxBuffer: outputBuffer,
   });
   if (run.error !== undefined) {
-    throw new Error(`git ${args.join(" ")} could not run: ${run.error.message}`, {
-      cause: run.error,
-    });
+    const why =
+      Reflect.get(run.error, "code") === "ENOBUFS"
+        ? `its output exceeded the buffer of ${outputBuffer} bytes`
+        : run.error.message;
+    throw new Error(`git ${args.join(" ")} could not run: ${why}`, { cause: run.error });
   }
   return { status: run.status, stdout: run.stdout, stderr: run.stderr };
 }

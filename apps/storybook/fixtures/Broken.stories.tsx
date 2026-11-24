@@ -1,5 +1,5 @@
-import { Button, colorSchemeAttribute } from "@solix/core";
-import { createEffect, onCleanup } from "solid-js";
+import { Button, type ButtonProps, colorSchemeAttribute } from "@solix/core";
+import { createEffect, createSignal, onCleanup } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect } from "storybook/test";
 import { argTypesOf } from "virtual:story-controls";
@@ -132,12 +132,41 @@ const ignoringItsVariant = {
 
 export const VariantOnlyAsAnAttribute = everyValueOf(ignoringItsVariant, "variant");
 
-export const KnownOpenThatNoLongerHolds = everyValueOf(
-  withControls,
+export const KnownOpenThatNoLongerHolds = everyValueOf(withControls, "unstyled", {
+  alike: [
+    { values: ["true", "false"], because: { kind: "openUntil", followUp: "a merged follow-up" } },
+  ],
+});
+
+const markedByAnUnreadProperty = {
+  ...withControls,
+  render: (args: Readonly<Record<string, unknown>>) => (
+    <Button style={{ "--unread-unstyled": String(args.unstyled) }}>Save</Button>
+  ),
+};
+
+export const UnstyledOnlyAsAnUnreadCustomProperty = everyValueOf(
+  markedByAnUnreadProperty,
   "unstyled",
-  {},
+);
+
+const [tone] = createSignal("Save");
+
+function LabelledByASignal(props: { variant?: ButtonProps["variant"] }) {
+  const label = tone();
+  return <Button variant={props.variant}>{label}</Button>;
+}
+
+export const ReadsASignalInItsBody = everyValueOf(
+  { component: LabelledByASignal, argTypes: argTypesOf(Button) },
+  "variant",
   {
-    knownOpen: { followUp: "a follow-up already merged", alike: [["true", "false"]] },
+    alike: [
+      {
+        values: ["subtle", "transparent"],
+        because: { kind: "design", reason: "subtle differs from transparent only while hovered" },
+      },
+    ],
   },
 );
 

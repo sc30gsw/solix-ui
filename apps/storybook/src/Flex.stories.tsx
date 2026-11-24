@@ -1,6 +1,10 @@
 import { Box, Flex } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
-import { cssWideKeywords, everyValueOf } from "#/every-value.tsx";
+import {
+  everyValueOf,
+  keywordsReachOnlyTheCustomProperty,
+  keywordsResetAPropertyThatIsNotInherited,
+} from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -43,20 +47,24 @@ export const WrappedInASection: Story = {
   ),
 };
 
-export const EveryWrap: Story = everyValueOf(
-  meta,
-  "wrap",
-  {},
-  {
-    rendersAs: cssWideKeywords,
-  },
-);
+export const EveryWrap: Story = everyValueOf(meta, "wrap", {
+  within: { "flex-wrap": "wrap-reverse" },
+  alike: [
+    {
+      values: ["nowrap", "initial", "unset", "revert", "revert-layer", "-moz-initial"],
+      because: keywordsResetAPropertyThatIsNotInherited,
+    },
+    { values: ["inherit", "nowrap"], because: keywordsReachOnlyTheCustomProperty },
+  ],
+});
 
-export const EveryDirection: Story = everyValueOf(
-  meta,
-  "direction",
-  {},
-  {
-    rendersAs: cssWideKeywords,
-  },
-);
+export const EveryDirection: Story = everyValueOf(meta, "direction", {
+  within: { "flex-direction": "column-reverse" },
+  alike: [
+    {
+      values: ["row", "initial", "unset", "revert", "revert-layer", "-moz-initial"],
+      because: keywordsResetAPropertyThatIsNotInherited,
+    },
+    { values: ["inherit", "row"], because: keywordsReachOnlyTheCustomProperty },
+  ],
+});

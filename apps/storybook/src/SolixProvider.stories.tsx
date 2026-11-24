@@ -172,7 +172,18 @@ function systemPrefers(scheme: SolixComputedColorScheme): () => void {
 }
 
 export const EveryDefaultColorScheme: Story = {
-  ...everyValueOf(meta, "defaultColorScheme", {}, { rendersAs: { auto: "dark" } }),
+  ...everyValueOf(meta, "defaultColorScheme", {
+    alike: [
+      {
+        values: ["auto", "dark"],
+        because: {
+          kind: "systemScheme",
+          scheme: "dark",
+          reason: "auto takes the scheme the system prefers",
+        },
+      },
+    ],
+  }),
   beforeEach: () => systemPrefers("dark"),
 };
 

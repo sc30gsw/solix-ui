@@ -1,4 +1,5 @@
 import type { StorybookConfig } from "storybook-solidjs-vite";
+import { builtFromItsSources } from "../../../scripts/source-digest.ts";
 import { storyControls } from "../../../scripts/story-controls.ts";
 
 const config: StorybookConfig = {
@@ -8,7 +9,7 @@ const config: StorybookConfig = {
   core: { disableTelemetry: true },
   viteFinal: (viteConfig) => ({
     ...viteConfig,
-    plugins: [...(viteConfig.plugins ?? []), storyControls()],
+    plugins: [...(viteConfig.plugins ?? []), storyControls(), builtFromItsSources()],
   }),
 };
 

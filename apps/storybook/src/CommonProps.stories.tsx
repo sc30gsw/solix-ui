@@ -1,6 +1,11 @@
 import { Box, Stack } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
-import { cssWideKeywords, everyValueOf } from "#/every-value.tsx";
+import {
+  everyBreakpointValueAt,
+  everyValueOf,
+  keywordsReachOnlyTheCustomProperty,
+  keywordsResetAPropertyThatIsNotInherited,
+} from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -203,109 +208,94 @@ export const ConsumerStyling: Story = {
   ),
 };
 
-export const EveryTextAlign: Story = everyValueOf(meta, "ta", {}, { rendersAs: cssWideKeywords });
-
-export const EveryPosition: Story = everyValueOf(meta, "pos", {}, { rendersAs: cssWideKeywords });
-
-const breakpointsAlikeAt = {
-  700: [["sm", "md", "lg", "xl"]],
-  900: [
-    ["xs", "sm"],
-    ["md", "lg", "xl"],
+export const EveryTextAlign: Story = everyValueOf(meta, "ta", {
+  within: { "text-align": "center" },
+  alike: [
+    {
+      values: ["center", "inherit", "unset", "revert", "revert-layer", "match-parent"],
+      because: { kind: "design", reason: "text-align is inherited, so each takes the parent's" },
+    },
+    {
+      values: ["center", "-webkit-match-parent", "match-parent"],
+      because: { kind: "design", reason: "-webkit-match-parent is match-parent in every engine" },
+    },
+    {
+      values: ["center", "-khtml-center", "-khtml-left", "-khtml-right"],
+      because: { kind: "design", reason: "no engine reads a -khtml- value, so the parent's stays" },
+    },
+    { values: ["center", "initial", "-moz-initial"], because: keywordsReachOnlyTheCustomProperty },
+    {
+      values: ["center", "-moz-center", "-moz-left", "-moz-right"],
+      because: {
+        kind: "engine",
+        engines: ["chromium", "webkit"],
+        reason: "a -moz- value is not read, so the parent's stays",
+      },
+    },
+    ...(["center", "left", "right"] as const).map((side) => ({
+      values: [`-moz-${side}`, `-webkit-${side}`] as const,
+      because: {
+        kind: "engine",
+        engines: ["firefox"],
+        reason: "each -moz- value is read as its -webkit- one",
+      } as const,
+    })),
   ],
-  1100: [
-    ["xs", "sm", "md"],
-    ["lg", "xl"],
+});
+
+export const EveryPosition: Story = everyValueOf(meta, "pos", {
+  within: { position: "relative" },
+  alike: [
+    {
+      values: ["static", "initial", "unset", "revert", "revert-layer", "-moz-initial"],
+      because: keywordsResetAPropertyThatIsNotInherited,
+    },
+    { values: ["inherit", "static"], because: keywordsReachOnlyTheCustomProperty },
+    {
+      values: ["static", "-webkit-sticky"],
+      because: {
+        kind: "engine",
+        engines: ["chromium", "firefox"],
+        reason: "-webkit-sticky is not read, so the position stays static",
+      },
+    },
+    {
+      values: ["sticky", "-webkit-sticky"],
+      because: { kind: "engine", engines: ["webkit"], reason: "-webkit-sticky is read as sticky" },
+    },
   ],
-  1300: [["xs", "sm", "md", "lg"]],
-} as const;
+});
 
-export const EveryHiddenFromAt700px: Story = everyValueOf(
-  meta,
-  "hiddenFrom",
-  {},
-  {
-    atWidth: { width: 700, alike: breakpointsAlikeAt[700] },
-  },
-);
+export const EveryHiddenFromAt672px: Story = everyBreakpointValueAt(meta, "hiddenFrom", 672);
 
-export const EveryHiddenFromAt900px: Story = everyValueOf(
-  meta,
-  "hiddenFrom",
-  {},
-  {
-    atWidth: { width: 900, alike: breakpointsAlikeAt[900] },
-  },
-);
+export const EveryHiddenFromAt880px: Story = everyBreakpointValueAt(meta, "hiddenFrom", 880);
 
-export const EveryHiddenFromAt1100px: Story = everyValueOf(
-  meta,
-  "hiddenFrom",
-  {},
-  {
-    atWidth: { width: 1100, alike: breakpointsAlikeAt[1100] },
-  },
-);
+export const EveryHiddenFromAt1096px: Story = everyBreakpointValueAt(meta, "hiddenFrom", 1096);
 
-export const EveryHiddenFromAt1300px: Story = everyValueOf(
-  meta,
-  "hiddenFrom",
-  {},
-  {
-    atWidth: { width: 1300, alike: breakpointsAlikeAt[1300] },
-  },
-);
+export const EveryHiddenFromAt1304px: Story = everyBreakpointValueAt(meta, "hiddenFrom", 1304);
 
-export const EveryVisibleFromAt700px: Story = everyValueOf(
-  meta,
-  "visibleFrom",
-  {},
-  {
-    atWidth: { width: 700, alike: breakpointsAlikeAt[700] },
-  },
-);
+export const EveryVisibleFromAt672px: Story = everyBreakpointValueAt(meta, "visibleFrom", 672);
 
-export const EveryVisibleFromAt900px: Story = everyValueOf(
-  meta,
-  "visibleFrom",
-  {},
-  {
-    atWidth: { width: 900, alike: breakpointsAlikeAt[900] },
-  },
-);
+export const EveryVisibleFromAt880px: Story = everyBreakpointValueAt(meta, "visibleFrom", 880);
 
-export const EveryVisibleFromAt1100px: Story = everyValueOf(
-  meta,
-  "visibleFrom",
-  {},
-  {
-    atWidth: { width: 1100, alike: breakpointsAlikeAt[1100] },
-  },
-);
+export const EveryVisibleFromAt1096px: Story = everyBreakpointValueAt(meta, "visibleFrom", 1096);
 
-export const EveryVisibleFromAt1300px: Story = everyValueOf(
-  meta,
-  "visibleFrom",
-  {},
-  {
-    atWidth: { width: 1300, alike: breakpointsAlikeAt[1300] },
-  },
-);
+export const EveryVisibleFromAt1304px: Story = everyBreakpointValueAt(meta, "visibleFrom", 1304);
 
-export const EveryLightHidden: Story = everyValueOf(
-  meta,
-  "lightHidden",
-  {},
-  {
-    inScheme: { dark: [["true", "false"]] },
-  },
-);
+export const EveryLightHidden: Story = everyValueOf(meta, "lightHidden", {
+  alike: [
+    {
+      values: ["true", "false"],
+      because: { kind: "scheme", scheme: "dark", reason: "lightHidden hides nothing there" },
+    },
+  ],
+});
 
-export const EveryDarkHidden: Story = everyValueOf(
-  meta,
-  "darkHidden",
-  {},
-  {
-    inScheme: { light: [["true", "false"]] },
-  },
-);
+export const EveryDarkHidden: Story = everyValueOf(meta, "darkHidden", {
+  alike: [
+    {
+      values: ["true", "false"],
+      because: { kind: "scheme", scheme: "light", reason: "darkHidden hides nothing there" },
+    },
+  ],
+});

@@ -1,6 +1,10 @@
 import { Button, Group } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
-import { cssWideKeywords, everyValueOf } from "#/every-value.tsx";
+import {
+  everyValueOf,
+  keywordsReachOnlyTheCustomProperty,
+  keywordsResetAPropertyThatIsNotInherited,
+} from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const meta = {
@@ -26,14 +30,16 @@ export const Grown: Story = {
   args: { grow: true },
 };
 
-export const EveryWrap: Story = everyValueOf(
-  meta,
-  "wrap",
-  {},
-  {
-    rendersAs: cssWideKeywords,
-  },
-);
+export const EveryWrap: Story = everyValueOf(meta, "wrap", {
+  within: { "flex-wrap": "wrap-reverse" },
+  alike: [
+    {
+      values: ["nowrap", "initial", "unset", "revert", "revert-layer", "-moz-initial"],
+      because: keywordsResetAPropertyThatIsNotInherited,
+    },
+    { values: ["inherit", "nowrap"], because: keywordsReachOnlyTheCustomProperty },
+  ],
+});
 
 export const KeptToItsShare: Story = {
   args: { grow: true, preventGrowOverflow: true, justify: "center", align: "flex-end" },
@@ -42,5 +48,5 @@ export const KeptToItsShare: Story = {
 export const EveryGrow: Story = everyValueOf(meta, "grow");
 
 export const EveryPreventGrowOverflow: Story = everyValueOf(meta, "preventGrowOverflow", {
-  grow: true,
+  args: { grow: true },
 });

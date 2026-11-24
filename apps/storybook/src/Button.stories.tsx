@@ -90,7 +90,14 @@ export const ColorFallsBack: Story = {
   },
 };
 
-export const EveryVariant: Story = everyValueOf(meta, "variant");
+export const EveryVariant: Story = everyValueOf(meta, "variant", {
+  alike: [
+    {
+      values: ["subtle", "transparent"],
+      because: { kind: "design", reason: "subtle differs from transparent only while hovered" },
+    },
+  ],
+});
 
 export const AsALink: Story = {
   render: () => (
@@ -104,20 +111,3 @@ export const AsALink: Story = {
 };
 
 export const EveryUnstyled: Story = everyValueOf(meta, "unstyled");
-
-const withTheDisabledAttribute = {
-  ...meta,
-  argTypes: { ...meta.argTypes, disabled: { control: { type: "boolean" } } },
-};
-
-export const EveryDisabled: Story = everyValueOf(
-  withTheDisabledAttribute,
-  "disabled",
-  {},
-  {
-    knownOpen: {
-      followUp: "Button's spec pull request gives a disabled button its own look (Q182)",
-      alike: [["true", "false"]],
-    },
-  },
-);

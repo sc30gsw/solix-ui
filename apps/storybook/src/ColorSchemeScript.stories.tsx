@@ -1,7 +1,7 @@
 import { ColorSchemeScript, colorSchemeAttribute } from "@solix/core";
 import { argTypesOf } from "virtual:story-controls";
 import { expect } from "storybook/test";
-import { everyValueOf } from "#/every-value.tsx";
+import { everyValueOf, type Observation } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
 
 const storageKey = "story-color-scheme";
@@ -73,8 +73,13 @@ function schemeSetIn(system: (typeof systemSchemes)[number], text: string): stri
   try {
     const page = frame.contentWindow;
     const scripted = frame.contentDocument;
-    if (page === null || scripted === null) return "no page to run it in";
-    Reflect.set(page, "matchMedia", () => ({ matches: system === "dark" }));
+    if (page === null || scripted === null) {
+      throw new Error("The frame that runs the colour-scheme script has no page.");
+    }
+    Reflect.set(page, "matchMedia", (query: string) => ({
+      matches: query === `(prefers-color-scheme: ${system})`,
+    }));
+    Object.defineProperty(page, "localStorage", { value: { getItem: () => null } });
     const script = scripted.createElement("script");
     script.text = text;
     scripted.head.append(script);
@@ -84,26 +89,20 @@ function schemeSetIn(system: (typeof systemSchemes)[number], text: string): stri
   }
 }
 
-function schemesTheScriptSets(rendered: Element): string {
-  return systemSchemes
-    .map((system) => `${schemeSetIn(system, rendered.textContent ?? "")} under a ${system} system`)
-    .join(", ");
-}
-
-const bySchemeItSets = {
-  byEffect: { effect: "the scheme its script sets", of: schemesTheScriptSets },
+const schemeTheScriptSets: Observation = {
+  name: "the scheme its script sets under a light and a dark system",
+  of: (container) => [
+    systemSchemes.map(
+      (system) =>
+        `${system}: ${schemeSetIn(system, container.querySelector("script")?.text ?? "")}`,
+    ),
+  ],
 };
 
-export const EveryDefaultColorScheme: Story = everyValueOf(
-  meta,
-  "defaultColorScheme",
-  {},
-  bySchemeItSets,
-);
+export const EveryDefaultColorScheme: Story = everyValueOf(meta, "defaultColorScheme", {
+  observe: schemeTheScriptSets,
+});
 
-export const EveryForcedColorScheme: Story = everyValueOf(
-  meta,
-  "forceColorScheme",
-  {},
-  bySchemeItSets,
-);
+export const EveryForcedColorScheme: Story = everyValueOf(meta, "forceColorScheme", {
+  observe: schemeTheScriptSets,
+});

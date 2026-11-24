@@ -48,4 +48,4 @@ export const Aligned: Story = {
   },
 };
 
-export const EveryGrow: Story = everyValueOf(meta, "grow", { columns: 24 });
+export const EveryGrow: Story = everyValueOf(meta, "grow", { args: { columns: 24 } });
