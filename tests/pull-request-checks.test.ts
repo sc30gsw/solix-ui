@@ -31,7 +31,7 @@ const chart =
   "```mermaid\nstateDiagram-v2\n  [*] --> Closed\n  Closed --> Open: you press open\n```";
 
 function reviewsAt(commit: string): string {
-  return `${reviewLines["comment-sicko"]}${commit}.\n${reviewLines.Thermos}${commit}, after 2 rounds.\n${reviewLines.fallow}${commit}.\n`;
+  return `${reviewLines["comment-sicko"]}${commit}.\n${reviewLines.Thermos}${commit}, after 2 rounds.\n`;
 }
 
 function bodyWith(
@@ -261,7 +261,6 @@ describe("the text of a pull request", () => {
   test.each([
     ["the comment-sicko line", reviewLines["comment-sicko"]],
     ["the Thermos line", reviewLines.Thermos],
-    ["the fallow line", reviewLines.fallow],
   ])(
     "fails a Verification section without %s, or with a placeholder in place of the commit",
     (_, line) => {
@@ -346,7 +345,6 @@ describe("the text of a pull request", () => {
     expect(after(changesOf(["src/a.ts"], [["src/a.ts", "AGENTS.md"]]))).toEqual([
       "The comment-sicko line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md, beyond moving a verification skill's Last confirmed commit. Run comment-sicko again on those commits and name the last one.",
       "The Thermos line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md, beyond moving a verification skill's Last confirmed commit. Run Thermos again on those commits and name the last one.",
-      "The fallow line names 0123abc, but the pull request's own commits after it change src/a.ts, AGENTS.md, beyond moving a verification skill's Last confirmed commit. Run fallow again on those commits and name the last one.",
     ]);
   });
 

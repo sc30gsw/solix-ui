@@ -17,13 +17,13 @@ vp run verify
 
 Then run the `Run it` command of each `verify-*` skill whose covered-code table covers a file the branch changes.
 
-Last, with nothing left uncommitted, run fallow's audit of what the branch changes:
+Last, with everything committed, run fallow's audit of the branch against its merge-base with its base branch:
 
 ```bash
-vp run fallow audit --base origin/<base branch>
+vp run fallow:audit origin/<base branch>
 ```
 
-It fails on each error the branch brings in, such as an unused export or file, or a function too complex. Fix every one. Judge each warning as step 5 judges a finding below Medium, and give their count on the fallow line of the body. A file that runs but that nothing imports gets an entry in `.fallowrc.json`. Turn a rule off or add an ignore there only for a finding that is wrong, and say why in the commit message. Never do it, or write a `fallow-ignore` comment, to make a real finding pass.
+Fix every error it reports. CI's `fallow` job runs the same check on the pull request. Judge each warning as step 5 judges a finding below Medium. fallow warns with `weakened-tests` on each entry the branch adds to `.fallowrc.json`: a file that runs in the product belongs in `entry`, and a script, setup file or other tooling in `supportEntry`.
 
 ## 2. Correct
 

@@ -31,7 +31,6 @@ export const chartLinesCap = 120;
 export const reviewLines = {
   "comment-sicko": "- comment-sicko: clean at ",
   Thermos: "- Thermos: no Medium or higher at ",
-  fallow: "- fallow: no error at ",
 } as const;
 const filesAfterReview = `.agents/skills/${verificationSkillPrefix}*/SKILL.md`;
 export const footer = "🤖 Generated with [Claude Code](https://claude.com/claude-code)";
