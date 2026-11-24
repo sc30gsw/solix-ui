@@ -1,6 +1,6 @@
 import { expect, test } from "vite-plus/test";
-import { chartOf, statechartOf } from "#/scripts/statechart.ts";
-import { runModel } from "#/tests/support/formal-graph.ts";
+import { chartOf, statechartOf, viewOf, withBroken } from "#/scripts/statechart.ts";
+import { runModel } from "#/scripts/formal/run.ts";
 
 const counter = [
   "let count = 0;",
@@ -29,8 +29,8 @@ const view = {
   step: (action: string) => (action === "up" ? "you count up" : "you reset"),
 };
 
-test("the statechart of a model reports the shortest path to each rule that breaks, in the view's words, and the rules that hold", () => {
-  const { report, broken } = statechartOf(model, view, 10, { source: counter });
+test("the statechart of a model reports the shortest path to each rule that breaks, in the view's words, and the rules that hold", async () => {
+  const { report, broken } = await statechartOf(model, view, 10, { source: counter });
 
   expect(broken.map(({ rule, trace }) => ({ rule, steps: trace.length - 1 }))).toEqual([
     { rule: "belowTwo", steps: 2 },
@@ -50,8 +50,8 @@ test("the statechart of a model reports the shortest path to each rule that brea
   expect(report).toContain("## Rules that hold\n\nbelowFour\n");
 });
 
-test("the chart draws each state the view names once, an arrow for each step between two of them, and marks where a rule breaks", () => {
-  const { chart } = statechartOf(model, view, 10, { source: counter });
+test("the chart draws each state the view names once, an arrow for each step between two of them, and marks where a rule breaks", async () => {
+  const { chart } = await statechartOf(model, view, 10, { source: counter });
 
   expect(chart).toBe(
     [
@@ -82,7 +82,7 @@ test("the chart draws each state the view names once, an arrow for each step bet
   );
 });
 
-test("a temporal property that breaks reports the behaviour that never reaches its target", () => {
+test("a temporal property that breaks reports the behaviour that never reaches its target", async () => {
   const unanswered = [
     "let asked = false;",
     "",
@@ -102,13 +102,13 @@ test("a temporal property that breaks reports the behaviour that never reaches i
     "export const everyQuestionIsAnswered = () => asked;",
     "",
   ].join("\n");
-  const { report } = statechartOf("unanswered.model.ts", {}, 10, { source: unanswered });
+  const { report } = await statechartOf("unanswered.model.ts", {}, 10, { source: unanswered });
 
   expect(report).toContain(
     [
       "## everyQuestionIsAnswered breaks",
       "",
-      "The temporal property breaks on this behaviour, of 2 steps:",
+      "The temporal property breaks on this behaviour, of 1 step:",
       "",
       "0. asked = FALSE",
       "1. ask: asked = TRUE",
@@ -117,8 +117,28 @@ test("a temporal property that breaks reports the behaviour that never reaches i
   );
 });
 
-test("a chart with more states than its cap is refused, saying how many it would draw and what to do", () => {
-  const { graph } = runModel(model, {
+test("an action property that breaks is reported as one, on its shortest path", async () => {
+  const neverDown = counter.replace(
+    "export const belowTwo = () => count < 2;",
+    "/** @always */\nexport const neverDown = (before: { count: number }) => count >= before.count;",
+  );
+  const { report } = await statechartOf(model, view, 10, { source: neverDown });
+
+  expect(report).toContain(
+    [
+      "## neverDown breaks",
+      "",
+      "The action property breaks on the shortest path, of 2 steps:",
+      "",
+      "0. at 0",
+      "1. you count up: at 1",
+      "2. you reset: at 0",
+    ].join("\n"),
+  );
+});
+
+test("a chart with more states than its cap is refused, saying how many it would draw and what to do", async () => {
+  const { graph } = await runModel(model, {
     dump: true,
     source: counter.replace(/export const below\w+ = .*\n/g, ""),
   });
@@ -126,5 +146,29 @@ test("a chart with more states than its cap is refused, saying how many it would
 
   expect(() => chartOf(graph, view, [], 3)).toThrow(
     "The chart would draw 4 states, more than its cap of 3. Give a view whose state() merges states that act the same or whose keep() draws fewer, or raise --max-states.",
+  );
+});
+
+test("a view that exports a name a chart view does not take, or a value of the wrong kind, is refused by name", () => {
+  expect(() => viewOf({ title: "A counter", states: () => "at 0" }, "counter.view.ts")).toThrow(
+    "counter.view.ts exports states, which a chart view does not take. A view exports only title, keep, state, step.",
+  );
+  expect(() => viewOf({ title: 3, step: "you count up" }, "counter.view.ts")).toThrow(
+    "counter.view.ts exports title, which is not a string and step, which is not a function.",
+  );
+  expect(viewOf({ title: "A counter" }, "counter.view.ts")).toEqual({ title: "A counter" });
+});
+
+test("a rule that tla-ts reports broken again, after it was left out of the check, stops the report", () => {
+  const broken = {
+    rule: "belowTwo",
+    kind: "invariant" as const,
+    trace: [],
+    loopsBackTo: undefined,
+  };
+
+  expect(withBroken(model, [], broken)).toEqual([broken]);
+  expect(() => withBroken(model, [broken], broken)).toThrow(
+    "counter.model.ts: tla-ts reports belowTwo broken again after it was left out of the check, so the rules cannot be told apart.",
   );
 });

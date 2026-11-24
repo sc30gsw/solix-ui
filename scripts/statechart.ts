@@ -1,17 +1,18 @@
+import { parseConfig } from "tla-ts";
+import {
+  checkCompiled,
+  compileModel,
+  type ModelRun,
+  type RunOptions,
+} from "#/scripts/formal/run.ts";
 import {
   actionLabel,
-  formatValue,
-  type ModelRun,
+  type GraphEdge,
   parseAction,
-  type RuleBreak,
-  type RunOptions,
-  rulesOf,
-  runModel,
   type StateGraph,
-  type TlaValue,
-  type Vars,
-  brokenRuleOf,
-} from "#/tests/support/formal-graph.ts";
+} from "#/scripts/formal/state-graph.ts";
+import { tlaText, type TlaValue, type Vars } from "#/scripts/formal/tla-value.ts";
+import type { RuleBreak } from "#/scripts/formal/trace.ts";
 
 export type ChartView = {
   title?: string;
@@ -19,6 +20,32 @@ export type ChartView = {
   state?: (vars: Vars) => string;
   step?: (action: string, parameters: TlaValue[], from: Vars, to: Vars) => string | null;
 };
+
+export const chartViewKeys = [
+  "title",
+  "keep",
+  "state",
+  "step",
+] as const satisfies readonly (keyof ChartView)[];
+
+export function viewOf(loaded: Readonly<Record<string, unknown>>, where: string): ChartView {
+  const named: readonly string[] = chartViewKeys;
+  const unknown = Object.keys(loaded).filter((key) => !named.includes(key));
+  if (unknown.length > 0) {
+    throw new Error(
+      `${where} exports ${unknown.join(", ")}, which a chart view does not take. A view exports only ${chartViewKeys.join(", ")}.`,
+    );
+  }
+  const { title, keep, state, step } = loaded;
+  const wrong = [
+    ...(title === undefined || typeof title === "string" ? [] : ["title, which is not a string"]),
+    ...Object.entries({ keep, state, step }).flatMap(([key, value]) =>
+      value === undefined || typeof value === "function" ? [] : [`${key}, which is not a function`],
+    ),
+  ];
+  if (wrong.length > 0) throw new Error(`${where} exports ${wrong.join(" and ")}.`);
+  return loaded as ChartView;
+}
 
 export type Statechart = {
   chart: string;
@@ -33,7 +60,7 @@ const pathClass = "classDef bugPath stroke:#c81e1e,stroke-dasharray:4 3";
 
 function plainState(vars: Vars): string {
   return Object.entries(vars)
-    .map(([name, value]) => `${name} = ${formatValue(value)}`)
+    .map(([name, value]) => `${name} = ${tlaText(value)}`)
     .join(", ");
 }
 
@@ -60,16 +87,13 @@ export function chartOf(
 ): { chart: string; states: number; arrows: number; hidden: string[] } {
   const { state, step } = labelsOf(view);
   const keep = view.keep ?? (() => true);
-  const out = new Map<string, string[]>();
-  for (const [index, edge] of graph.edges.entries()) {
-    out.set(edge.from, [...(out.get(edge.from) ?? []), String(index)]);
-  }
+  const out = new Map<string, GraphEdge[]>();
+  for (const edge of graph.edges) out.set(edge.from, [...(out.get(edge.from) ?? []), edge]);
   const starts = [...graph.states.values()].filter(({ initial, vars }) => initial && keep(vars));
   const reached = new Set(starts.map(({ id }) => id));
   const queue = [...reached];
   for (const id of queue) {
-    for (const index of out.get(id) ?? []) {
-      const { to } = graph.edges[Number(index)];
+    for (const { to } of out.get(id) ?? []) {
       const target = graph.states.get(to);
       if (target !== undefined && keep(target.vars) && !reached.has(to)) {
         reached.add(to);
@@ -88,7 +112,10 @@ export function chartOf(
       `The chart would draw ${labels.length} states, more than its cap of ${cap}. Give a view whose state() merges states that act the same or whose keep() draws fewer, or raise --max-states.`,
     );
   }
-  const name = (label: string | undefined) => `s${labels.indexOf(label ?? "")}`;
+  const name = (label: string | undefined) => {
+    const index = labels.indexOf(label ?? "");
+    return index === -1 ? undefined : `s${index}`;
+  };
   const arrows = new Map<string, Set<string>>();
   const hidden = new Set<string>();
   for (const edge of graph.edges) {
@@ -113,8 +140,7 @@ export function chartOf(
       broken.flatMap(({ trace }) =>
         classOf(trace)
           .filter((vars) => keep(vars))
-          .map((vars) => name(inChart(state(vars))))
-          .filter((each) => each !== "s-1"),
+          .flatMap((vars) => name(inChart(state(vars))) ?? []),
       ),
     );
   const breaking = marked((trace) => trace.slice(-1).map(({ vars }) => vars));
@@ -124,7 +150,7 @@ export function chartOf(
     "stateDiagram-v2",
     "  direction LR",
     ...labels.map((label, index) => `  s${index}: ${label}`),
-    ...[...new Set(starts.map(({ id }) => name(labelOf.get(id))))].map(
+    ...[...new Set(starts.flatMap(({ id }) => name(labelOf.get(id)) ?? []))].map(
       (start) => `  [*] --> ${start}`,
     ),
     ...[...arrows].map(([key, texts]) => `  ${key}: ${[...texts].sort().join(" or ")}`),
@@ -159,51 +185,71 @@ function pathReport(broken: RuleBreak, view: ChartView): string[] {
       : `The ${broken.kind} breaks on ${broken.kind === "temporal property" ? "this behaviour" : "the shortest path"}, of ${steps} step${steps === 1 ? "" : "s"}:`,
     "",
     ...broken.trace.map(({ action, vars }, index) => {
-      if (Object.keys(vars).length === 0) {
-        return action === "Stuttering"
-          ? `${index}. nothing more happens, ever`
-          : `${index}. ${action.toLowerCase()}, and round again for ever`;
-      }
       const before = broken.trace[index - 1]?.vars ?? {};
       const said = action === "" ? undefined : (step(action, before, vars) ?? action);
       return `${index}. ${said === undefined ? "" : `${said}: `}${inChart(state(vars))}`;
     }),
+    ...(broken.kind !== "temporal property"
+      ? []
+      : [
+          broken.loopsBackTo === undefined || broken.loopsBackTo >= broken.trace.length - 1
+            ? `${broken.trace.length}. nothing more happens, ever`
+            : `${broken.trace.length}. back to ${broken.loopsBackTo}, and round again for ever`,
+        ]),
     "",
   ];
 }
 
-export function checkEveryRule(
+export function withBroken(
+  model: string,
+  broken: readonly RuleBreak[],
+  found: RuleBreak,
+): RuleBreak[] {
+  if (broken.some(({ rule }) => rule === found.rule)) {
+    throw new Error(
+      `${model}: tla-ts reports ${found.rule} broken again after it was left out of the check, so the rules cannot be told apart.`,
+    );
+  }
+  return [...broken, found];
+}
+
+export async function checkEveryRule(
   model: string,
   options: RunOptions = {},
-): { runs: ModelRun[]; broken: RuleBreak[] } {
+): Promise<{ runs: ModelRun[]; broken: RuleBreak[]; rules: string[] }> {
+  const compiled = compileModel(model, options.source);
+  const config = parseConfig(compiled.config);
+  const rules = [...config.invariants, ...config.properties];
   const runs: ModelRun[] = [];
   const broken: RuleBreak[] = [];
   for (;;) {
-    const run = runModel(model, {
-      ...options,
+    const run = await checkCompiled(compiled, {
       dump: true,
       without: broken.map(({ rule }) => rule),
     });
     runs.push(run);
-    const found = run.status === 0 ? undefined : brokenRuleOf(run.output);
+    const found = run.broken;
     if (found === undefined) {
-      if (run.status !== 0) throw new Error(`tla-ts could not check ${model}:\n${run.output}`);
-      return { runs, broken };
+      if (run.result.status !== "success") {
+        throw new Error(
+          `tla-ts could not check ${model}: ${run.result.status}${run.result.failure === undefined ? "" : `, ${run.result.failure.message}`}.`,
+        );
+      }
+      return { runs, broken, rules };
     }
-    broken.push(found);
-    if (found.kind === "assumption" || found.kind === "deadlock") return { runs, broken };
+    broken.push(...withBroken(model, broken, found).slice(broken.length));
+    if (found.kind === "assumption" || found.kind === "deadlock") return { runs, broken, rules };
   }
 }
 
-export function statechartOf(
+export async function statechartOf(
   model: string,
   view: ChartView = {},
   cap: number = defaultStateCap,
   options: RunOptions = {},
-): Statechart {
-  const { runs, broken } = checkEveryRule(model, options);
+): Promise<Statechart> {
+  const { runs, broken, rules } = await checkEveryRule(model, options);
   const last = runs.at(-1);
-  const rules = rulesOf(runs[0]?.config ?? "");
   const holding = rules.filter((rule) => !broken.some((each) => each.rule === rule));
   const graph = last?.graph;
   const drawn = graph === undefined ? undefined : chartOf(graph, view, broken, cap);

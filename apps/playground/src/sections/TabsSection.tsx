@@ -4,6 +4,8 @@ import { createSignal, For, Show } from "solid-js";
 import { refOf } from "#/src/ref-of.ts";
 import {
   controlled as controlledList,
+  type ControlledSetup,
+  controlledSetupOf,
   displayedByTheApp,
   generated as generatedList,
   held as heldList,
@@ -17,6 +19,8 @@ import {
 const { inbox, drafts, locked } = tabNames.controlled;
 const { kept, asked, styled, classed } = tabNames.held;
 const { near, middle, far } = tabNames.inAShadowRoot;
+const controlledSetup = controlledSetupOf(controlledList);
+const heldSetup = controlledSetupOf(heldList);
 
 function tabValuesIn(text: string): string[] | undefined {
   try {
@@ -54,8 +58,17 @@ function renderInAShadowRootOf(host: Element | null | undefined): void {
   }
 }
 
+function refusedIn(
+  setup: ControlledSetup,
+  name: string,
+  refuse: (event: MouseEvent) => void,
+): { onClick?: (event: MouseEvent) => void } {
+  return setup.refused === name ? { onClick: refuse } : {};
+}
+
 export function TabsSection() {
-  const [controlled, setControlled] = createSignal<string | null>(valueOf(drafts));
+  const [controlled, setControlled] = createSignal<string | null>(valueOf(controlledSetup.value));
+  const [heldValue, setHeldValue] = createSignal<string | null>(valueOf(heldSetup.value));
   const [refused, setRefused] = createSignal(0);
   const [countsHovers, setCountsHovers] = createSignal(false);
   const [draftsHovers, setDraftsHovers] = createSignal(0);
@@ -65,6 +78,10 @@ export function TabsSection() {
   const [heldRequests, setHeldRequests] = createSignal(0);
   const [generated, setGenerated] = createSignal(["my tab", "100%"]);
   const [panelsMounted, setPanelsMounted] = createSignal(true);
+  const refuse = (event: MouseEvent) => {
+    event.preventDefault();
+    setRefused((count) => count + 1);
+  };
 
   return (
     <Box component="section" aria-label="Tabs">
@@ -113,7 +130,13 @@ export function TabsSection() {
         )}
       </For>
 
-      <Tabs value={controlled()} onChange={(value) => setControlled(value)} ref={refOf("Tabs")}>
+      <Tabs
+        value={controlled()}
+        onChange={(value) => {
+          if (controlledSetup.follows) setControlled(value);
+        }}
+        ref={refOf("Tabs")}
+      >
         <Tabs.List
           aria-label={controlledList}
           ref={refOf("TabsList")}
@@ -125,24 +148,20 @@ export function TabsSection() {
             value={valueOf(inbox)}
             leftSection={<span ref={() => setSectionsCreated((count) => count + 1)}>In</span>}
             ref={refOf("TabsTab")}
+            {...refusedIn(controlledSetup, inbox, refuse)}
           >
             <span>{inbox}</span>
           </Tabs.Tab>
           <Tabs.Tab
             value={valueOf(drafts)}
+            {...refusedIn(controlledSetup, drafts, refuse)}
             {...(countsHovers()
               ? { onPointerEnter: () => setDraftsHovers((count) => count + 1) }
               : {})}
           >
             {drafts}
           </Tabs.Tab>
-          <Tabs.Tab
-            value={valueOf(locked)}
-            onClick={(event) => {
-              event.preventDefault();
-              setRefused((count) => count + 1);
-            }}
-          >
+          <Tabs.Tab value={valueOf(locked)} {...refusedIn(controlledSetup, locked, refuse)}>
             {locked}
           </Tabs.Tab>
         </Tabs.List>
@@ -161,7 +180,13 @@ export function TabsSection() {
       <Button onClick={() => setCountsHovers(true)}>Count hovers over Drafts</Button>
       <Button onClick={() => setCountsListHovers(true)}>Count hovers over the list</Button>
 
-      <Tabs value={valueOf(kept)} onChange={() => setHeldRequests((count) => count + 1)}>
+      <Tabs
+        value={heldValue()}
+        onChange={(value) => {
+          setHeldRequests((count) => count + 1);
+          if (heldSetup.follows) setHeldValue(value);
+        }}
+      >
         <Tabs.List aria-label={heldList}>
           <Tabs.Tab value={valueOf(kept)}>{kept}</Tabs.Tab>
           <Tabs.Tab value={valueOf(asked)}>{asked}</Tabs.Tab>

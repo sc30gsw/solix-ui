@@ -6,9 +6,11 @@ import {
   isEnabled,
   type Move,
   type RovingList,
-  type Tab,
-  tabs,
 } from "#/formal/tabs/roving-list.ts";
+
+type Tab = 0 | 1 | 2 | 3;
+
+const tabs: Tab[] = [0, 1, 2, 3];
 
 let size!: 2 | 3 | 4;
 let disabled!: Set<Tab>;
@@ -36,13 +38,12 @@ function disabledFlags(): boolean[] {
 }
 
 function sdkStep(): number {
-  const count = size;
   if (key === "Home") return 0;
-  if (key === "End") return count - 1;
+  if (key === "End") return size - 1;
   const by = key === forwardKey(list()) ? 1 : key === backwardKey(list()) ? -1 : 0;
   if (by === 0) return from;
   const next = from + by;
-  return loop ? ((next % count) + count) % count : Math.max(0, Math.min(count - 1, next));
+  return loop ? ((next % size) + size) % size : Math.max(0, Math.min(size - 1, next));
 }
 
 function composedStep(step: RovingStep): number {

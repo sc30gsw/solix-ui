@@ -6,6 +6,10 @@ docs/verification
 .ADR
 docs/adr
 GLOSSARY.md
-formal/**/*Model.tla
-formal/**/*Model.cfg
+formal/tabs/ControlledTabsModel.tla
+formal/tabs/ControlledTabsModel.cfg
+formal/tabs/RovingListModel.tla
+formal/tabs/RovingListModel.cfg
+formal/tabs/StepOverModel.tla
+formal/tabs/StepOverModel.cfg
 formal/**/*_TTrace_*.tla

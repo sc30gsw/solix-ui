@@ -1,5 +1,6 @@
-import { controlledConfig } from "#/formal/tabs/tabs-configs.ts";
-import { textOf, type TlaValue, type Vars } from "#/tests/support/formal-graph.ts";
+import { controlled, controlledSetupOf } from "#/apps/playground/src/sections/tabs-setups.ts";
+import { controlledConfigOf } from "#/formal/tabs/setups.ts";
+import { textOf, type TlaValue, varsMatch, type Vars } from "#/scripts/formal/tla-value.ts";
 
 export const title =
   "Controlled Tabs as the playground's Controlled list, with three tabs, an app that follows every request and tab 3 refusing a click";
@@ -9,11 +10,7 @@ function tab(value: TlaValue): string {
 }
 
 export function keep(vars: Vars): boolean {
-  return (
-    vars.size === controlledConfig.size &&
-    vars.follows === controlledConfig.follows &&
-    vars.refused === controlledConfig.refused
-  );
+  return varsMatch(vars, controlledConfigOf(controlledSetupOf(controlled)));
 }
 
 export function state(vars: Vars): string {

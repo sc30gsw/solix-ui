@@ -1,5 +1,12 @@
-import { account } from "#/formal/tabs/tabs-configs.ts";
-import { formatValue, textOf, type TlaValue, type Vars } from "#/tests/support/formal-graph.ts";
+import { account, setupOf } from "#/apps/playground/src/sections/tabs-setups.ts";
+import { rovingConfigOf } from "#/formal/tabs/setups.ts";
+import {
+  fieldIn,
+  textOf,
+  type TlaValue,
+  varsMatch,
+  type Vars,
+} from "#/scripts/formal/tla-value.ts";
 
 export const title =
   "Stepping over a disabled tab in the playground's Account setup, with tab 2 disabled and wrapping";
@@ -8,26 +15,15 @@ function tab(value: TlaValue): string {
   return typeof value === "number" ? `tab ${value + 1}` : "no tab";
 }
 
-function fieldOf(value: TlaValue, field: string): TlaValue {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value[field]
-    : undefined;
-}
-
 export function keep(vars: Vars): boolean {
-  return (
-    vars.size === account.size &&
-    formatValue(vars.disabled) === formatValue([...account.disabled]) &&
-    vars.vertical === account.vertical &&
-    vars.rightToLeft === account.rightToLeft &&
-    vars.loop === account.loop
-  );
+  const { size, disabled, vertical, rightToLeft, loop } = rovingConfigOf(setupOf(account));
+  return varsMatch(vars, { size, disabled, vertical, rightToLeft, loop });
 }
 
 export function state(vars: Vars): string {
   if (vars.stepped === null) return `focus on ${tab(vars.from)}`;
-  return fieldOf(vars.stepped, "handled") === true
-    ? `the list steps focus over to ${tab(fieldOf(vars.stepped, "to"))}`
+  return fieldIn(vars.stepped, "handled", "the step over") === true
+    ? `the list steps focus over to ${tab(fieldIn(vars.stepped, "to", "the step over"))}`
     : "the key is left to the SDK's roving focus";
 }
 
