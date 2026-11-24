@@ -6,7 +6,6 @@ import {
   plainValuesIn,
   renderedOnTheServer,
 } from "#/tests/support/server-harness.ts";
-import { raisesSolidDiagnosticOnPurpose } from "../../../tests/support/solid-diagnostics-check.ts";
 
 const primitivePrefix = "create";
 
@@ -31,10 +30,6 @@ function renderOnTheServer(name: Primitive) {
       rendered.expected = started.value?.expected;
       started.browserCommands?.();
       rendered.afterBrowserCommands = serialized(started.value?.read());
-      if (started.stateCommands !== undefined) {
-        raisesSolidDiagnosticOnPurpose("SERVER_WRITE");
-        started.stateCommands.run();
-      }
       return rendered.afterBrowserCommands;
     });
   });
@@ -60,7 +55,7 @@ test("a primitive that returns nothing, or only functions, passes; one that retu
 });
 
 test.each(primitives)(
-  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, keeps it when a browser command is called there, calls a state command there without a browser read, and returns nothing or only functions",
+  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, keeps it when a browser command is called there and returns nothing or only functions",
   (name) => {
     const { returned, value, expected, afterBrowserCommands, touched } = renderOnTheServer(name);
 

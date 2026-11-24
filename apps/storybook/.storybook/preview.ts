@@ -1,11 +1,12 @@
 import type { AfterEach, BeforeEach } from "storybook/internal/types";
 import type { Preview, SolidRenderer } from "storybook-solidjs-vite";
+import { isRecord, wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
 import {
-  captureSolidDiagnostics,
-  isRecord,
+  describeSolidDiagnostic,
+  openSolidDiagnosticsGate,
+  type SolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
-  wcag2AAndAATags,
-} from "../../../tests/support/browser-gates.ts";
+} from "../../../tests/support/solid-diagnostics.ts";
 import { colorContrastRule } from "../../../tests/support/contrast-exceptions.ts";
 import {
   globalSwitchesThatSkipTheAccessibilityScan,
@@ -28,7 +29,7 @@ type StoryState = {
   canvasElement: Element;
 };
 
-let diagnosticsRaised: () => string[] = () => [];
+const diagnostics: { gate?: SolidDiagnosticsGate } = {};
 
 function shown(value: unknown): string {
   return value === undefined ? "nothing" : JSON.stringify(value);
@@ -81,7 +82,8 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
       "Solid's development build is not loaded, so no story can be checked for Solid development diagnostics.",
     );
   }
-  diagnosticsRaised = captureSolidDiagnostics();
+  diagnostics.gate?.finish();
+  diagnostics.gate = openSolidDiagnosticsGate();
   const mount = context.mount;
   context.mount = async (...rendered) => {
     const canvas = await mount(...rendered);
@@ -97,8 +99,8 @@ const afterEachStory: AfterEach<SolidRenderer> = (context) => {
       `The preview's afterEach tells a failed play from a failed gate, so it must run first after the play function, but ${context.reporting.reports.map(({ type }) => type).join(", ")} reported before it. A story or a meta that writes afterEach, or an addon whose afterEach the preview's no longer comes before, ran first.`,
     );
   }
-  const raised = diagnosticsRaised();
-  diagnosticsRaised = () => [];
+  const raised = (diagnostics.gate?.finish() ?? []).map(describeSolidDiagnostic);
+  diagnostics.gate = undefined;
   refuseAnyWayOut("while it ran", [...waysOutOfTheGate(context), ...unscannedIn(context)]);
   if (raised.length > 0) {
     throw new Error(`The story raised a Solid development diagnostic:\n${raised.join("\n")}`);

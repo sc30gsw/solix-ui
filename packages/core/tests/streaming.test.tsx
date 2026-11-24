@@ -96,3 +96,28 @@ test("a column that streams in after another writes the rules no earlier column 
   expect(later).toContain(".sx-col-offset-c0-2{");
   expect(later).not.toContain(flexBasis);
 });
+
+test("a column after one that waits arrives in the shell with every rule it places, since it reads no rule from a column still waiting", async () => {
+  const chunks = await chunksFrom(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      breakpoints,
+      get children() {
+        return [
+          createComponent(Loading, {
+            fallback,
+            get children() {
+              return createComponent(AsyncColumn, {});
+            },
+          }),
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Second" }),
+        ];
+      },
+    }),
+  );
+  const [shell = ""] = chunks;
+
+  expect(shell).toContain(fallback);
+  expect(shell).toContain("Second");
+  expect(shell).toContain(".sx-col-flex-basis-c0-2{");
+});
