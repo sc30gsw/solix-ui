@@ -377,6 +377,10 @@ inEveryEngine((browser) => {
       test.each(checks)("%s", async (___, check) => {
         await check({ page: opened.page, expected: opened.expected, fromMd });
       });
+
+      test("the page reports no console error or warning", () => {
+        expect(opened.consoleProblems).toEqual([]);
+      });
     });
   });
 });
