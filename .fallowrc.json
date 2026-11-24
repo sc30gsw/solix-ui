@@ -18,31 +18,17 @@
   "ignoreFindings": ["tests/fixtures/tarball-consumer/**"],
   "ignoreUnresolvedImports": ["#/tests/fixtures/primitive-rules/*/tests/support/*"],
   "ignoreDependencyOverrides": [
-    { "package": "@solidjs/start", "source": "pnpm-workspace.yaml" },
-    { "package": "eslint-plugin-solid", "source": "pnpm-workspace.yaml" },
-    { "package": "next", "source": "pnpm-workspace.yaml" },
-    { "package": "react-dom", "source": "pnpm-workspace.yaml" },
-    { "package": "solid-app-router", "source": "pnpm-workspace.yaml" },
-    { "package": "solid-start", "source": "pnpm-workspace.yaml" },
-    { "package": "vinxi", "source": "pnpm-workspace.yaml" },
-    { "package": "vite-plugin-solid", "source": "pnpm-workspace.yaml" }
+    { "package": "@solidjs/start" },
+    { "package": "eslint-plugin-solid" },
+    { "package": "next" },
+    { "package": "react-dom" },
+    { "package": "solid-app-router" },
+    { "package": "solid-start" },
+    { "package": "vinxi" },
+    { "package": "vite-plugin-solid" }
   ],
-  "ignoreExports": [
-    { "file": "apps/storybook/story-records.ts", "exports": ["instrumented"] },
-    { "file": "scripts/component-props.ts", "exports": ["defaultsAt", "defaultsBrandAt"] },
-    {
-      "file": "packages/core/tests/built-library.ts",
-      "exports": [
-        "handledKeys",
-        "rootPart",
-        "scaleOfThemeKey",
-        "themeStyleSheet",
-        "stableClass",
-        "isContainerWidth",
-        "resolveVariables"
-      ]
-    }
-  ],
+  "ignoreExports": [{ "file": "apps/storybook/story-records.ts", "exports": ["instrumented"] }],
+  "health": { "maxCrap": 0 },
   "rules": {
     "complexity-crap": "off"
   }
