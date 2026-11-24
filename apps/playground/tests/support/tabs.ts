@@ -1,15 +1,27 @@
 import type { Locator, Page } from "playwright";
 import { tabNamesOf, type TabsSetup, tabsSetups } from "#/src/sections/tabs-setups.ts";
 import { type DocumentSnapshot, snapshotOfDocument } from "#/tests/support/opening.ts";
-import type { RovingList } from "#/tests/support/roving-list-model.ts";
+import {
+  afterClick,
+  afterKey,
+  indexIn,
+  type Key,
+  named,
+  type RovingList,
+  rovingListOf,
+} from "#/tests/support/formal.ts";
 
 export {
   account,
+  type ControlledSetup,
   controlled,
+  controlledSetupOf,
+  controlledSetups,
   displayedByTheApp,
   generated,
   held,
   inAShadowRoot,
+  keyboardTable,
   manual,
   optional,
   panelOf,
@@ -28,44 +40,43 @@ export const clickMissedItsTab = "the click did not reach the tab";
 
 const pressEvents = ["mousedown", "mouseup", "click"];
 
-export function rovingListOf(setup: TabsSetup): RovingList {
-  return {
-    name: setup.list,
-    items: setup.tabs,
-    orientation: setup.orientation,
-    direction: setup.direction,
-    loop: setup.loop,
-    selectsOnMove: setup.selectsOnArrow,
-    deselects: setup.deselects,
-    initial: setup.initial,
-  };
+export type NamedRovingList = { name: string; names: string[]; list: RovingList };
+
+export type NamedSelection = { selected: string | null; focused: string | null };
+
+export function namedListOf(setup: TabsSetup): NamedRovingList {
+  return { name: setup.list, names: tabNamesOf(setup.list), list: rovingListOf(setup) };
 }
 
-export const tabLists: RovingList[] = tabsSetups.map(rovingListOf);
+export const namedLists: NamedRovingList[] = tabsSetups.map(namedListOf);
 
-export type ModelConfig = {
-  size: number;
-  disabled: number[];
-  vertical: boolean;
-  rightToLeft: boolean;
-  loop: boolean;
-  selectsOnMove: boolean;
-  deselects: boolean;
-  initial: number | null;
-};
+function indexesOf({ names }: NamedRovingList, state: NamedSelection) {
+  return { selected: indexIn(names, state.selected), focused: indexIn(names, state.focused) };
+}
 
-export function modelConfigOf(setup: TabsSetup): ModelConfig {
-  return {
-    size: setup.tabs.length,
-    disabled: setup.tabs.flatMap(({ disabled }, index) => (disabled ? [index] : [])),
-    vertical: setup.orientation === "vertical",
-    rightToLeft: setup.direction === "rtl",
-    loop: setup.loop,
-    selectsOnMove: setup.selectsOnArrow,
-    deselects: setup.deselects,
-    initial:
-      setup.initial === null ? null : setup.tabs.findIndex(({ name }) => name === setup.initial),
-  };
+function namesOf(
+  { names }: NamedRovingList,
+  state: { selected: number | null; focused: number | null },
+) {
+  return { selected: named(names, state.selected), focused: named(names, state.focused) };
+}
+
+export function afterClickByName(
+  list: NamedRovingList,
+  state: NamedSelection,
+  name: string,
+): NamedSelection {
+  const tab = indexIn(list.names, name);
+  if (tab === null) throw new Error(`${list.name}: a click needs a tab.`);
+  return namesOf(list, afterClick(list.list, indexesOf(list, state), tab));
+}
+
+export function afterKeyByName(
+  list: NamedRovingList,
+  state: NamedSelection,
+  key: Key,
+): NamedSelection {
+  return namesOf(list, afterKey(list.list, indexesOf(list, state), key));
 }
 
 export type TabsState = {

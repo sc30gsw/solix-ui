@@ -8,20 +8,18 @@ import {
   clickTab,
   optional,
   panelOf,
+  setupOf,
   snapshotOf,
   stateFrom,
   type TabsSnapshot,
-  tabLists,
+  afterClickByName,
+  afterKeyByName,
+  type NamedRovingList,
+  type NamedSelection,
+  namedLists,
   tabNames,
 } from "#/tests/support/tabs.ts";
-import {
-  afterKey,
-  afterPressOn,
-  type Key,
-  keys,
-  type RovingList,
-  type RovingListState,
-} from "#/tests/support/roving-list-model.ts";
+import { type Key, keys } from "#/tests/support/formal.ts";
 import { assertProperty } from "../../../tests/support/properties.ts";
 
 const url = inject("playgroundUrl");
@@ -32,10 +30,10 @@ const scrollAwayFromThePointer = 200;
 const notATab = "a tab the list does not have";
 const unrenderedList = "<main><p>no list of tabs yet</p></main>";
 const failsWithin = 5_000;
-type Model = RovingListState & { list: RovingList };
+type Model = NamedSelection & { list: NamedRovingList };
 type Real = { page: Page; readyAt: number };
 
-function become(model: Model, next: RovingListState): void {
+function become(model: Model, next: NamedSelection): void {
   model.selected = next.selected;
   model.focused = next.focused;
 }
@@ -90,12 +88,12 @@ class ClickTab extends Step {
     super();
     this.position = position;
   }
-  tab = ({ list }: Model) => list.items[this.position % list.items.length];
-  check = (model: Model) => !this.tab(model).disabled;
+  index = ({ list }: Model) => this.position % list.names.length;
+  check = (model: Model) => !model.list.list.disabled.has(this.index(model));
   async act(model: Model, { page }: Real) {
-    const { name } = this.tab(model);
+    const name = model.list.names[this.index(model)];
     await clickTab(page, model.list.name, name);
-    become(model, afterPressOn(model.list, model, name));
+    become(model, afterClickByName(model.list, model, name));
   }
   toString = () => `click the enabled tab at position ${this.position}, counted round the list`;
 }
@@ -109,25 +107,25 @@ class PressKey extends Step {
   check = (model: Model) => model.focused !== null;
   async act(model: Model, { page }: Real) {
     await page.keyboard.press(this.key);
-    become(model, afterKey(model.list, model, this.key));
+    become(model, afterKeyByName(model.list, model, this.key));
   }
   toString = () => `press ${this.key}`;
 }
 
 const { notes, files } = tabNames.optional;
 
-function theOptionalList(): RovingList {
-  const list = tabLists.find(({ name }) => name === optional);
+function theOptionalList(): NamedRovingList {
+  const list = namedLists.find(({ name }) => name === optional);
   if (!list) throw new Error(`${optional}: the playground describes no list of tabs so.`);
   return list;
 }
 
-function atTheStartOf(list: RovingList): Model {
-  return { list, selected: list.initial, focused: null };
+function atTheStartOf(list: NamedRovingList): Model {
+  return { list, selected: setupOf(list.name).initial, focused: null };
 }
 
-function clickOn(list: RovingList, tab: string): ClickTab {
-  return new ClickTab(list.items.findIndex(({ name }) => name === tab));
+function clickOn(list: NamedRovingList, tab: string): ClickTab {
+  return new ClickTab(list.names.indexOf(tab));
 }
 
 const steps = [
@@ -137,7 +135,7 @@ const steps = [
 
 function everySequenceAgreesOn(page: Page) {
   return fc.asyncProperty(
-    fc.constantFrom(...tabLists),
+    fc.constantFrom(...namedLists),
     fc.commands(steps, { maxCommands: longestSequence }),
     async (list, sequence) => {
       await opened(page, url, "hydrated");
@@ -239,7 +237,7 @@ inEveryEngine((browser) => {
 
   test("a disagreement with the model says what the page showed: each tab and panel, the document's state, its stylesheets and its scroll", async () => {
     const page = await browser().newPage();
-    const [list] = tabLists;
+    const [list] = namedLists;
     if (list === undefined) throw new Error("the playground renders no list of tabs.");
     const model = atTheStartOf(list);
     model.focused = notATab;
@@ -269,7 +267,7 @@ inEveryEngine((browser) => {
   test("a disagreement on a page that renders no such list of tabs says what the page showed, well within the test's timeout", async () => {
     const page = await browser().newPage();
     await page.setContent(unrenderedList);
-    const [list] = tabLists;
+    const [list] = namedLists;
     if (list === undefined) throw new Error("the playground renders no list of tabs.");
     const asked = performance.now();
 

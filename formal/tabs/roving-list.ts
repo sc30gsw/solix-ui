@@ -1,11 +1,21 @@
-export type Tab = 0 | 1 | 2 | 3;
 export type Move = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" | "End";
 export type Press = "Enter" | "Space";
 export type Key = Move | Press;
 
+export const keys: Key[] = [
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+  "Enter",
+  "Space",
+];
+
 export type RovingList = {
   size: number;
-  disabled: Set<Tab>;
+  disabled: Set<number>;
   vertical: boolean;
   rightToLeft: boolean;
   loop: boolean;
@@ -13,12 +23,10 @@ export type RovingList = {
   deselects: boolean;
 };
 
-export type Selection = { selected: Tab | null; focused: Tab | null };
-
-export const tabs: Tab[] = [0, 1, 2, 3];
+export type Selection = { selected: number | null; focused: number | null };
 
 export function isEnabled(list: RovingList, index: number): boolean {
-  return tabs.some((tab) => tab === index && tab < list.size && !list.disabled.has(tab));
+  return index >= 0 && index < list.size && !list.disabled.has(index);
 }
 
 function enabledFrom(list: RovingList, index: number, by: number): number {
@@ -72,22 +80,20 @@ export function destinationOf(list: RovingList, from: number, key: Move): number
   return from;
 }
 
-export function tabAt(index: number): Tab {
-  if (index === 1) return 1;
-  if (index === 2) return 2;
-  return index === 3 ? 3 : 0;
-}
-
-export function afterClick(list: RovingList, state: Selection, tab: Tab): Selection {
+export function afterClick(list: RovingList, state: Selection, tab: number): Selection {
   return { selected: list.deselects && state.selected === tab ? null : tab, focused: tab };
 }
 
 export function afterKey(list: RovingList, state: Selection, key: Key): Selection {
   if (state.focused === null) return state;
-  if (key === "Enter" || key === "Space") return afterClick(list, state, state.focused);
-  const to = tabAt(destinationOf(list, state.focused, key));
+  if (isPress(key)) return afterClick(list, state, state.focused);
+  const to = destinationOf(list, state.focused, key);
   return {
     selected: list.selectsOnMove && to !== state.focused ? to : state.selected,
     focused: to,
   };
+}
+
+export function tabStopOf(list: RovingList, state: Selection): number {
+  return state.selected ?? firstEnabled(list);
 }

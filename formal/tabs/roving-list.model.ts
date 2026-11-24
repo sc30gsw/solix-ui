@@ -1,16 +1,19 @@
 import {
   afterClick,
   afterKey,
-  firstEnabled,
   isAcross,
   isEnabled,
   isPress,
   type Key,
   type RovingList,
-  type Tab,
-  tabs,
+  type Selection,
+  tabStopOf,
 } from "#/formal/tabs/roving-list.ts";
-import { keyboardTable, rowHolds } from "#/formal/tabs/tabs-configs.ts";
+
+type Tab = 0 | 1 | 2 | 3;
+type Last = Key | "click" | "clickDisabled" | "none";
+
+const tabs: Tab[] = [0, 1, 2, 3];
 
 let size!: 2 | 3 | 4;
 let disabled!: Set<Tab>;
@@ -21,10 +24,25 @@ let selectsOnMove!: boolean;
 let deselects!: boolean;
 let selected!: Tab | null;
 let focused: Tab | null = null;
-let last: Key | "click" | "none" = "none";
+let last: Last = "none";
+
+function tabAt(index: number | null): Tab | null {
+  if (index === null) return null;
+  if (index === 0) return 0;
+  if (index === 1) return 1;
+  if (index === 2) return 2;
+  if (index === 3) return 3;
+  throw new Error("the roving list gave an index past the fourth tab");
+}
 
 function list(): RovingList {
   return { size, disabled, vertical, rightToLeft, loop, selectsOnMove, deselects };
+}
+
+function become(next: Selection, action: Last) {
+  selected = tabAt(next.selected);
+  focused = tabAt(next.focused);
+  last = action;
 }
 
 /** @initially */
@@ -35,18 +53,17 @@ export const isAListOfTabs = () =>
 
 export const click = (tab: Tab) => {
   if (!isEnabled(list(), tab)) return;
-  const next = afterClick(list(), { selected, focused }, tab);
-  selected = next.selected;
-  focused = next.focused;
-  last = "click";
+  become(afterClick(list(), { selected, focused }, tab), "click");
+};
+
+export const clickDisabled = (tab: Tab) => {
+  if (tab >= size || !disabled.has(tab)) return;
+  last = "clickDisabled";
 };
 
 export const press = (key: Key) => {
   if (focused === null) return;
-  const next = afterKey(list(), { selected, focused }, key);
-  selected = next.selected;
-  focused = next.focused;
-  last = key;
+  become(afterKey(list(), { selected, focused }, key), key);
 };
 
 export const focusRestsOnAnEnabledTab = () => focused === null || isEnabled(list(), focused);
@@ -57,22 +74,24 @@ export const anArrowSelectsTheTabItFocuses = () =>
   !selectsOnMove || focused === null || selected === null || selected === focused;
 
 export const theTabStopIsAnEnabledTab = () =>
-  isEnabled(list(), selected ?? focused ?? firstEnabled(list()));
+  isEnabled(list(), tabStopOf(list(), { selected, focused }));
 
 /** @always */
-export const aKeyAcrossTheOrientationChangesNothing = (before: {
-  selected: Tab | null;
-  focused: Tab | null;
-  last: Key | "click" | "none";
-}) =>
+export const aKeyAcrossTheOrientationChangesNothing = (before: Selection) =>
   last === "click" ||
+  last === "clickDisabled" ||
   last === "none" ||
   !isAcross(list(), last) ||
   (selected === before.selected && focused === before.focused);
 
 /** @always */
-export const enterAndSpaceKeepFocus = (before: { focused: Tab | null }) =>
-  last === "click" || last === "none" || !isPress(last) || focused === before.focused;
+export const enterAndSpaceKeepFocus = (before: Selection) =>
+  last === "click" ||
+  last === "clickDisabled" ||
+  last === "none" ||
+  !isPress(last) ||
+  focused === before.focused;
 
-/** @assume */
-export const everyRowOfTheKeyboardTableHolds = () => keyboardTable.every(rowHolds);
+/** @always */
+export const aClickOnADisabledTabChangesNothing = (before: Selection) =>
+  last !== "clickDisabled" || (selected === before.selected && focused === before.focused);

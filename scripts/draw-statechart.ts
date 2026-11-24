@@ -2,12 +2,12 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import { type ChartView, defaultStateCap, statechartOf } from "#/scripts/statechart.ts";
+import { type ChartView, defaultStateCap, statechartOf, viewOf } from "#/scripts/statechart.ts";
 
 async function viewFrom(file: string | undefined): Promise<ChartView> {
   if (file === undefined) return {};
-  const loaded: ChartView = await import(pathToFileURL(resolve(file)).href);
-  return loaded;
+  const loaded: Record<string, unknown> = await import(pathToFileURL(resolve(file)).href);
+  return viewOf(loaded, file);
 }
 
 const { positionals, values } = parseArgs({
@@ -25,7 +25,7 @@ if (model === undefined) {
   );
 }
 const cap = values["max-states"] === undefined ? defaultStateCap : Number(values["max-states"]);
-const { chart, report, broken } = statechartOf(model, await viewFrom(values.view), cap);
+const { chart, report, broken } = await statechartOf(model, await viewFrom(values.view), cap);
 if (values.out !== undefined) {
   mkdirSync(values.out, { recursive: true });
   writeFileSync(join(values.out, "chart.mmd"), chart);
