@@ -19,7 +19,7 @@ import {
 
 const url = inject("playgroundUrl");
 
-type Opened = { page: Page; expected: Expected; fromMd: boolean };
+type Opened = { page: Page; expected: Expected; fromMd: boolean; javaScriptEnabled: boolean };
 
 function after(page: Page, text: string): Locator {
   return page.getByText(text, { exact: true }).locator("xpath=following-sibling::*[1]");
@@ -295,7 +295,7 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
   ],
   [
     "a Grid gives each column the share of its row that span names, at each breakpoint or container width, after an offset and in the order given, with auto and content spans, columns and grow",
-    async ({ page, expected, fromMd }) => {
+    async ({ page, expected, fromMd, javaScriptEnabled }) => {
       const column = (text: string) => page.getByText(text, { exact: true });
       const half = column("Half from md");
 
@@ -378,6 +378,22 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
         ),
         `without breakpoints, a 960 pixel container is short of the library's md, ${breakpointWidths.md}, whatever the viewport`,
       ).toBe(true);
+      expect(
+        near(
+          (await boxOf(column("After a streamed column"))).width,
+          await spanWidth(column("After a streamed column"), 6, 12),
+        ),
+        "a column after a streamed Loading boundary keeps its container-query width",
+      ).toBe(true);
+      if (javaScriptEnabled) {
+        expect(
+          near(
+            (await boxOf(column("Streamed half"))).width,
+            await spanWidth(column("Streamed half"), 6, 12),
+          ),
+          "a column that streams in before a synchronous sibling keeps its container-query width after hydration",
+        ).toBe(true);
+      }
     },
   ],
 ];
@@ -399,7 +415,12 @@ inEveryEngine((browser) => {
       });
 
       test.each(checks)("%s", async (___, check) => {
-        await check({ page: opened.page, expected: opened.expected, fromMd });
+        await check({
+          page: opened.page,
+          expected: opened.expected,
+          fromMd,
+          javaScriptEnabled,
+        });
       });
     });
   });
@@ -423,7 +444,9 @@ inEveryEngine((browser) => {
       await page.setViewportSize({ width: mdBreakpointInPixels, height: viewportHeight });
 
       await expectTheBoxCascade({ page, expected, fromMd: true });
-      for (const [, check] of checks) await check({ page, expected, fromMd: true });
+      for (const [, check] of checks) {
+        await check({ page, expected, fromMd: true, javaScriptEnabled: true });
+      }
     } finally {
       await close();
     }

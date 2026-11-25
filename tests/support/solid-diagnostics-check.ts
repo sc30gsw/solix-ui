@@ -1,28 +1,34 @@
 import { afterAll, afterEach, beforeEach, expect, onTestFinished } from "vite-plus/test";
 import {
-  describeSolidDiagnostic,
   openSolidDiagnosticsGate,
-  openSolidDiagnosticsGateForOneTest,
   type SolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
 } from "#/tests/support/solid-diagnostics.ts";
 
-const gates: { outsideTests: SolidDiagnosticsGate; test?: SolidDiagnosticsGate } = {
-  outsideTests: openSolidDiagnosticsGate(),
+const outsideTests: { gate: SolidDiagnosticsGate } = {
+  gate: openSolidDiagnosticsGate(),
 };
+const testGates = new WeakMap<object, SolidDiagnosticsGate>();
 
-function finishTheTestsGate(): string[] {
-  const raised = gates.test?.finish() ?? [];
-  gates.test = undefined;
-  gates.outsideTests = openSolidDiagnosticsGate();
-  return raised.map(describeSolidDiagnostic);
+function finishTheTestsGate(task: object): string[] | undefined {
+  const gate = testGates.get(task);
+  if (gate === undefined) return undefined;
+  testGates.delete(task);
+  const raised = gate.finishDescribed();
+  outsideTests.gate = openSolidDiagnosticsGate();
+  return raised;
 }
 
-beforeEach(() => {
-  const raisedOutsideTests = gates.outsideTests.finish().map(describeSolidDiagnostic);
-  gates.test = openSolidDiagnosticsGateForOneTest();
+const inTestMessage =
+  "the Solid development diagnostics this test raised, in a server render or anywhere else in its body, but those it ran inside expectingSolidDiagnostic";
+
+beforeEach((context) => {
+  const raisedOutsideTests = outsideTests.gate.finishDescribed();
+  const gate = openSolidDiagnosticsGate({ exclusive: true });
+  testGates.set(context.task, gate);
   onTestFinished(() => {
-    if (gates.test !== undefined) finishTheTestsGate();
+    const raised = finishTheTestsGate(context.task);
+    if (raised !== undefined) expect.soft(raised, inTestMessage).toEqual([]);
   });
   expect(
     solidDevelopmentBuildLoaded(),
@@ -34,18 +40,14 @@ beforeEach(() => {
   ).toEqual([]);
 });
 
-afterEach(() => {
-  expect
-    .soft(
-      finishTheTestsGate(),
-      "the Solid development diagnostics this test raised, in a server render or anywhere else in its body, but those it ran inside expectingSolidDiagnostic",
-    )
-    .toEqual([]);
+afterEach((context) => {
+  const raised = finishTheTestsGate(context.task);
+  if (raised !== undefined) expect.soft(raised, inTestMessage).toEqual([]);
 });
 
 afterAll(() => {
   expect(
-    gates.outsideTests.finish().map(describeSolidDiagnostic),
+    outsideTests.gate.finishDescribed(),
     "the Solid development diagnostics raised after the file's last test",
   ).toEqual([]);
 });

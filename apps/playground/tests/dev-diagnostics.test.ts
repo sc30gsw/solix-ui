@@ -51,11 +51,31 @@ function isTheProbe(diagnostic: SolidDiagnostic): boolean {
 
 function printedAfterTheAddress(stream: PrintedLine["stream"]): string {
   const announced = server.printed.findIndex(({ text }) => text.includes(devUrl()));
+  if (announced === -1) {
+    throw new Error(`The development server did not print its address ${devUrl()}.`);
+  }
   return server.printed
     .slice(announced + 1)
     .filter((line) => line.stream === stream)
     .map(({ text }) => text)
     .join("\n");
+}
+
+function serverProblems() {
+  const stderr = problemsPrinted(printedAfterTheAddress("stderr"));
+  const stdout = problemsPrinted(printedAfterTheAddress("stdout"));
+  return {
+    stderrDiagnostics: stderr.diagnostics,
+    diagnostics: [...stderr.diagnostics, ...stdout.diagnostics].filter(
+      (diagnostic) => !isTheProbe(diagnostic),
+    ),
+    otherErrors: stderr.otherLines,
+  };
+}
+
+async function stopAndSnapshot(running: RunningServer): Promise<void> {
+  await running.stop();
+  server.printed = running.printedLines();
 }
 
 beforeAll(async () => {
@@ -67,7 +87,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await server.running?.stop();
+  if (server.running !== undefined && server.printed.length === 0) {
+    await stopAndSnapshot(server.running);
+  }
 });
 
 describe.each(enginesToVerify())("in %s", (engine) => {
@@ -119,39 +141,33 @@ describe.each(enginesToVerify())("in %s", (engine) => {
 
 describe("the development server", () => {
   beforeAll(async () => {
-    await (await fetch(devUrl())).text();
-    await (await fetch(`${devUrl()}?${diagnosticProbeParameter}`)).text();
-    await server.running?.stop();
-    server.printed = server.running?.printedLines() ?? [];
+    const page = await fetch(devUrl());
+    expect(page.ok, `fetching ${devUrl()} answered ${page.status}`).toBe(true);
+    await page.text();
+    const probe = await fetch(`${devUrl()}?${diagnosticProbeParameter}`);
+    expect(probe.ok, `fetching the diagnostic probe answered ${probe.status}`).toBe(true);
+    await probe.text();
+    if (server.running !== undefined) await stopAndSnapshot(server.running);
   });
 
   test("prints its address, and the report Solid's development build makes of the diagnostic probe, so what it printed is read and its render runs that build", () => {
-    const printed = server.printed.map(({ text }) => text).join("\n");
+    const { stderrDiagnostics } = serverProblems();
 
-    expect(printed).toContain(devUrl());
-    expect(
-      problemsPrinted(printedAfterTheAddress("stderr")).diagnostics.filter(isTheProbe),
-    ).toHaveLength(1);
+    expect(stderrDiagnostics.filter(isTheProbe)).toHaveLength(1);
   });
 
   test("prints no error, warning or diagnostic of Solid's from our own code while it renders the page", () => {
-    const errors = problemsPrinted(printedAfterTheAddress("stderr"));
-    const logged = problemsPrinted(printedAfterTheAddress("stdout"));
+    const { diagnostics, otherErrors } = serverProblems();
 
     expect([
-      ...[...errors.diagnostics, ...logged.diagnostics]
-        .filter((diagnostic) => !isTheProbe(diagnostic) && !isUpstream(diagnostic))
-        .map(describeSolidDiagnostic),
-      ...errors.otherLines,
+      ...diagnostics.filter((diagnostic) => !isUpstream(diagnostic)).map(describeSolidDiagnostic),
+      ...otherErrors,
     ]).toEqual([]);
   });
 });
 
 test("every upstream exception still describes a diagnostic that is reported, in a browser or by the development server", () => {
-  const reported = [
-    ...reportedInEveryEngine,
-    ...problemsPrinted(server.printed.map(({ text }) => text).join("\n")).diagnostics,
-  ];
+  const reported = [...reportedInEveryEngine, ...serverProblems().diagnostics];
 
   expect(
     upstreamExceptions.filter(

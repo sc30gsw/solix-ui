@@ -5,12 +5,15 @@ import {
 } from "#/tests/support/upstream-diagnostic-exceptions.ts";
 
 export type SolidDiagnostic = {
-  readonly code: DiagnosticCode;
+  readonly code: string;
   readonly message: string;
   readonly owner?: string;
 };
 
-export type SolidDiagnosticsGate = { readonly finish: () => SolidDiagnostic[] };
+export type SolidDiagnosticsGate = {
+  readonly finish: () => SolidDiagnostic[];
+  readonly finishDescribed: () => string[];
+};
 
 export type PrintedProblems = {
   readonly diagnostics: readonly SolidDiagnostic[];
@@ -47,7 +50,9 @@ function solidDiagnosticOf({ code, message, ownerPath }: DiagnosticEvent): Solid
 
 export function isCoveredBy(exception: UpstreamException, diagnostic: SolidDiagnostic): boolean {
   return (
-    diagnostic.code === exception.code && (diagnostic.owner ?? "").includes(exception.reportedUnder)
+    exception.reportedUnder !== "" &&
+    diagnostic.code === exception.code &&
+    (diagnostic.owner ?? "").includes(exception.reportedUnder)
   );
 }
 
@@ -55,28 +60,31 @@ export function isUpstream(diagnostic: SolidDiagnostic): boolean {
   return upstreamExceptions.some((exception) => isCoveredBy(exception, diagnostic));
 }
 
-function isDiagnosticCode(word: string): word is DiagnosticCode {
-  return /^[A-Z][A-Z0-9_]*$/.test(word);
-}
-
 function isFooter(message: string): boolean {
   return footerLines.some((footer) => message.startsWith(footer));
 }
 
-type OpenReport = { code: DiagnosticCode; message: string; owner?: string };
+type OpenReport = { code: string; message: string; owner?: string };
 
 export function problemsPrinted(text: string): PrintedProblems {
   const diagnostics: OpenReport[] = [];
   const otherLines: string[] = [];
   let open: OpenReport | undefined;
   for (const line of text.split("\n")) {
-    const [, word = "", message = ""] = printedReport.exec(line) ?? [];
-    const owner = ownerLine.exec(line)?.[1];
-    if (isDiagnosticCode(word) && isFooter(message)) continue;
-    if (isDiagnosticCode(word)) {
-      open = { code: word, message };
-      diagnostics.push(open);
-    } else if (open !== undefined && owner !== undefined && open.owner === undefined) {
+    const report = printedReport.exec(line);
+    if (report !== null) {
+      const [, code = "", message = ""] = report;
+      if (isFooter(message)) {
+        open = undefined;
+      } else {
+        open = { code, message };
+        diagnostics.push(open);
+      }
+      continue;
+    }
+    const owner =
+      open !== undefined && open.owner === undefined ? ownerLine.exec(line)?.[1] : undefined;
+    if (open !== undefined && owner !== undefined) {
       open.owner = owner;
     } else if (open === undefined || !continuedLine.test(line)) {
       open = undefined;
@@ -86,37 +94,30 @@ export function problemsPrinted(text: string): PrintedProblems {
   return { diagnostics, otherLines };
 }
 
-export function diagnosticsPrinted(text: string): SolidDiagnostic[] {
-  return [...problemsPrinted(text).diagnostics];
-}
-
-export function captureSolidDiagnostics(): () => SolidDiagnostic[] {
-  const capture = OBSERVE?.diagnostics.capture();
-  return () =>
-    (capture?.stop() ?? [])
-      .filter((event) => !allowedOnPurpose.has(event))
-      .map(solidDiagnosticOf)
-      .filter((diagnostic) => !isUpstream(diagnostic));
-}
-
-export function openSolidDiagnosticsGate(): SolidDiagnosticsGate {
-  const raised = captureSolidDiagnostics();
-  return { finish: raised };
-}
-
-export function openSolidDiagnosticsGateForOneTest(): SolidDiagnosticsGate {
-  if (testGate.open) {
+export function openSolidDiagnosticsGate(options?: {
+  readonly exclusive?: boolean;
+}): SolidDiagnosticsGate {
+  const exclusive = options?.exclusive === true;
+  if (exclusive && testGate.open) {
     throw new Error(
       "A test opened Solid's diagnostics gate while another test's gate was open. The gate reads one process-wide channel, so tests under it run one at a time.",
     );
   }
-  const gate = openSolidDiagnosticsGate();
-  testGate.open = true;
+  const capture = OBSERVE?.diagnostics.capture();
+  if (exclusive) testGate.open = true;
+  let closed = false;
+  const finish = (): SolidDiagnostic[] => {
+    if (closed) return [];
+    closed = true;
+    if (exclusive) testGate.open = false;
+    return (capture?.stop() ?? [])
+      .filter((event) => !allowedOnPurpose.has(event))
+      .map(solidDiagnosticOf)
+      .filter((diagnostic) => !isUpstream(diagnostic));
+  };
   return {
-    finish: () => {
-      testGate.open = false;
-      return gate.finish();
-    },
+    finish,
+    finishDescribed: () => finish().map(describeSolidDiagnostic),
   };
 }
 
@@ -126,7 +127,19 @@ function allowedAmong(code: DiagnosticCode, events: readonly DiagnosticEvent[]):
   return expected.length > 0;
 }
 
-export function expectingSolidDiagnostic<T>(code: DiagnosticCode, raise: () => T): T {
+function isThenable(value: unknown): boolean {
+  return (
+    value !== null &&
+    (typeof value === "object" || typeof value === "function") &&
+    "then" in value &&
+    typeof Reflect.get(value, "then") === "function"
+  );
+}
+
+export function expectingSolidDiagnostic<T>(
+  code: DiagnosticCode,
+  raise: () => T extends PromiseLike<unknown> ? never : T,
+): T {
   if (!testGate.open) {
     throw new Error(
       `expectingSolidDiagnostic("${code}") was called while no test held Solid's diagnostics gate, so nothing would check what it allows.`,
@@ -140,6 +153,12 @@ export function expectingSolidDiagnostic<T>(code: DiagnosticCode, raise: () => T
   } catch (error) {
     stop();
     throw error;
+  }
+  if (isThenable(returned)) {
+    stop();
+    throw new Error(
+      `expectingSolidDiagnostic("${code}") only wraps synchronous code; an async callback would close its capture before work after await runs.`,
+    );
   }
   if (!stop()) {
     throw new Error(

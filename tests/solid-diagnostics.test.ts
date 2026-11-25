@@ -1,8 +1,11 @@
+import { createComponent, renderToString } from "@solidjs/web";
+import { createSignal, Errored } from "solid-js";
 import { beforeAll, expect, test } from "vite-plus/test";
 import {
   describeSolidDiagnostic,
   expectingSolidDiagnostic,
   isCoveredBy,
+  openSolidDiagnosticsGate,
   problemsPrinted,
 } from "#/tests/support/solid-diagnostics.ts";
 
@@ -16,20 +19,21 @@ beforeAll(() => {
   }
 });
 
-test("a report printed by Solid's development build is read with its owner, apart from the lines around it, and a line of the same code that is not one of Solid's footers starts a new report", () => {
+test("a report printed by Solid's development build is read with its owner, apart from the lines around it, a line of the same code that is not one of Solid's footers starts a new report, and an indented line after a footer stays in otherLines", () => {
   const printed = [
     "10:09:33 PM [vite+] (ssr) connected.",
     "[SERVER_WRITE] Writing a signal on the server is deprecated.",
     "  in <App> › <Grid.Col>",
     "  at ../../packages/core/dist/GridCol.jsx:68:7",
     "[SERVER_WRITE] what it means and how to fix it: https://docs.solidjs.com",
+    "  indented detail after footer",
     "[SERVER_WRITE] agent repair guide: node_modules/solid-js/skills/reactivity-diagnostics/SKILL.md",
     "[SERVER_WRITE] Writing a store on the server is deprecated.",
     "[HOT_SCOPE_RERUNS] deeper evidence: import { attribution } from solid-js/attribution",
+    "  ➜  Network: use --host to expose",
     "Error: [REACTIVITY_HALTED] The reactive system halted.",
     "    at flush (solid.js:10:1)",
     "warning: probe",
-    "  ➜  Network: use --host to expose",
   ].join("\n");
 
   expect(problemsPrinted(printed)).toEqual({
@@ -44,13 +48,14 @@ test("a report printed by Solid's development build is read with its owner, apar
     ],
     otherLines: [
       "10:09:33 PM [vite+] (ssr) connected.",
-      "warning: probe",
+      "  indented detail after footer",
       "  ➜  Network: use --host to expose",
+      "warning: probe",
     ],
   });
 });
 
-test("an upstream exception covers a diagnostic of its code reported under the owner it names, and no other", () => {
+test("an upstream exception covers a diagnostic of its code reported under the non-empty owner it names, and no other", () => {
   const exception = {
     code: "SERVER_WRITE",
     reportedUnder: "<Grid.Col>",
@@ -67,6 +72,12 @@ test("an upstream exception covers a diagnostic of its code reported under the o
   expect(
     isCoveredBy(exception, { code: "NO_OWNER_EFFECT", message: "m", owner: "<Grid.Col>" }),
   ).toBe(false);
+  expect(
+    isCoveredBy(
+      { ...exception, reportedUnder: "" },
+      { code: "SERVER_WRITE", message: "m", owner: "<Grid.Col>" },
+    ),
+  ).toBe(false);
 });
 
 test("a diagnostic is described by its code, the first line of its message and its owner", () => {
@@ -75,9 +86,34 @@ test("a diagnostic is described by its code, the first line of its message and i
   ).toBe("SERVER_WRITE: Written. (in <Box>)");
 });
 
-test("an allowance made while no test holds the gate throws, and one whose code raised nothing fails", () => {
+test("an allowance made while no test holds the gate throws, one whose code raised nothing fails, and an async callback is refused", () => {
   expect(String(outsideATest.thrown)).toContain("while no test held Solid's diagnostics gate");
   expect(() => expectingSolidDiagnostic("SERVER_WRITE", () => undefined)).toThrow(
     "raised no SERVER_WRITE",
   );
+  expect(() =>
+    expectingSolidDiagnostic("SERVER_WRITE", (() => Promise.resolve()) as unknown as () => void),
+  ).toThrow("synchronous");
+});
+
+test("expectingSolidDiagnostic allows only the code it names inside its callback, leaving other codes reported to the outer gate, and finish is idempotent", () => {
+  const { captured, secondFinish } = expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () => {
+    const outer = openSolidDiagnosticsGate();
+    expectingSolidDiagnostic("SERVER_WRITE", () => {
+      renderToString(() => {
+        const [, setWritten] = createSignal(false);
+        setWritten(true);
+        return createComponent(Errored, {
+          fallback: () => "fallback",
+          get children(): string {
+            throw new Error("contained");
+          },
+        });
+      });
+    });
+    return { captured: outer.finish(), secondFinish: outer.finish() };
+  });
+
+  expect(captured.map(({ code }) => code)).toEqual(["SSR_RENDER_ERROR_CONTAINED"]);
+  expect(secondFinish).toEqual([]);
 });

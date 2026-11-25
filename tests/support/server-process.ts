@@ -59,6 +59,7 @@ export async function startServer({
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,
   });
+  const clean = (text: string) => stripVTControlCharacters(text.replace(/\r$/, ""));
   const lines: PrintedLine[] = [];
   const unfinished: Record<PrintedStream, string> = { stdout: "", stderr: "" };
   const streams = [
@@ -70,22 +71,28 @@ export async function startServer({
     source.on("data", (chunk: string) => {
       const pieces = `${unfinished[stream]}${chunk}`.split("\n");
       unfinished[stream] = pieces.pop() ?? "";
-      lines.push(...pieces.map((text) => ({ stream, text })));
+      for (const piece of pieces) {
+        const text = clean(piece);
+        if (text !== "") lines.push({ stream, text });
+      }
     });
   }
-  const printedLines = (): PrintedLine[] =>
-    [...lines, ...streams.map(([stream]) => ({ stream, text: unfinished[stream] }))]
-      .map(({ stream, text }) => ({ stream, text: stripVTControlCharacters(text) }))
-      .filter(({ text }) => text !== "");
+  const printedLines = (): PrintedLine[] => {
+    const trailing = streams.flatMap(([stream]) => {
+      const text = clean(unfinished[stream]);
+      return text === "" ? [] : [{ stream, text }];
+    });
+    return [...lines, ...trailing];
+  };
   const printed = () =>
     printedLines()
       .map(({ text }) => text)
       .join("\n");
   const shown = () => `\nWhat the server printed:\n${printed().slice(-outputShown) || "nothing"}`;
-  const exited = new Promise<void>((resolve) => running.once("exit", () => resolve()));
+  const closed = new Promise<void>((resolve) => running.once("close", () => resolve()));
   const stop = async () => {
     running.stdin.end();
-    await exited;
+    await closed;
   };
   const failed = async (problem: string): Promise<never> => {
     await stop();

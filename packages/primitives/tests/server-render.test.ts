@@ -1,5 +1,10 @@
 import { expect, test } from "vite-plus/test";
-import { type Primitive, serialized, serverCases, startCase } from "#/fixtures/server-cases.ts";
+import {
+  type Primitive,
+  serialized,
+  serverPrimitives,
+  startCase,
+} from "#/fixtures/server-cases.ts";
 import { library } from "#/tests/built-library.ts";
 import {
   browserResourcesReadDuring,
@@ -9,11 +14,7 @@ import {
 
 const primitivePrefix = "create";
 
-function isPrimitive(name: string): name is Primitive {
-  return Object.hasOwn(serverCases, name);
-}
-
-const primitives = Object.keys(serverCases).filter(isPrimitive).sort();
+const primitives = serverPrimitives;
 
 function renderOnTheServer(name: Primitive) {
   const rendered = {

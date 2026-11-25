@@ -2,7 +2,6 @@ import type { AfterEach, BeforeEach } from "storybook/internal/types";
 import type { Preview, SolidRenderer } from "storybook-solidjs-vite";
 import { isRecord, wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
 import {
-  describeSolidDiagnostic,
   openSolidDiagnosticsGate,
   type SolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
@@ -94,13 +93,13 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
 
 const afterEachStory: AfterEach<SolidRenderer> = (context) => {
   playReturned();
+  const raised = diagnostics.gate?.finishDescribed() ?? [];
+  diagnostics.gate = undefined;
   if (context.reporting.reports.length > 0) {
     throw new Error(
       `The preview's afterEach tells a failed play from a failed gate, so it must run first after the play function, but ${context.reporting.reports.map(({ type }) => type).join(", ")} reported before it. A story or a meta that writes afterEach, or an addon whose afterEach the preview's no longer comes before, ran first.`,
     );
   }
-  const raised = (diagnostics.gate?.finish() ?? []).map(describeSolidDiagnostic);
-  diagnostics.gate = undefined;
   refuseAnyWayOut("while it ran", [...waysOutOfTheGate(context), ...unscannedIn(context)]);
   if (raised.length > 0) {
     throw new Error(`The story raised a Solid development diagnostic:\n${raised.join("\n")}`);

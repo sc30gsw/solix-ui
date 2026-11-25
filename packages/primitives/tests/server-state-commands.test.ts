@@ -1,17 +1,15 @@
 import { expect, test } from "vite-plus/test";
-import { type Primitive, serverCases, startCase } from "#/fixtures/server-cases.ts";
+import {
+  type Primitive,
+  serverCases,
+  serverPrimitives,
+  startCase,
+} from "#/fixtures/server-cases.ts";
 import { library } from "#/tests/built-library.ts";
 import { browserResourcesReadDuring, renderedOnTheServer } from "#/tests/support/server-harness.ts";
 import { expectingSolidDiagnostic } from "../../../tests/support/solid-diagnostics.ts";
 
-function isPrimitive(name: string): name is Primitive {
-  return Object.hasOwn(serverCases, name);
-}
-
-const withStateCommands = Object.keys(serverCases)
-  .filter(isPrimitive)
-  .filter((name) => serverCases[name].has.stateCommands)
-  .sort();
+const withStateCommands = serverPrimitives.filter((name) => serverCases[name].has.stateCommands);
 
 function browserResourcesReadByItsStateCommand(name: Primitive): string[] {
   return browserResourcesReadDuring(() => {

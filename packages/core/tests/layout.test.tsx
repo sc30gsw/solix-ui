@@ -1,6 +1,6 @@
 import type { CompiledStyles } from "@stylexjs/stylex";
 import { createComponent, renderToString } from "@solidjs/web";
-import { createSignal } from "solid-js";
+import { createSignal, Errored } from "solid-js";
 import { expect, expectTypeOf, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "#/build-pipeline.mjs";
 import type {
@@ -890,6 +890,71 @@ test("a Grid with container queries and one with media queries, each with two li
   expect(rulesOf(container).join("").split(flexBasis)).toHaveLength(2);
   expect(media).toContain("Second");
   expect(rulesOf(media)).toEqual([]);
+});
+
+test("a container Grid.Col whose children throw inside Errored leaves no stale entry to suppress a later healthy column's rules", () => {
+  const flexBasis = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
+  function Throws(): never {
+    throw new Error("broken child");
+  }
+  const html = expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () =>
+    renderToString(() =>
+      createComponent(library.Grid, {
+        type: "container",
+        get children() {
+          return [
+            createComponent(Errored, {
+              fallback: () => "Fallback",
+              get children() {
+                return createComponent(library.GridCol, {
+                  span: { base: 12, md: 6 },
+                  get children() {
+                    return createComponent(Throws, {});
+                  },
+                });
+              },
+            }),
+            createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Healthy" }),
+          ];
+        },
+      }),
+    ),
+  );
+
+  expect(html).toContain("Fallback");
+  expect(html).toContain("Healthy");
+  expect(rulesOf(html).join("")).toContain(flexBasis);
+});
+
+test("a container Grid.Col whose span throws inside Errored neither leaks its error to a later sibling nor suppresses its rules", () => {
+  const flexBasis = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
+  const html = expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () =>
+    renderToString(() =>
+      createComponent(library.Grid, {
+        type: "container",
+        get children() {
+          return [
+            createComponent(Errored, {
+              fallback: () => "Fallback",
+              get children() {
+                return createComponent(library.GridCol, {
+                  get span(): never {
+                    throw new Error("broken span");
+                  },
+                  children: "First",
+                });
+              },
+            }),
+            createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Healthy" }),
+          ];
+        },
+      }),
+    ),
+  );
+
+  expect(html).toContain("Fallback");
+  expect(html).toContain("Healthy");
+  expect(rulesOf(html).join("")).toContain(flexBasis);
 });
 
 test("a signal written in a server render at the end of this file still raises SERVER_WRITE, so no render before it used up the one report Solid makes of it in this process", () => {

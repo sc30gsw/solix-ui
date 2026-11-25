@@ -1,4 +1,5 @@
 import { Box, Grid } from "@solix/core";
+import { createMemo, Loading } from "solid-js";
 import { refOf } from "#/src/ref-of.ts";
 
 const containerBreakpoints = {
@@ -8,6 +9,14 @@ const containerBreakpoints = {
   lg: "25em",
   xl: "30em",
 } as const;
+
+function StreamedColumn() {
+  const span = createMemo(async () => {
+    await Promise.resolve();
+    return 6;
+  });
+  return <Grid.Col span={{ base: 12, md: span() }}>Streamed half</Grid.Col>;
+}
 
 export function GridSection() {
   return (
@@ -47,6 +56,14 @@ export function GridSection() {
         <Grid type="container" breakpoints={containerBreakpoints}>
           <Grid.Col span={{ base: 12, md: 6 }}>Half of a wide container</Grid.Col>
           <Grid.Col span={{ base: 12, md: 6 }}>Cell</Grid.Col>
+        </Grid>
+      </Box>
+      <Box w={480} mt="md">
+        <Grid type="container" breakpoints={containerBreakpoints}>
+          <Loading fallback={<Grid.Col span={12}>Waiting for streamed half</Grid.Col>}>
+            <StreamedColumn />
+          </Loading>
+          <Grid.Col span={{ base: 12, md: 6 }}>After a streamed column</Grid.Col>
         </Grid>
       </Box>
       <Box w={240} mt="md">

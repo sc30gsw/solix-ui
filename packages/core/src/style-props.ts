@@ -1,5 +1,14 @@
-import type { JSX } from "@solidjs/web";
-import { createMemo, createSignal, onSettled } from "solid-js";
+import { getHydrationWriter, type JSX, takeHydrationValue } from "@solidjs/web";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  isHydratable,
+  isHydrating,
+  onCleanup,
+  onSettled,
+} from "solid-js";
 import {
   baseKey,
   type Breakpoint,
@@ -95,10 +104,6 @@ type DefaultValue<Row extends VariableRow> = Row extends {
     ? number | (string & {})
     : string | number;
 
-/**
- * A prop that sets the variable `Name` of a component's `Of`, keyed by breakpoint when its row is
- * responsive.
- */
 export type VariableProp<
   Of extends Variables,
   Name extends keyof Of["rows"],
@@ -411,77 +416,144 @@ function rulesFor(queries: ContainerQueries, used: readonly Used[]): string | un
   return `${layerOrder}@layer ${libraryCascadeLayer}.${containerQueryLayer}{${[...registrations, ...readers].join("")}}`;
 }
 
+function keyOf([name, slot]: Used): string {
+  return `${name} ${slot}`;
+}
+
+function sameStrings(before: readonly string[], after: readonly string[]): boolean {
+  return before.length === after.length && before.every((key, index) => key === after[index]);
+}
+
+function sameUsed(before: readonly Used[], after: readonly Used[]): boolean {
+  return (
+    before.length === after.length &&
+    before.every(([name, slot], index) => name === after[index]?.[0] && slot === after[index]?.[1])
+  );
+}
+
 function uniqueUsed(used: readonly Used[]): Used[] {
-  const seen = new Map(used.map((pair) => [pair.join(" "), pair]));
+  const seen = new Map(used.map((pair) => [keyOf(pair), pair]));
   return [...seen.values()].sort(([before, beforeSlot], [after, afterSlot]) =>
     beforeSlot === afterSlot ? before.localeCompare(after) : beforeSlot - afterSlot,
   );
 }
 
-type Member = { readonly placed: () => readonly string[] };
+const queryMemberPrefix = "solix:qc:";
+
+type Member = { readonly id: string; keys: readonly string[] };
 
 type Membership = {
   readonly members: Member[];
-  readonly departures: () => number;
-  readonly depart: (member: Member) => void;
+  readonly written: Map<string, readonly string[]>;
+  readonly version: () => number;
+  readonly remove: (member: Member) => void;
+  readonly notify: () => void;
 };
-
-function keyOf([name, slot]: Used): string {
-  return `${name} ${slot}`;
-}
 
 function createMembership(): Membership {
   const members: Member[] = [];
-  const [departures, setDepartures] = createSignal(0);
+  const written = new Map<string, readonly string[]>();
+  const [version, setVersion] = createSignal(0);
   return {
     members,
-    departures,
-    depart(member) {
-      members.splice(members.indexOf(member), 1);
-      setDepartures((count) => count + 1);
+    written,
+    version,
+    remove(member) {
+      const index = members.indexOf(member);
+      if (index !== -1) members.splice(index, 1);
+    },
+    notify() {
+      setVersion((count) => count + 1);
     },
   };
 }
 
-function joinInDocumentOrder(membership: Membership, used: () => readonly Used[]): Member {
-  const member: Member = {
-    placed: createMemo(() => uniqueUsed(used()).map(keyOf), { loadingValue: [] }),
-  };
-  membership.members.push(member);
-  onSettled(() => () => membership.depart(member));
-  return member;
+function isStringArray(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
 }
 
-function placedBefore(membership: Membership, own: Member | undefined): Set<string> {
-  membership.departures();
-  const { members } = membership;
-  const before = own === undefined ? [] : members.slice(0, members.indexOf(own));
-  return new Set(before.flatMap((member) => member.placed()));
+function placedBefore(membership: Membership, own: Member, streaming: boolean): Set<string> {
+  membership.version();
+  const index = membership.members.indexOf(own);
+  const before = index <= 0 ? [] : membership.members.slice(0, index);
+  const visible = streaming ? before.filter((member) => member.id.length <= own.id.length) : before;
+  return new Set(visible.flatMap((member) => member.keys));
 }
 
-function queryContainer(
+function rulesPinnedTo(
+  current: ContainerQueries,
+  ownPairs: readonly Used[],
+  own: Member,
+  keys: readonly string[],
+): string | undefined {
+  const allowed = new Set(keys);
+  const chosen = ownPairs.filter((pair) => allowed.has(keyOf(pair)));
+  own.keys = chosen.map(keyOf);
+  return rulesFor(current, chosen);
+}
+
+function memberContainer(
   queries: () => ContainerQueries | undefined,
   membership: Membership,
-  joins: boolean,
 ): QueryContainer {
-  let reported: () => readonly Used[] = () => [];
+  const id = createUniqueId();
+  const writer = getHydrationWriter();
+  let ownUsed: (() => readonly Used[]) | undefined;
   let own: Member | undefined;
+  let hydratedKeys: readonly string[] | undefined;
+  if (isHydrating()) {
+    const taken = takeHydrationValue(`${queryMemberPrefix}${id}`);
+    if (taken?.status === "resolved" && isStringArray(taken.value)) hydratedKeys = taken.value;
+  }
   return {
     queries,
     report(used) {
-      reported = used;
-      if (joins) own = joinInDocumentOrder(membership, used);
+      if (own !== undefined) return;
+      const placed = createMemo(() => uniqueUsed(used()), { equals: sameUsed });
+      const member: Member = { id, keys: [] };
+      ownUsed = placed;
+      own = member;
+      membership.members.push(member);
+      onCleanup(() => membership.remove(member));
+      createEffect(
+        () => placed().map(keyOf),
+        (next, prev) => {
+          if (prev === undefined) return;
+          if (!sameStrings(member.keys, next)) {
+            member.keys = next;
+            membership.notify();
+          }
+        },
+      );
+      onSettled(() => () => {
+        membership.remove(member);
+        membership.notify();
+      });
     },
     rules() {
       const current = queries();
-      if (current === undefined) return undefined;
-      const before = placedBefore(membership, own);
-      return rulesFor(
-        current,
-        uniqueUsed(reported()).filter((pair) => !before.has(keyOf(pair))),
-      );
+      if (current === undefined || ownUsed === undefined || own === undefined) return undefined;
+      const ownPairs = ownUsed();
+      if (hydratedKeys !== undefined) {
+        membership.version();
+        const keys = hydratedKeys;
+        hydratedKeys = undefined;
+        return rulesPinnedTo(current, ownPairs, own, keys);
+      }
+      const pinned = membership.written.get(id);
+      if (pinned !== undefined) return rulesPinnedTo(current, ownPairs, own, pinned);
+      const streaming = writer?.async === true;
+      const before = placedBefore(membership, own, streaming);
+      const missing = ownPairs.filter((pair) => !before.has(keyOf(pair)));
+      own.keys = ownPairs.map(keyOf);
+      if (streaming && isHydratable()) {
+        const emitted = missing.map(keyOf);
+        membership.written.set(id, emitted);
+        writer.write(`${queryMemberPrefix}${id}`, emitted);
+      }
+      return rulesFor(current, missing);
     },
-    member: () => queryContainer(queries, membership, true),
+    member: () => memberContainer(queries, membership),
   };
 }
 
@@ -489,21 +561,34 @@ export function createQueryContainer(
   scope: string,
   widths: () => readonly (readonly [key: string, width: string])[] | undefined,
 ): QueryContainer {
-  return queryContainer(
-    () => {
-      const given = widths();
-      if (given === undefined) return undefined;
-      return {
-        scope: scope.replace(characterOutsideAClassName, "_"),
-        widths: given
-          .flatMap(([key, width]): [string, string][] => {
-            const parsed = widthOf(width);
-            return parsed ? [[key, `${parsed.amount}${parsed.unit}`]] : [];
-          })
-          .toSorted(([, narrower], [, wider]) => pixelsOf(narrower) - pixelsOf(wider)),
-      };
+  const queries = () => {
+    const given = widths();
+    if (given === undefined) return undefined;
+    return {
+      scope: scope.replace(characterOutsideAClassName, "_"),
+      widths: given
+        .flatMap(([key, width]): [string, string][] => {
+          const parsed = widthOf(width);
+          return parsed ? [[key, `${parsed.amount}${parsed.unit}`]] : [];
+        })
+        .toSorted(([, narrower], [, wider]) => pixelsOf(narrower) - pixelsOf(wider)),
+    };
+  };
+  let reported: () => readonly Used[] = () => [];
+  let membership: Membership | undefined;
+  return {
+    queries,
+    report(used) {
+      reported = used;
     },
-    createMembership(),
-    false,
-  );
+    rules() {
+      const current = queries();
+      if (current === undefined) return undefined;
+      return rulesFor(current, uniqueUsed(reported()));
+    },
+    member() {
+      membership ??= createMembership();
+      return memberContainer(queries, membership);
+    },
+  };
 }

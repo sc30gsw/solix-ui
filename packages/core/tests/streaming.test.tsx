@@ -115,9 +115,50 @@ test("a column after one that waits arrives in the shell with every rule it plac
       },
     }),
   );
-  const [shell = ""] = chunks;
+  const [shell = "", ...rest] = chunks;
+  const later = rest.join("");
 
   expect(shell).toContain(fallback);
   expect(shell).toContain("Second");
   expect(shell).toContain(".sx-col-flex-basis-c0-2{");
+  expect(shell).toContain("solix:qc:");
+  expect(later).toContain("Half");
+  expect(later).toContain("solix:qc:");
+  expect(later).toContain(".sx-col-offset-c0-2{");
+  expect(later).not.toContain(".sx-col-flex-basis-c0-2{");
+});
+
+test("a synchronous column sharing a Loading boundary with a waiting column keeps the rules it recorded when the boundary retries", async () => {
+  const chunks = await chunksFrom(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      breakpoints,
+      get children() {
+        return [
+          createComponent(Loading, {
+            fallback,
+            get children() {
+              return [
+                createComponent(library.GridCol, {
+                  span: { base: 12, md: 6 },
+                  children: "Beside async",
+                }),
+                createComponent(AsyncColumn, {}),
+              ];
+            },
+          }),
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Second" }),
+        ];
+      },
+    }),
+  );
+  const [shell = "", ...rest] = chunks;
+  const later = rest.join("");
+
+  expect(shell).toContain("Second");
+  expect(shell).toContain(".sx-col-flex-basis-c0-2{");
+  expect(later).toContain("Beside async");
+  expect(later).toContain("Half");
+  expect(later).toContain(".sx-col-flex-basis-c0-2{");
+  expect(later).toContain(".sx-col-offset-c0-2{");
 });
