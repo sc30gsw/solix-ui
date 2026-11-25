@@ -1,4 +1,6 @@
-import { Grid } from "@solix/core";
+import { Box, Button, Grid } from "@solix/core";
+import { createSignal, Show } from "solid-js";
+import { expect, userEvent, waitFor } from "storybook/test";
 import { argTypesOf } from "virtual:story-controls";
 import { everyValueOf } from "#/every-value.tsx";
 import type { ComponentMeta, ComponentStory } from "#/story-meta.ts";
@@ -35,6 +37,63 @@ export const OnItsContainerWidth: Story = {
   args: {
     type: "container",
     breakpoints: { xs: "20em", sm: "30em", md: "40em", lg: "50em", xl: "60em" },
+  },
+};
+
+export const DynamicContainerColumns: Story = {
+  args: {
+    type: "container",
+    breakpoints: { xs: "10em", sm: "15em", md: "20em", lg: "25em", xl: "30em" },
+  },
+  render: (args) => {
+    const [firstResponsive, setFirstResponsive] = createSignal(true);
+    const [showFirst, setShowFirst] = createSignal(true);
+    return (
+      <Box w={480}>
+        <Button onClick={() => setFirstResponsive((current) => !current)}>
+          Toggle first md span
+        </Button>
+        <Button onClick={() => setShowFirst((current) => !current)}>Toggle first column</Button>
+        <Grid {...args}>
+          <Show when={showFirst()}>
+            <Grid.Col span={firstResponsive() ? { base: 12, md: 6 } : 12}>First dynamic</Grid.Col>
+          </Show>
+          <Grid.Col span={{ base: 12, md: 6 }}>Second dynamic</Grid.Col>
+        </Grid>
+      </Box>
+    );
+  },
+  play: async ({ canvas }) => {
+    const first = () => canvas.getByText("First dynamic");
+    const second = () => canvas.getByText("Second dynamic");
+    const styleCount = () =>
+      second().closest(".solix-Grid-inner")?.querySelectorAll("style[data-solix-rules]").length;
+
+    await waitFor(async () => {
+      await expect(second().getBoundingClientRect().width).toBeLessThan(300);
+      await expect(styleCount()).toBe(1);
+    });
+
+    await userEvent.click(canvas.getByRole("button", { name: "Toggle first md span" }));
+    await waitFor(async () => {
+      await expect(first().getBoundingClientRect().width).toBeGreaterThan(400);
+      await expect(second().getBoundingClientRect().width).toBeLessThan(300);
+      await expect(styleCount()).toBe(1);
+    });
+
+    await userEvent.click(canvas.getByRole("button", { name: "Toggle first md span" }));
+    await waitFor(async () => {
+      await expect(first().getBoundingClientRect().width).toBeLessThan(300);
+      await expect(second().getBoundingClientRect().width).toBeLessThan(300);
+      await expect(styleCount()).toBe(1);
+    });
+
+    await userEvent.click(canvas.getByRole("button", { name: "Toggle first column" }));
+    await waitFor(async () => {
+      await expect(canvas.queryByText("First dynamic")).toBeNull();
+      await expect(second().getBoundingClientRect().width).toBeLessThan(300);
+      await expect(styleCount()).toBe(1);
+    });
   },
 };
 

@@ -18,7 +18,7 @@ import type { createParts, PartsOptions } from "#/src/parts.ts";
 import type { spaceVariables } from "#/src/Space.variables.ts";
 import type { Variables } from "#/src/variables.ts";
 import { breakpointWidths } from "#/src/style-prop-table.ts";
-import type { ContainerWidth } from "#/src/style-props.ts";
+import type { ContainerWidth } from "#/src/query-container.ts";
 import { isContainerWidth, library } from "#/tests/built-library.ts";
 import { expectingSolidDiagnostic } from "../../../tests/support/solid-diagnostics.ts";
 import { render } from "#/tests/fixtures.ts";
@@ -773,6 +773,8 @@ test("GridCol: in a grid with container queries and no breakpoints, keys its val
   expect(html).toContain("solix-Grid-container");
 });
 
+const mdFlexBasisRule = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
+
 test("a container grid of 12 columns writes each rule its columns share once, in the first column that places it, and a later column writes only what no earlier one wrote", () => {
   const span = { base: 12, md: 6 };
   const html = renderToString(() =>
@@ -787,12 +789,11 @@ test("a container grid of 12 columns writes each rule its columns share once, in
     }),
   );
   const rules = rulesOf(html);
-  const flexBasis = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
 
   expect(rules).toHaveLength(2);
-  expect(rules.join("").split(flexBasis)).toHaveLength(2);
-  expect(rules[0]).toContain(flexBasis);
-  expect(rules[1]).not.toContain(flexBasis);
+  expect(rules.join("").split(mdFlexBasisRule)).toHaveLength(2);
+  expect(rules[0]).toContain(mdFlexBasisRule);
+  expect(rules[1]).not.toContain(mdFlexBasisRule);
   expect(rules[1]).toContain(".sx-col-offset-c0-2{--col-offset:var(--sx-col-offset-c0-2)}");
 });
 
@@ -884,77 +885,67 @@ test("a Grid with container queries and one with media queries, each with two li
     });
   const container = renderToString(() => twoLikeColumns("container"));
   const media = renderToString(() => twoLikeColumns("media"));
-  const flexBasis = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
 
   expect(container).toContain("Second");
-  expect(rulesOf(container).join("").split(flexBasis)).toHaveLength(2);
+  expect(rulesOf(container).join("").split(mdFlexBasisRule)).toHaveLength(2);
   expect(media).toContain("Second");
   expect(rulesOf(media)).toEqual([]);
 });
 
+function renderErroredContainerGrid(
+  brokenColumn: () => ReturnType<typeof createComponent>,
+): string {
+  return expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () =>
+    renderToString(() =>
+      createComponent(library.Grid, {
+        type: "container",
+        get children() {
+          return [
+            createComponent(Errored, {
+              fallback: () => "Fallback",
+              get children() {
+                return brokenColumn();
+              },
+            }),
+            createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Healthy" }),
+          ];
+        },
+      }),
+    ),
+  );
+}
+
 test("a container Grid.Col whose children throw inside Errored leaves no stale entry to suppress a later healthy column's rules", () => {
-  const flexBasis = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
   function Throws(): never {
     throw new Error("broken child");
   }
-  const html = expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () =>
-    renderToString(() =>
-      createComponent(library.Grid, {
-        type: "container",
-        get children() {
-          return [
-            createComponent(Errored, {
-              fallback: () => "Fallback",
-              get children() {
-                return createComponent(library.GridCol, {
-                  span: { base: 12, md: 6 },
-                  get children() {
-                    return createComponent(Throws, {});
-                  },
-                });
-              },
-            }),
-            createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Healthy" }),
-          ];
-        },
-      }),
-    ),
+  const html = renderErroredContainerGrid(() =>
+    createComponent(library.GridCol, {
+      span: { base: 12, md: 6 },
+      get children() {
+        return createComponent(Throws, {});
+      },
+    }),
   );
 
   expect(html).toContain("Fallback");
   expect(html).toContain("Healthy");
-  expect(rulesOf(html).join("")).toContain(flexBasis);
+  expect(rulesOf(html).join("")).toContain(mdFlexBasisRule);
 });
 
 test("a container Grid.Col whose span throws inside Errored neither leaks its error to a later sibling nor suppresses its rules", () => {
-  const flexBasis = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
-  const html = expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () =>
-    renderToString(() =>
-      createComponent(library.Grid, {
-        type: "container",
-        get children() {
-          return [
-            createComponent(Errored, {
-              fallback: () => "Fallback",
-              get children() {
-                return createComponent(library.GridCol, {
-                  get span(): never {
-                    throw new Error("broken span");
-                  },
-                  children: "First",
-                });
-              },
-            }),
-            createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Healthy" }),
-          ];
-        },
-      }),
-    ),
+  const html = renderErroredContainerGrid(() =>
+    createComponent(library.GridCol, {
+      get span(): never {
+        throw new Error("broken span");
+      },
+      children: "First",
+    }),
   );
 
   expect(html).toContain("Fallback");
   expect(html).toContain("Healthy");
-  expect(rulesOf(html).join("")).toContain(flexBasis);
+  expect(rulesOf(html).join("")).toContain(mdFlexBasisRule);
 });
 
 test("a signal written in a server render at the end of this file still raises SERVER_WRITE, so no render before it used up the one report Solid makes of it in this process", () => {

@@ -14,8 +14,6 @@ import {
 
 const primitivePrefix = "create";
 
-const primitives = serverPrimitives;
-
 function renderOnTheServer(name: Primitive) {
   const rendered = {
     returned: undefined as unknown,
@@ -43,8 +41,8 @@ test("the build exports exactly the primitives the server cases cover", () => {
     .map(([name]) => name)
     .sort();
 
-  expect(primitives.length).toBeGreaterThan(0);
-  expect(built).toEqual(primitives);
+  expect(serverPrimitives.length).toBeGreaterThan(0);
+  expect(built).toEqual(serverPrimitives);
 });
 
 test("a primitive that returns nothing, or only functions, passes; one that returns a value fails", () => {
@@ -55,7 +53,7 @@ test("a primitive that returns nothing, or only functions, passes; one that retu
   expect(plainValuesIn([command, 1], "createFrozen")).toEqual(["createFrozen[1] is 1"]);
 });
 
-test.each(primitives)(
+test.each(serverPrimitives)(
   "%s, built and called inside a server render, reads none of the browser resources, gives its server value, keeps it when a browser command is called there and returns nothing or only functions",
   (name) => {
     const { returned, value, expected, afterBrowserCommands, touched } = renderOnTheServer(name);

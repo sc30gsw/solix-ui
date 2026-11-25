@@ -68,7 +68,10 @@ test.each(["media", "container"] as const)(
   },
 );
 
-test("a column that streams in after another writes the rules no earlier column wrote, and none that one wrote", async () => {
+const flexBasisRule = ".sx-col-flex-basis-c0-2{";
+const offsetRule = ".sx-col-offset-c0-2{";
+
+test("in a streaming render, a Grid writes one container hydration flag and each column writes its own rules", async () => {
   const chunks = await chunksFrom(() =>
     createComponent(library.Grid, {
       type: "container",
@@ -88,16 +91,56 @@ test("a column that streams in after another writes the rules no earlier column 
   );
   const [shell = "", ...rest] = chunks;
   const later = rest.join("");
-  const flexBasis = ".sx-col-flex-basis-c0-2{";
 
   expect(shell).toContain(fallback);
-  expect(shell).toContain(flexBasis);
+  expect(shell).toContain(flexBasisRule);
+  expect(shell).toContain("solix:qc:");
   expect(later).toContain("Half");
-  expect(later).toContain(".sx-col-offset-c0-2{");
-  expect(later).not.toContain(flexBasis);
+  expect(later).toContain(flexBasisRule);
+  expect(later).toContain(offsetRule);
+  expect(later).not.toContain("solix:qc:");
 });
 
-test("a column after one that waits arrives in the shell with every rule it places, since it reads no rule from a column still waiting", async () => {
+test("a responsive fallback column inside Loading does not suppress a later shell column or the resolved column", async () => {
+  const chunks = await chunksFrom(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      breakpoints,
+      get children() {
+        return [
+          createComponent(Loading, {
+            get fallback() {
+              return createComponent(library.GridCol, {
+                span: { base: 12, md: 6 },
+                children: fallback,
+              });
+            },
+            get children() {
+              return createComponent(AsyncColumn, {});
+            },
+          }),
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Shell" }),
+        ];
+      },
+    }),
+  );
+  const [shell = "", ...rest] = chunks;
+  const later = rest.join("");
+
+  expect(shell.split(flexBasisRule)).toHaveLength(3);
+  expect(shell).toContain("Shell");
+  expect(later).toContain("Half");
+  expect(later).toContain(flexBasisRule);
+  expect(later).toContain(offsetRule);
+});
+
+test("a wrapped shell column after Loading still writes its own rules in the shell", async () => {
+  function WrappedColumn() {
+    return createComponent(library.GridCol, {
+      span: { base: 12, md: 6 },
+      children: "Wrapped",
+    });
+  }
   const chunks = await chunksFrom(() =>
     createComponent(library.Grid, {
       type: "container",
@@ -110,7 +153,7 @@ test("a column after one that waits arrives in the shell with every rule it plac
               return createComponent(AsyncColumn, {});
             },
           }),
-          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Second" }),
+          createComponent(WrappedColumn, {}),
         ];
       },
     }),
@@ -118,17 +161,60 @@ test("a column after one that waits arrives in the shell with every rule it plac
   const [shell = "", ...rest] = chunks;
   const later = rest.join("");
 
-  expect(shell).toContain(fallback);
-  expect(shell).toContain("Second");
-  expect(shell).toContain(".sx-col-flex-basis-c0-2{");
-  expect(shell).toContain("solix:qc:");
+  expect(shell).toContain("Wrapped");
+  expect(shell).toContain(flexBasisRule);
   expect(later).toContain("Half");
-  expect(later).toContain("solix:qc:");
-  expect(later).toContain(".sx-col-offset-c0-2{");
-  expect(later).not.toContain(".sx-col-flex-basis-c0-2{");
+  expect(later).toContain(flexBasisRule);
+  expect(later).toContain(offsetRule);
 });
 
-test("a synchronous column sharing a Loading boundary with a waiting column keeps the rules it recorded when the boundary retries", async () => {
+test("two sibling Loading boundaries each stream their column with its own rules", async () => {
+  function SecondAsyncColumn() {
+    const span = createMemo(async () => {
+      await new Promise((resolve) => setTimeout(resolve, columnDelay + 40));
+      return 4;
+    });
+    return createComponent(library.GridCol, {
+      get span() {
+        return { base: 12, md: span() };
+      },
+      children: "Third",
+    });
+  }
+  const chunks = await chunksFrom(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      breakpoints,
+      get children() {
+        return [
+          createComponent(Loading, {
+            fallback: "First fallback",
+            get children() {
+              return createComponent(AsyncColumn, {});
+            },
+          }),
+          createComponent(Loading, {
+            fallback: "Second fallback",
+            get children() {
+              return createComponent(SecondAsyncColumn, {});
+            },
+          }),
+        ];
+      },
+    }),
+  );
+  const [shell = "", ...rest] = chunks;
+  const later = rest.join("");
+
+  expect(shell).toContain("First fallback");
+  expect(shell).toContain("Second fallback");
+  expect(later).toContain("Half");
+  expect(later).toContain("Third");
+  expect(later.split(flexBasisRule)).toHaveLength(3);
+  expect(later).toContain(offsetRule);
+});
+
+test("a synchronous column sharing a Loading boundary with a waiting column keeps its rules when the boundary retries", async () => {
   const chunks = await chunksFrom(() =>
     createComponent(library.Grid, {
       type: "container",
@@ -156,9 +242,9 @@ test("a synchronous column sharing a Loading boundary with a waiting column keep
   const later = rest.join("");
 
   expect(shell).toContain("Second");
-  expect(shell).toContain(".sx-col-flex-basis-c0-2{");
+  expect(shell).toContain(flexBasisRule);
   expect(later).toContain("Beside async");
   expect(later).toContain("Half");
-  expect(later).toContain(".sx-col-flex-basis-c0-2{");
-  expect(later).toContain(".sx-col-offset-c0-2{");
+  expect(later.split(flexBasisRule)).toHaveLength(3);
+  expect(later).toContain(offsetRule);
 });

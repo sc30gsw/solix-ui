@@ -94,6 +94,10 @@ export function problemsPrinted(text: string): PrintedProblems {
   return { diagnostics, otherLines };
 }
 
+export function unexpectedDiagnostics(diagnostics: readonly SolidDiagnostic[]): string[] {
+  return diagnostics.filter((diagnostic) => !isUpstream(diagnostic)).map(describeSolidDiagnostic);
+}
+
 export function openSolidDiagnosticsGate(options?: {
   readonly exclusive?: boolean;
 }): SolidDiagnosticsGate {
@@ -155,7 +159,7 @@ export function expectingSolidDiagnostic<T>(
     throw error;
   }
   if (isThenable(returned)) {
-    stop();
+    capture?.stop();
     throw new Error(
       `expectingSolidDiagnostic("${code}") only wraps synchronous code; an async callback would close its capture before work after await runs.`,
     );

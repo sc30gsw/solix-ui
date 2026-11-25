@@ -59,7 +59,7 @@ export async function startServer({
     stdio: ["pipe", "pipe", "pipe"],
     detached: true,
   });
-  const clean = (text: string) => stripVTControlCharacters(text.replace(/\r$/, ""));
+  const clean = (text: string) => stripVTControlCharacters(text).replace(/\r$/, "");
   const lines: PrintedLine[] = [];
   const unfinished: Record<PrintedStream, string> = { stdout: "", stderr: "" };
   const streams = [

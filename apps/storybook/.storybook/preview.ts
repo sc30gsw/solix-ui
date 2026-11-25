@@ -81,8 +81,13 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
       "Solid's development build is not loaded, so no story can be checked for Solid development diagnostics.",
     );
   }
-  diagnostics.gate?.finish();
+  const prior = diagnostics.gate?.finishDescribed() ?? [];
   diagnostics.gate = openSolidDiagnosticsGate();
+  if (prior.length > 0) {
+    throw new Error(
+      `A Solid development diagnostic was raised before the story:\n${prior.join("\n")}`,
+    );
+  }
   const mount = context.mount;
   context.mount = async (...rendered) => {
     const canvas = await mount(...rendered);

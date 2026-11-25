@@ -10,11 +10,10 @@ import {
   viteOnAFreePort,
 } from "../../../tests/support/server-process";
 import {
-  describeSolidDiagnostic,
   isCoveredBy,
-  isUpstream,
   problemsPrinted,
   type SolidDiagnostic,
+  unexpectedDiagnostics,
 } from "../../../tests/support/solid-diagnostics.ts";
 import { upstreamExceptions } from "../../../tests/support/upstream-diagnostic-exceptions.ts";
 import { diagnosticProbeMessage, diagnosticProbeParameter } from "#/src/diagnostic-probe.tsx";
@@ -26,20 +25,17 @@ const { notes } = tabNames.optional;
 
 const appDirectory = join(import.meta.dirname, "..");
 
-const server: { running?: RunningServer; printed: readonly PrintedLine[] } = { printed: [] };
+const server: { running?: RunningServer } = {};
 const reportedInEveryEngine: SolidDiagnostic[] = [];
 
-function devUrl(): string {
+function runningServer(): RunningServer {
   if (server.running === undefined) throw new Error("The development server did not start.");
-  return server.running.url;
+  return server.running;
 }
 
 function unexpectedIn(text: string): string[] {
   const { diagnostics, otherLines } = problemsPrinted(text);
-  return [
-    ...diagnostics.filter((diagnostic) => !isUpstream(diagnostic)).map(describeSolidDiagnostic),
-    ...otherLines,
-  ];
+  return [...unexpectedDiagnostics(diagnostics), ...otherLines];
 }
 
 function isTheProbe(diagnostic: SolidDiagnostic): boolean {
@@ -50,11 +46,13 @@ function isTheProbe(diagnostic: SolidDiagnostic): boolean {
 }
 
 function printedAfterTheAddress(stream: PrintedLine["stream"]): string {
-  const announced = server.printed.findIndex(({ text }) => text.includes(devUrl()));
+  const running = runningServer();
+  const lines = running.printedLines();
+  const announced = lines.findIndex(({ text }) => text.includes(running.url));
   if (announced === -1) {
-    throw new Error(`The development server did not print its address ${devUrl()}.`);
+    throw new Error(`The development server did not print its address ${running.url}.`);
   }
-  return server.printed
+  return lines
     .slice(announced + 1)
     .filter((line) => line.stream === stream)
     .map(({ text }) => text)
@@ -73,11 +71,6 @@ function serverProblems() {
   };
 }
 
-async function stopAndSnapshot(running: RunningServer): Promise<void> {
-  await running.stop();
-  server.printed = running.printedLines();
-}
-
 beforeAll(async () => {
   server.running = await startServer({
     directory: appDirectory,
@@ -87,9 +80,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (server.running !== undefined && server.printed.length === 0) {
-    await stopAndSnapshot(server.running);
-  }
+  await server.running?.stop();
 });
 
 describe.each(enginesToVerify())("in %s", (engine) => {
@@ -106,7 +97,7 @@ describe.each(enginesToVerify())("in %s", (engine) => {
     });
     page.on("pageerror", (error) => reported.push(String(error)));
 
-    await opened(page, devUrl(), "hydrated");
+    await opened(page, runningServer().url, "hydrated");
     const summary = page.locator("summary").filter({ hasText: "Toggle" });
     const content = page.getByText("Hidden content");
     await summary.click();
@@ -141,13 +132,14 @@ describe.each(enginesToVerify())("in %s", (engine) => {
 
 describe("the development server", () => {
   beforeAll(async () => {
-    const page = await fetch(devUrl());
-    expect(page.ok, `fetching ${devUrl()} answered ${page.status}`).toBe(true);
+    const running = runningServer();
+    const page = await fetch(running.url);
+    expect(page.ok, `fetching ${running.url} answered ${page.status}`).toBe(true);
     await page.text();
-    const probe = await fetch(`${devUrl()}?${diagnosticProbeParameter}`);
+    const probe = await fetch(`${running.url}?${diagnosticProbeParameter}`);
     expect(probe.ok, `fetching the diagnostic probe answered ${probe.status}`).toBe(true);
     await probe.text();
-    if (server.running !== undefined) await stopAndSnapshot(server.running);
+    await running.stop();
   });
 
   test("prints its address, and the report Solid's development build makes of the diagnostic probe, so what it printed is read and its render runs that build", () => {
@@ -159,10 +151,7 @@ describe("the development server", () => {
   test("prints no error, warning or diagnostic of Solid's from our own code while it renders the page", () => {
     const { diagnostics, otherErrors } = serverProblems();
 
-    expect([
-      ...diagnostics.filter((diagnostic) => !isUpstream(diagnostic)).map(describeSolidDiagnostic),
-      ...otherErrors,
-    ]).toEqual([]);
+    expect([...unexpectedDiagnostics(diagnostics), ...otherErrors]).toEqual([]);
   });
 });
 

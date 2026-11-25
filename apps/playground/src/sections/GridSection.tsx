@@ -60,7 +60,9 @@ export function GridSection() {
       </Box>
       <Box w={480} mt="md">
         <Grid type="container" breakpoints={containerBreakpoints}>
-          <Loading fallback={<Grid.Col span={12}>Waiting for streamed half</Grid.Col>}>
+          <Loading
+            fallback={<Grid.Col span={{ base: 12, md: 6 }}>Waiting for streamed half</Grid.Col>}
+          >
             <StreamedColumn />
           </Loading>
           <Grid.Col span={{ base: 12, md: 6 }}>After a streamed column</Grid.Col>

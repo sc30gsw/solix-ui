@@ -11,10 +11,8 @@ import {
   type ContainerWidth,
   containerWidthOf,
   createQueryContainer,
-  type GapProps,
-  type GridTypeProps,
-  type VariableProp,
-} from "#/src/style-props.ts";
+} from "#/src/query-container.ts";
+import { type GapProps, type GridTypeProps, type VariableProp } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
