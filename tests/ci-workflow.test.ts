@@ -581,3 +581,19 @@ test.for(wrongFallowWorkflows)(
     expect(fallowJobProblems(workflow)).toContainEqual(expect.stringContaining(expectedProblem));
   },
 );
+
+test("gateJobProblems refuses empty env, empty checkoutWith, and checkoutWith overriding reserved checkout inputs", () => {
+  const empty: Workflow = {};
+  expect(() => gateJobProblems(empty, "fallow", fallowAudit, { env: {} })).toThrow("env");
+  expect(() => gateJobProblems(empty, "fallow", fallowAudit, { checkoutWith: {} })).toThrow(
+    "checkoutWith",
+  );
+  expect(() =>
+    gateJobProblems(empty, "fallow", fallowAudit, { checkoutWith: { "fetch-depth": 1 } }),
+  ).toThrow("fetch-depth");
+  expect(() =>
+    gateJobProblems(empty, "fallow", fallowAudit, {
+      checkoutWith: { "persist-credentials": true },
+    }),
+  ).toThrow("persist-credentials");
+});

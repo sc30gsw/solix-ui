@@ -88,16 +88,29 @@ type GateJobOptions = {
   env?: Record<string, unknown>;
 };
 
+function validateGateOptions(options?: GateJobOptions): void {
+  if (options?.env !== undefined && Object.keys(options.env).length === 0) {
+    throw new Error("gateJobProblems: env must name at least one variable, or be omitted.");
+  }
+  if (options?.checkoutWith !== undefined) {
+    const keys = Object.keys(options.checkoutWith);
+    if (keys.length === 0) {
+      throw new Error("gateJobProblems: checkoutWith must name at least one input, or be omitted.");
+    }
+    const [checkout] = setUpSteps;
+    const reserved = { ...checkout.mayAlsoSet, ...checkout.with };
+    const collided = keys.filter((key) => key in reserved);
+    if (collided.length > 0) {
+      throw new Error(
+        `gateJobProblems: checkoutWith may not override ${collided.join(", ")}, which the shared checkout step fixes.`,
+      );
+    }
+  }
+}
+
 function setUpStepsWith(options?: GateJobOptions): readonly SetUpStep[] {
   if (!options?.checkoutWith) return setUpSteps;
   const [checkout, ...rest] = setUpSteps;
-  const reserved = { ...checkout.mayAlsoSet, ...checkout.with };
-  const collided = Object.keys(options.checkoutWith).filter((key) => key in reserved);
-  if (collided.length > 0) {
-    throw new Error(
-      `gateJobProblems: checkoutWith may not override ${collided.join(", ")}, which the shared checkout step fixes.`,
-    );
-  }
   return [{ ...checkout, with: { ...checkout.with, ...options.checkoutWith } }, ...rest];
 }
 
@@ -153,9 +166,6 @@ function stepProblems(
   command: string,
   options?: GateJobOptions,
 ): string[] {
-  if (options?.env !== undefined && Object.keys(options.env).length === 0) {
-    throw new Error("gateJobProblems: env must name at least one variable, or be omitted.");
-  }
   const expectedSetUp = setUpStepsWith(options);
   const exactly = `a gate job's steps are exactly ${gateStepsFor(command, expectedSetUp, options?.env)}.`;
   const wanted = expectedSetUp.length + 1;
@@ -180,6 +190,7 @@ export function gateJobProblems(
   command: string,
   options?: GateJobOptions,
 ): string[] {
+  validateGateOptions(options);
   const job = workflow.jobs?.[name];
   if (job === undefined) return [`the workflow has no ${name} job.`];
   return [

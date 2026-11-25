@@ -21,20 +21,18 @@ function uncommittedChangesIn(root: string): string[] {
   ];
 }
 
-function resolveMergeBase(root: string, base: string): string | undefined {
+function resolveMergeBase(root: string, base: string): string {
   const resolvedBase = gitRun(["-C", root, "rev-parse", "--verify", "--quiet", `${base}^{commit}`]);
   if (resolvedBase.status !== 0) {
-    console.error(
+    throw new Error(
       `git finds no commit for ${base}: ${resolvedBase.stderr.trim() || "unknown revision"}. Fetch ${base}, or give the base revision as the argument.`,
     );
-    return undefined;
   }
   const mergeBase = gitRun(["-C", root, "merge-base", resolvedBase.stdout.trim(), "HEAD"]);
   if (mergeBase.status !== 0) {
-    console.error(
+    throw new Error(
       `git finds no merge-base of ${base} and HEAD: ${mergeBase.stderr.trim() || "they share no commit"}. Fetch ${base}, or give the base revision as the argument.`,
     );
-    return undefined;
   }
   return mergeBase.stdout.trim();
 }
@@ -58,10 +56,8 @@ function runAudit(args: readonly string[]): number {
     return 1;
   }
   const from = resolveMergeBase(root, base);
-  if (from === undefined) return 2;
-
   const changed = pathsIn(
-    gitIn(root, ["diff", "--name-only", "--no-renames", "-z", `${from}..HEAD`]),
+    gitIn(root, ["diff", "--name-only", "--no-renames", "-z", `${from}..HEAD`, "--"]),
   );
   const result = auditFallow(from, root);
   const problems = emptyChangesetProblems(result.changedFilesCount, changed);

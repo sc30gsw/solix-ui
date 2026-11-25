@@ -22,53 +22,80 @@ const configFile = ".fallowrc.json";
 const hooksDirectory = ".vite-hooks/";
 const removedByPnpm = "-";
 const defaultExportRule = "import/no-default-export";
-const scriptExtension = /\.[cm]?[jt]s$/;
+const scriptExtension = /\.[cm]?[jt]sx?$/;
 const envAssignment = /^[A-Za-z_]\w*=/;
-const nodeInlineCodeFlags = new Set(["-e", "--eval", "-p", "--print"]);
-const nodeValueFlags = new Set([
+const shellPrefixes = new Set(["exec", "!", "then", "else", "do"]);
+const nodeInlineCodeFlags = ["-e", "--eval", "-p", "--print"] as const;
+const nodePreloadFlags = ["--import", "--loader", "-r", "--require"] as const;
+const nodeOtherValueFlags = new Set([
   "-C",
   "--conditions",
   "--env-file",
   "--env-file-if-exists",
-  "--import",
-  "--loader",
-  "-r",
-  "--require",
+  "--input-type",
 ]);
+const shellCommentOrQuote = /"[^"]*"|'[^']*'|(^|[\s;|&])#.*$/g;
 
 const fallowConfig: FallowConfig = JSON.parse(
   readFileSync(join(repositoryRoot, configFile), "utf8"),
 );
 
-function nodeScriptIn(words: readonly string[]): string | undefined {
-  const commandAt = words.findIndex((word) => !envAssignment.test(word));
-  if (commandAt === -1 || words[commandAt] !== "node") return undefined;
-  for (let at = commandAt + 1; at < words.length; at += 1) {
-    const token = words[at];
-    if (token === "--") return words[at + 1];
-    if (nodeInlineCodeFlags.has(token)) return undefined;
-    if (nodeValueFlags.has(token)) at += 1;
-    else if (!token.startsWith("-")) return token;
-  }
-  return undefined;
+function matchesFlag(token: string, flags: readonly string[]): string | undefined {
+  return flags.find((flag) => token === flag || token.startsWith(`${flag}=`));
 }
 
-const shellCommentOrQuote = /"[^"]*"|'[^']*'|#.*$/g;
+function parseNodeOption(words: readonly string[], at: number, scripts: string[]): number | "stop" {
+  const token = words[at];
+  if (token === "--") {
+    scripts.push(...words.slice(at + 1, at + 2));
+    return "stop";
+  }
+  if (matchesFlag(token, nodeInlineCodeFlags) !== undefined) return "stop";
+  const preload = matchesFlag(token, nodePreloadFlags);
+  if (preload !== undefined) {
+    const equals = token.indexOf("=");
+    const value = equals === -1 ? words[at + 1] : token.slice(equals + 1);
+    if (value !== undefined) scripts.push(value);
+    return equals === -1 ? at + 1 : at;
+  }
+  if (nodeOtherValueFlags.has(token)) return at + 1;
+  if (!token.startsWith("-")) {
+    scripts.push(token);
+    return "stop";
+  }
+  return at;
+}
+
+function nodeScriptsIn(words: readonly string[]): string[] {
+  const commandAt = words.findIndex(
+    (word) => !envAssignment.test(word) && !shellPrefixes.has(word),
+  );
+  if (commandAt === -1 || words[commandAt] !== "node") return [];
+  const scripts: string[] = [];
+  for (let at = commandAt + 1; at < words.length; at += 1) {
+    const next = parseNodeOption(words, at, scripts);
+    if (next === "stop") break;
+    at = next;
+  }
+  return scripts;
+}
 
 function scriptsRunByNodeIn(source: string): string[] {
   return source
+    .replaceAll("\\\n", " ")
     .split("\n")
     .map((line) =>
-      line.replace(shellCommentOrQuote, (match) => (match.startsWith("#") ? "" : match)).trim(),
+      line
+        .replace(shellCommentOrQuote, (match, before: string | undefined) =>
+          before === undefined ? match : before,
+        )
+        .trim(),
     )
     .filter((line) => line !== "")
     .flatMap(commandsOf)
-    .flatMap((words) => {
-      const script = nodeScriptIn(words);
-      return script !== undefined && scriptExtension.test(script)
-        ? [relative(repositoryRoot, resolve(repositoryRoot, script))]
-        : [];
-    });
+    .flatMap(nodeScriptsIn)
+    .filter((script) => scriptExtension.test(script))
+    .map((script) => relative(repositoryRoot, resolve(repositoryRoot, script)));
 }
 
 function runByTheHooks(hooks: readonly string[]): string[] {
@@ -87,6 +114,27 @@ function defaultExportFiles(): string[] {
     isRuleOff(rules?.[defaultExportRule]) ? files : [],
   );
 }
+
+test("scriptsRunByNodeIn finds scripts run with node across hook forms and ignores comments and inline evals", () => {
+  const hook = [
+    "# node scripts/commented.ts",
+    "FOO=a#b node ./scripts/env-hash.ts # node scripts/inline-comment.ts",
+    '[ $# -gt 0 ] && exec node --conditions node --import ./scripts/preload.mjs "scripts/main.ts"',
+    "if true; then node --require=scripts/req.cjs -- scripts/after-dash.tsx; fi",
+    'node -e "1" scripts/ignored-eval.ts && node --eval="1" scripts/ignored-eq.ts',
+    "node \\",
+    "  scripts/continued.mts",
+  ].join("\n");
+
+  expect(scriptsRunByNodeIn(hook)).toEqual([
+    "scripts/env-hash.ts",
+    "scripts/preload.mjs",
+    "scripts/main.ts",
+    "scripts/req.cjs",
+    "scripts/after-dash.tsx",
+    "scripts/continued.mts",
+  ]);
+});
 
 test(`every file ${configFile} lists in entry, supportEntry and ignoreExports is tracked, every ignoreExports name is exported by its file, and every ignoreFindings pattern matches a tracked file`, () => {
   const allTracked = trackedFiles();
@@ -124,13 +172,13 @@ test(`${configFile} ignores exactly the overrides that pnpm-workspace.yaml sets 
   expect(ignored.toSorted()).toEqual(removed.toSorted());
 });
 
-test(`supportEntry in ${configFile} holds the agent kit's copy script, every file outside node_modules/ that a test project of vp run verify names in globalSetup or setupFiles, and every script a tracked ${hooksDirectory}* hook runs with node`, () => {
+test(`supportEntry in ${configFile} holds the agent kit's copy script, every file outside node_modules/ that a test project of vp run verify names in globalSetup or setupFiles, and every script scriptsRunByNodeIn finds in a tracked ${hooksDirectory}* hook`, () => {
   const settings = allProjectSettings(
     `whether supportEntry in ${configFile} holds every test project's globalSetup and setupFiles`,
   );
   const projectSetups = Object.values(settings)
     .flatMap(({ globalSetup, setupFiles }) => [...globalSetup, ...setupFiles])
-    .filter((file) => !file.startsWith("node_modules/"));
+    .filter((file) => !file.split("/").includes("node_modules"));
   const hooks = trackedFiles().filter((file) => file.startsWith(hooksDirectory));
   const named = new Set([...projectSetups, copyScript, ...runByTheHooks(hooks)]);
   const support = fallowConfig.supportEntry ?? [];
@@ -140,7 +188,7 @@ test(`supportEntry in ${configFile} holds the agent kit's copy script, every fil
   expect([...named].filter((file) => !support.includes(file))).toEqual([]);
 });
 
-test(`fallow reports no tracked file that an ${defaultExportRule} override in vite.config.ts lists as unused, so each file a tool loads by convention is an entry point or imported`, () => {
+test(`fallow reports no tracked file that an override in vite.config.ts turning ${defaultExportRule} off lists as unused, so each file a tool loads by convention is an entry point or imported`, () => {
   const patterns = defaultExportFiles();
   const loaded = trackedFiles().filter((file) =>
     patterns.some((pattern) => matchesGlob(file, pattern)),
