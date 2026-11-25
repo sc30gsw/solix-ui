@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join, matchesGlob, relative, resolve } from "node:path";
-import { expect, test } from "vite-plus/test";
+import { expect, inject, test } from "vite-plus/test";
 import { copyScript } from "#/scripts/agent-kit.ts";
 import { unusedFilesIn } from "#/scripts/fallow-audit.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import { exportsOf, parse } from "#/scripts/syntax.ts";
+import { refuseAFilteredRun } from "#/tests/support/global-setup.ts";
 import { repositoryRoot, trackedFiles } from "#/tests/support/workspace.ts";
-import config from "#/vite.config.ts";
+import config, { configuredProjectNames } from "#/vite.config.ts";
 
 type FallowConfig = {
   entry?: string[];
@@ -16,65 +17,74 @@ type FallowConfig = {
   ignoreDependencyOverrides?: { package: string }[];
 };
 
-type SetupConfig = {
-  readonly root?: string;
-  readonly test?: {
-    readonly globalSetup?: string | readonly string[];
-    readonly setupFiles?: string | readonly string[];
-  };
-};
-
 const configFile = ".fallowrc.json";
 const hooksDirectory = ".vite-hooks/";
 const removedByPnpm = "-";
 const defaultExportRule = "import/no-default-export";
-const scriptRunByNode = /\bnode(?:\s+-\S+)*\s+["']?([^"'\s]+\.[cm]?[jt]s)["']?/g;
+const scriptExtension = /\.[cm]?[jt]s$/;
+const nodeValueFlags = new Set([
+  "-C",
+  "--conditions",
+  "--env-file",
+  "--env-file-if-exists",
+  "--import",
+  "--loader",
+  "-r",
+  "--require",
+]);
 
 const fallowConfig: FallowConfig = JSON.parse(
   readFileSync(join(repositoryRoot, configFile), "utf8"),
 );
 
-function fromTheRoot(file: string, base: string): string {
-  return relative(repositoryRoot, resolve(base, file));
-}
-
-function stringsOf(value: string | readonly string[] | undefined): readonly string[] {
-  if (value === undefined) return [];
-  return typeof value === "string" ? [value] : value;
-}
-
-function setupsIn(entry: SetupConfig, parentRoot: string): string[] {
-  const base = entry.root === undefined ? parentRoot : resolve(parentRoot, entry.root);
-  return [...stringsOf(entry.test?.globalSetup), ...stringsOf(entry.test?.setupFiles)].map((file) =>
-    fromTheRoot(file, base),
-  );
-}
-
-function isSetupConfig(value: unknown): value is SetupConfig {
-  return typeof value === "object" && value !== null;
-}
-
-function namedByTheProjects(): string[] {
-  const rootBase =
-    config.root === undefined ? repositoryRoot : resolve(repositoryRoot, config.root);
-  const fromRoot = setupsIn(config, repositoryRoot);
-  const fromProjects = (config.test?.projects ?? []).flatMap((project) =>
-    isSetupConfig(project) ? setupsIn(project, rootBase) : [],
-  );
-  return [...fromRoot, ...fromProjects];
+function scriptsRunByNodeIn(source: string): string[] {
+  const scripts: string[] = [];
+  for (const rawLine of source.split("\n")) {
+    const line = rawLine.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    const tokens = line.split(/\s+/);
+    for (let index = 0; index < tokens.length; index++) {
+      if (tokens[index] !== "node") continue;
+      let cursor = index + 1;
+      while (cursor < tokens.length) {
+        const token = tokens[cursor];
+        if (token === "--") {
+          cursor++;
+          break;
+        }
+        if (nodeValueFlags.has(token)) {
+          cursor += 2;
+          continue;
+        }
+        if (token.startsWith("-")) {
+          cursor++;
+          continue;
+        }
+        break;
+      }
+      const script = tokens[cursor]?.replace(/^["']|["']$/g, "");
+      if (script !== undefined && scriptExtension.test(script)) {
+        scripts.push(relative(repositoryRoot, resolve(repositoryRoot, script)));
+      }
+    }
+  }
+  return scripts;
 }
 
 function runByTheHooks(hooks: readonly string[]): string[] {
   return hooks.flatMap((hook) =>
-    [...readFileSync(join(repositoryRoot, hook), "utf8").matchAll(scriptRunByNode)].map(
-      ([, script]) => script,
-    ),
+    scriptsRunByNodeIn(readFileSync(join(repositoryRoot, hook), "utf8")),
   );
+}
+
+function isRuleOff(rule: unknown): boolean {
+  const severity = Array.isArray(rule) ? rule[0] : rule;
+  return severity === "off" || severity === 0;
 }
 
 function defaultExportFiles(): string[] {
   return (config.lint?.overrides ?? []).flatMap(({ files, rules }) =>
-    rules?.[defaultExportRule] === "off" ? files : [],
+    isRuleOff(rules?.[defaultExportRule]) ? files : [],
   );
 }
 
@@ -114,9 +124,18 @@ test(`${configFile} ignores exactly the overrides that pnpm-workspace.yaml sets 
   expect(ignored.toSorted()).toEqual(removed.toSorted());
 });
 
-test(`supportEntry in ${configFile} holds every file that a test project's globalSetup or setupFiles, the agent kit's copy script or a tracked ${hooksDirectory}* hook running node names`, () => {
+test(`supportEntry in ${configFile} holds every file outside node_modules/ that a test project of vp run verify names in globalSetup or setupFiles, the agent kit's copy script or a tracked ${hooksDirectory}* hook running node names`, () => {
+  const settings = inject("runSettingsOfEachProject");
+  refuseAFilteredRun(
+    Object.keys(settings),
+    configuredProjectNames(),
+    `whether supportEntry in ${configFile} holds every test project's globalSetup and setupFiles`,
+  );
+  const projectSetups = Object.values(settings)
+    .flatMap(({ globalSetup, setupFiles }) => [...globalSetup, ...setupFiles])
+    .filter((file) => !file.startsWith("node_modules/"));
   const hooks = trackedFiles().filter((file) => file.startsWith(hooksDirectory));
-  const named = new Set([...namedByTheProjects(), copyScript, ...runByTheHooks(hooks)]);
+  const named = new Set([...projectSetups, copyScript, ...runByTheHooks(hooks)]);
   const support = fallowConfig.supportEntry ?? [];
 
   expect(hooks.length).toBeGreaterThan(0);

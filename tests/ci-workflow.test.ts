@@ -516,65 +516,69 @@ function fallowJobProblems(workflow: Workflow): string[] {
   ];
 }
 
-const parsedPullRequestWorkflow = workflowAt(pullRequestWorkflow);
-
-function withFallowStep(indexToEdit: number, update: (step: Step) => Step): Workflow {
+function aFallowWorkflow(changes: { checkout?: Step; audit?: Step; workflow?: object }): Workflow {
   return {
-    ...parsedPullRequestWorkflow,
+    on: { pull_request: { types: ["opened", "synchronize", "reopened"] } },
+    permissions: readOnly,
+    ...changes.workflow,
     jobs: {
       fallow: {
-        ...parsedPullRequestWorkflow.jobs?.fallow,
-        steps: parsedPullRequestWorkflow.jobs?.fallow?.steps?.map((step, index) =>
-          index === indexToEdit ? update(step) : step,
-        ),
+        ...gate,
+        steps: [
+          changes.checkout ?? {
+            ...checkout,
+            with: { ...checkout.with, ...fallowGateOptions.checkoutWith },
+          },
+          setUpVp,
+          changes.audit ?? { run: fallowAudit, env: fallowGateOptions.env },
+        ],
       },
     },
   };
 }
 
 test(`on every pull request, the fallow job of ${pullRequestWorkflow} is a read-only gate job running ${fallowAudit} against the event's base, reading no secret`, () => {
-  expect(fallowJobProblems(parsedPullRequestWorkflow)).toEqual([]);
+  expect(fallowJobProblems(workflowAt(pullRequestWorkflow))).toEqual([]);
 });
 
 const wrongFallowWorkflows: [string, Workflow, string][] = [
   [
     "a checkout step omitting ref",
-    withFallowStep(0, (step) => ({ ...step, with: { "fetch-depth": 0 } })),
-    'step 1 of the fallow job has with {"fetch-depth":0}, not {"ref":"${{ github.event.pull_request.head.sha }}","fetch-depth":0};',
+    aFallowWorkflow({ checkout }),
+    'step 1 of the fallow job has with {"fetch-depth":0}, not {"fetch-depth":0,"ref":"${{ github.event.pull_request.head.sha }}"};',
   ],
   [
     "a checkout step with a wrong ref",
-    withFallowStep(0, (step) => ({
-      ...step,
-      with: { "fetch-depth": 0, ref: "main" },
-    })),
-    'step 1 of the fallow job has with {"fetch-depth":0,"ref":"main"}, not {"ref":"${{ github.event.pull_request.head.sha }}","fetch-depth":0};',
-  ],
-  [
-    "a workflow-level env on the fallow workflow",
-    {
-      ...parsedPullRequestWorkflow,
-      env: { NODE_OPTIONS: "--version" },
-    },
-    "the workflow of the fallow job sets env; a gate job's workflow sets only name, on, permissions, jobs.",
+    aFallowWorkflow({
+      checkout: { ...checkout, with: { "fetch-depth": 0, ref: "main" } },
+    }),
+    'step 1 of the fallow job has with {"fetch-depth":0,"ref":"main"}, not {"fetch-depth":0,"ref":"${{ github.event.pull_request.head.sha }}"};',
   ],
   [
     "a fallow audit step omitting env",
-    withFallowStep(2, ({ run }) => ({ run })),
+    aFallowWorkflow({ audit: { run: fallowAudit } }),
     'step 3 of the fallow job has env {}, not {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}"};',
   ],
   [
     "a fallow audit step with a wrong PULL_REQUEST_BASE env",
-    withFallowStep(2, (step) => ({ ...step, env: { PULL_REQUEST_BASE: "HEAD" } })),
+    aFallowWorkflow({ audit: { run: fallowAudit, env: { PULL_REQUEST_BASE: "HEAD" } } }),
     'step 3 of the fallow job has env {"PULL_REQUEST_BASE":"HEAD"}, not {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}"};',
+  ],
+  [
+    "a fallow audit step with an extra env variable alongside PULL_REQUEST_BASE",
+    aFallowWorkflow({
+      audit: {
+        run: fallowAudit,
+        env: { ...fallowGateOptions.env, NODE_OPTIONS: "--version" },
+      },
+    }),
+    'step 3 of the fallow job has env {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}","NODE_OPTIONS":"--version"}, not {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}"};',
   ],
 ];
 
 test.for(wrongFallowWorkflows)(
   "the fallow gate rule refuses %s",
   ([, workflow, expectedProblem]) => {
-    expect(fallowJobProblems(workflow).some((problem) => problem.includes(expectedProblem))).toBe(
-      true,
-    );
+    expect(fallowJobProblems(workflow)).toContainEqual(expect.stringContaining(expectedProblem));
   },
 );

@@ -1,4 +1,5 @@
 import { expect, inject, test } from "vite-plus/test";
+import { refuseAFilteredRun } from "#/tests/support/global-setup.ts";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
 import { configuredProjectNames } from "#/vite.config.ts";
 
@@ -9,19 +10,11 @@ function isOf(name: string, project: string): boolean {
   return name === project || name.startsWith(`${project} (`);
 }
 
-function refuseAFilteredRun(projects: readonly string[], cannotTell: string): void {
-  const missing = configuredProjectNames().filter((project) => !projects.includes(project));
-  if (missing.length > 0) {
-    throw new Error(
-      `The run is filtered: it holds only the projects ${projects.join(", ")}, and no ${missing.join(" or ")} project, so it cannot tell ${cannotTell}. Run it without --project.`,
-    );
-  }
-}
-
 test(`the ${checkerProject} project's sequence group comes before that of every other project`, () => {
   const settings = inject("runSettingsOfEachProject");
   refuseAFilteredRun(
     Object.keys(settings),
+    configuredProjectNames(),
     `whether the ${checkerProject} project runs before the others`,
   );
   const others = Object.entries(settings).filter(([name]) => name !== checkerProject);
@@ -51,6 +44,7 @@ test("no browser project saves a screenshot when a test fails: every project who
   const settings = inject("runSettingsOfEachProject");
   refuseAFilteredRun(
     Object.keys(settings),
+    configuredProjectNames(),
     "whether every project whose browser is enabled saves no screenshot",
   );
   const inABrowser = Object.entries(settings).filter(([, { browser }]) => browser.enabled);
@@ -69,6 +63,7 @@ test(`the ${browserProject} project's instances run in a sequence group no other
   const settings = inject("runSettingsOfEachProject");
   refuseAFilteredRun(
     Object.keys(settings),
+    configuredProjectNames(),
     `whether the ${browserProject} project's instances share a sequence group with another project`,
   );
   const isBrowser = (name: string) => isOf(name, browserProject);

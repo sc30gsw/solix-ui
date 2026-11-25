@@ -152,4 +152,46 @@ describe("the fallow audit check", () => {
       expect(noBase.stderr).toContain("git finds no merge-base of main and HEAD");
     });
   });
+
+  test("prints warnings and exits 0 when fallow reports a warning-only verdict", async () => {
+    await inTemporaryTree(
+      {
+        ...project,
+        "src/index.test.ts": 'import { used } from "./used.ts";\nconsole.log(used);\n',
+      },
+      (root) => {
+        onABranch(root, (at) =>
+          writeFileSync(
+            join(at, "src/index.test.ts"),
+            'import { used } from "./used.ts";\ntest.skip("a", () => { console.log(used); });\n',
+          ),
+        );
+        const run = audited(root, "main");
+
+        expect(run.status).toBe(0);
+        expect(run.stdout).toContain("test.skip");
+      },
+    );
+  });
+
+  test("audits from the repository root even when invoked from a subdirectory", async () => {
+    await inTemporaryTree(project, (root) => {
+      onABranch(root, (at) => writeFileSync(join(at, "README.md"), "A small project.\n"));
+      writeFileSync(join(root, "root-untracked.txt"), "stray\n");
+      const dirtyFromSubdir = audited(join(root, "src"), "main");
+
+      expect(dirtyFromSubdir.status).toBe(1);
+      expect(dirtyFromSubdir.stderr).toContain("untracked file: root-untracked.txt");
+    });
+  });
+
+  test("exits 2 with the git error message when run outside a git repository", async () => {
+    await inTemporaryTree(project, (root) => {
+      const outside = audited(root, "main");
+
+      expect(outside.status).toBe(2);
+      expect(outside.stderr).toContain("not a git repository");
+      expect(outside.stderr).not.toContain("at ");
+    });
+  });
 });

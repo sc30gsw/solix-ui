@@ -14,8 +14,22 @@ export type RunSettings = {
   provided: Record<string, unknown>;
   groupOrder: number;
   globalSetup: string[];
+  setupFiles: string[];
   browser: { enabled: boolean; screenshotFailures: boolean };
 };
+
+export function refuseAFilteredRun(
+  projects: readonly string[],
+  configured: readonly string[],
+  cannotTell: string,
+): void {
+  const missing = configured.filter((project) => !projects.includes(project));
+  if (missing.length > 0) {
+    throw new Error(
+      `The run is filtered: it holds only the projects ${projects.join(", ")}, and no ${missing.join(" or ")} project, so it cannot tell ${cannotTell}. Run it without --project.`,
+    );
+  }
+}
 
 declare module "vite-plus/test" {
   interface ProvidedContext {
@@ -42,6 +56,7 @@ function runSettingsOfEachProject(project: TestProject): Record<string, RunSetti
         provided: { ...config.provide },
         groupOrder: config.sequence.groupOrder,
         globalSetup: [config.globalSetup].flat().map((file) => relative(repositoryRoot, file)),
+        setupFiles: [config.setupFiles].flat().map((file) => relative(repositoryRoot, file)),
         browser: {
           enabled: config.browser.enabled,
           screenshotFailures: config.browser.screenshotFailures,
