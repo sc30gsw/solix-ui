@@ -91,7 +91,8 @@ type GateJobOptions = {
 function setUpStepsWith(options?: GateJobOptions): readonly SetUpStep[] {
   if (!options?.checkoutWith) return setUpSteps;
   const [checkout, ...rest] = setUpSteps;
-  const collided = Object.keys(options.checkoutWith).filter((key) => key in checkout.with);
+  const reserved = { ...checkout.mayAlsoSet, ...checkout.with };
+  const collided = Object.keys(options.checkoutWith).filter((key) => key in reserved);
   if (collided.length > 0) {
     throw new Error(
       `gateJobProblems: checkoutWith may not override ${collided.join(", ")}, which the shared checkout step fixes.`,

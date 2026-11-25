@@ -27,7 +27,11 @@ function onABranch(root: string, change: (root: string) => void): void {
 }
 
 function audited(root: string, ...args: string[]) {
-  return spawnSync(process.execPath, [auditCheck, ...args], { cwd: root, encoding: "utf8" });
+  return spawnSync(process.execPath, [auditCheck, ...args], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, LC_ALL: "C" },
+  });
 }
 
 describe("emptyChangesetProblems", () => {
@@ -176,7 +180,17 @@ describe("the fallow audit check", () => {
 
   test("audits from the repository root even when invoked from a subdirectory", async () => {
     await inTemporaryTree(project, (root) => {
-      onABranch(root, (at) => writeFileSync(join(at, "README.md"), "A small project.\n"));
+      onABranch(root, (at) =>
+        writeFileSync(
+          join(at, "src/used.ts"),
+          "export const used = 1;\nexport const unused = 2;\n",
+        ),
+      );
+      const fromSubdir = audited(join(root, "src"), "main");
+
+      expect(fromSubdir.status).toBe(1);
+      expect(fromSubdir.stdout).toContain("unused");
+
       writeFileSync(join(root, "root-untracked.txt"), "stray\n");
       const dirtyFromSubdir = audited(join(root, "src"), "main");
 

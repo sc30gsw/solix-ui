@@ -516,11 +516,10 @@ function fallowJobProblems(workflow: Workflow): string[] {
   ];
 }
 
-function aFallowWorkflow(changes: { checkout?: Step; audit?: Step; workflow?: object }): Workflow {
+function aFallowWorkflow(changes: { checkout?: Step; audit?: Step }): Workflow {
   return {
     on: { pull_request: { types: ["opened", "synchronize", "reopened"] } },
     permissions: readOnly,
-    ...changes.workflow,
     jobs: {
       fallow: {
         ...gate,

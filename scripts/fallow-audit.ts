@@ -5,10 +5,14 @@ import { repositoryRoot } from "#/scripts/repository.ts";
 const installedFallow = join(repositoryRoot, "node_modules/.bin/fallow");
 const maxBuffer = 64 * 1024 * 1024;
 
+const auditVerdicts = ["pass", "warn", "fail"] as const;
+
+type AuditVerdict = (typeof auditVerdicts)[number];
+
 type AuditResult = {
   readonly status: number;
   readonly changedFilesCount: number;
-  readonly verdict: string;
+  readonly verdict: AuditVerdict;
 };
 
 function fallowEnv(): NodeJS.ProcessEnv {
@@ -19,12 +23,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function spawnFallow(args: readonly string[], cwd: string, inherit = false) {
+function isAuditVerdict(value: unknown): value is AuditVerdict {
+  return typeof value === "string" && auditVerdicts.some((verdict) => verdict === value);
+}
+
+function spawnFallow(args: readonly string[], cwd: string, stdio: "pipe" | "inherit") {
   const run = spawnSync(installedFallow, args, {
     cwd,
     encoding: "utf8",
     env: fallowEnv(),
-    ...(inherit ? { stdio: "inherit" as const } : { maxBuffer }),
+    ...(stdio === "inherit" ? { stdio } : { maxBuffer }),
   });
   if (run.error !== undefined) {
     throw new Error(`fallow ${args.join(" ")} could not start: ${run.error.message}`);
@@ -36,7 +44,7 @@ function spawnFallow(args: readonly string[], cwd: string, inherit = false) {
 }
 
 function fallowJson(args: readonly string[], cwd: string): { status: number; data: unknown } {
-  const run = spawnFallow([...args, "--format", "json", "--quiet"], cwd);
+  const run = spawnFallow([...args, "--format", "json", "--quiet"], cwd, "pipe");
   try {
     return { status: run.status ?? 1, data: JSON.parse(run.stdout) };
   } catch {
@@ -54,14 +62,16 @@ export function auditFallow(base: string, cwd: string): AuditResult {
   if (typeof changedFilesCount !== "number") {
     throw new Error("fallow audit --format json gave no numeric changed_files_count.");
   }
-  if (typeof verdict !== "string") {
-    throw new Error("fallow audit --format json gave no string verdict.");
+  if (!isAuditVerdict(verdict)) {
+    throw new Error(
+      `fallow audit --format json gave unexpected verdict ${JSON.stringify(verdict)} (expected one of ${auditVerdicts.join(", ")}).`,
+    );
   }
   return { status, changedFilesCount, verdict };
 }
 
 export function printFallowAudit(base: string, cwd: string): number {
-  return spawnFallow(["audit", "--base", base], cwd, true).status ?? 1;
+  return spawnFallow(["audit", "--base", base], cwd, "inherit").status ?? 1;
 }
 
 export function unusedFilesIn(cwd: string): string[] {

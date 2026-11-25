@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { join, matchesGlob, relative, resolve } from "node:path";
-import { expect, inject, test } from "vite-plus/test";
+import { expect, test } from "vite-plus/test";
 import { copyScript } from "#/scripts/agent-kit.ts";
 import { unusedFilesIn } from "#/scripts/fallow-audit.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import { exportsOf, parse } from "#/scripts/syntax.ts";
-import { refuseAFilteredRun } from "#/tests/support/global-setup.ts";
+import { allProjectSettings } from "#/tests/support/run-settings.ts";
+import { commandsOf } from "#/tests/support/skill-commands.ts";
 import { repositoryRoot, trackedFiles } from "#/tests/support/workspace.ts";
-import config, { configuredProjectNames } from "#/vite.config.ts";
+import config from "#/vite.config.ts";
 
 type FallowConfig = {
   entry?: string[];
@@ -22,6 +23,8 @@ const hooksDirectory = ".vite-hooks/";
 const removedByPnpm = "-";
 const defaultExportRule = "import/no-default-export";
 const scriptExtension = /\.[cm]?[jt]s$/;
+const envAssignment = /^[A-Za-z_]\w*=/;
+const nodeInlineCodeFlags = new Set(["-e", "--eval", "-p", "--print"]);
 const nodeValueFlags = new Set([
   "-C",
   "--conditions",
@@ -37,38 +40,35 @@ const fallowConfig: FallowConfig = JSON.parse(
   readFileSync(join(repositoryRoot, configFile), "utf8"),
 );
 
-function scriptsRunByNodeIn(source: string): string[] {
-  const scripts: string[] = [];
-  for (const rawLine of source.split("\n")) {
-    const line = rawLine.trim();
-    if (line === "" || line.startsWith("#")) continue;
-    const tokens = line.split(/\s+/);
-    for (let index = 0; index < tokens.length; index++) {
-      if (tokens[index] !== "node") continue;
-      let cursor = index + 1;
-      while (cursor < tokens.length) {
-        const token = tokens[cursor];
-        if (token === "--") {
-          cursor++;
-          break;
-        }
-        if (nodeValueFlags.has(token)) {
-          cursor += 2;
-          continue;
-        }
-        if (token.startsWith("-")) {
-          cursor++;
-          continue;
-        }
-        break;
-      }
-      const script = tokens[cursor]?.replace(/^["']|["']$/g, "");
-      if (script !== undefined && scriptExtension.test(script)) {
-        scripts.push(relative(repositoryRoot, resolve(repositoryRoot, script)));
-      }
-    }
+function nodeScriptIn(words: readonly string[]): string | undefined {
+  const commandAt = words.findIndex((word) => !envAssignment.test(word));
+  if (commandAt === -1 || words[commandAt] !== "node") return undefined;
+  for (let at = commandAt + 1; at < words.length; at += 1) {
+    const token = words[at];
+    if (token === "--") return words[at + 1];
+    if (nodeInlineCodeFlags.has(token)) return undefined;
+    if (nodeValueFlags.has(token)) at += 1;
+    else if (!token.startsWith("-")) return token;
   }
-  return scripts;
+  return undefined;
+}
+
+const shellCommentOrQuote = /"[^"]*"|'[^']*'|#.*$/g;
+
+function scriptsRunByNodeIn(source: string): string[] {
+  return source
+    .split("\n")
+    .map((line) =>
+      line.replace(shellCommentOrQuote, (match) => (match.startsWith("#") ? "" : match)).trim(),
+    )
+    .filter((line) => line !== "")
+    .flatMap(commandsOf)
+    .flatMap((words) => {
+      const script = nodeScriptIn(words);
+      return script !== undefined && scriptExtension.test(script)
+        ? [relative(repositoryRoot, resolve(repositoryRoot, script))]
+        : [];
+    });
 }
 
 function runByTheHooks(hooks: readonly string[]): string[] {
@@ -124,11 +124,8 @@ test(`${configFile} ignores exactly the overrides that pnpm-workspace.yaml sets 
   expect(ignored.toSorted()).toEqual(removed.toSorted());
 });
 
-test(`supportEntry in ${configFile} holds every file outside node_modules/ that a test project of vp run verify names in globalSetup or setupFiles, the agent kit's copy script or a tracked ${hooksDirectory}* hook running node names`, () => {
-  const settings = inject("runSettingsOfEachProject");
-  refuseAFilteredRun(
-    Object.keys(settings),
-    configuredProjectNames(),
+test(`supportEntry in ${configFile} holds the agent kit's copy script, every file outside node_modules/ that a test project of vp run verify names in globalSetup or setupFiles, and every script a tracked ${hooksDirectory}* hook runs with node`, () => {
+  const settings = allProjectSettings(
     `whether supportEntry in ${configFile} holds every test project's globalSetup and setupFiles`,
   );
   const projectSetups = Object.values(settings)

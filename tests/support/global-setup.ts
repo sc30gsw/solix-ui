@@ -18,19 +18,6 @@ export type RunSettings = {
   browser: { enabled: boolean; screenshotFailures: boolean };
 };
 
-export function refuseAFilteredRun(
-  projects: readonly string[],
-  configured: readonly string[],
-  cannotTell: string,
-): void {
-  const missing = configured.filter((project) => !projects.includes(project));
-  if (missing.length > 0) {
-    throw new Error(
-      `The run is filtered: it holds only the projects ${projects.join(", ")}, and no ${missing.join(" or ")} project, so it cannot tell ${cannotTell}. Run it without --project.`,
-    );
-  }
-}
-
 declare module "vite-plus/test" {
   interface ProvidedContext {
     playgroundUrl: string;
