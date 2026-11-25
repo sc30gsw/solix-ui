@@ -1,10 +1,9 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
-  installedVp,
+  execVp,
   listed,
   packageManagerAnswerTimeout,
   repositoryRoot,
@@ -75,26 +74,31 @@ function withoutSettings(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   );
 }
 
-function pnpmAnswer(directory: string, vp: string): string {
+function pnpmAnswer(directory: string, vp?: string): string {
   const noUserConfig = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
+  const command = vp ?? "vp";
   try {
-    return execFileSync(vp, ["pm", "config", "list", "--json"], {
-      cwd: directory,
-      encoding: "utf8",
-      env: { ...withoutSettings(process.env), XDG_CONFIG_HOME: noUserConfig },
-      timeout: packageManagerAnswerTimeout,
-    });
+    return execVp(
+      ["pm", "config", "list", "--json"],
+      {
+        cwd: directory,
+        encoding: "utf8",
+        env: { ...withoutSettings(process.env), XDG_CONFIG_HOME: noUserConfig },
+        timeout: packageManagerAnswerTimeout,
+      },
+      vp,
+    );
   } catch (error) {
     const { code } = error as NodeJS.ErrnoException;
     if (code === "ENOENT") {
       throw new Error(
-        `${workspaceFile} is read through pnpm, which ${vp} starts, and that is neither installed here nor on PATH. Install Vite+, then run \`vp install\`.`,
+        `${workspaceFile} is read through pnpm, which ${command} starts, and that is neither installed here nor on PATH. Install Vite+, then run \`vp install\`.`,
         { cause: error },
       );
     }
     if (code === "ETIMEDOUT") {
       throw new Error(
-        `${vp} pm config list gave no answer in ${packageManagerAnswerTimeout / 1000} seconds.`,
+        `${command} pm config list gave no answer in ${packageManagerAnswerTimeout / 1000} seconds.`,
         { cause: error },
       );
     }
@@ -104,10 +108,7 @@ function pnpmAnswer(directory: string, vp: string): string {
   }
 }
 
-export function readPnpmSettings(
-  directory: string = repositoryRoot,
-  vp: string = existsSync(installedVp) ? installedVp : "vp",
-): PnpmSettings {
+export function readPnpmSettings(directory: string = repositoryRoot, vp?: string): PnpmSettings {
   return settingsFrom(JSON.parse(pnpmAnswer(directory, vp)) as RawSettings);
 }
 

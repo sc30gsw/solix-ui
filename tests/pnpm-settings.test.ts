@@ -1,4 +1,7 @@
 import {
+  accessSync,
+  chmodSync,
+  constants,
   globSync,
   mkdirSync,
   mkdtempSync,
@@ -8,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import {
   pnpmSettings,
@@ -134,6 +137,60 @@ test("a workspace-dir variable does not point the reader at another checkout", (
     expect(readPnpmSettings(checkout).catalog).toHaveProperty("solid-js");
     vi.unstubAllEnvs();
   }
+});
+
+function executableOnPath(name: string): string | undefined {
+  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
+    if (directory === "") continue;
+    const candidate = join(directory, name);
+    try {
+      if (statSync(candidate).isFile()) {
+        accessSync(candidate, constants.X_OK);
+        return candidate;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+function shellQuoted(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function writeExecutable(directory: string, name: string, script: string): void {
+  const path = join(directory, name);
+  writeFileSync(path, script);
+  chmodSync(path, 0o755);
+}
+
+test("readPnpmSettings prefers vp on PATH before node_modules/.bin/vp, and falls back to node_modules/.bin/vp when vp is not on PATH", () => {
+  const checkout = checkoutWith(catalogOnly);
+  const originalPath = process.env.PATH ?? "";
+  const pnpm = executableOnPath("pnpm");
+  expect(pnpm).toBeDefined();
+
+  const pathWithVp = temporaryDirectory();
+  writeExecutable(
+    pathWithVp,
+    "vp",
+    '#!/bin/sh\nprintf \'%s\' \'{"catalog":{"from-path":"1.0.0"}}\'\n',
+  );
+  vi.stubEnv("PATH", `${pathWithVp}${delimiter}${originalPath}`);
+
+  expect(readPnpmSettings(checkout).catalog).toEqual({ "from-path": "1.0.0" });
+
+  const pathWithoutVp = temporaryDirectory();
+  writeExecutable(pathWithoutVp, "node", `#!/bin/sh\nexec ${shellQuoted(process.execPath)} "$@"\n`);
+  writeExecutable(pathWithoutVp, "pnpm", `#!/bin/sh\nexec ${shellQuoted(pnpm ?? "")} "$@"\n`);
+  vi.stubEnv("PATH", `${pathWithoutVp}${delimiter}/usr/bin${delimiter}/bin`);
+
+  expect(executableOnPath("vp")).toBeUndefined();
+  expect(readPnpmSettings(checkout).catalog).toEqual({
+    "@solidjs/web": "2.0.0-rc.21",
+    "solid-js": "2.0.0-rc.21",
+  });
 });
 
 test("a vp that is neither installed nor on PATH fails with the way to install it", () => {

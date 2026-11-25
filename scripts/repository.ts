@@ -1,10 +1,26 @@
-import { execFileSync } from "node:child_process";
-import { type Dirent, globSync, readFileSync } from "node:fs";
+import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
+import { type Dirent, existsSync, globSync, readFileSync } from "node:fs";
 import { join, sep } from "node:path";
 
 export const repositoryRoot = join(import.meta.dirname, "..");
 export const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
 export const packageManagerAnswerTimeout = 30_000;
+
+export function execVp(
+  args: readonly string[],
+  options: ExecFileSyncOptionsWithStringEncoding,
+  vp?: string,
+): string {
+  if (vp !== undefined) return execFileSync(vp, args, options);
+  try {
+    return execFileSync("vp", args, options);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" && existsSync(installedVp)) {
+      return execFileSync(installedVp, args, options);
+    }
+    throw error;
+  }
+}
 
 const generatedOrInstalled = new Set(["node_modules", "dist", ".git"]);
 
@@ -77,7 +93,7 @@ export function whyInstalled(
   names: readonly string[],
   directory: string = repositoryRoot,
 ): Dependent[] {
-  const answer = execFileSync(installedVp, ["why", ...names, "-r", "--json"], {
+  const answer = execVp(["why", ...names, "-r", "--json"], {
     cwd: directory,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

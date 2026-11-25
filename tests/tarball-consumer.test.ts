@@ -39,8 +39,8 @@ import {
   type ExportTarget,
   type Manifest,
   componentLibraries,
+  execVp,
   installedVersions,
-  installedVp,
   libraryNames,
   libraryPackages,
   packageManagerAnswerTimeout,
@@ -136,16 +136,12 @@ function typeErrors(): string {
 }
 
 function packInto(destination: string, directory: string): Pick<Packed, "tarball" | "files"> {
-  const answer = execFileSync(
-    installedVp,
-    ["pm", "pack", "--json", "--pack-destination", destination],
-    {
-      cwd: directory,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: packageManagerAnswerTimeout,
-    },
-  );
+  const answer = execVp(["pm", "pack", "--json", "--pack-destination", destination], {
+    cwd: directory,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: packageManagerAnswerTimeout,
+  });
   const result: unknown = JSON.parse(answer);
   const filename =
     typeof result === "object" && result !== null && "filename" in result

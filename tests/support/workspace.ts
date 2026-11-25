@@ -17,6 +17,7 @@ export {
   type ExportTarget,
   type Installed,
   type Manifest,
+  execVp,
   installedVersions,
   installedVp,
   listed,
