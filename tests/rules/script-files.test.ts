@@ -8,8 +8,10 @@ import {
   fileOf,
   firstLine,
   isFileOfPackage,
+  isTypeOnlyImport,
   isValueReference,
   memberDeclarations,
+  memberRead,
   moduleSpecifierOf,
   nameOf,
   openProgram,
@@ -79,10 +81,19 @@ function namesARunner(program: Program, node: ts.Node): boolean {
   if (ts.isImportSpecifier(node) || ts.isExportSpecifier(node)) {
     return declarationsOf(program, node.name).some(isARunner);
   }
-  return (
-    (ts.isPropertyAccessExpression(node) ||
+  if (
+    !(
+      ts.isPropertyAccessExpression(node) ||
       ts.isElementAccessExpression(node) ||
-      ts.isBindingElement(node)) &&
+      ts.isBindingElement(node)
+    )
+  ) {
+    return false;
+  }
+  const read = memberRead(program, node);
+  return (
+    read !== undefined &&
+    read.names.some((name) => runners.importNames.includes(name)) &&
     memberDeclarations(program, node).some(isARunner)
   );
 }
@@ -123,8 +134,14 @@ function whereItIsUsedWhole(program: Program, holder: ts.Node): ts.Node | undefi
 
 function importedNames(nodes: readonly ts.Node[]): ts.Identifier[] {
   return nodes.flatMap((node) => {
-    if (ts.isImportClause(node)) return node.name ? [node.name] : [];
-    return ts.isNamespaceImport(node) || ts.isImportSpecifier(node) ? [node.name] : [];
+    if (!ts.isImportClause(node) || isTypeOnlyImport(node)) return [];
+    const bindings = node.namedBindings;
+    const bound = bindings
+      ? ts.isNamespaceImport(bindings)
+        ? [bindings.name]
+        : bindings.elements.filter((element) => !element.isTypeOnly).map((element) => element.name)
+      : [];
+    return node.name ? [node.name, ...bound] : bound;
   });
 }
 
