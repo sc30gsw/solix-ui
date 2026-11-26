@@ -14,13 +14,8 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import {
-  askPackageManager,
-  listed,
-  packageManagerAnswerTimeout,
-  repositoryRoot,
-  VitePlusNotFound,
-} from "#/scripts/repository.ts";
+import { askPackageManager, VitePlusNotFound } from "#/scripts/package-manager.ts";
+import { listed, packageManagerAnswerTimeout, repositoryRoot } from "#/scripts/repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
 
@@ -94,19 +89,21 @@ function userConfigHome(): string {
     : join(homedir(), ".config");
 }
 
-function configHomeWithoutPnpm(): string {
-  const configHome = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
+function linkInto(configHome: string, target: string, name: string): void {
+  const kind = statSync(target, { throwIfNoEntry: false })?.isDirectory() ? "junction" : "file";
+  try {
+    symlinkSync(target, join(configHome, name), kind);
+  } catch {
+    return;
+  }
+}
+
+function linkUserConfigBesidesPnpm(configHome: string): void {
   const userHome = userConfigHome();
   const entries = existsSync(userHome) ? readdirSync(userHome) : [];
   for (const name of entries.filter((entry) => entry !== "pnpm")) {
-    const target = join(userHome, name);
-    symlinkSync(
-      target,
-      join(configHome, name),
-      statSync(target, { throwIfNoEntry: false })?.isDirectory() ? "junction" : "file",
-    );
+    linkInto(configHome, join(userHome, name), name);
   }
-  return configHome;
 }
 
 function removeConfigHome(configHome: string): void {
@@ -118,8 +115,7 @@ function removeConfigHome(configHome: string): void {
   rmdirSync(configHome);
 }
 
-function pnpmAnswer(directory: string): string {
-  const configHome = configHomeWithoutPnpm();
+function askedForSettings(directory: string, configHome: string): string {
   try {
     return askPackageManager(["pm", "config", "list", "--json"], {
       cwd: directory,
@@ -128,15 +124,29 @@ function pnpmAnswer(directory: string): string {
       timeout: packageManagerAnswerTimeout,
     });
   } catch (error) {
-    if (error instanceof VitePlusNotFound) {
-      throw new Error(`${workspaceFile} is read through pnpm, which vp starts. ${error.message}`, {
-        cause: error,
-      });
-    }
-    throw error;
-  } finally {
-    removeConfigHome(configHome);
+    if (!(error instanceof VitePlusNotFound)) throw error;
+    throw new Error(`${workspaceFile} is read through pnpm, which vp starts. ${error.message}`, {
+      cause: error,
+    });
   }
+}
+
+function pnpmAnswer(directory: string): string {
+  const outcome: { configHome?: string; answer?: string; failure?: unknown } = {};
+  try {
+    outcome.configHome = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
+    linkUserConfigBesidesPnpm(outcome.configHome);
+    outcome.answer = askedForSettings(directory, outcome.configHome);
+  } catch (error) {
+    outcome.failure = error;
+  }
+  try {
+    if (outcome.configHome !== undefined) removeConfigHome(outcome.configHome);
+  } catch (cleanup) {
+    if (!("failure" in outcome)) throw cleanup;
+  }
+  if ("failure" in outcome || outcome.answer === undefined) throw outcome.failure;
+  return outcome.answer;
 }
 
 export function readPnpmSettings(directory: string = repositoryRoot): PnpmSettings {

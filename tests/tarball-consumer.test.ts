@@ -35,7 +35,7 @@ import {
   startServer,
   viteOnAFreePort,
 } from "#/tests/support/server-process.ts";
-import { askPackageManager } from "#/scripts/repository.ts";
+import { askPackageManager } from "#/scripts/package-manager.ts";
 import {
   type ExportTarget,
   type Manifest,

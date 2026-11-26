@@ -17,8 +17,9 @@ import {
   settingsFrom,
   workspaceFile,
 } from "#/scripts/pnpm-settings.ts";
-import { pinnedVitePlus, repositoryRoot, rootManifest } from "#/scripts/repository.ts";
-import { shellQuoted, writeShim } from "#/tests/support/shims.ts";
+import { installedVitePlusVersion } from "#/scripts/package-manager.ts";
+import { repositoryRoot, rootManifest } from "#/scripts/repository.ts";
+import { callsOf, configQuery, shellQuoted, writeShim } from "#/tests/support/shims.ts";
 import { packages } from "#/tests/support/workspace.ts";
 
 const catalogOnly = ["catalog:", '  "@solidjs/web": 2.0.0-rc.21', "  solid-js: 2.0.0-rc.21", ""];
@@ -44,6 +45,10 @@ function temporaryDirectory(): string {
 function checkoutWith(lines: readonly string[]): string {
   const checkout = temporaryDirectory();
   writeFileSync(join(checkout, workspaceFile), lines.join("\n"));
+  writeFileSync(
+    join(checkout, "package.json"),
+    JSON.stringify({ packageManager: rootManifest().packageManager }),
+  );
   return checkout;
 }
 
@@ -137,20 +142,22 @@ test("a workspace-dir variable does not point the reader at another checkout", (
   }
 });
 
-test("readPnpmSettings asks the vp on PATH, and hides only pnpm's user config from it, so a global vp keeps its own", () => {
+test("readPnpmSettings asks the vp on PATH, which is checked before every answer, and hides only pnpm's user config from it, so a global vp keeps its own", () => {
   const checkout = checkoutWith(catalogOnly);
   const configHome = userConfigWith(agePolicy);
   mkdirSync(join(configHome, "vite-plus"));
   writeFileSync(join(configHome, "vite-plus/config.json"), "{}");
   const bin = temporaryDirectory();
-  writeShim(
+  const pnpm = rootManifest().packageManager?.replace("@", "/") ?? "";
+  const vp = writeShim(
     bin,
     "vp",
     [
-      `if [ "$1" = "--version" ]; then printf 'vp v%s\\n' ${shellQuoted(pinnedVitePlus())}; exit 0; fi`,
+      `printf '%s\\n' "$*" >> ${shellQuoted(`${join(bin, "vp")}.calls`)}`,
+      `if [ "$1" = "--version" ]; then printf 'vp v%s\\n' ${shellQuoted(installedVitePlusVersion() ?? "")}; exit 0; fi`,
       `if [ -f "$XDG_CONFIG_HOME/vite-plus/config.json" ]; then vp=seen; else vp=hidden; fi`,
       `if [ -e "$XDG_CONFIG_HOME/pnpm" ]; then pnpm=seen; else pnpm=hidden; fi`,
-      `printf '{"catalog":{"vite-plus config":"%s","pnpm config":"%s"}}' "$vp" "$pnpm"`,
+      `printf '{"userAgent":"%s","catalog":{"vite-plus config":"%s","pnpm config":"%s"}}' ${shellQuoted(pnpm)} "$vp" "$pnpm"`,
     ].join("\n"),
   );
   vi.stubEnv("XDG_CONFIG_HOME", configHome);
@@ -160,6 +167,7 @@ test("readPnpmSettings asks the vp on PATH, and hides only pnpm's user config fr
     "vite-plus config": "seen",
     "pnpm config": "hidden",
   });
+  expect(callsOf(vp)).toEqual(["--version", configQuery]);
   expect(readFileSync(join(configHome, "vite-plus/config.json"), "utf8")).toBe("{}");
   expect(readFileSync(join(configHome, "pnpm/config.yaml"), "utf8")).toBe(agePolicy.join("\n"));
 });

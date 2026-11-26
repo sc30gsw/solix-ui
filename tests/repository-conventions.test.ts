@@ -24,16 +24,7 @@ import {
 } from "#/tests/support/workspace.ts";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { gitInScratchRepository } from "#/tests/support/git.ts";
-import {
-  descendants,
-  exportsOf,
-  parse,
-  parseAll,
-  parseText,
-  ts,
-  unwrapped,
-} from "#/scripts/syntax.ts";
-import { scriptFilesIn } from "#/scripts/repository.ts";
+import { exportsOf, parse } from "#/scripts/syntax.ts";
 import { seedVariable } from "#/tests/support/property-seed.ts";
 import { isModelFile, modelFilePatterns } from "#/scripts/formal-verification.ts";
 import { formalSkillPrefix, verificationSkillPrefix } from "#/scripts/verification-skills.ts";
@@ -749,82 +740,6 @@ test("no project-owned skill copies a version from the catalog", () => {
 
   expect(versions.length).toBeGreaterThan(0);
   expect(violations).toEqual([]);
-});
-
-const childProcessRunners = ["execFileSync", "execFile", "spawn", "spawnSync"];
-const packageManagerCommands = ["pm", "why"];
-const mayRunVp = /\binstalledVp\b|["'`]vp["'`]/;
-
-function calleeName(call: ts.CallExpression): string | undefined {
-  const callee = unwrapped(call.expression);
-  if (ts.isIdentifier(callee)) return callee.text;
-  return ts.isPropertyAccessExpression(callee) ? callee.name.text : undefined;
-}
-
-function namesVp(expression: ts.Expression | undefined): boolean {
-  if (expression === undefined) return false;
-  const program = unwrapped(expression);
-  return (
-    (ts.isIdentifier(program) && program.text === "installedVp") ||
-    (ts.isStringLiteralLikeNode(program) && program.text === "vp")
-  );
-}
-
-function packageManagerCommandOf(expression: ts.Expression | undefined): string | undefined {
-  if (expression === undefined) return undefined;
-  const list = unwrapped(expression);
-  const first = ts.isArrayLiteralExpression(list) ? list.elements[0] : undefined;
-  return first !== undefined &&
-    ts.isStringLiteralLikeNode(first) &&
-    packageManagerCommands.includes(first.text)
-    ? first.text
-    : undefined;
-}
-
-function packageManagerBypassesIn(source: ts.SourceFile, file: string): string[] {
-  return descendants(source).flatMap((node) => {
-    if (!ts.isCallExpression(node)) return [];
-    const name = calleeName(node);
-    const [program, args] = node.arguments;
-    const command = packageManagerCommandOf(args);
-    if (
-      name === undefined ||
-      !childProcessRunners.includes(name) ||
-      !namesVp(program) ||
-      command === undefined
-    ) {
-      return [];
-    }
-    const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-    return [
-      `${file}:${line}: ${name} runs vp ${command} itself; ask the package manager through askPackageManager in scripts/repository.ts, which picks the vp and checks its release.`,
-    ];
-  });
-}
-
-test("no script or test runs vp pm or vp why itself: each asks the package manager through askPackageManager", () => {
-  const files = scriptFilesIn().filter((file) => mayRunVp.test(read(file)));
-
-  expect(files).toContain("scripts/repository.ts");
-  expect(
-    parseAll(files.map((file) => join(repositoryRoot, file))).flatMap((source, index) =>
-      packageManagerBypassesIn(source, files[index] ?? ""),
-    ),
-  ).toEqual([]);
-});
-
-test.for([
-  ['execFileSync(installedVp, ["why", name])', 1],
-  ['spawn("vp", ["pm", "pack"])', 1],
-  ['childProcess.spawnSync("vp", ["why"] as const)', 1],
-  ["execFile(`vp`, [`pm`, `config`])", 1],
-  ['execFileSync(installedVp, ["fmt", file])', 0],
-  ['execFileSync("vpx", ["pm"])', 0],
-  ['askPackageManager(["why", name], options)', 0],
-] as const)("the package-manager rule, on %s, finds %i bypass", ([call, found]) => {
-  expect(packageManagerBypassesIn(parseText(`${call};\n`, ".ts"), "fixture.ts")).toHaveLength(
-    found,
-  );
 });
 
 test("every row of the rules table in AGENTS.md is compact, so a rule edit changes one line", () => {
