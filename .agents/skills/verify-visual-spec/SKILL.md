@@ -37,7 +37,7 @@ A variant renders like another, a hover or a pressed state draws nothing, the da
 | `scripts/browser-instances.ts`: `browserInEveryEngine` | The engines the project runs in. |
 | `solid-js`, `@solidjs/web`, `@solidjs/vite-plugin`, `@stylexjs/stylex`, `vite-plus`, `@vitest/browser-playwright` and `playwright` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `dba0e2b`. Run `git diff dba0e2b -- packages/core/spec/look packages/core/spec/format.ts packages/core/spec/runner.ts packages/core/spec/computed.ts packages/core/spec/commands.ts packages/core/spec/fixtures.ts packages/core/spec/registry.ts packages/core/tests/visual-spec.browser.test.ts packages/core/tests/spec-registry.test.ts packages/core/src vite.config.ts scripts/browser-instances.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
+Last confirmed against commit `06bb761`. Run `git diff 06bb761 -- packages/core/spec/look packages/core/spec/format.ts packages/core/spec/runner.ts packages/core/spec/computed.ts packages/core/spec/commands.ts packages/core/spec/fixtures.ts packages/core/spec/registry.ts packages/core/tests/visual-spec.browser.test.ts packages/core/tests/spec-registry.test.ts packages/core/src vite.config.ts scripts/browser-instances.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the checks still describe the code at the new commit.
 
 ## Run it
 
