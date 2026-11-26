@@ -1,7 +1,30 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { packageManagerConfigQuery } from "#/scripts/package-manager.ts";
+import { manifestAt, rootManifest } from "#/scripts/repository.ts";
 
-export const configQuery = "pm config list --json";
+export const configQuery = packageManagerConfigQuery.join(" ");
+
+const pinnedPnpmPattern = /^pnpm@([^+\s]+)/;
+
+export function pinnedPnpmVersion(
+  packageManager: string | undefined = rootManifest().packageManager,
+): string {
+  const version =
+    packageManager === undefined ? undefined : pinnedPnpmPattern.exec(packageManager)?.[1];
+  if (version === undefined) {
+    throw new Error(`Expected pnpm@<version> in packageManager, got ${String(packageManager)}`);
+  }
+  return version;
+}
+
+export function installedVitePlusRelease(): string {
+  const version = manifestAt("node_modules/vite-plus/package.json").version;
+  if (typeof version !== "string") {
+    throw new Error("Expected version in node_modules/vite-plus/package.json");
+  }
+  return version;
+}
 
 export function shellQuoted(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
@@ -18,7 +41,11 @@ export type VpShim = {
   version: string;
   pnpm?: string;
   config?: string;
+  configStatus?: number;
+  configSeconds?: number;
+  configScript?: readonly string[];
   answer?: string;
+  answerSeconds?: number;
   status?: number;
   versionLine?: string;
   versionStatus?: number;
@@ -42,6 +69,14 @@ export function writeVpShim(directory: string, name: string, shim: VpShim): stri
       ? []
       : [`  printf 'version failed on purpose' >&2`, `  exit ${shim.versionStatus}`];
   const versionWaits = shim.versionSeconds === undefined ? [] : [`  sleep ${shim.versionSeconds}`];
+  const configWaits = shim.configSeconds === undefined ? [] : [`  sleep ${shim.configSeconds}`];
+  const configBody =
+    shim.configScript !== undefined
+      ? shim.configScript.map((line) => `  ${line}`)
+      : shim.configStatus !== undefined
+        ? [`  printf 'config failed on purpose' >&2`, `  exit ${shim.configStatus}`]
+        : [`  printf '%s' ${shellQuoted(configAnswerOf(shim))}`, `  exit 0`];
+  const answerWaits = shim.answerSeconds === undefined ? [] : [`sleep ${shim.answerSeconds}`];
   const queryFails = (shim.status ?? 0) === 0 ? [] : [`printf 'failed on purpose' >&2`];
   return writeShim(
     directory,
@@ -54,7 +89,11 @@ export function writeVpShim(directory: string, name: string, shim: VpShim): stri
       `  printf '%s\\n' ${shellQuoted(shim.versionLine ?? `vp v${shim.version}`)}`,
       `  exit 0`,
       `fi`,
-      `if [ "$*" = ${shellQuoted(configQuery)} ]; then printf '%s' ${shellQuoted(configAnswerOf(shim))}; exit 0; fi`,
+      `if [ "$*" = ${shellQuoted(configQuery)} ]; then`,
+      ...configWaits,
+      ...configBody,
+      `fi`,
+      ...answerWaits,
       `printf '%s' ${shellQuoted(shim.answer ?? "")}`,
       ...queryFails,
       `exit ${shim.status ?? 0}`,

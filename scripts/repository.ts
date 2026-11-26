@@ -1,8 +1,9 @@
 import { type Dirent, globSync, readFileSync } from "node:fs";
 import { join, sep } from "node:path";
 import { askPackageManager } from "#/scripts/package-manager.ts";
+import { repositoryRoot } from "#/scripts/repository-root.ts";
 
-export const repositoryRoot = join(import.meta.dirname, "..");
+export { repositoryRoot };
 export const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
 export const packageManagerAnswerTimeout = 30_000;
 
@@ -34,6 +35,7 @@ export type ExportTarget = string | null | ExportTarget[] | { [condition: string
 
 export type Manifest = {
   name?: string;
+  version?: string;
   license?: string;
   exports?: ExportTarget;
   imports?: Record<string, string>;

@@ -3,10 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { installedVitePlusVersion } from "#/scripts/package-manager.ts";
 import { readPnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
-import { rootManifest } from "#/scripts/repository.ts";
-import { shellQuoted, writeShim } from "#/tests/support/shims.ts";
+import {
+  installedVitePlusRelease,
+  pinnedPnpmVersion,
+  shellQuoted,
+  writeVpShim,
+} from "#/tests/support/shims.ts";
 
 vi.mock("node:fs", async (importOriginal) => {
   const original = await importOriginal<typeof fs>();
@@ -38,16 +41,14 @@ test("when an entry of the user's config home cannot be linked, readPnpmSettings
   mkdirSync(join(configHome, "vite-plus"));
   writeFileSync(join(configHome, "vite-plus/config.json"), "{}");
   const bin = temporaryDirectory();
-  const pnpm = rootManifest().packageManager?.replace("@", "/") ?? "";
-  writeShim(
-    bin,
-    "vp",
-    [
-      `if [ "$1" = "--version" ]; then printf 'vp v%s\\n' ${shellQuoted(installedVitePlusVersion() ?? "")}; exit 0; fi`,
+  writeVpShim(bin, "vp", {
+    version: installedVitePlusRelease(),
+    configScript: [
       `if [ -f "$XDG_CONFIG_HOME/vite-plus/config.json" ]; then vp=seen; else vp=left-out; fi`,
-      `printf '{"userAgent":"%s","catalog":{"vite-plus config":"%s"}}' ${shellQuoted(pnpm)} "$vp"`,
-    ].join("\n"),
-  );
+      `printf '{"userAgent":"pnpm/%s","catalog":{"vite-plus config":"%s"}}' ${shellQuoted(pinnedPnpmVersion())} "$vp"`,
+      `exit 0`,
+    ],
+  });
   vi.stubEnv("XDG_CONFIG_HOME", configHome);
   vi.stubEnv("PATH", `${bin}${delimiter}${process.env.PATH ?? ""}`);
 

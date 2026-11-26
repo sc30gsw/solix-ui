@@ -17,9 +17,15 @@ import {
   settingsFrom,
   workspaceFile,
 } from "#/scripts/pnpm-settings.ts";
-import { installedVitePlusVersion } from "#/scripts/package-manager.ts";
 import { repositoryRoot, rootManifest } from "#/scripts/repository.ts";
-import { callsOf, configQuery, shellQuoted, writeShim } from "#/tests/support/shims.ts";
+import {
+  callsOf,
+  configQuery,
+  installedVitePlusRelease,
+  pinnedPnpmVersion,
+  shellQuoted,
+  writeVpShim,
+} from "#/tests/support/shims.ts";
 import { packages } from "#/tests/support/workspace.ts";
 
 const catalogOnly = ["catalog:", '  "@solidjs/web": 2.0.0-rc.21', "  solid-js: 2.0.0-rc.21", ""];
@@ -148,18 +154,15 @@ test("readPnpmSettings asks the vp on PATH, which is checked before every answer
   mkdirSync(join(configHome, "vite-plus"));
   writeFileSync(join(configHome, "vite-plus/config.json"), "{}");
   const bin = temporaryDirectory();
-  const pnpm = rootManifest().packageManager?.replace("@", "/") ?? "";
-  const vp = writeShim(
-    bin,
-    "vp",
-    [
-      `printf '%s\\n' "$*" >> ${shellQuoted(`${join(bin, "vp")}.calls`)}`,
-      `if [ "$1" = "--version" ]; then printf 'vp v%s\\n' ${shellQuoted(installedVitePlusVersion() ?? "")}; exit 0; fi`,
+  const vp = writeVpShim(bin, "vp", {
+    version: installedVitePlusRelease(),
+    configScript: [
       `if [ -f "$XDG_CONFIG_HOME/vite-plus/config.json" ]; then vp=seen; else vp=hidden; fi`,
       `if [ -e "$XDG_CONFIG_HOME/pnpm" ]; then pnpm=seen; else pnpm=hidden; fi`,
-      `printf '{"userAgent":"%s","catalog":{"vite-plus config":"%s","pnpm config":"%s"}}' ${shellQuoted(pnpm)} "$vp" "$pnpm"`,
-    ].join("\n"),
-  );
+      `printf '{"userAgent":"pnpm/%s","catalog":{"vite-plus config":"%s","pnpm config":"%s"}}' ${shellQuoted(pinnedPnpmVersion())} "$vp" "$pnpm"`,
+      `exit 0`,
+    ],
+  });
   vi.stubEnv("XDG_CONFIG_HOME", configHome);
   vi.stubEnv("PATH", `${bin}${delimiter}${process.env.PATH ?? ""}`);
 
@@ -170,6 +173,15 @@ test("readPnpmSettings asks the vp on PATH, which is checked before every answer
   expect(callsOf(vp)).toEqual(["--version", configQuery]);
   expect(readFileSync(join(configHome, "vite-plus/config.json"), "utf8")).toBe("{}");
   expect(readFileSync(join(configHome, "pnpm/config.yaml"), "utf8")).toBe(agePolicy.join("\n"));
+
+  const notADirectory = join(temporaryDirectory(), "file-config-home");
+  writeFileSync(notADirectory, "");
+  vi.stubEnv("XDG_CONFIG_HOME", notADirectory);
+  expect(readPnpmSettings(checkout).catalog).toEqual({
+    "vite-plus config": "hidden",
+    "pnpm config": "hidden",
+  });
+  expect(pinnedPnpmVersion("pnpm@12.23.0+sha512.abc")).toBe("12.23.0");
 });
 
 test("settingsFrom refuses pnpm settings with no catalog entry, and skills: true in place of names", () => {

@@ -1,5 +1,4 @@
 import {
-  existsSync,
   lstatSync,
   mkdtempSync,
   readdirSync,
@@ -14,7 +13,12 @@ import {
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { askPackageManager, VitePlusNotFound } from "#/scripts/package-manager.ts";
+import {
+  askPackageManager,
+  packageManagerConfigQuery,
+  VitePlusNotFound,
+  withoutPackageManagerEnv,
+} from "#/scripts/package-manager.ts";
 import { listed, packageManagerAnswerTimeout, repositoryRoot } from "#/scripts/repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
@@ -43,7 +47,17 @@ export type RawSettings = {
   permissions?: Record<string, { skills?: string[] | boolean }>;
 };
 
-const settingFromTheEnvironment = /^p?npm_config_/i;
+const ignorableLinkErrors = new Set([
+  "EPERM",
+  "EACCES",
+  "EEXIST",
+  "ENOENT",
+  "EROFS",
+  "ENOSYS",
+  "ENOTSUP",
+  "EINVAL",
+  "ELOOP",
+]);
 let cached: PnpmSettings | undefined;
 
 function approvedSkillsIn(permissions: RawSettings["permissions"]): Record<string, string[]> {
@@ -76,12 +90,6 @@ export function settingsFrom(raw: RawSettings): PnpmSettings {
   };
 }
 
-function withoutSettings(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(
-    Object.entries(environment).filter(([name]) => !settingFromTheEnvironment.test(name)),
-  );
-}
-
 function userConfigHome(): string {
   const configured = process.env.XDG_CONFIG_HOME;
   return configured !== undefined && isAbsolute(configured)
@@ -90,17 +98,27 @@ function userConfigHome(): string {
 }
 
 function linkInto(configHome: string, target: string, name: string): void {
-  const kind = statSync(target, { throwIfNoEntry: false })?.isDirectory() ? "junction" : "file";
   try {
+    const kind = statSync(target, { throwIfNoEntry: false })?.isDirectory() ? "junction" : "file";
     symlinkSync(target, join(configHome, name), kind);
-  } catch {
-    return;
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    if (code !== undefined && ignorableLinkErrors.has(code)) return;
+    throw error;
   }
 }
 
 function linkUserConfigBesidesPnpm(configHome: string): void {
   const userHome = userConfigHome();
-  const entries = existsSync(userHome) ? readdirSync(userHome) : [];
+  let entries: string[];
+  try {
+    if (!statSync(userHome, { throwIfNoEntry: false })?.isDirectory()) return;
+    entries = readdirSync(userHome);
+  } catch (error) {
+    const { code } = error as NodeJS.ErrnoException;
+    if (code === "EACCES" || code === "ENOENT" || code === "ENOTDIR") return;
+    throw error;
+  }
   for (const name of entries.filter((entry) => entry !== "pnpm")) {
     linkInto(configHome, join(userHome, name), name);
   }
@@ -117,10 +135,10 @@ function removeConfigHome(configHome: string): void {
 
 function askedForSettings(directory: string, configHome: string): string {
   try {
-    return askPackageManager(["pm", "config", "list", "--json"], {
+    return askPackageManager(packageManagerConfigQuery, {
       cwd: directory,
       encoding: "utf8",
-      env: { ...withoutSettings(process.env), XDG_CONFIG_HOME: configHome },
+      env: { ...withoutPackageManagerEnv(process.env), XDG_CONFIG_HOME: configHome },
       timeout: packageManagerAnswerTimeout,
     });
   } catch (error) {
@@ -131,22 +149,26 @@ function askedForSettings(directory: string, configHome: string): string {
   }
 }
 
+function removeQuietly(configHome: string): void {
+  try {
+    removeConfigHome(configHome);
+  } catch {
+    return;
+  }
+}
+
 function pnpmAnswer(directory: string): string {
-  const outcome: { configHome?: string; answer?: string; failure?: unknown } = {};
+  const configHome = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
+  let answer: string;
   try {
-    outcome.configHome = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
-    linkUserConfigBesidesPnpm(outcome.configHome);
-    outcome.answer = askedForSettings(directory, outcome.configHome);
+    linkUserConfigBesidesPnpm(configHome);
+    answer = askedForSettings(directory, configHome);
   } catch (error) {
-    outcome.failure = error;
+    removeQuietly(configHome);
+    throw error;
   }
-  try {
-    if (outcome.configHome !== undefined) removeConfigHome(outcome.configHome);
-  } catch (cleanup) {
-    if (!("failure" in outcome)) throw cleanup;
-  }
-  if ("failure" in outcome || outcome.answer === undefined) throw outcome.failure;
-  return outcome.answer;
+  removeConfigHome(configHome);
+  return answer;
 }
 
 export function readPnpmSettings(directory: string = repositoryRoot): PnpmSettings {

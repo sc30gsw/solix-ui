@@ -33,7 +33,7 @@ type SetUpStep = {
   action: string;
   with: Record<string, unknown>;
   mayAlsoSet?: Record<string, unknown>;
-  checkedElsewhere?: { key: string; by: string };
+  extraKeysChecked?: readonly string[];
 };
 const setUpVpAction = "voidzero-dev/setup-vp";
 const setUpSteps: readonly SetUpStep[] = [
@@ -45,7 +45,7 @@ const setUpSteps: readonly SetUpStep[] = [
   {
     action: setUpVpAction,
     with: { "node-version-file": "package.json", cache: true },
-    checkedElsewhere: { key: "version", by: "the vite-plus version rule" },
+    extraKeysChecked: ["version"],
   },
 ];
 
@@ -95,10 +95,10 @@ function keysBeyond(part: object, allowed: readonly string[]): string[] {
 
 function describedStep(step: SetUpStep): string {
   const also = step.mayAlsoSet ? ` and, if it likes, ${JSON.stringify(step.mayAlsoSet)}` : "";
-  const elsewhere = step.checkedElsewhere
-    ? ` and the ${step.checkedElsewhere.key} ${step.checkedElsewhere.by} asks for`
+  const extra = step.extraKeysChecked?.length
+    ? ` and the ${step.extraKeysChecked.join(", ")} the vite-plus version rule asks for`
     : "";
-  return `${step.action} with ${JSON.stringify(step.with)}${also}${elsewhere}`;
+  return `${step.action} with ${JSON.stringify(step.with)}${also}${extra}`;
 }
 
 function gateStepsFor(command: string): string {
@@ -112,7 +112,7 @@ function withMatches(given: Record<string, unknown>, expected: SetUpStep): boole
     Object.keys(expected.with).every((key) => key in given) &&
     Object.entries(given).every(
       ([key, value]) =>
-        key === expected.checkedElsewhere?.key ||
+        (expected.extraKeysChecked?.includes(key) ?? false) ||
         (key in allowed && isDeepStrictEqual(value, allowed[key])),
     )
   );
@@ -156,8 +156,8 @@ export function vitePlusVersionProblems(workflow: Workflow): string[] {
   const pinned = catalogVitePlus();
   return Object.entries(workflow.jobs ?? {}).flatMap(([name, { steps = [] }]) =>
     steps.flatMap((step, index) => {
-      const version = step.with?.version;
       if (actionOf(step) !== setUpVpAction) return [];
+      const version = step.with?.version;
       if (isDeepStrictEqual(version, pinned)) return [];
       const given = version === undefined ? "no version" : `version ${JSON.stringify(version)}`;
       return [
