@@ -5,7 +5,7 @@ import { stripVTControlCharacters } from "node:util";
 import { expect, test } from "vite-plus/test";
 import { inTemporaryTree } from "#/tests/support/temporary-tree.ts";
 import { withoutTestRunnerVariables } from "#/tests/support/test-runner-environment.ts";
-import { installedVp, repositoryRoot } from "#/tests/support/workspace.ts";
+import { installedVp, repositoryRoot } from "#/scripts/repository.ts";
 
 const probeConfig = join(repositoryRoot, "tests/fixtures/concurrent-runs/vite.config.ts");
 const runTimeout = 120_000;

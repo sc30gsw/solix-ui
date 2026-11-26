@@ -1,25 +1,156 @@
 import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
-import { type Dirent, existsSync, globSync, readFileSync } from "node:fs";
+import { type Dirent, existsSync, globSync, readFileSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 
 export const repositoryRoot = join(import.meta.dirname, "..");
 export const installedVp = join(repositoryRoot, "node_modules/.bin/vp");
+export const installedVitePlus = join(repositoryRoot, "node_modules/vite-plus");
 export const packageManagerAnswerTimeout = 30_000;
 
-export function execVp(
+export type VpCandidate = { command: string; script?: string };
+
+export const vpCandidates: readonly VpCandidate[] = [
+  { command: "vp" },
+  { command: process.execPath, script: join(installedVitePlus, "bin/vp") },
+];
+
+export class VitePlusNotFound extends Error {
+  readonly tried: string[];
+
+  constructor(tried: string[]) {
+    super(
+      `No vp answered: ${listed(tried)} is neither on PATH nor installed here. Install Vite+, then run \`vp install\`.`,
+    );
+    this.tried = tried;
+  }
+}
+
+export class VitePlusVersionMismatch extends Error {
+  readonly command: string;
+  readonly found: string;
+  readonly pinned: string;
+
+  constructor(command: string, found: string, pinned: string) {
+    super(
+      `${command} answered ${found}, but the repository installs vite-plus ${pinned}, the release the catalog pins. Install that release, or run the script through \`vp run\`.`,
+    );
+    this.command = command;
+    this.found = found;
+    this.pinned = pinned;
+  }
+}
+
+export class PackageManagerQueryFailed extends Error {
+  readonly command: string;
+  readonly code: string | undefined;
+  readonly status: number | null | undefined;
+  readonly stderr: string;
+
+  constructor(command: string, error: unknown) {
+    const failure = error as NodeJS.ErrnoException & { status?: number | null; stderr?: unknown };
+    const stderr = typeof failure.stderr === "string" ? failure.stderr : "";
+    const reason =
+      failure.code === "ETIMEDOUT"
+        ? `gave no answer in ${packageManagerAnswerTimeout / 1000} seconds`
+        : typeof failure.status === "number"
+          ? `exited with ${failure.status}${stderr.trim() === "" ? "" : `: ${stderr.trim()}`}`
+          : `failed: ${failure.message}`;
+    super(`${command} ${reason}.`, { cause: error });
+    this.command = command;
+    this.code = failure.code;
+    this.status = failure.status;
+    this.stderr = stderr;
+  }
+}
+
+const vpVersion = /^vp v(\S+)/;
+const answeredVersions = new Map<string, string>();
+
+function commandLine(candidate: VpCandidate, args: readonly string[]): string {
+  return [
+    candidate.command,
+    ...(candidate.script === undefined ? [] : [candidate.script]),
+    ...args,
+  ].join(" ");
+}
+
+function run(
+  candidate: VpCandidate,
   args: readonly string[],
   options: ExecFileSyncOptionsWithStringEncoding,
-  vp?: string,
 ): string {
-  if (vp !== undefined) return execFileSync(vp, args, options);
+  const argv = candidate.script === undefined ? args : [candidate.script, ...args];
   try {
-    return execFileSync("vp", args, options);
+    return execFileSync(candidate.command, argv, options);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT" && existsSync(installedVp)) {
-      return execFileSync(installedVp, args, options);
-    }
-    throw error;
+    throw new PackageManagerQueryFailed(commandLine(candidate, args), error);
   }
+}
+
+function isMissing(candidate: VpCandidate, error: unknown): boolean {
+  return (
+    candidate.script === undefined &&
+    error instanceof PackageManagerQueryFailed &&
+    error.code === "ENOENT"
+  );
+}
+
+export function pinnedVitePlus(): string {
+  const manifest = join(installedVitePlus, "package.json");
+  if (!existsSync(manifest)) {
+    throw new Error(`vite-plus is not installed in ${repositoryRoot}; run \`vp install\`.`);
+  }
+  return (JSON.parse(readFileSync(manifest, "utf8")) as { version: string }).version;
+}
+
+function checkVersion(
+  candidate: VpCandidate,
+  options: ExecFileSyncOptionsWithStringEncoding,
+): void {
+  const key = commandLine(candidate, []);
+  const pinned = pinnedVitePlus();
+  let found = answeredVersions.get(key);
+  if (found === undefined) {
+    const answer = run(candidate, ["--version"], {
+      cwd: options.cwd,
+      env: options.env,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: packageManagerAnswerTimeout,
+    });
+    found = vpVersion.exec(answer)?.[1] ?? (answer.trim().split("\n")[0] || "nothing");
+    answeredVersions.set(key, found);
+  }
+  if (found !== pinned) {
+    throw new VitePlusVersionMismatch(commandLine(candidate, ["--version"]), found, pinned);
+  }
+}
+
+export function askPackageManager(
+  args: readonly string[],
+  options: ExecFileSyncOptionsWithStringEncoding,
+  candidates: readonly VpCandidate[] = vpCandidates,
+): string {
+  const cwd = options.cwd ?? process.cwd();
+  if (!statSync(cwd, { throwIfNoEntry: false })?.isDirectory()) {
+    throw new Error(`vp ${args.join(" ")} cannot run in ${String(cwd)}, which is not a directory.`);
+  }
+  const tried: string[] = [];
+  for (const candidate of candidates) {
+    if (candidate.script !== undefined && !existsSync(candidate.script)) {
+      tried.push(commandLine(candidate, []));
+      continue;
+    }
+    try {
+      checkVersion(candidate, options);
+    } catch (error) {
+      if (!isMissing(candidate, error)) throw error;
+      tried.push(commandLine(candidate, []));
+      continue;
+    }
+    return run(candidate, args, options);
+  }
+  throw new VitePlusNotFound(tried);
 }
 
 const generatedOrInstalled = new Set(["node_modules", "dist", ".git"]);
@@ -93,7 +224,7 @@ export function whyInstalled(
   names: readonly string[],
   directory: string = repositoryRoot,
 ): Dependent[] {
-  const answer = execVp(["why", ...names, "-r", "--json"], {
+  const answer = askPackageManager(["why", ...names, "-r", "--json"], {
     cwd: directory,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

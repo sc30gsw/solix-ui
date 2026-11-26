@@ -1,12 +1,25 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import {
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
-  execVp,
+  askPackageManager,
   listed,
   packageManagerAnswerTimeout,
   repositoryRoot,
+  VitePlusNotFound,
 } from "#/scripts/repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
@@ -74,42 +87,60 @@ function withoutSettings(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   );
 }
 
-function pnpmAnswer(directory: string, vp?: string): string {
-  const noUserConfig = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
-  const command = vp ?? "vp";
-  try {
-    return execVp(
-      ["pm", "config", "list", "--json"],
-      {
-        cwd: directory,
-        encoding: "utf8",
-        env: { ...withoutSettings(process.env), XDG_CONFIG_HOME: noUserConfig },
-        timeout: packageManagerAnswerTimeout,
-      },
-      vp,
+function userConfigHome(): string {
+  const configured = process.env.XDG_CONFIG_HOME;
+  return configured !== undefined && isAbsolute(configured)
+    ? configured
+    : join(homedir(), ".config");
+}
+
+function configHomeWithoutPnpm(): string {
+  const configHome = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
+  const userHome = userConfigHome();
+  const entries = existsSync(userHome) ? readdirSync(userHome) : [];
+  for (const name of entries.filter((entry) => entry !== "pnpm")) {
+    const target = join(userHome, name);
+    symlinkSync(
+      target,
+      join(configHome, name),
+      statSync(target, { throwIfNoEntry: false })?.isDirectory() ? "junction" : "file",
     );
+  }
+  return configHome;
+}
+
+function removeConfigHome(configHome: string): void {
+  for (const name of readdirSync(configHome)) {
+    const entry = join(configHome, name);
+    if (lstatSync(entry).isSymbolicLink()) unlinkSync(entry);
+    else rmSync(entry, { recursive: true });
+  }
+  rmdirSync(configHome);
+}
+
+function pnpmAnswer(directory: string): string {
+  const configHome = configHomeWithoutPnpm();
+  try {
+    return askPackageManager(["pm", "config", "list", "--json"], {
+      cwd: directory,
+      encoding: "utf8",
+      env: { ...withoutSettings(process.env), XDG_CONFIG_HOME: configHome },
+      timeout: packageManagerAnswerTimeout,
+    });
   } catch (error) {
-    const { code } = error as NodeJS.ErrnoException;
-    if (code === "ENOENT") {
-      throw new Error(
-        `${workspaceFile} is read through pnpm, which ${command} starts, and that is neither installed here nor on PATH. Install Vite+, then run \`vp install\`.`,
-        { cause: error },
-      );
-    }
-    if (code === "ETIMEDOUT") {
-      throw new Error(
-        `${command} pm config list gave no answer in ${packageManagerAnswerTimeout / 1000} seconds.`,
-        { cause: error },
-      );
+    if (error instanceof VitePlusNotFound) {
+      throw new Error(`${workspaceFile} is read through pnpm, which vp starts. ${error.message}`, {
+        cause: error,
+      });
     }
     throw error;
   } finally {
-    rmSync(noUserConfig, { recursive: true });
+    removeConfigHome(configHome);
   }
 }
 
-export function readPnpmSettings(directory: string = repositoryRoot, vp?: string): PnpmSettings {
-  return settingsFrom(JSON.parse(pnpmAnswer(directory, vp)) as RawSettings);
+export function readPnpmSettings(directory: string = repositoryRoot): PnpmSettings {
+  return settingsFrom(JSON.parse(pnpmAnswer(directory)) as RawSettings);
 }
 
 export function pnpmSettings(): PnpmSettings {

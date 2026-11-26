@@ -35,11 +35,11 @@ import {
   startServer,
   viteOnAFreePort,
 } from "#/tests/support/server-process.ts";
+import { askPackageManager } from "#/scripts/repository.ts";
 import {
   type ExportTarget,
   type Manifest,
   componentLibraries,
-  execVp,
   installedVersions,
   libraryNames,
   libraryPackages,
@@ -136,7 +136,7 @@ function typeErrors(): string {
 }
 
 function packInto(destination: string, directory: string): Pick<Packed, "tarball" | "files"> {
-  const answer = execVp(["pm", "pack", "--json", "--pack-destination", destination], {
+  const answer = askPackageManager(["pm", "pack", "--json", "--pack-destination", destination], {
     cwd: directory,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],

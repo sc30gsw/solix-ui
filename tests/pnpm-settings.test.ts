@@ -1,7 +1,4 @@
 import {
-  accessSync,
-  chmodSync,
-  constants,
   globSync,
   mkdirSync,
   mkdtempSync,
@@ -20,7 +17,8 @@ import {
   settingsFrom,
   workspaceFile,
 } from "#/scripts/pnpm-settings.ts";
-import { repositoryRoot, rootManifest } from "#/scripts/repository.ts";
+import { pinnedVitePlus, repositoryRoot, rootManifest } from "#/scripts/repository.ts";
+import { shellQuoted, writeShim } from "#/tests/support/shims.ts";
 import { packages } from "#/tests/support/workspace.ts";
 
 const catalogOnly = ["catalog:", '  "@solidjs/web": 2.0.0-rc.21', "  solid-js: 2.0.0-rc.21", ""];
@@ -139,64 +137,31 @@ test("a workspace-dir variable does not point the reader at another checkout", (
   }
 });
 
-function executableOnPath(name: string): string | undefined {
-  for (const directory of (process.env.PATH ?? "").split(delimiter)) {
-    if (directory === "") continue;
-    const candidate = join(directory, name);
-    try {
-      if (statSync(candidate).isFile()) {
-        accessSync(candidate, constants.X_OK);
-        return candidate;
-      }
-    } catch {
-      continue;
-    }
-  }
-  return undefined;
-}
-
-function shellQuoted(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function writeExecutable(directory: string, name: string, script: string): void {
-  const path = join(directory, name);
-  writeFileSync(path, script);
-  chmodSync(path, 0o755);
-}
-
-test("readPnpmSettings prefers vp on PATH before node_modules/.bin/vp, and falls back to node_modules/.bin/vp when vp is not on PATH", () => {
+test("readPnpmSettings asks the vp on PATH, and hides only pnpm's user config from it, so a global vp keeps its own", () => {
   const checkout = checkoutWith(catalogOnly);
-  const originalPath = process.env.PATH ?? "";
-  const pnpm = executableOnPath("pnpm");
-  expect(pnpm).toBeDefined();
-
-  const pathWithVp = temporaryDirectory();
-  writeExecutable(
-    pathWithVp,
+  const configHome = userConfigWith(agePolicy);
+  mkdirSync(join(configHome, "vite-plus"));
+  writeFileSync(join(configHome, "vite-plus/config.json"), "{}");
+  const bin = temporaryDirectory();
+  writeShim(
+    bin,
     "vp",
-    '#!/bin/sh\nprintf \'%s\' \'{"catalog":{"from-path":"1.0.0"}}\'\n',
+    [
+      `if [ "$1" = "--version" ]; then printf 'vp v%s\\n' ${shellQuoted(pinnedVitePlus())}; exit 0; fi`,
+      `if [ -f "$XDG_CONFIG_HOME/vite-plus/config.json" ]; then vp=seen; else vp=hidden; fi`,
+      `if [ -e "$XDG_CONFIG_HOME/pnpm" ]; then pnpm=seen; else pnpm=hidden; fi`,
+      `printf '{"catalog":{"vite-plus config":"%s","pnpm config":"%s"}}' "$vp" "$pnpm"`,
+    ].join("\n"),
   );
-  vi.stubEnv("PATH", `${pathWithVp}${delimiter}${originalPath}`);
+  vi.stubEnv("XDG_CONFIG_HOME", configHome);
+  vi.stubEnv("PATH", `${bin}${delimiter}${process.env.PATH ?? ""}`);
 
-  expect(readPnpmSettings(checkout).catalog).toEqual({ "from-path": "1.0.0" });
-
-  const pathWithoutVp = temporaryDirectory();
-  writeExecutable(pathWithoutVp, "node", `#!/bin/sh\nexec ${shellQuoted(process.execPath)} "$@"\n`);
-  writeExecutable(pathWithoutVp, "pnpm", `#!/bin/sh\nexec ${shellQuoted(pnpm ?? "")} "$@"\n`);
-  vi.stubEnv("PATH", `${pathWithoutVp}${delimiter}/usr/bin${delimiter}/bin`);
-
-  expect(executableOnPath("vp")).toBeUndefined();
   expect(readPnpmSettings(checkout).catalog).toEqual({
-    "@solidjs/web": "2.0.0-rc.21",
-    "solid-js": "2.0.0-rc.21",
+    "vite-plus config": "seen",
+    "pnpm config": "hidden",
   });
-});
-
-test("a vp that is neither installed nor on PATH fails with the way to install it", () => {
-  expect(() => readPnpmSettings(checkoutWith(catalogOnly), "a-vp-that-is-not-installed")).toThrow(
-    /Install Vite\+, then run `vp install`/,
-  );
+  expect(readFileSync(join(configHome, "vite-plus/config.json"), "utf8")).toBe("{}");
+  expect(readFileSync(join(configHome, "pnpm/config.yaml"), "utf8")).toBe(agePolicy.join("\n"));
 });
 
 test("settingsFrom refuses pnpm settings with no catalog entry, and skills: true in place of names", () => {
