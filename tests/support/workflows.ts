@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { parse as parseYaml } from "yaml";
+import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 
 export type Step = { run?: string; uses?: string; with?: Record<string, unknown> } & Record<
@@ -33,17 +34,25 @@ type SetUpStep = {
   with: Record<string, unknown>;
   mayAlsoSet?: Record<string, unknown>;
 };
-const setUpSteps: readonly SetUpStep[] = [
-  {
-    action: "actions/checkout",
-    with: { "fetch-depth": 0 },
-    mayAlsoSet: { "persist-credentials": false },
-  },
-  {
-    action: "voidzero-dev/setup-vp",
-    with: { "node-version-file": "package.json", cache: true },
-  },
-];
+export const setUpVpAction = "voidzero-dev/setup-vp";
+
+export function pinnedVitePlus(): string | undefined {
+  return pnpmSettings().catalog["vite-plus"];
+}
+
+function setUpSteps(): readonly SetUpStep[] {
+  return [
+    {
+      action: "actions/checkout",
+      with: { "fetch-depth": 0 },
+      mayAlsoSet: { "persist-credentials": false },
+    },
+    {
+      action: setUpVpAction,
+      with: { "node-version-file": "package.json", cache: true, version: pinnedVitePlus() },
+    },
+  ];
+}
 const expression = /\$\{\{([\s\S]*?)\}\}/g;
 const secretsContext = /(?<![\w.])secrets(?:\s*\.\s*(\w+))?/g;
 
@@ -78,13 +87,14 @@ function keysBeyond(part: object, allowed: readonly string[]): string[] {
   return Object.keys(part).filter((key) => !allowed.includes(key));
 }
 
-function described(step: SetUpStep): string {
+function describedStep(step: SetUpStep): string {
   const also = step.mayAlsoSet ? ` and, if it likes, ${JSON.stringify(step.mayAlsoSet)}` : "";
   return `${step.action} with ${JSON.stringify(step.with)}${also}`;
 }
 
 function gateStepsFor(command: string): string {
-  return `${setUpSteps.map(described).join(", ")}, then run ${command}, each setting nothing else but a name`;
+  const described = setUpSteps().map(describedStep);
+  return `${described.join(", ")}, then run ${command}, each setting nothing else but a name`;
 }
 
 function withMatches(given: Record<string, unknown>, expected: SetUpStep): boolean {
@@ -117,18 +127,34 @@ function gateStepProblem(step: Step, command: string): string | undefined {
 
 function stepProblems(name: string, steps: readonly Step[], command: string): string[] {
   const exactly = `a gate job's steps are exactly ${gateStepsFor(command)}.`;
-  const wanted = setUpSteps.length + 1;
+  const expectedSteps = setUpSteps();
+  const wanted = expectedSteps.length + 1;
   if (steps.length !== wanted) {
     return [`the ${name} job has ${steps.length} steps, not ${wanted}; ${exactly}`];
   }
   return steps.flatMap((step, index) => {
-    const expected = setUpSteps[index];
+    const expected = expectedSteps[index];
     const problem =
       expected === undefined ? gateStepProblem(step, command) : setUpStepProblem(step, expected);
     return problem === undefined
       ? []
       : [`step ${index + 1} of the ${name} job ${problem}; ${exactly}`];
   });
+}
+
+export function vitePlusVersionProblems(workflow: Workflow): string[] {
+  const pinned = pinnedVitePlus();
+  return Object.entries(workflow.jobs ?? {}).flatMap(([name, { steps = [] }]) =>
+    steps.flatMap((step, index) => {
+      const version = step.with?.version;
+      if (step.uses?.split("@")[0]?.toLowerCase() !== setUpVpAction) return [];
+      if (isDeepStrictEqual(version, pinned)) return [];
+      const given = version === undefined ? "no version" : `version ${JSON.stringify(version)}`;
+      return [
+        `step ${index + 1} of the ${name} job sets up Vite+ with ${given}; give it version ${JSON.stringify(pinned)}, the vite-plus release the catalog pins.`,
+      ];
+    }),
+  );
 }
 
 export function gateJobProblems(workflow: Workflow, name: string, command: string): string[] {
