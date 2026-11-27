@@ -502,42 +502,44 @@ export const pinFilePatterns = [
   workspaceFile,
   "pnpm-lock.yaml",
   heldBackFile,
-  "scripts/newest-releases.ts",
-  "scripts/release-sources.ts",
-  "scripts/check-newest-releases.ts",
   ".github/workflows/newest-releases*.yml",
+  "scripts/check-newest-releases.ts",
+  "scripts/git.ts",
+  "scripts/newest-releases.ts",
+  "scripts/package-manager.internal.ts",
+  "scripts/package-manager.ts",
+  "scripts/pnpm-settings.ts",
+  "scripts/release-sources.ts",
+  "scripts/repository-root.ts",
+  "scripts/repository.ts",
 ];
 
-export function changesPins(changedFiles: readonly string[] | undefined): boolean {
+export function mayChangePins(changedFiles: readonly string[] | undefined): boolean {
   return (
     changedFiles === undefined ||
     changedFiles.some((file) => pinFilePatterns.some((pattern) => matchesGlob(file, pattern)))
   );
 }
 
-export type Verdict = { failing: Problem[]; warned: Problem[] };
+export type Verdict = { failures: Problem[]; warnings: Problem[] };
 
 export function verdictOf(
   problems: readonly Problem[],
-  run: RunEnvironment,
-  changedFiles: readonly string[] | undefined,
+  pullRequestFiles: readonly string[] | undefined,
 ): Verdict {
-  if (run.GITHUB_EVENT_NAME !== "pull_request" || changesPins(changedFiles)) {
-    return { failing: [...problems], warned: [] };
-  }
+  if (mayChangePins(pullRequestFiles)) return { failures: [...problems], warnings: [] };
   return {
-    failing: problems.filter(({ kind }) => kind !== "behind"),
-    warned: problems.filter(({ kind }) => kind === "behind"),
+    failures: problems.filter(({ kind }) => kind !== "behind"),
+    warnings: problems.filter(({ kind }) => kind === "behind"),
   };
 }
 
-export function warningLines(warned: readonly Problem[], run: RunEnvironment): string[] {
-  if (warned.length === 0) return [];
-  const base = run.GITHUB_BASE_REF || "main";
+export function warningLines(warnings: readonly Problem[], base: string): string[] {
+  if (warnings.length === 0) return [];
   return [
-    ...warned.map(({ message }) => message),
-    `This pull request changes no pin, so a pin behind does not fail it. Move it in a build(deps) pull request of its own to ${base}.`,
-  ];
+    ...warnings.map(({ message }) => message),
+    `This pull request changes no pin, so a pin behind does not fail it. The fix is a build(deps) pull request of its own to ${base}.`,
+  ].map((line) => `::warning::${line}`);
 }
 
 export function failureLines(problems: readonly Problem[], run: RunEnvironment): string[] {

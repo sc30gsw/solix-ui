@@ -1,9 +1,10 @@
+import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
-  changesPins,
   compareWithNewest,
   failureLines,
   heldBackFrom,
+  mayChangePins,
   exactlyRequiredBy,
   type HeldBack,
   heldBackFile,
@@ -26,7 +27,8 @@ import {
   storybookAppManifest,
   untilStableMembers,
 } from "#/scripts/release-sources.ts";
-import { manifestAt, manifestPaths, rootManifest } from "#/scripts/repository.ts";
+import { manifestAt, manifestPaths, repositoryRoot, rootManifest } from "#/scripts/repository.ts";
+import { importsOf, parse } from "#/scripts/syntax.ts";
 import { type Listing, now, policy, registryDocument } from "#/tests/support/registry-fixtures.ts";
 import {
   cronProblems,
@@ -488,46 +490,62 @@ test("a failing check adds no pull-request advice when no pin is behind, or when
   expect(failureLines([behind], {})).toEqual([behind.message]);
 });
 
-test("a pull request changes the pins when it changes a manifest, the workspace file, the lockfile, the holds or the check itself, and when its files cannot be listed", () => {
+function scriptsTheCheckImports(): string[] {
+  const seen = new Set<string>();
+  const pending = ["scripts/check-newest-releases.ts"];
+  for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+    if (seen.has(file)) continue;
+    seen.add(file);
+    for (const { specifier } of importsOf(parse(join(repositoryRoot, file)))) {
+      if (specifier.startsWith("#/scripts/")) pending.push(specifier.slice(2));
+    }
+  }
+  return [...seen].sort();
+}
+
+test("a pull request may change the pins when it changes a manifest, the workspace file, the lockfile, the holds, a newest-releases workflow or any script the check imports, and when its files cannot be listed", () => {
+  const theCheck = scriptsTheCheckImports();
+  expect(theCheck).toContain("scripts/pnpm-settings.ts");
   for (const file of [
     "package.json",
     "apps/storybook/package.json",
     workspaceFile,
     "pnpm-lock.yaml",
     heldBackFile,
-    "scripts/newest-releases.ts",
-    "scripts/release-sources.ts",
-    "scripts/check-newest-releases.ts",
+    ".github/workflows/newest-releases.yml",
     ".github/workflows/newest-releases-on-pr.yml",
+    ...theCheck,
   ]) {
-    expect(changesPins(["README.md", file]), file).toBe(true);
+    expect(mayChangePins(["README.md", file]), file).toBe(true);
   }
-  expect(changesPins(undefined)).toBe(true);
-  expect(changesPins([])).toBe(false);
-  expect(changesPins(["packages/core/src/Button.tsx", ".agents/skills/x/SKILL.md"])).toBe(false);
+  expect(mayChangePins(undefined)).toBe(true);
+  expect(mayChangePins([])).toBe(false);
+  for (const file of [
+    "packages/core/src/Button.tsx",
+    ".agents/skills/x/SKILL.md",
+    ".github/workflows/ci.yml",
+    "scripts/newest-releases-helpers.ts",
+    "package.json.bak",
+  ]) {
+    expect(mayChangePins([file]), file).toBe(false);
+  }
 });
 
-test("on a pull request that changes no pin, a pin behind is a warning and every other problem still fails", () => {
+test("on a pull request that changes no pin, a pin behind is a warning and every other problem still fails; with no file list, everything fails", () => {
   const untouched = ["packages/core/src/Button.tsx"];
-  expect(verdictOf([behind, holdFailed], onAPullRequest, untouched)).toEqual({
-    failing: [holdFailed],
-    warned: [behind],
+  expect(verdictOf([behind, holdFailed], untouched)).toEqual({
+    failures: [holdFailed],
+    warnings: [behind],
   });
-  expect(verdictOf([behind], onAPullRequest, [workspaceFile])).toEqual({
-    failing: [behind],
-    warned: [],
-  });
-  expect(verdictOf([behind], onAPullRequest, undefined)).toEqual({ failing: [behind], warned: [] });
-  expect(
-    verdictOf([behind], { ...onAPullRequest, GITHUB_EVENT_NAME: "schedule" }, untouched),
-  ).toEqual({ failing: [behind], warned: [] });
+  expect(verdictOf([behind], [workspaceFile])).toEqual({ failures: [behind], warnings: [] });
+  expect(verdictOf([behind], undefined)).toEqual({ failures: [behind], warnings: [] });
 });
 
-test("a warned pin behind names the build(deps) pull request to the base branch that moves it", () => {
-  expect(warningLines([], onAPullRequest)).toEqual([]);
-  expect(warningLines([behind], onAPullRequest)).toEqual([
-    behind.message,
-    "This pull request changes no pin, so a pin behind does not fail it. Move it in a build(deps) pull request of its own to release-2.",
+test("a pin behind that only warns is a workflow warning that says its fix is a build(deps) pull request of its own to the base branch", () => {
+  expect(warningLines([], "release-2")).toEqual([]);
+  expect(warningLines([behind], "release-2")).toEqual([
+    `::warning::${behind.message}`,
+    "::warning::This pull request changes no pin, so a pin behind does not fail it. The fix is a build(deps) pull request of its own to release-2.",
   ]);
 });
 

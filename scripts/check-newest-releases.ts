@@ -29,17 +29,24 @@ const { comparisons, problems } = compareWithNewest({
   untilStablePackages: untilStableMembers(settings.catalog),
 });
 
-function changedFilesOfThePullRequest(): string[] | undefined {
-  const base = process.env.GITHUB_BASE_REF;
-  if (process.env.GITHUB_EVENT_NAME !== "pull_request" || !base) return undefined;
+function filesOfThePullRequest(base: string): string[] | undefined {
   const run = gitRun(["diff", "--name-only", "-z", `refs/remotes/origin/${base}...HEAD`]);
-  return run.status === 0 ? pathsIn(run.stdout) : undefined;
+  if (run.status === 0) return pathsIn(run.stdout);
+  console.error(
+    `git diff against origin/${base} failed, so the check treats this pull request as changing the pins:\n${run.stderr.trim()}`,
+  );
+  return undefined;
 }
 
+const pullRequestBase =
+  process.env.GITHUB_EVENT_NAME === "pull_request" ? process.env.GITHUB_BASE_REF : undefined;
 console.log(reportTable(comparisons));
-const { failing, warned } = verdictOf(problems, process.env, changedFilesOfThePullRequest());
-for (const line of warningLines(warned, process.env)) console.warn(line);
-if (failing.length > 0) {
-  console.error(failureLines(failing, process.env).join("\n"));
+const { failures, warnings } = verdictOf(
+  problems,
+  pullRequestBase ? filesOfThePullRequest(pullRequestBase) : undefined,
+);
+if (pullRequestBase) for (const line of warningLines(warnings, pullRequestBase)) console.log(line);
+if (failures.length > 0) {
+  console.error(failureLines(failures, process.env).join("\n"));
   process.exitCode = 1;
 }
