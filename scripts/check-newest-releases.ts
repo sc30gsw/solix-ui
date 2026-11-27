@@ -1,4 +1,12 @@
-import { compareWithNewest, failureLines, pinsOf, reportTable } from "#/scripts/newest-releases.ts";
+import { gitRun, pathsIn } from "#/scripts/git.ts";
+import {
+  compareWithNewest,
+  failureLines,
+  pinsOf,
+  reportTable,
+  verdictOf,
+  warningLines,
+} from "#/scripts/newest-releases.ts";
 import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
 import {
   heldBackEntries,
@@ -21,8 +29,17 @@ const { comparisons, problems } = compareWithNewest({
   untilStablePackages: untilStableMembers(settings.catalog),
 });
 
+function changedFilesOfThePullRequest(): string[] | undefined {
+  const base = process.env.GITHUB_BASE_REF;
+  if (process.env.GITHUB_EVENT_NAME !== "pull_request" || !base) return undefined;
+  const run = gitRun(["diff", "--name-only", "-z", `refs/remotes/origin/${base}...HEAD`]);
+  return run.status === 0 ? pathsIn(run.stdout) : undefined;
+}
+
 console.log(reportTable(comparisons));
-if (problems.length > 0) {
-  console.error(failureLines(problems, process.env).join("\n"));
+const { failing, warned } = verdictOf(problems, process.env, changedFilesOfThePullRequest());
+for (const line of warningLines(warned, process.env)) console.warn(line);
+if (failing.length > 0) {
+  console.error(failureLines(failing, process.env).join("\n"));
   process.exitCode = 1;
 }

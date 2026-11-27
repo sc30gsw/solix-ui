@@ -1,5 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import {
+  changesPins,
   compareWithNewest,
   failureLines,
   heldBackFrom,
@@ -15,8 +16,10 @@ import {
   pinsOf,
   prereleasePinsOnlyNamedBy,
   type RegistryDocument,
+  verdictOf,
+  warningLines,
 } from "#/scripts/newest-releases.ts";
-import { pnpmSettings } from "#/scripts/pnpm-settings.ts";
+import { pnpmSettings, workspaceFile } from "#/scripts/pnpm-settings.ts";
 import {
   heldBackEntries,
   releasePolicy,
@@ -483,6 +486,49 @@ test("a failing check adds no pull-request advice when no pin is behind, or when
     behind.message,
   ]);
   expect(failureLines([behind], {})).toEqual([behind.message]);
+});
+
+test("a pull request changes the pins when it changes a manifest, the workspace file, the lockfile, the holds or the check itself, and when its files cannot be listed", () => {
+  for (const file of [
+    "package.json",
+    "apps/storybook/package.json",
+    workspaceFile,
+    "pnpm-lock.yaml",
+    heldBackFile,
+    "scripts/newest-releases.ts",
+    "scripts/release-sources.ts",
+    "scripts/check-newest-releases.ts",
+    ".github/workflows/newest-releases-on-pr.yml",
+  ]) {
+    expect(changesPins(["README.md", file]), file).toBe(true);
+  }
+  expect(changesPins(undefined)).toBe(true);
+  expect(changesPins([])).toBe(false);
+  expect(changesPins(["packages/core/src/Button.tsx", ".agents/skills/x/SKILL.md"])).toBe(false);
+});
+
+test("on a pull request that changes no pin, a pin behind is a warning and every other problem still fails", () => {
+  const untouched = ["packages/core/src/Button.tsx"];
+  expect(verdictOf([behind, holdFailed], onAPullRequest, untouched)).toEqual({
+    failing: [holdFailed],
+    warned: [behind],
+  });
+  expect(verdictOf([behind], onAPullRequest, [workspaceFile])).toEqual({
+    failing: [behind],
+    warned: [],
+  });
+  expect(verdictOf([behind], onAPullRequest, undefined)).toEqual({ failing: [behind], warned: [] });
+  expect(
+    verdictOf([behind], { ...onAPullRequest, GITHUB_EVENT_NAME: "schedule" }, untouched),
+  ).toEqual({ failing: [behind], warned: [] });
+});
+
+test("a warned pin behind names the build(deps) pull request to the base branch that moves it", () => {
+  expect(warningLines([], onAPullRequest)).toEqual([]);
+  expect(warningLines([behind], onAPullRequest)).toEqual([
+    behind.message,
+    "This pull request changes no pin, so a pin behind does not fail it. Move it in a build(deps) pull request of its own to release-2.",
+  ]);
 });
 
 test(`${heldBackFile} is read against its type, so an entry of the wrong shape fails by its place and its name`, () => {

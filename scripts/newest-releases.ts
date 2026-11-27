@@ -1,4 +1,6 @@
+import { matchesGlob } from "node:path";
 import semver from "semver";
+import { workspaceFile } from "#/scripts/pnpm-settings.ts";
 
 export const heldBackFile = "scripts/held-back-releases.json";
 export const packageManagerPinName = "packageManager";
@@ -494,6 +496,49 @@ export function compareWithNewest(input: {
 }
 
 export type RunEnvironment = Record<string, string | undefined>;
+
+export const pinFilePatterns = [
+  "**/package.json",
+  workspaceFile,
+  "pnpm-lock.yaml",
+  heldBackFile,
+  "scripts/newest-releases.ts",
+  "scripts/release-sources.ts",
+  "scripts/check-newest-releases.ts",
+  ".github/workflows/newest-releases*.yml",
+];
+
+export function changesPins(changedFiles: readonly string[] | undefined): boolean {
+  return (
+    changedFiles === undefined ||
+    changedFiles.some((file) => pinFilePatterns.some((pattern) => matchesGlob(file, pattern)))
+  );
+}
+
+export type Verdict = { failing: Problem[]; warned: Problem[] };
+
+export function verdictOf(
+  problems: readonly Problem[],
+  run: RunEnvironment,
+  changedFiles: readonly string[] | undefined,
+): Verdict {
+  if (run.GITHUB_EVENT_NAME !== "pull_request" || changesPins(changedFiles)) {
+    return { failing: [...problems], warned: [] };
+  }
+  return {
+    failing: problems.filter(({ kind }) => kind !== "behind"),
+    warned: problems.filter(({ kind }) => kind === "behind"),
+  };
+}
+
+export function warningLines(warned: readonly Problem[], run: RunEnvironment): string[] {
+  if (warned.length === 0) return [];
+  const base = run.GITHUB_BASE_REF || "main";
+  return [
+    ...warned.map(({ message }) => message),
+    `This pull request changes no pin, so a pin behind does not fail it. Move it in a build(deps) pull request of its own to ${base}.`,
+  ];
+}
 
 export function failureLines(problems: readonly Problem[], run: RunEnvironment): string[] {
   const messages = problems.map(({ message }) => message);
