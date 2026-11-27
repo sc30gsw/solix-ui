@@ -3,10 +3,13 @@ import { expect, test } from "vite-plus/test";
 import { staticStorybookDirectory } from "#/apps/storybook/tests/support/test-servers.ts";
 import { newestReleasesCheck } from "#/tests/support/release-checks.ts";
 import {
+  actionOf,
+  catalogVitePlus,
   gateJobProblems,
   permissionsLeftOut,
   secretsNamedIn,
   type Step,
+  vitePlusVersionProblems,
   type Workflow,
   workflowAt,
   writeScopes,
@@ -24,10 +27,6 @@ function events(on: unknown): string[] {
   if (typeof on === "string") return [on];
   if (Array.isArray(on)) return on.map(String);
   return typeof on === "object" && on !== null ? Object.keys(on) : [];
-}
-
-function actionOf(step: Step): string | undefined {
-  return step.uses?.split("@")[0];
 }
 
 test("on a pull request, once verify passes, the job that runs it uploads the Storybook static build that verify made, keeps it for a set number of days, and fails the step when there is none", () => {
@@ -243,9 +242,10 @@ test(`${ciWorkflow}, which holds no gate job, may set concurrency with cancel-in
 
 const check = { run: newestReleasesCheck };
 const checkout = { uses: "actions/checkout@v7", with: { "fetch-depth": 0 } };
+const pinned = catalogVitePlus();
 const setUpVp = {
   uses: "voidzero-dev/setup-vp@v1.22.0",
-  with: { "node-version-file": "package.json", cache: true },
+  with: { "node-version-file": "package.json", cache: true, version: pinned },
 };
 const readOnly = { contents: "read" };
 const gate = { "runs-on": "ubuntu-latest", "timeout-minutes": 10 };
@@ -271,7 +271,8 @@ function aWorkflow(changes: {
   };
 }
 
-const gateSteps = `actions/checkout with {"fetch-depth":0} and, if it likes, {"persist-credentials":false}, voidzero-dev/setup-vp with {"node-version-file":"package.json","cache":true}, then run ${newestReleasesCheck}, each setting nothing else but a name`;
+const setUpWith = JSON.stringify(setUpVp.with);
+const gateSteps = `actions/checkout with {"fetch-depth":0} and, if it likes, {"persist-credentials":false}, voidzero-dev/setup-vp with ${setUpWith}, then run ${newestReleasesCheck}, each setting nothing else but a name`;
 
 const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
   [
@@ -365,6 +366,31 @@ const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
       ],
     }),
     `step 1 of the a job has with {"fetch-depth":0,"persist-credentials":true}, not {"fetch-depth":0}; a gate job's steps are exactly ${gateSteps}.`,
+  ],
+  [
+    "a setup step that leaves out version",
+    aWorkflow({
+      steps: [
+        checkout,
+        { ...setUpVp, with: { "node-version-file": "package.json", cache: true } },
+        check,
+      ],
+    }),
+    `step 2 of the a job sets up Vite+ with no version; give it version ${JSON.stringify(pinned)}, the vite-plus release the catalog pins.`,
+  ],
+  [
+    "a setup step that installs another vite-plus release",
+    aWorkflow({
+      steps: [checkout, { ...setUpVp, with: { ...setUpVp.with, version: "0.0.1" } }, check],
+    }),
+    `step 2 of the a job sets up Vite+ with version "0.0.1"; give it version ${JSON.stringify(pinned)}, the vite-plus release the catalog pins.`,
+  ],
+  [
+    "a setup step that sets another input",
+    aWorkflow({
+      steps: [checkout, { ...setUpVp, with: { ...setUpVp.with, "run-install": false } }, check],
+    }),
+    `step 2 of the a job has with ${JSON.stringify({ ...setUpVp.with, "run-install": false })}, not ${setUpWith}; a gate job's steps are exactly ${gateSteps}.`,
   ],
   [
     "the setup step left out",
@@ -462,7 +488,7 @@ const rightRuns: [what: string, workflow: Workflow][] = [
     aWorkflow({
       steps: [
         checkout,
-        { ...setUpVp, with: { cache: true, "node-version-file": "package.json" } },
+        { ...setUpVp, with: { version: pinned, cache: true, "node-version-file": "package.json" } },
         check,
       ],
     }),
@@ -482,6 +508,34 @@ const rightRuns: [what: string, workflow: Workflow][] = [
     aWorkflow({ steps: [{ ...checkout, uses: "Actions/Checkout@v7" }, setUpVp, check] }),
   ],
 ];
+
+test("every step of every workflow that sets up Vite+ installs the vite-plus release the catalog pins, so a script that a job runs with plain Node asks the vp that the repository installs", () => {
+  expect(
+    workflowFiles.flatMap((file) =>
+      vitePlusVersionProblems(workflowAt(file)).map((problem) => `${file}: ${problem}`),
+    ),
+  ).toEqual([]);
+});
+
+const unpinnedSetUps: [what: string, step: Step, problem: string][] = [
+  [
+    "no version",
+    { uses: "voidzero-dev/setup-vp@v1.22.0", with: { cache: true } },
+    `step 1 of the a job sets up Vite+ with no version; give it version ${JSON.stringify(pinned)}, the vite-plus release the catalog pins.`,
+  ],
+  [
+    "another version",
+    { uses: "Voidzero-Dev/Setup-Vp@v1.22.0", with: { version: "0.0.1" } },
+    `step 1 of the a job sets up Vite+ with version "0.0.1"; give it version ${JSON.stringify(pinned)}, the vite-plus release the catalog pins.`,
+  ],
+];
+
+test.for(unpinnedSetUps)(
+  "the vite-plus version rule, on a setup step with %s, refuses it",
+  ([, step, problem]) => {
+    expect(vitePlusVersionProblems({ jobs: { a: { steps: [step] } } })).toEqual([problem]);
+  },
+);
 
 test.for(rightRuns)("the pull-request newest-release rule, on %s, allows it", ([, workflow]) => {
   expect(newestCheckProblems(workflow)).toEqual([]);
@@ -596,4 +650,15 @@ test("gateJobProblems refuses empty env, empty checkoutWith, and checkoutWith ov
       checkoutWith: { "persist-credentials": true },
     }),
   ).toThrow("persist-credentials");
+});
+
+test("a setup-vp step with both a wrong version and an extra input reports both problems", () => {
+  const badWith = { ...setUpVp.with, version: "0.0.1", "run-install": false };
+  const problems = newestCheckProblems(
+    aWorkflow({ steps: [checkout, { ...setUpVp, with: badWith }, check] }),
+  );
+  expect(problems).toEqual([
+    `step 2 of the a job has with ${JSON.stringify(badWith)}, not ${setUpWith}; a gate job's steps are exactly ${gateSteps}.`,
+    `step 2 of the a job sets up Vite+ with version "0.0.1"; give it version ${JSON.stringify(pinned)}, the vite-plus release the catalog pins.`,
+  ]);
 });

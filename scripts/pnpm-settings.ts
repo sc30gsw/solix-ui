@@ -1,14 +1,25 @@
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import {
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { isAbsolute, join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
-  installedVp,
-  listed,
-  packageManagerAnswerTimeout,
-  repositoryRoot,
-} from "#/scripts/repository.ts";
+  askPackageManager,
+  packageManagerConfigQuery,
+  VitePlusNotFound,
+  withoutPackageManagerEnv,
+} from "#/scripts/package-manager.ts";
+import { listed, packageManagerAnswerTimeout, repositoryRoot } from "#/scripts/repository.ts";
 
 export const workspaceFile = "pnpm-workspace.yaml";
 
@@ -36,7 +47,17 @@ export type RawSettings = {
   permissions?: Record<string, { skills?: string[] | boolean }>;
 };
 
-const settingFromTheEnvironment = /^p?npm_config_/i;
+const ignorableLinkErrors = new Set([
+  "EPERM",
+  "EACCES",
+  "EEXIST",
+  "ENOENT",
+  "EROFS",
+  "ENOSYS",
+  "ENOTSUP",
+  "EINVAL",
+  "ELOOP",
+]);
 let cached: PnpmSettings | undefined;
 
 function approvedSkillsIn(permissions: RawSettings["permissions"]): Record<string, string[]> {
@@ -69,46 +90,96 @@ export function settingsFrom(raw: RawSettings): PnpmSettings {
   };
 }
 
-function withoutSettings(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return Object.fromEntries(
-    Object.entries(environment).filter(([name]) => !settingFromTheEnvironment.test(name)),
-  );
+function userConfigHome(): string {
+  const configured = process.env.XDG_CONFIG_HOME;
+  return configured !== undefined && isAbsolute(configured)
+    ? configured
+    : join(homedir(), ".config");
 }
 
-function pnpmAnswer(directory: string, vp: string): string {
-  const noUserConfig = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const code = Reflect.get(error, "code");
+  return typeof code === "string" ? code : undefined;
+}
+
+function linkInto(configHome: string, target: string, name: string): void {
   try {
-    return execFileSync(vp, ["pm", "config", "list", "--json"], {
-      cwd: directory,
-      encoding: "utf8",
-      env: { ...withoutSettings(process.env), XDG_CONFIG_HOME: noUserConfig },
-      timeout: packageManagerAnswerTimeout,
-    });
+    const kind = statSync(target, { throwIfNoEntry: false })?.isDirectory() ? "junction" : "file";
+    symlinkSync(target, join(configHome, name), kind);
   } catch (error) {
-    const { code } = error as NodeJS.ErrnoException;
-    if (code === "ENOENT") {
-      throw new Error(
-        `${workspaceFile} is read through pnpm, which ${vp} starts, and that is neither installed here nor on PATH. Install Vite+, then run \`vp install\`.`,
-        { cause: error },
-      );
-    }
-    if (code === "ETIMEDOUT") {
-      throw new Error(
-        `${vp} pm config list gave no answer in ${packageManagerAnswerTimeout / 1000} seconds.`,
-        { cause: error },
-      );
-    }
+    const code = errorCode(error);
+    if (code !== undefined && ignorableLinkErrors.has(code)) return;
     throw error;
-  } finally {
-    rmSync(noUserConfig, { recursive: true });
   }
 }
 
-export function readPnpmSettings(
-  directory: string = repositoryRoot,
-  vp: string = existsSync(installedVp) ? installedVp : "vp",
-): PnpmSettings {
-  return settingsFrom(JSON.parse(pnpmAnswer(directory, vp)) as RawSettings);
+const unreadableConfigHomeErrors = new Set(["EACCES", "ENOENT", "ENOTDIR", "EPERM", "ELOOP"]);
+
+function linkUserConfigBesidesPnpm(configHome: string): void {
+  const userHome = userConfigHome();
+  let entries: string[];
+  try {
+    entries = readdirSync(userHome);
+  } catch (error) {
+    const code = errorCode(error);
+    if (code !== undefined && unreadableConfigHomeErrors.has(code)) return;
+    throw error;
+  }
+  for (const name of entries.filter((entry) => entry.toLowerCase() !== "pnpm")) {
+    linkInto(configHome, join(userHome, name), name);
+  }
+}
+
+function removeConfigHome(configHome: string): void {
+  for (const name of readdirSync(configHome)) {
+    const entry = join(configHome, name);
+    if (lstatSync(entry).isSymbolicLink()) unlinkSync(entry);
+    else rmSync(entry, { recursive: true });
+  }
+  rmdirSync(configHome);
+}
+
+function askedForSettings(directory: string, configHome: string): string {
+  try {
+    return askPackageManager(packageManagerConfigQuery, {
+      cwd: directory,
+      encoding: "utf8",
+      env: { ...withoutPackageManagerEnv(process.env), XDG_CONFIG_HOME: configHome },
+      timeout: packageManagerAnswerTimeout,
+    });
+  } catch (error) {
+    if (!(error instanceof VitePlusNotFound)) throw error;
+    throw new Error(`${workspaceFile} is read through pnpm, which vp starts. ${error.message}`, {
+      cause: error,
+    });
+  }
+}
+
+function removeQuietly(configHome: string): void {
+  try {
+    removeConfigHome(configHome);
+  } catch {
+    return;
+  }
+}
+
+function pnpmAnswer(directory: string): string {
+  const configHome = mkdtempSync(join(tmpdir(), "no-pnpm-user-config-"));
+  let answer: string;
+  try {
+    linkUserConfigBesidesPnpm(configHome);
+    answer = askedForSettings(directory, configHome);
+  } catch (error) {
+    removeQuietly(configHome);
+    throw error;
+  }
+  removeConfigHome(configHome);
+  return answer;
+}
+
+export function readPnpmSettings(directory: string = repositoryRoot): PnpmSettings {
+  return settingsFrom(JSON.parse(pnpmAnswer(directory)) as RawSettings);
 }
 
 export function pnpmSettings(): PnpmSettings {
