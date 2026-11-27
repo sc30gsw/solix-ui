@@ -35,12 +35,12 @@ import {
   startServer,
   viteOnAFreePort,
 } from "#/tests/support/server-process.ts";
+import { askPackageManager } from "#/scripts/package-manager.ts";
 import {
   type ExportTarget,
   type Manifest,
   componentLibraries,
   installedVersions,
-  installedVp,
   libraryNames,
   libraryPackages,
   packageManagerAnswerTimeout,
@@ -136,16 +136,12 @@ function typeErrors(): string {
 }
 
 function packInto(destination: string, directory: string): Pick<Packed, "tarball" | "files"> {
-  const answer = execFileSync(
-    installedVp,
-    ["pm", "pack", "--json", "--pack-destination", destination],
-    {
-      cwd: directory,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: packageManagerAnswerTimeout,
-    },
-  );
+  const answer = askPackageManager(["pm", "pack", "--json", "--pack-destination", destination], {
+    cwd: directory,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: packageManagerAnswerTimeout,
+  });
   const result: unknown = JSON.parse(answer);
   const filename =
     typeof result === "object" && result !== null && "filename" in result

@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  "entry": [
+    "apps/playground/src/App.tsx",
+    "apps/playground/src/Document.tsx",
+    "apps/playground/src/middleware.ts"
+  ],
+  "supportEntry": [
+    "scripts/check-working-tree.ts",
+    "scripts/check-private-terms.mjs",
+    "scripts/copy-kit-skills.ts",
+    "tests/support/git-free-environment.ts",
+    "tests/support/build-packages.ts",
+    "tests/support/global-setup.ts",
+    "tests/support/solid-diagnostics-check.ts",
+    "apps/playground/tests/support/console-check.ts",
+    "apps/storybook/story-color-scheme.setup.ts",
+    "apps/storybook/story-records.setup.ts",
+    "apps/storybook/story-records-command.ts",
+    "apps/storybook/tests/support/story-reporter.ts"
+  ],
+  "ignoreFindings": ["tests/fixtures/tarball-consumer/**"],
+  "ignoreUnresolvedImports": ["#/tests/fixtures/primitive-rules/*/tests/support/*"],
+  "ignoreDependencyOverrides": [
+    { "package": "@solidjs/start" },
+    { "package": "eslint-plugin-solid" },
+    { "package": "next" },
+    { "package": "react-dom" },
+    { "package": "solid-app-router" },
+    { "package": "solid-start" },
+    { "package": "vinxi" },
+    { "package": "vite-plugin-solid" }
+  ],
+  "ignoreExports": [{ "file": "apps/storybook/story-records.ts", "exports": ["instrumented"] }],
+  "health": { "maxCrap": 0 }
+}

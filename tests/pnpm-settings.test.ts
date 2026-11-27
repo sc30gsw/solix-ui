@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import {
   pnpmSettings,
@@ -18,6 +18,14 @@ import {
   workspaceFile,
 } from "#/scripts/pnpm-settings.ts";
 import { repositoryRoot, rootManifest } from "#/scripts/repository.ts";
+import {
+  callsOf,
+  configQuery,
+  installedVitePlusRelease,
+  pinnedPnpmVersion,
+  shellQuoted,
+  writeVpShim,
+} from "#/tests/support/shims.ts";
 import { packages } from "#/tests/support/workspace.ts";
 
 const catalogOnly = ["catalog:", '  "@solidjs/web": 2.0.0-rc.21', "  solid-js: 2.0.0-rc.21", ""];
@@ -43,6 +51,10 @@ function temporaryDirectory(): string {
 function checkoutWith(lines: readonly string[]): string {
   const checkout = temporaryDirectory();
   writeFileSync(join(checkout, workspaceFile), lines.join("\n"));
+  writeFileSync(
+    join(checkout, "package.json"),
+    JSON.stringify({ packageManager: rootManifest().packageManager }),
+  );
   return checkout;
 }
 
@@ -136,10 +148,39 @@ test("a workspace-dir variable does not point the reader at another checkout", (
   }
 });
 
-test("a vp that is neither installed nor on PATH fails with the way to install it", () => {
-  expect(() => readPnpmSettings(checkoutWith(catalogOnly), "a-vp-that-is-not-installed")).toThrow(
-    /Install Vite\+, then run `vp install`/,
-  );
+test("readPnpmSettings asks the vp on PATH, which is checked before every answer, and hides only pnpm's user config from it, so a global vp keeps its own", () => {
+  const checkout = checkoutWith(catalogOnly);
+  const configHome = userConfigWith(agePolicy);
+  mkdirSync(join(configHome, "vite-plus"));
+  writeFileSync(join(configHome, "vite-plus/config.json"), "{}");
+  const bin = temporaryDirectory();
+  const vp = writeVpShim(bin, "vp", {
+    version: installedVitePlusRelease(),
+    configScript: [
+      `if [ -f "$XDG_CONFIG_HOME/vite-plus/config.json" ]; then vp=seen; else vp=hidden; fi`,
+      `if [ -e "$XDG_CONFIG_HOME/pnpm" ]; then pnpm=seen; else pnpm=hidden; fi`,
+      `printf '{"userAgent":"pnpm/%s","catalog":{"vite-plus config":"%s","pnpm config":"%s"}}' ${shellQuoted(pinnedPnpmVersion())} "$vp" "$pnpm"`,
+      `exit 0`,
+    ],
+  });
+  vi.stubEnv("XDG_CONFIG_HOME", configHome);
+  vi.stubEnv("PATH", `${bin}${delimiter}${process.env.PATH ?? ""}`);
+
+  expect(readPnpmSettings(checkout).catalog).toEqual({
+    "vite-plus config": "seen",
+    "pnpm config": "hidden",
+  });
+  expect(callsOf(vp)).toEqual(["--version", configQuery]);
+  expect(readFileSync(join(configHome, "vite-plus/config.json"), "utf8")).toBe("{}");
+  expect(readFileSync(join(configHome, "pnpm/config.yaml"), "utf8")).toBe(agePolicy.join("\n"));
+
+  const notADirectory = join(temporaryDirectory(), "file-config-home");
+  writeFileSync(notADirectory, "");
+  vi.stubEnv("XDG_CONFIG_HOME", notADirectory);
+  expect(readPnpmSettings(checkout).catalog).toEqual({
+    "vite-plus config": "hidden",
+    "pnpm config": "hidden",
+  });
 });
 
 test("settingsFrom refuses pnpm settings with no catalog entry, and skills: true in place of names", () => {

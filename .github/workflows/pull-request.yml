@@ -17,6 +17,7 @@ jobs:
           fetch-depth: 0
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
+          version: "1.8.0"
           node-version-file: package.json
           cache: true
       - run: node scripts/check-pull-request-text.ts "$GITHUB_EVENT_PATH"
@@ -33,9 +34,27 @@ jobs:
           fetch-depth: 0
       - uses: voidzero-dev/setup-vp@v1.22.0
         with:
+          version: "1.8.0"
           node-version-file: package.json
           cache: true
       - run: node scripts/check-fixes-carry-tests.ts "$PULL_REQUEST_BASE" "$PULL_REQUEST_HEAD"
         env:
           PULL_REQUEST_BASE: ${{ github.event.pull_request.base.sha }}
           PULL_REQUEST_HEAD: ${{ github.event.pull_request.head.sha }}
+
+  fallow:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: voidzero-dev/setup-vp@v1.22.0
+        with:
+          version: "1.8.0"
+          node-version-file: package.json
+          cache: true
+      - run: node scripts/check-fallow-audit.ts "$PULL_REQUEST_BASE"
+        env:
+          PULL_REQUEST_BASE: refs/remotes/origin/${{ github.event.pull_request.base.ref }}
