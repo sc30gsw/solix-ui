@@ -116,7 +116,15 @@ function linkUserConfigBesidesPnpm(configHome: string): void {
     entries = readdirSync(userHome);
   } catch (error) {
     const { code } = error as NodeJS.ErrnoException;
-    if (code === "EACCES" || code === "ENOENT" || code === "ENOTDIR") return;
+    if (
+      code === "EACCES" ||
+      code === "ENOENT" ||
+      code === "ENOTDIR" ||
+      code === "EPERM" ||
+      code === "ELOOP"
+    ) {
+      return;
+    }
     throw error;
   }
   for (const name of entries.filter((entry) => entry !== "pnpm")) {

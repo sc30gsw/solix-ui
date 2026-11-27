@@ -181,7 +181,6 @@ test("readPnpmSettings asks the vp on PATH, which is checked before every answer
     "vite-plus config": "hidden",
     "pnpm config": "hidden",
   });
-  expect(pinnedPnpmVersion("pnpm@12.23.0+sha512.abc")).toBe("12.23.0");
 });
 
 test("settingsFrom refuses pnpm settings with no catalog entry, and skills: true in place of names", () => {

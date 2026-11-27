@@ -390,7 +390,7 @@ const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
     aWorkflow({
       steps: [checkout, { ...setUpVp, with: { ...setUpVp.with, "run-install": false } }, check],
     }),
-    `step 2 of the a job has with ${JSON.stringify({ ...setUpVp.with, "run-install": false })}, not ${setUpWith}; a gate job's steps are exactly ${gateSteps}.`,
+    `step 2 of the a job has with ${JSON.stringify({ "node-version-file": "package.json", cache: true, "run-install": false })}, not ${setUpWith}; a gate job's steps are exactly ${gateSteps}.`,
   ],
   [
     "the setup step left out",

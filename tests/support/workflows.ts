@@ -29,11 +29,12 @@ const keysOfAGateWorkflow = ["name", "on", "permissions", "jobs"];
 const keysOfAGateJob = ["runs-on", "timeout-minutes", "steps", "permissions"];
 const keysOfASetUpStep = ["uses", "with", "name"];
 const keysOfTheGateStep = ["run", "name"];
+type ExtraCheckedKey = { key: string; rule: string };
 type SetUpStep = {
   action: string;
   with: Record<string, unknown>;
   mayAlsoSet?: Record<string, unknown>;
-  extraKeysChecked?: readonly string[];
+  extraKeysChecked?: readonly ExtraCheckedKey[];
 };
 const setUpVpAction = "voidzero-dev/setup-vp";
 const setUpSteps: readonly SetUpStep[] = [
@@ -45,7 +46,7 @@ const setUpSteps: readonly SetUpStep[] = [
   {
     action: setUpVpAction,
     with: { "node-version-file": "package.json", cache: true },
-    extraKeysChecked: ["version"],
+    extraKeysChecked: [{ key: "version", rule: "the vite-plus version rule" }],
   },
 ];
 
@@ -95,9 +96,9 @@ function keysBeyond(part: object, allowed: readonly string[]): string[] {
 
 function describedStep(step: SetUpStep): string {
   const also = step.mayAlsoSet ? ` and, if it likes, ${JSON.stringify(step.mayAlsoSet)}` : "";
-  const extra = step.extraKeysChecked?.length
-    ? ` and the ${step.extraKeysChecked.join(", ")} the vite-plus version rule asks for`
-    : "";
+  const extra = (step.extraKeysChecked ?? [])
+    .map(({ key, rule }) => ` and the ${key} ${rule} asks for`)
+    .join("");
   return `${step.action} with ${JSON.stringify(step.with)}${also}${extra}`;
 }
 
@@ -106,14 +107,20 @@ function gateStepsFor(command: string): string {
   return `${described.join(", ")}, then run ${command}, each setting nothing else but a name`;
 }
 
+function withoutExtraCheckedKeys(
+  given: Record<string, unknown>,
+  expected: SetUpStep,
+): Record<string, unknown> {
+  const extra = new Set((expected.extraKeysChecked ?? []).map(({ key }) => key));
+  return Object.fromEntries(Object.entries(given).filter(([key]) => !extra.has(key)));
+}
+
 function withMatches(given: Record<string, unknown>, expected: SetUpStep): boolean {
   const allowed = { ...expected.mayAlsoSet, ...expected.with };
   return (
     Object.keys(expected.with).every((key) => key in given) &&
     Object.entries(given).every(
-      ([key, value]) =>
-        (expected.extraKeysChecked?.includes(key) ?? false) ||
-        (key in allowed && isDeepStrictEqual(value, allowed[key])),
+      ([key, value]) => key in allowed && isDeepStrictEqual(value, allowed[key]),
     )
   );
 }
@@ -124,9 +131,10 @@ function setUpStepProblem(step: Step, expected: SetUpStep): string | undefined {
   if (actionOf(step) !== expected.action) {
     return `uses ${step.uses ?? "no action"}, not ${expected.action}`;
   }
-  return withMatches(step.with ?? {}, expected)
+  const checked = withoutExtraCheckedKeys(step.with ?? {}, expected);
+  return withMatches(checked, expected)
     ? undefined
-    : `has with ${JSON.stringify(step.with ?? {})}, not ${JSON.stringify(expected.with)}`;
+    : `has with ${JSON.stringify(checked)}, not ${JSON.stringify(expected.with)}`;
 }
 
 function gateStepProblem(step: Step, command: string): string | undefined {

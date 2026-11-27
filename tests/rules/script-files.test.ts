@@ -10,7 +10,6 @@ import {
   isFileOfPackage,
   isTypeOnlyImport,
   isValueReference,
-  memberDeclarations,
   memberRead,
   moduleSpecifierOf,
   nameOf,
@@ -91,11 +90,14 @@ function namesARunner(program: Program, node: ts.Node): boolean {
     return false;
   }
   const read = memberRead(program, node);
+  if (read === undefined) return false;
+  const matching = read.names.filter((name) => runners.importNames.includes(name));
+  if (matching.length === 0) return false;
   return (
-    read !== undefined &&
-    read.names.some((name) => runners.importNames.includes(name)) &&
-    memberDeclarations(program, node).some(isARunner)
-  );
+    ts.isPropertyAccessExpression(node)
+      ? declarationsOf(program, node.name)
+      : propertyDeclarations(program, read.owner, matching)
+  ).some(isARunner);
 }
 
 function namesThePackage(program: Program, call: ts.CallExpression): boolean {

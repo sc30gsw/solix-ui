@@ -1,6 +1,8 @@
 import { execFileSync, type ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
 import { delimiter, join } from "node:path";
+import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 import { repositoryRoot } from "#/scripts/repository-root.ts";
 
 export type Seam = {
@@ -19,7 +21,6 @@ export type PresentCandidate = {
 };
 
 export type AbsentCandidate = {
-  kind: CandidateKind;
   absent: string;
 };
 
@@ -34,6 +35,10 @@ const vpVersion = /^vp v(\S+)/m;
 const pnpmVersion = /^pnpm\/(\S+)/;
 const pinnedPnpm = /^pnpm@([^+\s]+)/;
 const packageManagerEnv = /^p?npm_config_/i;
+
+export function pinnedPnpmOf(packageManager: string | undefined): string | undefined {
+  return packageManager === undefined ? undefined : pinnedPnpm.exec(packageManager)?.[1];
+}
 
 export function withoutPackageManagerEnv(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(
@@ -94,8 +99,8 @@ export class PackageManagerMismatch extends Error {
     candidateKind: CandidateKind,
     found: string | undefined,
     declared: string | undefined,
-    pinned: string | undefined,
   ) {
+    const pinned = pinnedPnpmOf(declared);
     const answered = found === undefined ? "by no pnpm it names" : `by pnpm ${found}`;
     const wanted =
       declared === undefined
@@ -167,17 +172,17 @@ export function installedVitePlusVersion(seam: Seam = installedSeam()): string |
 function scriptCandidate(seam: Seam): Candidate {
   const manifest = manifestOf(seam.vitePlus);
   if (manifest === undefined) {
-    return { kind: "local", absent: `vite-plus is not installed in ${seam.root}` };
+    return { absent: `vite-plus is not installed in ${seam.root}` };
   }
   const bin = manifest.bin;
   const named = typeof bin === "object" && bin !== null ? Reflect.get(bin, "vp") : undefined;
   if (typeof named !== "string") {
-    return { kind: "local", absent: `the vite-plus in ${seam.vitePlus} names no bin.vp` };
+    return { absent: `the vite-plus in ${seam.vitePlus} names no bin.vp` };
   }
   const script = join(seam.vitePlus, named);
   return existsSync(script)
     ? { kind: "local", command: process.execPath, prefix: [script] }
-    : { kind: "local", absent: `${script}, the bin.vp of vite-plus, does not exist` };
+    : { absent: `${script}, the bin.vp of vite-plus, does not exist` };
 }
 
 export function candidatesOf(seam: Seam): Candidate[] {
@@ -189,14 +194,14 @@ function commandLine(candidate: PresentCandidate, args: readonly string[]): stri
 }
 
 function budgetOf(timeout: number | undefined): Budget {
-  return timeout === undefined || timeout <= 0
+  return timeout === undefined || !Number.isFinite(timeout) || timeout <= 0
     ? { total: undefined, deadline: undefined }
-    : { total: timeout, deadline: Date.now() + timeout };
+    : { total: timeout, deadline: performance.now() + timeout };
 }
 
 function timeoutFor(budget: Budget, command: string): number | undefined {
   if (budget.deadline === undefined) return undefined;
-  const remaining = budget.deadline - Date.now();
+  const remaining = budget.deadline - performance.now();
   if (remaining <= 0) {
     throw new PackageManagerQueryFailed(
       command,
@@ -204,7 +209,7 @@ function timeoutFor(budget: Budget, command: string): number | undefined {
       budget.total,
     );
   }
-  return remaining;
+  return Math.ceil(remaining);
 }
 
 function run(
@@ -271,11 +276,7 @@ function probingConfig(
   };
 }
 
-function parseConfigObject(
-  command: string,
-  answer: string,
-  timeout: number | undefined,
-): Record<string, unknown> {
+function parseConfigObject(command: string, answer: string): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(answer);
@@ -284,7 +285,7 @@ function parseConfigObject(
     throw new PackageManagerQueryFailed(
       command,
       new Error(`returned invalid JSON: ${detail}`, { cause: error }),
-      timeout,
+      undefined,
     );
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -292,7 +293,7 @@ function parseConfigObject(
     throw new PackageManagerQueryFailed(
       command,
       new Error(`returned ${kind}, not a JSON object`),
-      timeout,
+      undefined,
     );
   }
   return parsed as Record<string, unknown>;
@@ -326,11 +327,10 @@ function checkedAnswer(
   }
   const configCommand = commandLine(candidate, packageManagerConfigQuery);
   const configAnswer = run(candidate, packageManagerConfigQuery, probingConfig(options), budget);
-  const config = parseConfigObject(configCommand, configAnswer, budget.total);
+  const config = parseConfigObject(configCommand, configAnswer);
   const agent = config.userAgent ?? config["user-agent"];
   const answering = typeof agent === "string" ? pnpmVersion.exec(agent)?.[1] : undefined;
-  const pinned =
-    seam.packageManager === undefined ? undefined : pinnedPnpm.exec(seam.packageManager)?.[1];
+  const pinned = pinnedPnpmOf(seam.packageManager);
   if (answering === undefined || answering !== pinned) {
     throw new PackageManagerMismatch(
       configCommand,
@@ -338,10 +338,14 @@ function checkedAnswer(
       candidate.kind,
       answering,
       seam.packageManager,
-      pinned,
     );
   }
   return isConfigQuery(args) ? configAnswer : run(candidate, args, options, budget);
+}
+
+function directoryOf(cwd: ExecFileSyncOptionsWithStringEncoding["cwd"]): string {
+  if (cwd === undefined) return process.cwd();
+  return cwd instanceof URL ? fileURLToPath(cwd) : String(cwd);
 }
 
 export function askWith(
@@ -349,7 +353,7 @@ export function askWith(
   args: readonly string[],
   options: ExecFileSyncOptionsWithStringEncoding,
 ): string {
-  const directory = String(options.cwd ?? process.cwd());
+  const directory = directoryOf(options.cwd);
   if (!statSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
     throw new WorkingDirectoryMissing(directory, args);
   }

@@ -6,18 +6,26 @@ import {
   scriptFilesIn,
   scriptFilesInDotDirectoriesIn,
 } from "#/scripts/repository.ts";
-import { descendants, importsOf, parseAll, parseText, ts, unwrapped } from "#/scripts/syntax.ts";
+import {
+  descendants,
+  importsOf,
+  moduleSpecifierOf,
+  parseAll,
+  parseText,
+  ts,
+  unwrapped,
+} from "#/scripts/syntax.ts";
 
 const runners = new Set(["execFileSync", "execFile", "spawn", "spawnSync", "exec", "execSync"]);
 const childProcess = new Set(["node:child_process", "child_process"]);
 const packageManagerCommands = new Set(["pm", "why"]);
 const internalModule = "scripts/package-manager.internal.ts";
-const internalModuleStem = "scripts/package-manager.internal";
+const internalModuleStem = internalModule.replace(/\.ts$/, "");
 const mayImportTheInternalModule = ["scripts/package-manager.ts", "tests/package-manager.test.ts"];
 const mayRunVp = /\bvp\b|vite-plus|installedVp|package-manager\.internal/;
 const shellSeparators = /&&|\|\||[;&|\n]/;
 const envAssignment = /^[A-Za-z_]\w*=\S*\s+/;
-const vpAtSegmentStart = /^(vp|\$\{\s*installedVp\s*\})\s+(\S+)/;
+const vpAtSegmentStart = /^(?:["']?)(vp|\$\{\s*installedVp\s*\})(?:["']?)\s+(\S+)/;
 const askInstead =
   "ask the package manager through askPackageManager in scripts/package-manager.ts, which checks the vp and the pnpm that answer";
 const runTheLocalVp = "run the repository's own vp, installedVp in scripts/repository.ts";
@@ -44,9 +52,9 @@ function recordBinding(
   table.set(name, value);
 }
 
-function namesIn(source: ts.SourceFile): Names {
+function namesIn(source: ts.SourceFile, nodes: readonly ts.Node[]): Names {
   const constantsByContainer = new Map<ts.Node, Map<string, ts.Expression | undefined>>();
-  for (const node of descendants(source)) {
+  for (const node of nodes) {
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
@@ -236,45 +244,43 @@ function runsIn(names: Names, node: ts.Node): { what: string; problem: string | 
     const [program, ...args] = elementsOf(names, node.initializer);
     return [{ what: "command", problem: problemOf(names, { program, args }) }];
   }
+  if (
+    ts.isShorthandPropertyAssignment(node) &&
+    ts.isIdentifier(node.name) &&
+    node.name.text === "command"
+  ) {
+    const [program, ...args] = elementsOf(names, node.name);
+    return [{ what: "command", problem: problemOf(names, { program, args }) }];
+  }
   return [];
 }
 
 function resolvesToInternalModule(file: string, specifier: string): boolean {
   const normalized = specifier.startsWith("#/")
-    ? specifier.slice(2)
+    ? posix.normalize(specifier.slice(2))
     : specifier.startsWith(".")
       ? posix.normalize(posix.join(posix.dirname(file.replaceAll("\\", "/")), specifier))
       : specifier;
   return normalized.replace(/\.(?:mts|mjs|ts|js)$/, "") === internalModuleStem;
 }
 
-function moduleSpecifierIn(node: ts.Node): string | undefined {
-  if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
-    return ts.isStringLiteralLikeNode(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined;
-  }
-  if (ts.isCallExpression(node) && node.arguments.length >= 1) {
-    const [first] = node.arguments;
-    if (!ts.isStringLiteralLikeNode(first)) return undefined;
-    if (node.expression.kind === ts.SyntaxKind.ImportKeyword) return first.text;
-    if (ts.isIdentifier(node.expression) && node.expression.text === "require") return first.text;
-  }
-  return undefined;
-}
-
 function packageManagerCallProblemsIn(source: ts.SourceFile, file: string): string[] {
-  const names = namesIn(source);
+  const nodes = descendants(source);
+  const names = namesIn(source, nodes);
   const lineOf = (node: ts.Node) => source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
   const imports = mayImportTheInternalModule.includes(file)
     ? []
-    : descendants(source).flatMap((node) => {
-        const specifier = moduleSpecifierIn(node);
-        return specifier !== undefined && resolvesToInternalModule(file, specifier)
+    : nodes.flatMap((node) => {
+        const specifier = moduleSpecifierOf(node);
+        return specifier !== undefined &&
+          ts.isStringLiteralLikeNode(specifier) &&
+          resolvesToInternalModule(file, specifier.text)
           ? [
               `${file}:${lineOf(node)}: imports ${internalModule}; only ${mayImportTheInternalModule.join(" and ")} do, so every question to the package manager goes through askPackageManager.`,
             ]
           : [];
       });
-  const runs = descendants(source).flatMap((node) =>
+  const runs = nodes.flatMap((node) =>
     runsIn(names, node).flatMap(({ what, problem }) =>
       problem === undefined ? [] : [`${file}:${lineOf(node)}: ${what} ${problem}.`],
     ),
@@ -331,6 +337,11 @@ const refused: [what: string, code: string, problem: string][] = [
     "exec runs vp pm itself",
   ],
   [
+    "a quoted shell command through installedVp",
+    'execSync(`"${installedVp}" why solid-js`);',
+    "execSync runs vp why itself",
+  ],
+  [
     "arguments held in a constant",
     'const args = ["pm", "pack"];\nexecFileSync(installedVp, args);',
     "execFileSync runs vp pm itself",
@@ -355,6 +366,11 @@ const refused: [what: string, code: string, problem: string][] = [
     'startServer({ command: [installedVp, "why", "solid-js"] });',
     "command runs vp why itself",
   ],
+  [
+    "a shorthand command property",
+    'const command = [installedVp, "why"];\nstartServer({ command });',
+    "command runs vp why itself",
+  ],
   ["vp from PATH", 'spawn("vp", ["test"]);', "spawn runs vp from PATH"],
   ["a shell command that runs vp from PATH", 'execSync("vp test");', "execSync runs vp from PATH"],
   [
@@ -365,6 +381,11 @@ const refused: [what: string, code: string, problem: string][] = [
   [
     "the internal module",
     'import { askWith } from "#/scripts/package-manager.internal.ts";\naskWith(seam, ["why"], options);',
+    `imports ${internalModule}`,
+  ],
+  [
+    "a subpath import of the internal module with a dot segment",
+    'import { askWith } from "#/scripts/./package-manager.internal.ts";\naskWith(seam, ["why"], options);',
     `imports ${internalModule}`,
   ],
   [
@@ -385,6 +406,16 @@ const refused: [what: string, code: string, problem: string][] = [
   [
     "a dynamic import of the internal module",
     'await import("#/scripts/package-manager.internal.ts");',
+    `imports ${internalModule}`,
+  ],
+  [
+    "a require of the internal module",
+    'require("#/scripts/package-manager.internal.ts");',
+    `imports ${internalModule}`,
+  ],
+  [
+    "an import type of the internal module",
+    'type S = import("#/scripts/package-manager.internal.ts").Seam;',
     `imports ${internalModule}`,
   ],
   [

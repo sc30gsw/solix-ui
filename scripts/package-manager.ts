@@ -2,9 +2,11 @@ import type { ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
 import { askWith, installedSeam } from "#/scripts/package-manager.internal.ts";
 
 export {
+  installedVitePlusVersion,
   packageManagerConfigQuery,
   PackageManagerMismatch,
   PackageManagerQueryFailed,
+  pinnedPnpmOf,
   VitePlusNotFound,
   VitePlusVersionMismatch,
   withoutPackageManagerEnv,

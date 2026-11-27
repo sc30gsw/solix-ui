@@ -18,12 +18,14 @@ import { repositoryRoot } from "#/scripts/repository.ts";
 import {
   callsOf,
   configQuery,
+  pinnedPnpmVersion,
   writeStandInVitePlus,
   writeVpScript,
   writeVpShim,
 } from "#/tests/support/shims.ts";
 
 const release = "1.8.0";
+const pinnedPnpm = pinnedPnpmVersion();
 const query = ["why", "solid-js", "--json"];
 const temporary: string[] = [];
 
@@ -43,7 +45,7 @@ function seamIn(directory: string, onPath: string, installed = true): Seam {
     writeStandInVitePlus(vitePlus, release);
     writeVpScript(join(vitePlus, "bin/vp.mjs"), { version: release, answer: "from the bin" });
   }
-  return { onPath, root: directory, vitePlus, packageManager: "pnpm@12.23.0" };
+  return { onPath, root: directory, vitePlus, packageManager: `pnpm@${pinnedPnpm}` };
 }
 
 function scriptOf(seam: Seam): string {
@@ -181,33 +183,19 @@ test("a vp that answers where no vite-plus is installed fails with VitePlusVersi
   );
 });
 
-test("a vp whose pnpm is not the one packageManager names fails with PackageManagerMismatch, and is never asked", () => {
-  const directory = temporaryDirectory();
-  const vp = writeVpShim(directory, "vp", { version: release, pnpm: "10.28.0" });
-  const seam = seamIn(directory, vp);
-  const error = thrownBy(() => ask(seam));
-
-  expect(error).toBeInstanceOf(PackageManagerMismatch);
-  expect(error).toMatchObject({
-    command: `${vp} ${configQuery}`,
-    directory,
-    found: "10.28.0",
-    pinned: "12.23.0",
-  });
-  expect(callsOf(vp)).toEqual(["--version", configQuery]);
-  expect(callsOf(scriptOf(seam))).toEqual([]);
-});
-
-test("the pnpm release is read from userAgent or the hyphenated user-agent key, and an answer without either fails", () => {
+test("the pnpm release is read from userAgent or the hyphenated user-agent key, accepts +sha512 pins, and fails without either", () => {
   const directory = temporaryDirectory();
   const hyphenated = writeVpShim(directory, "vp-hyphen", {
     version: release,
-    config: JSON.stringify({ "user-agent": "pnpm/12.23.0 npm/? node/v26.13.1 linux x64" }),
+    config: JSON.stringify({ "user-agent": `pnpm/${pinnedPnpm} npm/? node/v26.13.1 linux x64` }),
     answer: "from user-agent",
   });
   const none = writeVpShim(directory, "vp-none", { version: release, config: "{}" });
 
   expect(ask(seamIn(directory, hyphenated))).toBe("from user-agent");
+  expect(
+    ask({ ...seamIn(directory, hyphenated), packageManager: `pnpm@${pinnedPnpm}+sha512.abc` }),
+  ).toBe("from user-agent");
   expect(thrownBy(() => ask(seamIn(directory, none)))).toMatchObject({ found: undefined });
 });
 
@@ -267,17 +255,27 @@ test("the repository asks vp on PATH, then the bin.vp of the vite-plus it instal
 
 test("the question's timeout is one shared deadline across --version, the pnpm probe and the query, and an untimed ETIMEDOUT does not say 0 seconds", () => {
   const directory = temporaryDirectory();
-  const vp = writeVpShim(directory, "vp", {
+  const slowConfig = writeVpShim(directory, "vp-slow-config", {
     version: release,
     versionSeconds: 0.2,
-    configSeconds: 0.2,
+    configSeconds: 1,
     answer: "too late",
   });
-  const seam = seamIn(directory, vp);
-
-  expect(() => ask(seam, query, 300)).toThrow(
-    `${vp} ${configQuery} gave no answer in 0.3 seconds.`,
+  expect(() => ask(seamIn(directory, slowConfig), query, 600)).toThrow(
+    `${slowConfig} ${configQuery} gave no answer in 0.6 seconds.`,
   );
+
+  const slowAnswer = writeVpShim(directory, "vp-slow-answer", {
+    version: release,
+    versionSeconds: 0.15,
+    configSeconds: 0.15,
+    answerSeconds: 1,
+    answer: "too late",
+  });
+  expect(() => ask(seamIn(directory, slowAnswer), query, 700)).toThrow(
+    `${slowAnswer} ${query.join(" ")} gave no answer in 0.7 seconds.`,
+  );
+
   expect(
     new PackageManagerQueryFailed(
       "vp why",
@@ -317,29 +315,31 @@ test("a config probe that exits non-zero or answers invalid or non-object JSON f
   }
 });
 
-test("PackageManagerMismatch tailors its advice to whether PATH or the local vp answered, separates command and directory, and distinguishes missing from non-pnpm packageManager", () => {
+test("PackageManagerMismatch stops without asking the query or next candidate, tailors its advice to whether PATH or the local vp answered, separates command and directory, and distinguishes missing from non-pnpm packageManager", () => {
   const directory = temporaryDirectory();
   const pathVp = writeVpShim(directory, "vp", { version: release, pnpm: "10.28.0" });
-  const pathError = thrownBy(() => ask(seamIn(directory, pathVp)));
+  const pathSeam = seamIn(directory, pathVp);
+  const pathError = thrownBy(() => ask(pathSeam));
 
   expect(pathError).toBeInstanceOf(PackageManagerMismatch);
   expect(pathError).toMatchObject({
     command: `${pathVp} ${configQuery}`,
     directory,
     found: "10.28.0",
-    pinned: "12.23.0",
+    pinned: pinnedPnpm,
   });
   expect((pathError as Error).message).toBe(
-    `${pathVp} ${configQuery} in ${directory} was answered by pnpm 10.28.0, but packageManager is pnpm@12.23.0. Give ${directory} the repository's packageManager (pnpm@12.23.0), or install the global vp at the repository's vite-plus release so vp switches to it.`,
+    `${pathVp} ${configQuery} in ${directory} was answered by pnpm 10.28.0, but packageManager is pnpm@${pinnedPnpm}. Give ${directory} the repository's packageManager (pnpm@${pinnedPnpm}), or install the global vp at the repository's vite-plus release so vp switches to it.`,
   );
+  expect(callsOf(pathVp)).toEqual(["--version", configQuery]);
+  expect(callsOf(scriptOf(pathSeam))).toEqual([]);
 
   const localDir = temporaryDirectory();
   const localSeam = seamIn(localDir, join(localDir, "missing-vp"));
-  writeVpScript(scriptOf(localSeam), { version: release, answer: "from bin" });
   const localError = thrownBy(() => ask({ ...localSeam, packageManager: "pnpm@12.99.0" }));
   expect(localError).toBeInstanceOf(PackageManagerMismatch);
   expect((localError as Error).message).toBe(
-    `${process.execPath} ${scriptOf(localSeam)} ${configQuery} in ${localDir} was answered by pnpm 12.23.0, but packageManager is pnpm@12.99.0. Install the global vp at the repository's vite-plus release, and give ${localDir} the repository's packageManager (pnpm@12.99.0); the repository's own vp does not switch pnpm by packageManager.`,
+    `${process.execPath} ${scriptOf(localSeam)} ${configQuery} in ${localDir} was answered by pnpm ${pinnedPnpm}, but packageManager is pnpm@12.99.0. Install the global vp at the repository's vite-plus release, and give ${localDir} the repository's packageManager (pnpm@12.99.0); the repository's own vp does not switch pnpm by packageManager.`,
   );
 
   const missingPm = thrownBy(() =>
@@ -387,14 +387,27 @@ test("the bare-name PATH reason, EACCES, and a broken shebang interpreter are di
   expect(shebangError).toBeInstanceOf(PackageManagerQueryFailed);
   expect(shebangError).toMatchObject({ code: "ENOENT" });
   expect(callsOf(scriptOf(badShebangSeam))).toEqual([]);
+
+  const bareBadShebangSeam = seamIn(directory, "vp-bad-shebang");
+  const bareShebangError = thrownBy(() =>
+    askWith(bareBadShebangSeam, query, {
+      cwd: directory,
+      encoding: "utf8",
+      env: { ...process.env, PATH: directory },
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
+  );
+  expect(bareShebangError).toBeInstanceOf(PackageManagerQueryFailed);
+  expect(bareShebangError).toMatchObject({ code: "ENOENT" });
+  expect(callsOf(scriptOf(bareBadShebangSeam))).toEqual([]);
 });
 
-test("the pnpm config probe strips npm_config_* variables so a parent package manager cannot spoof user-agent", () => {
+test("the pnpm config probe strips npm_config_* and pnpm_config_* variables so a parent package manager cannot spoof user-agent", () => {
   const directory = temporaryDirectory();
   const vp = writeVpShim(directory, "vp", {
     version: release,
     configScript: [
-      `if [ -n "$npm_config_user_agent" ]; then printf '{"userAgent":"%s"}' "$npm_config_user_agent"; else printf '{"userAgent":"pnpm/12.23.0 npm/? node/?"}'; fi`,
+      `if [ -n "$npm_config_user_agent" ] || [ -n "$pnpm_config_user_agent" ]; then printf '{"userAgent":"pnpm/9.0.0 npm/? node/?"}'; else printf '{"userAgent":"pnpm/${pinnedPnpm} npm/? node/?"}'; fi`,
       `exit 0`,
     ],
     answer: "clean probe",
@@ -405,7 +418,11 @@ test("the pnpm config probe strips npm_config_* variables so a parent package ma
     askWith(seam, query, {
       cwd: directory,
       encoding: "utf8",
-      env: { ...process.env, npm_config_user_agent: "pnpm/9.0.0 npm/? node/?" },
+      env: {
+        ...process.env,
+        npm_config_user_agent: "pnpm/9.0.0 npm/? node/?",
+        pnpm_config_user_agent: "pnpm/9.0.0 npm/? node/?",
+      },
       stdio: ["ignore", "pipe", "pipe"],
     }),
   ).toBe("clean probe");

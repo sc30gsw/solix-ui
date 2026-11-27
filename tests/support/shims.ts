@@ -1,17 +1,18 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { packageManagerConfigQuery } from "#/scripts/package-manager.ts";
-import { manifestAt, rootManifest } from "#/scripts/repository.ts";
+import {
+  installedVitePlusVersion,
+  packageManagerConfigQuery,
+  pinnedPnpmOf,
+} from "#/scripts/package-manager.ts";
+import { rootManifest } from "#/scripts/repository.ts";
 
 export const configQuery = packageManagerConfigQuery.join(" ");
-
-const pinnedPnpmPattern = /^pnpm@([^+\s]+)/;
 
 export function pinnedPnpmVersion(
   packageManager: string | undefined = rootManifest().packageManager,
 ): string {
-  const version =
-    packageManager === undefined ? undefined : pinnedPnpmPattern.exec(packageManager)?.[1];
+  const version = pinnedPnpmOf(packageManager);
   if (version === undefined) {
     throw new Error(`Expected pnpm@<version> in packageManager, got ${String(packageManager)}`);
   }
@@ -19,8 +20,8 @@ export function pinnedPnpmVersion(
 }
 
 export function installedVitePlusRelease(): string {
-  const version = manifestAt("node_modules/vite-plus/package.json").version;
-  if (typeof version !== "string") {
+  const version = installedVitePlusVersion();
+  if (version === undefined) {
     throw new Error("Expected version in node_modules/vite-plus/package.json");
   }
   return version;
@@ -58,7 +59,8 @@ function logOf(path: string): string {
 
 export function configAnswerOf(shim: Pick<VpShim, "pnpm" | "config">): string {
   return (
-    shim.config ?? JSON.stringify({ userAgent: `pnpm/${shim.pnpm ?? "12.23.0"} npm/? node/?` })
+    shim.config ??
+    JSON.stringify({ userAgent: `pnpm/${shim.pnpm ?? pinnedPnpmVersion()} npm/? node/?` })
   );
 }
 
@@ -101,7 +103,10 @@ export function writeVpShim(directory: string, name: string, shim: VpShim): stri
   );
 }
 
-export function writeVpScript(path: string, shim: Pick<VpShim, "version" | "answer">): string {
+export function writeVpScript(
+  path: string,
+  shim: Pick<VpShim, "version" | "pnpm" | "answer">,
+): string {
   mkdirSync(dirname(path), { recursive: true });
   const log = JSON.stringify(logOf(path));
   writeFileSync(
@@ -110,7 +115,7 @@ export function writeVpScript(path: string, shim: Pick<VpShim, "version" | "answ
       `import { appendFileSync } from "node:fs";`,
       `const args = process.argv.slice(2).join(" ");`,
       `appendFileSync(${log}, args + "\\n");`,
-      `const answers = { "--version": ${JSON.stringify(`vp v${shim.version}\n`)}, ${JSON.stringify(configQuery)}: ${JSON.stringify(configAnswerOf({}))} };`,
+      `const answers = { "--version": ${JSON.stringify(`vp v${shim.version}\n`)}, ${JSON.stringify(configQuery)}: ${JSON.stringify(configAnswerOf({ pnpm: shim.pnpm }))} };`,
       `process.stdout.write(answers[args] ?? ${JSON.stringify(shim.answer ?? "")});`,
       ``,
     ].join("\n"),
