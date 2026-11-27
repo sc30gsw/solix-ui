@@ -121,15 +121,15 @@ function setUpStepProblem(step: Step, expected: SetUpStep): string | undefined {
     return `uses ${step.uses ?? "no action"}, not ${expected.action}`;
   }
   const given = step.with ?? {};
+  if (withMatches(given, expected)) return undefined;
   if (
     expected.action === setUpVpAction &&
-    !isDeepStrictEqual(given.version, expected.with.version)
+    !isDeepStrictEqual(given.version, expected.with.version) &&
+    withMatches({ ...given, version: expected.with.version }, expected)
   ) {
     return undefined;
   }
-  return withMatches(given, expected)
-    ? undefined
-    : `has with ${JSON.stringify(given)}, not ${JSON.stringify(expected.with)}`;
+  return `has with ${JSON.stringify(given)}, not ${JSON.stringify(expected.with)}`;
 }
 
 function gateStepProblem(step: Step, command: string): string | undefined {

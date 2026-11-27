@@ -97,12 +97,18 @@ function userConfigHome(): string {
     : join(homedir(), ".config");
 }
 
+function errorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const code = Reflect.get(error, "code");
+  return typeof code === "string" ? code : undefined;
+}
+
 function linkInto(configHome: string, target: string, name: string): void {
   try {
     const kind = statSync(target, { throwIfNoEntry: false })?.isDirectory() ? "junction" : "file";
     symlinkSync(target, join(configHome, name), kind);
   } catch (error) {
-    const { code } = error as NodeJS.ErrnoException;
+    const code = errorCode(error);
     if (code !== undefined && ignorableLinkErrors.has(code)) return;
     throw error;
   }
@@ -116,11 +122,11 @@ function linkUserConfigBesidesPnpm(configHome: string): void {
   try {
     entries = readdirSync(userHome);
   } catch (error) {
-    const { code } = error as NodeJS.ErrnoException;
+    const code = errorCode(error);
     if (code !== undefined && unreadableConfigHomeErrors.has(code)) return;
     throw error;
   }
-  for (const name of entries.filter((entry) => entry !== "pnpm")) {
+  for (const name of entries.filter((entry) => entry.toLowerCase() !== "pnpm")) {
     linkInto(configHome, join(userHome, name), name);
   }
 }

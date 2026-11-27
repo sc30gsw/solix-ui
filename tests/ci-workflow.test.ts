@@ -555,3 +555,14 @@ test.for(wrongRuns)(
     expect(newestCheckProblems(workflow)).toContain(problem);
   },
 );
+
+test("a setup-vp step with both a wrong version and an extra input reports both problems", () => {
+  const badWith = { ...setUpVp.with, version: "0.0.1", "run-install": false };
+  const problems = newestCheckProblems(
+    aWorkflow({ steps: [checkout, { ...setUpVp, with: badWith }, check] }),
+  );
+  expect(problems).toEqual([
+    `step 2 of the a job has with ${JSON.stringify(badWith)}, not ${setUpWith}; a gate job's steps are exactly ${gateSteps}.`,
+    `step 2 of the a job sets up Vite+ with version "0.0.1"; give it version ${JSON.stringify(pinned)}, the vite-plus release the catalog pins.`,
+  ]);
+});

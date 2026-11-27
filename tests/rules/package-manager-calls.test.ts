@@ -26,10 +26,20 @@ const publicArities: Readonly<Record<string, number>> = {
   askPackageManager: 2,
   installedVitePlusVersion: 0,
 };
+const allowedPublicReExports = new Set([
+  "packageManagerConfigQuery",
+  "PackageManagerMismatch",
+  "PackageManagerQueryFailed",
+  "pinnedPnpmOf",
+  "VitePlusNotFound",
+  "VitePlusVersionMismatch",
+  "withoutPackageManagerEnv",
+  "WorkingDirectoryMissing",
+]);
 const mayRunVp = /\bvp\b|vite-plus|installedVp|package-manager\.internal/;
 const shellSeparators = /&&|\|\||[;&|\n]/;
 const envAssignment = /^[A-Za-z_]\w*=\S*\s+/;
-const vpAtSegmentStart = /^(?:["']?)(vp|\$\{\s*installedVp\s*\})(?:["']?)\s+(\S+)/;
+const vpAtSegmentStart = /^(?:["']?)(vp|\$\{\s*installedVp\s*\})(?:["']?)(?:\s+(\S+)|$)/;
 const askInstead =
   "ask the package manager through askPackageManager in scripts/package-manager.ts, which checks the vp and the pnpm that answer";
 const runTheLocalVp = "run the repository's own vp, installedVp in scripts/repository.ts";
@@ -147,12 +157,17 @@ function runnerOf(names: Names, call: ts.CallExpression): string | undefined {
     const original = names.runners.get(callee.text);
     return original !== undefined && runners.has(original) ? original : undefined;
   }
-  return ts.isPropertyAccessExpression(callee) &&
-    ts.isIdentifier(callee.expression) &&
-    names.namespaces.has(callee.expression.text) &&
-    runners.has(callee.name.text)
-    ? callee.name.text
-    : undefined;
+  if (ts.isPropertyAccessExpression(callee)) {
+    const receiver = resolved(names, callee.expression);
+    if (
+      ts.isIdentifier(receiver) &&
+      names.namespaces.has(receiver.text) &&
+      runners.has(callee.name.text)
+    ) {
+      return callee.name.text;
+    }
+  }
+  return undefined;
 }
 
 function textOf(names: Names, expression: ts.Expression | undefined): string | undefined {
@@ -206,14 +221,37 @@ function problemOf(names: Names, run: Run): string | undefined {
   return undefined;
 }
 
+function shellTextOf(names: Names, value: ts.Expression): string | undefined {
+  if (ts.isStringLiteralLikeNode(value)) return value.text;
+  if (value.kind !== ts.SyntaxKind.TemplateExpression) return undefined;
+  const parts: string[] = [];
+  value.forEachChild((child) => {
+    if (ts.isTemplateHead(child)) {
+      parts.push(child.text);
+      return;
+    }
+    child.forEachChild((piece) => {
+      if (ts.isTemplateMiddle(piece) || ts.isTemplateTail(piece)) {
+        parts.push(piece.text);
+        return;
+      }
+      if (!ts.isExpression(piece)) return;
+      const part = resolved(names, piece);
+      parts.push(
+        ts.isIdentifier(part) && part.text === "installedVp"
+          ? "${installedVp}"
+          : ts.isStringLiteralLikeNode(part)
+            ? part.text
+            : `\${${piece.getText()}}`,
+      );
+    });
+  });
+  return parts.join("");
+}
+
 function shellProblemOf(names: Names, command: ts.Expression | undefined): string | undefined {
   if (command === undefined) return undefined;
-  const value = resolved(names, command);
-  const text = ts.isStringLiteralLikeNode(value)
-    ? value.text
-    : value.kind === ts.SyntaxKind.TemplateExpression
-      ? value.getText().slice(1, -1)
-      : undefined;
+  const text = shellTextOf(names, resolved(names, command));
   if (text === undefined) return undefined;
   for (const part of text.split(shellSeparators)) {
     let segment = part.trim();
@@ -260,21 +298,51 @@ function resolvesToInternalModule(file: string, specifier: string): boolean {
 function publicFacadeProblemsIn(source: ts.SourceFile, file: string): string[] {
   const problems: string[] = [];
   for (const [name, expected] of Object.entries(publicArities)) {
-    const declaration = source.statements.find(
+    const declarations = source.statements.filter(
       (statement): statement is ts.FunctionDeclaration =>
         ts.isFunctionDeclaration(statement) &&
         isExported(statement) &&
         statement.name?.text === name,
     );
-    if (declaration === undefined) {
+    if (declarations.length === 0) {
       problems.push(`${file}: must export function ${name} with ${expected} parameters.`);
       continue;
     }
-    if (
-      declaration.parameters.length !== expected ||
-      declaration.parameters.some((parameter) => parameter.dotDotDotToken !== undefined)
-    ) {
+    const invalid = declarations.some(
+      (declaration) =>
+        declaration.parameters.length !== expected ||
+        declaration.parameters.some((parameter) => parameter.dotDotDotToken !== undefined),
+    );
+    if (invalid) {
       problems.push(`${file}: ${name} must take exactly ${expected} parameters and nothing else.`);
+    }
+  }
+  for (const statement of source.statements) {
+    if (ts.isExportAssignment(statement)) {
+      problems.push(`${file}: must not export default or export = from the public facade.`);
+      continue;
+    }
+    if (ts.isExportDeclaration(statement)) {
+      if (statement.exportClause === undefined || !ts.isNamedExports(statement.exportClause)) {
+        problems.push(`${file}: must not wildcard-re-export from the public facade.`);
+        continue;
+      }
+      for (const element of statement.exportClause.elements) {
+        const exported = (element.propertyName ?? element.name).text;
+        if (!allowedPublicReExports.has(exported)) {
+          problems.push(`${file}: must not re-export ${exported} from the public facade.`);
+        }
+      }
+      continue;
+    }
+    if (isExported(statement)) {
+      const allowed =
+        ts.isFunctionDeclaration(statement) &&
+        statement.name !== undefined &&
+        Object.hasOwn(publicArities, statement.name.text);
+      if (!allowed) {
+        problems.push(`${file}: exports a declaration beyond the public facade.`);
+      }
     }
   }
   return problems;
@@ -464,6 +532,17 @@ const refused: [what: string, code: string, problem: string][] = [
     'const cmd = "vp";\n{ const cmd = "echo"; spawn(cmd, ["hi"]); }\nspawn(cmd, ["why"]);',
     "spawn runs vp why itself",
   ],
+  ["a bare vp shell command", 'execSync("cd sub && vp");', "execSync runs vp from PATH"],
+  [
+    "a const alias of a child_process namespace import",
+    'import cp from "node:child_process";\nconst runner = cp;\nrunner.execFileSync("vp", ["why"]);',
+    "execFileSync runs vp why itself",
+  ],
+  [
+    "a shell template interpolating a const alias of installedVp",
+    "const local = installedVp;\nexecSync(`${local} why`);",
+    "execSync runs vp why itself",
+  ],
 ];
 
 const allowed: [what: string, code: string][] = [
@@ -495,16 +574,13 @@ test.for(allowed)("the package-manager rule allows %s", ([, code]) => {
   ).toEqual([]);
 });
 
-test("the package-manager rule lets the public module and its test import the internal one, and holds the public facade's parameter counts", () => {
-  const validFacade = parseText(
-    [
-      'import { askWith } from "#/scripts/package-manager.internal.ts";',
-      "export function installedVitePlusVersion() { return undefined; }",
-      "export function askPackageManager(args: readonly string[], options: object) { return askWith(args, options); }",
-      "",
-    ].join("\n"),
-    ".ts",
-  );
+test("the package-manager rule lets the public module and its test import the internal one, and holds the public facade's surface and parameter counts", () => {
+  const validFacadeLines = [
+    'import { askWith } from "#/scripts/package-manager.internal.ts";',
+    "export function installedVitePlusVersion() { return undefined; }",
+    "export function askPackageManager(args: readonly string[], options: object) { return askWith(args, options); }",
+  ];
+  const validFacade = parseText(`${validFacadeLines.join("\n")}\n`, ".ts");
 
   for (const file of mayImportTheInternalModule) {
     expect(packageManagerCallProblemsIn(validFacade, file)).toEqual([]);
@@ -520,12 +596,53 @@ test("the package-manager rule lets the public module and its test import the in
       "askPackageManager must take exactly 2 parameters and nothing else.",
     ],
     [
-      'export { installedVitePlusVersion } from "#/scripts/package-manager.internal.ts";\nexport function askPackageManager(a: unknown, b: unknown) {}',
-      "must export function installedVitePlusVersion with 0 parameters.",
+      [
+        "export function installedVitePlusVersion() { return undefined; }",
+        "export function askPackageManager(a: unknown, b: unknown): string;",
+        "export function askPackageManager(a: unknown, b: unknown, seam?: unknown): string;",
+        'export function askPackageManager(a: unknown, b: unknown, seam?: unknown) { return ""; }',
+      ].join("\n"),
+      "askPackageManager must take exactly 2 parameters and nothing else.",
+    ],
+    [
+      `${validFacadeLines.join("\n")}\nexport { askWith } from "#/scripts/package-manager.internal.ts";`,
+      "must not re-export askWith from the public facade.",
+    ],
+    [
+      `${validFacadeLines.join("\n")}\nexport { askWith as run } from "#/scripts/package-manager.internal.ts";`,
+      "must not re-export askWith from the public facade.",
+    ],
+    [
+      `${validFacadeLines.join("\n")}\nexport * from "#/scripts/package-manager.internal.ts";`,
+      "must not wildcard-re-export from the public facade.",
+    ],
+    [
+      `${validFacadeLines.join("\n")}\nexport const leak = askWith;`,
+      "exports a declaration beyond the public facade.",
+    ],
+    [
+      `${validFacadeLines.join("\n")}\nexport default askWith;`,
+      "must not export default or export = from the public facade.",
     ],
   ] as const) {
     const problems = packageManagerCallProblemsIn(parseText(`${code}\n`, ".ts"), publicModule);
     expect(problems).toHaveLength(1);
     expect(problems[0]).toContain(problem);
   }
+
+  const reExportedVersionProblems = packageManagerCallProblemsIn(
+    parseText(
+      'export { installedVitePlusVersion } from "#/scripts/package-manager.internal.ts";\nexport function askPackageManager(a: unknown, b: unknown) {}\n',
+      ".ts",
+    ),
+    publicModule,
+  );
+  expect(reExportedVersionProblems).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("must export function installedVitePlusVersion with 0 parameters."),
+      expect.stringContaining(
+        "must not re-export installedVitePlusVersion from the public facade.",
+      ),
+    ]),
+  );
 });

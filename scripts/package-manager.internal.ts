@@ -26,7 +26,7 @@ export type AbsentCandidate = {
 
 export type Candidate = PresentCandidate | AbsentCandidate;
 
-type Budget = { readonly total: number | undefined; readonly deadline: number | undefined };
+type Budget = { readonly total: number; readonly deadline: number } | undefined;
 
 export const packageManagerConfigQuery = ["pm", "config", "list", "--json"] as const;
 
@@ -121,13 +121,17 @@ export class PackageManagerMismatch extends Error {
   }
 }
 
-function stringField(value: object, key: string): string | undefined {
-  const field = Reflect.get(value, key);
+function fieldOf(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
+}
+
+function stringField(value: unknown, key: string): string | undefined {
+  const field = fieldOf(value, key);
   return typeof field === "string" ? field : undefined;
 }
 
-function statusField(value: object): number | null | undefined {
-  const field = Reflect.get(value, "status");
+function statusField(value: unknown): number | null | undefined {
+  const field = fieldOf(value, "status");
   return typeof field === "number" || field === null ? field : undefined;
 }
 
@@ -138,10 +142,9 @@ export class PackageManagerQueryFailed extends Error {
   readonly stderr: string;
 
   constructor(command: string, error: unknown, timeout: number | undefined) {
-    const object = typeof error === "object" && error !== null ? error : undefined;
-    const code = object === undefined ? undefined : stringField(object, "code");
-    const status = object === undefined ? undefined : statusField(object);
-    const stderr = (object === undefined ? undefined : stringField(object, "stderr"))?.trim() ?? "";
+    const code = stringField(error, "code");
+    const status = statusField(error);
+    const stderr = stringField(error, "stderr")?.trim() ?? "";
     const detail = error instanceof Error ? error.message : String(error);
     const reason =
       code === "ETIMEDOUT"
@@ -159,36 +162,31 @@ export class PackageManagerQueryFailed extends Error {
   }
 }
 
-function manifestOf(directory: string): Record<string, unknown> | undefined {
+function manifestOf(directory: string): unknown {
   const path = join(directory, "package.json");
-  return existsSync(path)
-    ? (JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>)
-    : undefined;
+  return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
 }
 
 export function installedSeam(): Seam {
-  const packageManager = manifestOf(repositoryRoot)?.packageManager;
   return {
     onPath: "vp",
     root: repositoryRoot,
     vitePlus: join(repositoryRoot, "node_modules/vite-plus"),
-    packageManager: typeof packageManager === "string" ? packageManager : undefined,
+    packageManager: stringField(manifestOf(repositoryRoot), "packageManager"),
   };
 }
 
-export function installedVitePlusVersion(seam: Seam = installedSeam()): string | undefined {
-  const version = manifestOf(seam.vitePlus)?.version;
-  return typeof version === "string" ? version : undefined;
+export function installedVitePlusVersion(seam: Seam): string | undefined {
+  return stringField(manifestOf(seam.vitePlus), "version");
 }
 
 function scriptCandidate(seam: Seam): Candidate {
   const manifest = manifestOf(seam.vitePlus);
-  if (manifest === undefined) {
+  if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
     return { absent: `vite-plus is not installed in ${seam.root}` };
   }
-  const bin = manifest.bin;
-  const named = typeof bin === "object" && bin !== null ? Reflect.get(bin, "vp") : undefined;
-  if (typeof named !== "string") {
+  const named = stringField(fieldOf(manifest, "bin"), "vp");
+  if (named === undefined) {
     return { absent: `the vite-plus in ${seam.vitePlus} names no bin.vp` };
   }
   const script = join(seam.vitePlus, named);
@@ -207,12 +205,12 @@ function commandLine(candidate: PresentCandidate, args: readonly string[]): stri
 
 function budgetOf(timeout: number | undefined): Budget {
   return timeout === undefined || !Number.isFinite(timeout) || timeout <= 0
-    ? { total: undefined, deadline: undefined }
+    ? undefined
     : { total: timeout, deadline: performance.now() + timeout };
 }
 
 function timeoutFor(budget: Budget, command: string): number | undefined {
-  if (budget.deadline === undefined) return undefined;
+  if (budget === undefined) return undefined;
   const remaining = budget.deadline - performance.now();
   if (remaining <= 0) {
     throw new PackageManagerQueryFailed(
@@ -238,7 +236,7 @@ function run(
       timeout,
     });
   } catch (error) {
-    throw new PackageManagerQueryFailed(command, error, budget.total);
+    throw new PackageManagerQueryFailed(command, error, budget?.total);
   }
 }
 
@@ -340,8 +338,8 @@ function checkedAnswer(
   const configCommand = commandLine(candidate, packageManagerConfigQuery);
   const configAnswer = run(candidate, packageManagerConfigQuery, probingConfig(options), budget);
   const config = parseConfigObject(configCommand, configAnswer);
-  const agent = config.userAgent ?? config["user-agent"];
-  const answering = typeof agent === "string" ? pnpmVersion.exec(agent)?.[1] : undefined;
+  const agent = stringField(config, "userAgent") ?? stringField(config, "user-agent");
+  const answering = agent === undefined ? undefined : pnpmVersion.exec(agent)?.[1];
   const pinned = pinnedPnpmOf(seam.packageManager);
   if (answering === undefined || answering !== pinned) {
     throw new PackageManagerMismatch(

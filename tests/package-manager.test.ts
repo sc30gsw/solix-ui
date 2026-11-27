@@ -15,6 +15,7 @@ import {
   VitePlusVersionMismatch,
   WorkingDirectoryMissing,
 } from "#/scripts/package-manager.internal.ts";
+import { installedVitePlusVersion as publicInstalledVitePlusVersion } from "#/scripts/package-manager.ts";
 import { repositoryRoot } from "#/scripts/repository.ts";
 import {
   callsOf,
@@ -251,7 +252,16 @@ test("the repository asks vp on PATH, then the bin.vp of the vite-plus it instal
     { kind: "local", command: process.execPath, prefix: [script] },
   ]);
   expect(existsSync(script)).toBe(true);
-  expect(installedVitePlusVersion()).toMatch(/^\d+\.\d+\.\d+/);
+  expect(installedVitePlusVersion(seam)).toMatch(/^\d+\.\d+\.\d+/);
+  expect(publicInstalledVitePlusVersion()).toBe(installedVitePlusVersion(seam));
+
+  const nullManifestDir = temporaryDirectory();
+  const nullVitePlus = join(nullManifestDir, "node_modules/vite-plus");
+  writeStandInVitePlus(nullVitePlus, release);
+  writeFileSync(join(nullVitePlus, "package.json"), "null");
+  expect(candidatesOf({ ...seam, root: nullManifestDir, vitePlus: nullVitePlus })[1]).toEqual({
+    absent: `vite-plus is not installed in ${nullManifestDir}`,
+  });
 });
 
 test("the question's timeout is one shared deadline across --version, the pnpm probe and the query, ignores non-finite timeouts, accepts URL cwd, and an untimed ETIMEDOUT does not say 0 seconds", () => {
@@ -306,6 +316,19 @@ test("the question's timeout is one shared deadline across --version, the pnpm p
       undefined,
     ).message,
   ).toBe("vp why timed out.");
+  expect(new PackageManagerQueryFailed("vp why", null, undefined)).toMatchObject({
+    code: undefined,
+    status: undefined,
+    stderr: "",
+    message: "vp why failed: null.",
+  });
+  expect(
+    new PackageManagerQueryFailed("vp why", { status: "bad", stderr: 42 }, undefined),
+  ).toMatchObject({
+    code: undefined,
+    status: undefined,
+    stderr: "",
+  });
 });
 
 test("a config probe that exits non-zero or answers invalid or non-object JSON fails with PackageManagerQueryFailed, and the next candidate never runs", () => {
