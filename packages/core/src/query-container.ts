@@ -6,7 +6,6 @@ import {
   isHydratable,
   isHydrating,
   onCleanup,
-  onSettled,
 } from "solid-js";
 import { containerQueryLayer, layerOrder, libraryCascadeLayer } from "#/src/layers.ts";
 import {
@@ -14,12 +13,12 @@ import {
   breakpointWidths,
   containerVariableClass,
   isBreakpoint,
+  pixelsPerRem,
   readerRule,
   registrationRule,
   variableProperty,
 } from "#/src/style-prop-table.ts";
 
-const pixelsPerRem = 16;
 const containerWidthUnits = ["rem", "px", "em"] as const;
 const fractionLeadingZeros = ["", "0", "00", "000"] as const;
 const unsignedInteger = "(?:0|[1-9]\\d*)";
@@ -55,6 +54,9 @@ export type QueryContainer = {
   readonly queries: () => ContainerQueries | undefined;
   readonly report: (used: () => readonly Used[]) => void;
   readonly rules: () => string | undefined;
+};
+
+export type SharedQueryContainer = QueryContainer & {
   readonly member: () => QueryContainer;
 };
 
@@ -142,91 +144,68 @@ type Member = { keys: readonly string[] };
 type Membership = {
   readonly members: Member[];
   readonly version: () => number;
-  readonly remove: (member: Member) => void;
   readonly notify: () => void;
+  readonly leave: (member: Member) => void;
 };
 
-function placedBefore(membership: Membership, own: Member): Set<string> {
-  membership.version();
-  const index = membership.members.indexOf(own);
-  const before = index <= 0 ? [] : membership.members.slice(0, index);
-  return new Set(before.flatMap((member) => member.keys));
+function isFollowed(members: readonly Member[], member: Member): boolean {
+  const index = members.indexOf(member);
+  return index !== -1 && index < members.length - 1;
 }
 
-function memberContainer(
-  queries: () => ContainerQueries | undefined,
-  membership: Membership,
-  streamed: boolean,
-): QueryContainer {
-  let ownUsed: (() => readonly Used[]) | undefined;
-  let own: Member | undefined;
-  return {
-    queries,
-    report(used) {
-      if (own !== undefined) return;
-      const placed = createMemo(() => uniqueUsed(used()), { equals: sameUsed });
-      const member: Member = { keys: [] };
-      ownUsed = placed;
-      own = member;
-      membership.members.push(member);
-      let settled = false;
-      onCleanup(() => {
-        membership.remove(member);
-        if (!isServer && !settled) queueMicrotask(membership.notify);
-      });
-      createEffect(placed, (_, prev) => {
-        if (prev !== undefined) membership.notify();
-      });
-      onSettled(() => {
-        settled = true;
-        return () => {
-          membership.remove(member);
-          membership.notify();
-        };
-      });
-    },
-    rules() {
-      const current = queries();
-      if (current === undefined || ownUsed === undefined || own === undefined) {
-        if (own !== undefined) own.keys = [];
-        return undefined;
-      }
-      const ownPairs = ownUsed();
-      own.keys = ownPairs.map(keyOf);
-      if (streamed && (isServer || isHydrating())) {
-        return rulesFor(current, ownPairs);
-      }
-      const before = placedBefore(membership, own);
-      const missing = ownPairs.filter((pair) => !before.has(keyOf(pair)));
-      return rulesFor(current, missing);
-    },
-    member: () => memberContainer(queries, membership, streamed),
-  };
-}
-
-export function createQueryContainer(
-  scope: string,
-  widths: () => readonly (readonly [key: string, width: string])[] | undefined,
-): QueryContainer {
-  const normalizedScope = scope.replace(characterOutsideAClassName, "_");
-  const hydrationKey = `${queryContainerPrefix}${normalizedScope}`;
-  const writer = getHydrationWriter();
-  const streaming = writer?.async === true;
-  if (streaming && isHydratable()) writer.write(hydrationKey, true);
-  const taken = isHydrating() ? takeHydrationValue(hydrationKey) : undefined;
-  const streamed = streaming || (taken?.status === "resolved" && taken.value === true);
-
+function createMembership(): Membership {
+  const members: Member[] = [];
+  const [version, setVersion] = createSignal(0);
   let disposed = false;
   onCleanup(() => {
     disposed = true;
   });
+  const notify = () => {
+    if (!disposed) setVersion((count) => count + 1);
+  };
+  return {
+    members,
+    version,
+    notify,
+    leave(member) {
+      const index = members.indexOf(member);
+      if (index === -1) return;
+      members.splice(index, 1);
+      if (!isServer && index < members.length && member.keys.length > 0) queueMicrotask(notify);
+    },
+  };
+}
 
-  const queries = createMemo(
+function placedBefore(membership: Membership, own: Member): Set<string> {
+  const index = membership.members.indexOf(own);
+  if (index <= 0) return new Set();
+  membership.version();
+  return new Set(membership.members.slice(0, index).flatMap((member) => member.keys));
+}
+
+function streamedRender(scope: string): boolean {
+  const hydrationKey = `${queryContainerPrefix}${scope}`;
+  if (isServer) {
+    const writer = getHydrationWriter();
+    const streaming = writer?.async === true;
+    if (streaming && isHydratable()) writer.write(hydrationKey, true);
+    return streaming;
+  }
+  if (!isHydrating()) return false;
+  const taken = takeHydrationValue(hydrationKey);
+  return taken?.status === "resolved" && taken.value === true;
+}
+
+function queriesOf(
+  scope: string,
+  widths: () => readonly (readonly [key: string, width: string])[] | undefined,
+): () => ContainerQueries | undefined {
+  return createMemo(
     (): ContainerQueries | undefined => {
       const given = widths();
       if (given === undefined) return undefined;
       return {
-        scope: normalizedScope,
+        scope,
         widths: given
           .flatMap(([key, width]): [string, string][] => {
             const parsed = widthOf(width);
@@ -237,32 +216,88 @@ export function createQueryContainer(
     },
     { equals: sameQueries },
   );
+}
 
-  const members: Member[] = [];
-  const [version, setVersion] = createSignal(0);
-  const membership: Membership = {
-    members,
-    version,
-    remove(member) {
-      const index = members.indexOf(member);
-      if (index !== -1) members.splice(index, 1);
+function placedOf(used: () => readonly Used[], member?: Member): () => readonly Used[] {
+  return createMemo(
+    () => {
+      if (member !== undefined) member.keys = [];
+      const placed = uniqueUsed(used());
+      if (member !== undefined) member.keys = placed.map(keyOf);
+      return placed;
     },
-    notify() {
-      if (!disposed) setVersion((count) => count + 1);
-    },
-  };
+    { equals: sameUsed },
+  );
+}
 
-  let reported: () => readonly Used[] = () => [];
+function ownedContainer(queries: () => ContainerQueries | undefined): QueryContainer {
+  let placed: () => readonly Used[] = () => [];
   return {
     queries,
     report(used) {
-      reported = used;
+      placed = placedOf(used);
     },
     rules() {
       const current = queries();
-      if (current === undefined) return undefined;
-      return rulesFor(current, uniqueUsed(reported()));
+      return current === undefined ? undefined : rulesFor(current, placed());
     },
+  };
+}
+
+function memberContainer(
+  queries: () => ContainerQueries | undefined,
+  membership: Membership,
+  streamed: boolean,
+): QueryContainer {
+  let joined: { member: Member; placed: () => readonly Used[] } | undefined;
+  return {
+    queries,
+    report(used) {
+      if (joined !== undefined) return;
+      const member: Member = { keys: [] };
+      const placed = placedOf(used, member);
+      joined = { member, placed };
+      membership.members.push(member);
+      onCleanup(() => membership.leave(member));
+      createEffect(placed, () => {
+        if (isFollowed(membership.members, member)) membership.notify();
+      });
+    },
+    rules() {
+      const current = queries();
+      if (current === undefined || joined === undefined) return undefined;
+      const placed = joined.placed();
+      const before = placedBefore(membership, joined.member);
+      if (streamed && (isServer || isHydrating())) return rulesFor(current, placed);
+      return rulesFor(
+        current,
+        placed.filter((pair) => !before.has(keyOf(pair))),
+      );
+    },
+  };
+}
+
+function scopeOf(scope: string): string {
+  return scope.replace(characterOutsideAClassName, "_");
+}
+
+export function createQueryContainer(
+  scope: string,
+  widths: () => readonly (readonly [key: string, width: string])[] | undefined,
+): QueryContainer {
+  return ownedContainer(queriesOf(scopeOf(scope), widths));
+}
+
+export function createSharedQueryContainer(
+  scope: string,
+  widths: () => readonly (readonly [key: string, width: string])[] | undefined,
+): SharedQueryContainer {
+  const normalizedScope = scopeOf(scope);
+  const streamed = streamedRender(normalizedScope);
+  const queries = queriesOf(normalizedScope, widths);
+  const membership = createMembership();
+  return {
+    ...ownedContainer(queries),
     member: () => memberContainer(queries, membership, streamed),
   };
 }

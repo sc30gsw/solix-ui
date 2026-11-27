@@ -7,6 +7,7 @@ import {
   canonicalOf,
   containerVariableClass,
   type PropertyRow,
+  pixelsPerRem,
   type ResponsiveKey,
   type RowOf,
   type Scale,
@@ -34,7 +35,6 @@ import { colorValueOf } from "#/src/color-table.ts";
 import { declarable } from "#/src/css-syntax.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
-const pixelsPerRem = 16;
 const colorScale = "color" satisfies Scale;
 
 type Absent = null | undefined;

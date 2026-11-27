@@ -25,6 +25,7 @@ type AliasRow = { readonly aliasOf: string };
 
 export const stylePropClassPrefix = "sx";
 export const libraryStyleMark = "data-solix-rules";
+export const pixelsPerRem = 16;
 
 export const breakpointWidths = {
   xs: "36em",

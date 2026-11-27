@@ -43,16 +43,13 @@ const disposers: (() => void)[] = [];
 const recorders: (() => void)[] = [];
 const scope = { depth: 0 };
 const journals = new Set<Attachments>();
-type HarnessTask = { readonly concurrent?: boolean };
+const diagnostics: { gate?: SolidDiagnosticsGate; running: number } = { running: 0 };
 
-const diagnosticsGates = new WeakMap<HarnessTask, SolidDiagnosticsGate>();
-const active: { task?: HarnessTask } = {};
-
-function diagnosticsRaised(task: HarnessTask): string[] {
-  const gate = diagnosticsGates.get(task);
-  if (gate === undefined) return [];
-  diagnosticsGates.delete(task);
-  return gate.finishDescribed();
+function diagnosticsRaised(): string[] {
+  const raised = diagnostics.gate?.finishDescribed() ?? [];
+  diagnostics.gate =
+    diagnostics.running > 0 ? openSolidDiagnosticsGate({ exclusive: true }) : undefined;
+  return raised;
 }
 
 function inScope(): boolean {
@@ -276,15 +273,11 @@ function leftAfterDispose(): string[] {
   ];
 }
 
-function startRecording(task: HarnessTask): void {
-  if (task.concurrent !== true) {
-    liveListeners.clear();
-    liveTimers.clear();
-    liveObservations.clear();
-    liveHandlers.clear();
-    active.task = task;
-  }
-  diagnosticsGates.set(task, openSolidDiagnosticsGate());
+function startRecording(): void {
+  liveListeners.clear();
+  liveTimers.clear();
+  liveObservations.clear();
+  liveHandlers.clear();
 }
 
 export function mount<T>(create: () => T): T {
@@ -350,21 +343,24 @@ export function unmount(): void {
 }
 
 export function reportAfterDispose(): string[] {
-  const task = active.task;
-  if (task === undefined || task.concurrent === true) {
-    throw new Error("reportAfterDispose() only runs inside a sequential browser-harness test.");
+  if (diagnostics.gate === undefined || diagnostics.running !== 1) {
+    throw new Error(
+      "reportAfterDispose() only runs inside a browser-harness test that no other test runs beside.",
+    );
   }
   unmount();
-  const report = [...diagnosticsRaised(task), ...leftAfterDispose()];
-  startRecording(task);
+  const report = [...diagnosticsRaised(), ...leftAfterDispose()];
+  startRecording();
   return report;
 }
 
 beforeEach(({ task }) => {
+  if (task.concurrent !== true) startRecording();
+  diagnostics.running += 1;
+  diagnostics.gate ??= openSolidDiagnosticsGate({ exclusive: true });
   expect(solidDevelopmentBuildLoaded(), "the browser project runs Solid's development build").toBe(
     true,
   );
-  startRecording(task);
 });
 
 afterEach(({ task }) => {
@@ -375,10 +371,15 @@ afterEach(({ task }) => {
     for (const remove of recorders.splice(0)) remove();
     document.body.replaceChildren();
   } finally {
-    if (active.task === task) active.task = undefined;
-    raised = diagnosticsRaised(task);
+    diagnostics.running -= 1;
+    raised = diagnosticsRaised();
   }
-  expect(raised, "a primitive raised a Solid development diagnostic").toEqual([]);
+  expect(
+    raised,
+    task.concurrent === true
+      ? "a primitive raised a Solid development diagnostic while this test, or a test that ran at once with it, ran"
+      : "a primitive raised a Solid development diagnostic",
+  ).toEqual([]);
   expect(
     leftAfterDispose(),
     "a primitive left a listener, timer or observer behind after its owner was disposed",

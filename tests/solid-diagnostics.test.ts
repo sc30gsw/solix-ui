@@ -117,3 +117,10 @@ test("expectingSolidDiagnostic allows only the code it names inside its callback
   expect(captured.map(({ code }) => code)).toEqual(["SSR_RENDER_ERROR_CONTAINED"]);
   expect(secondFinish).toEqual([]);
 });
+
+test("a test gate opened while another test's gate is open is refused, and a gate that is not a test's opens beside it", () => {
+  expect(() => openSolidDiagnosticsGate({ exclusive: true })).toThrow(
+    "while another test's gate was open",
+  );
+  expect(openSolidDiagnosticsGate().finish()).toEqual([]);
+});

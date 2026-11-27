@@ -1,11 +1,11 @@
 import { createContext, useContext } from "solid-js";
 import type { CarriedStyling } from "#/src/parts.ts";
-import type { QueryContainer } from "#/src/query-container.ts";
+import type { SharedQueryContainer } from "#/src/query-container.ts";
 
 export type GridContextValue = {
   columns: () => number;
   grow: () => boolean;
-  container: QueryContainer;
+  container: SharedQueryContainer;
   col: CarriedStyling;
 };
 

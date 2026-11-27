@@ -28,7 +28,13 @@ type StoryState = {
   canvasElement: Element;
 };
 
-const diagnostics: { gate?: SolidDiagnosticsGate } = {};
+const diagnostics: { gate: SolidDiagnosticsGate } = { gate: openSolidDiagnosticsGate() };
+
+function raisedSinceTheLastHook(): string[] {
+  const raised = diagnostics.gate.finishDescribed();
+  diagnostics.gate = openSolidDiagnosticsGate();
+  return raised;
+}
 
 function shown(value: unknown): string {
   return value === undefined ? "nothing" : JSON.stringify(value);
@@ -81,8 +87,7 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
       "Solid's development build is not loaded, so no story can be checked for Solid development diagnostics.",
     );
   }
-  const prior = diagnostics.gate?.finishDescribed() ?? [];
-  diagnostics.gate = openSolidDiagnosticsGate();
+  const prior = raisedSinceTheLastHook();
   if (prior.length > 0) {
     throw new Error(
       `A Solid development diagnostic was raised before the story:\n${prior.join("\n")}`,
@@ -98,8 +103,7 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
 
 const afterEachStory: AfterEach<SolidRenderer> = (context) => {
   playReturned();
-  const raised = diagnostics.gate?.finishDescribed() ?? [];
-  diagnostics.gate = undefined;
+  const raised = raisedSinceTheLastHook();
   if (context.reporting.reports.length > 0) {
     throw new Error(
       `The preview's afterEach tells a failed play from a failed gate, so it must run first after the play function, but ${context.reporting.reports.map(({ type }) => type).join(", ")} reported before it. A story or a meta that writes afterEach, or an addon whose afterEach the preview's no longer comes before, ran first.`,

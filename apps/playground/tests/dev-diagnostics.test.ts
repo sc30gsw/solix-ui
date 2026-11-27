@@ -59,7 +59,15 @@ function printedAfterTheAddress(stream: PrintedLine["stream"]): string {
     .join("\n");
 }
 
-function serverProblems() {
+type ServerProblems = {
+  readonly stderrDiagnostics: readonly SolidDiagnostic[];
+  readonly diagnostics: readonly SolidDiagnostic[];
+  readonly otherErrors: readonly string[];
+};
+
+const printed: { problems?: ServerProblems } = {};
+
+function readServerProblems(): ServerProblems {
   const stderr = problemsPrinted(printedAfterTheAddress("stderr"));
   const stdout = problemsPrinted(printedAfterTheAddress("stdout"));
   return {
@@ -69,6 +77,13 @@ function serverProblems() {
     ),
     otherErrors: stderr.otherLines,
   };
+}
+
+function serverProblems(): ServerProblems {
+  if (printed.problems === undefined) {
+    throw new Error("What the development server printed is read only once it has stopped.");
+  }
+  return printed.problems;
 }
 
 beforeAll(async () => {
@@ -140,6 +155,7 @@ describe("the development server", () => {
     expect(probe.ok, `fetching the diagnostic probe answered ${probe.status}`).toBe(true);
     await probe.text();
     await running.stop();
+    printed.problems = readServerProblems();
   });
 
   test("prints its address, and the report Solid's development build makes of the diagnostic probe, so what it printed is read and its render runs that build", () => {

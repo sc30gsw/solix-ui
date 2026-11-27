@@ -1,6 +1,6 @@
 import type { Locator, Page } from "playwright";
 import { afterAll, beforeAll, describe, expect, inject, test } from "vite-plus/test";
-import { breakpointWidths } from "../../../packages/core/src/style-prop-table";
+import { breakpointWidths, libraryStyleMark } from "../../../packages/core/src/style-prop-table";
 import {
   computed,
   type Expected,
@@ -393,6 +393,21 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
           ),
           "a column that streams in before a synchronous sibling keeps its container-query width after hydration",
         ).toBe(true);
+        await expect
+          .poll(
+            () =>
+              column("After a streamed column")
+                .locator("xpath=..")
+                .evaluate(
+                  (inner, mark) => inner.querySelectorAll(`:scope > style[${mark}]`).length,
+                  libraryStyleMark,
+                ),
+            {
+              message:
+                "once the page has hydrated, the like columns of the streamed grid write the rules they share once",
+            },
+          )
+          .toBe(1);
       }
     },
   ],

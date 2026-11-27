@@ -1,5 +1,5 @@
 import { Box, Button, Grid } from "@solix/core";
-import { createSignal, Show } from "solid-js";
+import { createMemo, createSignal, Loading, Show } from "solid-js";
 import { expect, userEvent, waitFor } from "storybook/test";
 import { argTypesOf } from "virtual:story-controls";
 import { everyValueOf } from "#/every-value.tsx";
@@ -25,6 +25,27 @@ export default meta;
 
 type Story = ComponentStory<typeof meta>;
 
+const narrowContainerBreakpoints = {
+  xs: "10em",
+  sm: "15em",
+  md: "20em",
+  lg: "25em",
+  xl: "30em",
+} as const;
+const columnLoadingDelay = 50;
+
+function columnRulesBeside(column: Element): number | undefined {
+  return column.closest(".solix-Grid-inner")?.querySelectorAll("style[data-solix-rules]").length;
+}
+
+function LoadedColumn() {
+  const span = createMemo(async () => {
+    await new Promise((resolve) => setTimeout(resolve, columnLoadingDelay));
+    return 6;
+  });
+  return <Grid.Col span={{ base: 12, md: span() }}>Loaded column</Grid.Col>;
+}
+
 export const Default: Story = {};
 
 export const Grown: Story = {
@@ -43,7 +64,7 @@ export const OnItsContainerWidth: Story = {
 export const DynamicContainerColumns: Story = {
   args: {
     type: "container",
-    breakpoints: { xs: "10em", sm: "15em", md: "20em", lg: "25em", xl: "30em" },
+    breakpoints: narrowContainerBreakpoints,
   },
   render: (args) => {
     const [firstResponsive, setFirstResponsive] = createSignal(true);
@@ -66,8 +87,7 @@ export const DynamicContainerColumns: Story = {
   play: async ({ canvas }) => {
     const first = () => canvas.getByText("First dynamic");
     const second = () => canvas.getByText("Second dynamic");
-    const styleCount = () =>
-      second().closest(".solix-Grid-inner")?.querySelectorAll("style[data-solix-rules]").length;
+    const styleCount = () => columnRulesBeside(second());
 
     await waitFor(async () => {
       await expect(second().getBoundingClientRect().width).toBeLessThan(300);
@@ -93,6 +113,33 @@ export const DynamicContainerColumns: Story = {
       await expect(canvas.queryByText("First dynamic")).toBeNull();
       await expect(second().getBoundingClientRect().width).toBeLessThan(300);
       await expect(styleCount()).toBe(1);
+    });
+  },
+};
+
+export const ContainerColumnAfterALoadedOne: Story = {
+  args: {
+    type: "container",
+    breakpoints: narrowContainerBreakpoints,
+  },
+  render: (args) => (
+    <Box w={480}>
+      <Grid {...args}>
+        <Loading fallback="Loading a column">
+          <LoadedColumn />
+        </Loading>
+        <Grid.Col span={{ base: 12, md: 6 }}>Column after a loaded one</Grid.Col>
+      </Grid>
+    </Box>
+  ),
+  play: async ({ canvas }) => {
+    const loaded = await canvas.findByText("Loaded column");
+    const after = canvas.getByText("Column after a loaded one");
+
+    await waitFor(async () => {
+      await expect(loaded.getBoundingClientRect().width).toBeLessThan(300);
+      await expect(after.getBoundingClientRect().width).toBeLessThan(300);
+      await expect(columnRulesBeside(after)).toBe(1);
     });
   },
 };
