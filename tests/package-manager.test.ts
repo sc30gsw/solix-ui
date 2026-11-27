@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, expect, test } from "vite-plus/test";
 import {
   askWith,
@@ -253,28 +254,50 @@ test("the repository asks vp on PATH, then the bin.vp of the vite-plus it instal
   expect(installedVitePlusVersion()).toMatch(/^\d+\.\d+\.\d+/);
 });
 
-test("the question's timeout is one shared deadline across --version, the pnpm probe and the query, and an untimed ETIMEDOUT does not say 0 seconds", () => {
+test("the question's timeout is one shared deadline across --version, the pnpm probe and the query, ignores non-finite timeouts, accepts URL cwd, and an untimed ETIMEDOUT does not say 0 seconds", () => {
   const directory = temporaryDirectory();
   const slowConfig = writeVpShim(directory, "vp-slow-config", {
     version: release,
-    versionSeconds: 0.2,
-    configSeconds: 1,
+    versionSeconds: 0.6,
+    configSeconds: 0.6,
     answer: "too late",
   });
-  expect(() => ask(seamIn(directory, slowConfig), query, 600)).toThrow(
-    `${slowConfig} ${configQuery} gave no answer in 0.6 seconds.`,
+  const slowConfigSeam = seamIn(directory, slowConfig);
+  const configError = thrownBy(() => ask(slowConfigSeam, query, 1000));
+  expect(configError).toBeInstanceOf(PackageManagerQueryFailed);
+  expect((configError as Error).message).toBe(
+    `${slowConfig} ${configQuery} gave no answer in 1 seconds.`,
   );
+  expect(callsOf(slowConfig)).toEqual(["--version", configQuery]);
+  expect(callsOf(scriptOf(slowConfigSeam))).toEqual([]);
 
   const slowAnswer = writeVpShim(directory, "vp-slow-answer", {
     version: release,
-    versionSeconds: 0.15,
-    configSeconds: 0.15,
-    answerSeconds: 1,
+    versionSeconds: 0.4,
+    configSeconds: 0.4,
+    answerSeconds: 0.7,
     answer: "too late",
   });
-  expect(() => ask(seamIn(directory, slowAnswer), query, 700)).toThrow(
-    `${slowAnswer} ${query.join(" ")} gave no answer in 0.7 seconds.`,
+  const slowAnswerSeam = seamIn(directory, slowAnswer);
+  const answerError = thrownBy(() => ask(slowAnswerSeam, query, 1200));
+  expect(answerError).toBeInstanceOf(PackageManagerQueryFailed);
+  expect((answerError as Error).message).toBe(
+    `${slowAnswer} ${query.join(" ")} gave no answer in 1.2 seconds.`,
   );
+  expect(callsOf(slowAnswer)).toEqual(["--version", configQuery, query.join(" ")]);
+  expect(callsOf(scriptOf(slowAnswerSeam))).toEqual([]);
+
+  const fast = writeVpShim(directory, "vp-fast", { version: release, answer: "ok" });
+  const fastSeam = seamIn(directory, fast);
+  expect(ask(fastSeam, query, Number.NaN)).toBe("ok");
+  expect(ask(fastSeam, query, Number.POSITIVE_INFINITY)).toBe("ok");
+  expect(
+    askWith(fastSeam, query, {
+      cwd: pathToFileURL(directory),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }),
+  ).toBe("ok");
 
   expect(
     new PackageManagerQueryFailed(
@@ -296,7 +319,9 @@ test("a config probe that exits non-zero or answers invalid or non-object JSON f
   const arrayJson = writeVpShim(directory, "vp-array", { version: release, config: "[]" });
 
   const seamNonZero = seamIn(directory, nonZero);
-  expect(thrownBy(() => ask(seamNonZero))).toMatchObject({
+  const nonZeroError = thrownBy(() => ask(seamNonZero));
+  expect(nonZeroError).toBeInstanceOf(PackageManagerQueryFailed);
+  expect(nonZeroError).toMatchObject({
     command: `${nonZero} ${configQuery}`,
     status: 2,
   });

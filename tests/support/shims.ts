@@ -9,9 +9,8 @@ import { rootManifest } from "#/scripts/repository.ts";
 
 export const configQuery = packageManagerConfigQuery.join(" ");
 
-export function pinnedPnpmVersion(
-  packageManager: string | undefined = rootManifest().packageManager,
-): string {
+export function pinnedPnpmVersion(): string {
+  const packageManager = rootManifest().packageManager;
   const version = pinnedPnpmOf(packageManager);
   if (version === undefined) {
     throw new Error(`Expected pnpm@<version> in packageManager, got ${String(packageManager)}`);
@@ -31,7 +30,7 @@ export function shellQuoted(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-export function writeShim(directory: string, name: string, body: string): string {
+function writeShim(directory: string, name: string, body: string): string {
   const path = join(directory, name);
   writeFileSync(path, `#!/bin/sh\n${body}\n`);
   chmodSync(path, 0o755);
@@ -57,7 +56,7 @@ function logOf(path: string): string {
   return `${path}.calls`;
 }
 
-export function configAnswerOf(shim: Pick<VpShim, "pnpm" | "config">): string {
+function configAnswerOf(shim: Pick<VpShim, "pnpm" | "config">): string {
   return (
     shim.config ??
     JSON.stringify({ userAgent: `pnpm/${shim.pnpm ?? pinnedPnpmVersion()} npm/? node/?` })
@@ -103,10 +102,7 @@ export function writeVpShim(directory: string, name: string, shim: VpShim): stri
   );
 }
 
-export function writeVpScript(
-  path: string,
-  shim: Pick<VpShim, "version" | "pnpm" | "answer">,
-): string {
+export function writeVpScript(path: string, shim: Pick<VpShim, "version" | "answer">): string {
   mkdirSync(dirname(path), { recursive: true });
   const log = JSON.stringify(logOf(path));
   writeFileSync(
@@ -115,7 +111,7 @@ export function writeVpScript(
       `import { appendFileSync } from "node:fs";`,
       `const args = process.argv.slice(2).join(" ");`,
       `appendFileSync(${log}, args + "\\n");`,
-      `const answers = { "--version": ${JSON.stringify(`vp v${shim.version}\n`)}, ${JSON.stringify(configQuery)}: ${JSON.stringify(configAnswerOf({ pnpm: shim.pnpm }))} };`,
+      `const answers = { "--version": ${JSON.stringify(`vp v${shim.version}\n`)}, ${JSON.stringify(configQuery)}: ${JSON.stringify(configAnswerOf({}))} };`,
       `process.stdout.write(answers[args] ?? ${JSON.stringify(shim.answer ?? "")});`,
       ``,
     ].join("\n"),

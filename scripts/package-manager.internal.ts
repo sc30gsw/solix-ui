@@ -26,7 +26,6 @@ export type AbsentCandidate = {
 
 export type Candidate = PresentCandidate | AbsentCandidate;
 
-type Failure = NodeJS.ErrnoException & { status?: number | null; stderr?: unknown };
 type Budget = { readonly total: number | undefined; readonly deadline: number | undefined };
 
 export const packageManagerConfigQuery = ["pm", "config", "list", "--json"] as const;
@@ -122,6 +121,16 @@ export class PackageManagerMismatch extends Error {
   }
 }
 
+function stringField(value: object, key: string): string | undefined {
+  const field = Reflect.get(value, key);
+  return typeof field === "string" ? field : undefined;
+}
+
+function statusField(value: object): number | null | undefined {
+  const field = Reflect.get(value, "status");
+  return typeof field === "number" || field === null ? field : undefined;
+}
+
 export class PackageManagerQueryFailed extends Error {
   readonly command: string;
   readonly code: string | undefined;
@@ -129,20 +138,23 @@ export class PackageManagerQueryFailed extends Error {
   readonly stderr: string;
 
   constructor(command: string, error: unknown, timeout: number | undefined) {
-    const failure = error as Failure;
-    const stderr = typeof failure.stderr === "string" ? failure.stderr.trim() : "";
+    const object = typeof error === "object" && error !== null ? error : undefined;
+    const code = object === undefined ? undefined : stringField(object, "code");
+    const status = object === undefined ? undefined : statusField(object);
+    const stderr = (object === undefined ? undefined : stringField(object, "stderr"))?.trim() ?? "";
+    const detail = error instanceof Error ? error.message : String(error);
     const reason =
-      failure.code === "ETIMEDOUT"
+      code === "ETIMEDOUT"
         ? timeout === undefined
           ? "timed out"
           : `gave no answer in ${timeout / 1000} seconds`
-        : typeof failure.status === "number"
-          ? `exited with ${failure.status}${stderr === "" ? "" : `: ${stderr}`}`
-          : `failed: ${failure.message}`;
+        : typeof status === "number"
+          ? `exited with ${status}${stderr === "" ? "" : `: ${stderr}`}`
+          : `failed: ${detail}`;
     super(`${command} ${reason}.`, { cause: error });
     this.command = command;
-    this.code = failure.code;
-    this.status = failure.status;
+    this.code = code;
+    this.status = status;
     this.stderr = stderr;
   }
 }

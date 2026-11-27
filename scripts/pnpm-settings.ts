@@ -108,23 +108,16 @@ function linkInto(configHome: string, target: string, name: string): void {
   }
 }
 
+const unreadableConfigHomeErrors = new Set(["EACCES", "ENOENT", "ENOTDIR", "EPERM", "ELOOP"]);
+
 function linkUserConfigBesidesPnpm(configHome: string): void {
   const userHome = userConfigHome();
   let entries: string[];
   try {
-    if (!statSync(userHome, { throwIfNoEntry: false })?.isDirectory()) return;
     entries = readdirSync(userHome);
   } catch (error) {
     const { code } = error as NodeJS.ErrnoException;
-    if (
-      code === "EACCES" ||
-      code === "ENOENT" ||
-      code === "ENOTDIR" ||
-      code === "EPERM" ||
-      code === "ELOOP"
-    ) {
-      return;
-    }
+    if (code !== undefined && unreadableConfigHomeErrors.has(code)) return;
     throw error;
   }
   for (const name of entries.filter((entry) => entry !== "pnpm")) {

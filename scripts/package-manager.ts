@@ -1,8 +1,11 @@
 import type { ExecFileSyncOptionsWithStringEncoding } from "node:child_process";
-import { askWith, installedSeam } from "#/scripts/package-manager.internal.ts";
+import {
+  askWith,
+  installedSeam,
+  installedVitePlusVersion as installedVitePlusVersionOf,
+} from "#/scripts/package-manager.internal.ts";
 
 export {
-  installedVitePlusVersion,
   packageManagerConfigQuery,
   PackageManagerMismatch,
   PackageManagerQueryFailed,
@@ -12,6 +15,10 @@ export {
   withoutPackageManagerEnv,
   WorkingDirectoryMissing,
 } from "#/scripts/package-manager.internal.ts";
+
+export function installedVitePlusVersion(): string | undefined {
+  return installedVitePlusVersionOf(installedSeam());
+}
 
 export function askPackageManager(
   args: readonly string[],

@@ -1,27 +1,31 @@
 import { readFileSync } from "node:fs";
 import { join, posix } from "node:path";
 import { expect, test } from "vite-plus/test";
-import {
-  repositoryRoot,
-  scriptFilesIn,
-  scriptFilesInDotDirectoriesIn,
-} from "#/scripts/repository.ts";
+import { repositoryRoot } from "#/scripts/repository.ts";
 import {
   descendants,
   importsOf,
+  isExported,
   moduleSpecifierOf,
   parseAll,
   parseText,
+  staticPropertyName,
   ts,
   unwrapped,
 } from "#/scripts/syntax.ts";
+import { scriptFiles, scriptFilesInDotDirectories } from "#/tests/support/workspace.ts";
 
 const runners = new Set(["execFileSync", "execFile", "spawn", "spawnSync", "exec", "execSync"]);
 const childProcess = new Set(["node:child_process", "child_process"]);
 const packageManagerCommands = new Set(["pm", "why"]);
+const publicModule = "scripts/package-manager.ts";
 const internalModule = "scripts/package-manager.internal.ts";
 const internalModuleStem = internalModule.replace(/\.ts$/, "");
-const mayImportTheInternalModule = ["scripts/package-manager.ts", "tests/package-manager.test.ts"];
+const mayImportTheInternalModule = [publicModule, "tests/package-manager.test.ts"];
+const publicArities: Readonly<Record<string, number>> = {
+  askPackageManager: 2,
+  installedVitePlusVersion: 0,
+};
 const mayRunVp = /\bvp\b|vite-plus|installedVp|package-manager\.internal/;
 const shellSeparators = /&&|\|\||[;&|\n]/;
 const envAssignment = /^[A-Za-z_]\w*=\S*\s+/;
@@ -102,24 +106,20 @@ function lookupConstant(
   return undefined;
 }
 
+function propertyValue(node: ts.Node, name: string): ts.Expression | undefined {
+  if (staticPropertyName(node) !== name) return undefined;
+  if (ts.isPropertyAssignment(node)) return node.initializer;
+  if (ts.isShorthandPropertyAssignment(node) && ts.isIdentifier(node.name)) return node.name;
+  return undefined;
+}
+
 function propertyOfObject(
   object: ts.ObjectLiteralExpression,
   name: string,
 ): ts.Expression | undefined {
   for (const property of object.properties) {
-    if (ts.isPropertyAssignment(property)) {
-      const key =
-        ts.isIdentifier(property.name) || ts.isStringLiteralLikeNode(property.name)
-          ? property.name.text
-          : undefined;
-      if (key === name) return property.initializer;
-    } else if (
-      ts.isShorthandPropertyAssignment(property) &&
-      ts.isIdentifier(property.name) &&
-      property.name.text === name
-    ) {
-      return property.name;
-    }
+    const value = propertyValue(property, name);
+    if (value !== undefined) return value;
   }
   return undefined;
 }
@@ -209,11 +209,10 @@ function problemOf(names: Names, run: Run): string | undefined {
 function shellProblemOf(names: Names, command: ts.Expression | undefined): string | undefined {
   if (command === undefined) return undefined;
   const value = resolved(names, command);
-  const raw = value.getText();
   const text = ts.isStringLiteralLikeNode(value)
     ? value.text
-    : raw.startsWith("`") && raw.endsWith("`")
-      ? raw.slice(1, -1)
+    : value.kind === ts.SyntaxKind.TemplateExpression
+      ? value.getText().slice(1, -1)
       : undefined;
   if (text === undefined) return undefined;
   for (const part of text.split(shellSeparators)) {
@@ -229,30 +228,24 @@ function shellProblemOf(names: Names, command: ts.Expression | undefined): strin
   return undefined;
 }
 
-function runsIn(names: Names, node: ts.Node): { what: string; problem: string | undefined }[] {
+function runsIn(names: Names, node: ts.Node): { what: string; problem: string } | undefined {
   if (ts.isCallExpression(node)) {
     const runner = runnerOf(names, node);
-    if (runner === undefined) return [];
+    if (runner === undefined) return undefined;
     const [program, args] = node.arguments;
     const problem =
       runner === "exec" || runner === "execSync"
         ? shellProblemOf(names, program)
         : problemOf(names, { program, args: elementsOf(names, args) });
-    return [{ what: runner, problem }];
+    return problem === undefined ? undefined : { what: runner, problem };
   }
-  if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name) && node.name.text === "command") {
-    const [program, ...args] = elementsOf(names, node.initializer);
-    return [{ what: "command", problem: problemOf(names, { program, args }) }];
+  const command = propertyValue(node, "command");
+  if (command !== undefined) {
+    const [program, ...args] = elementsOf(names, command);
+    const problem = problemOf(names, { program, args });
+    return problem === undefined ? undefined : { what: "command", problem };
   }
-  if (
-    ts.isShorthandPropertyAssignment(node) &&
-    ts.isIdentifier(node.name) &&
-    node.name.text === "command"
-  ) {
-    const [program, ...args] = elementsOf(names, node.name);
-    return [{ what: "command", problem: problemOf(names, { program, args }) }];
-  }
-  return [];
+  return undefined;
 }
 
 function resolvesToInternalModule(file: string, specifier: string): boolean {
@@ -262,6 +255,29 @@ function resolvesToInternalModule(file: string, specifier: string): boolean {
       ? posix.normalize(posix.join(posix.dirname(file.replaceAll("\\", "/")), specifier))
       : specifier;
   return normalized.replace(/\.(?:mts|mjs|ts|js)$/, "") === internalModuleStem;
+}
+
+function publicFacadeProblemsIn(source: ts.SourceFile, file: string): string[] {
+  const problems: string[] = [];
+  for (const [name, expected] of Object.entries(publicArities)) {
+    const declaration = source.statements.find(
+      (statement): statement is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(statement) &&
+        isExported(statement) &&
+        statement.name?.text === name,
+    );
+    if (declaration === undefined) {
+      problems.push(`${file}: must export function ${name} with ${expected} parameters.`);
+      continue;
+    }
+    if (
+      declaration.parameters.length !== expected ||
+      declaration.parameters.some((parameter) => parameter.dotDotDotToken !== undefined)
+    ) {
+      problems.push(`${file}: ${name} must take exactly ${expected} parameters and nothing else.`);
+    }
+  }
+  return problems;
 }
 
 function packageManagerCallProblemsIn(source: ts.SourceFile, file: string): string[] {
@@ -280,16 +296,16 @@ function packageManagerCallProblemsIn(source: ts.SourceFile, file: string): stri
             ]
           : [];
       });
-  const runs = nodes.flatMap((node) =>
-    runsIn(names, node).flatMap(({ what, problem }) =>
-      problem === undefined ? [] : [`${file}:${lineOf(node)}: ${what} ${problem}.`],
-    ),
-  );
-  return [...imports, ...runs];
+  const runs = nodes.flatMap((node) => {
+    const found = runsIn(names, node);
+    return found === undefined ? [] : [`${file}:${lineOf(node)}: ${found.what} ${found.problem}.`];
+  });
+  const facade = file === publicModule ? publicFacadeProblemsIn(source, file) : [];
+  return [...imports, ...runs, ...facade];
 }
 
 test("no script or test asks the package manager itself or runs a vp but the repository's own: a question goes through askPackageManager, which alone imports the internal module, and every other run uses installedVp", () => {
-  const files = [...scriptFilesIn(), ...scriptFilesInDotDirectoriesIn()].filter((file) =>
+  const files = [...scriptFiles, ...scriptFilesInDotDirectories].filter((file) =>
     mayRunVp.test(readFileSync(join(repositoryRoot, file), "utf8")),
   );
 
@@ -369,6 +385,11 @@ const refused: [what: string, code: string, problem: string][] = [
   [
     "a shorthand command property",
     'const command = [installedVp, "why"];\nstartServer({ command });',
+    "command runs vp why itself",
+  ],
+  [
+    "a string-keyed command property",
+    'startServer({ "command": [installedVp, "why"] });',
     "command runs vp why itself",
   ],
   ["vp from PATH", 'spawn("vp", ["test"]);', "spawn runs vp from PATH"],
@@ -474,13 +495,37 @@ test.for(allowed)("the package-manager rule allows %s", ([, code]) => {
   ).toEqual([]);
 });
 
-test("the package-manager rule lets the public module and its test import the internal one", () => {
-  const source = parseText(
-    'import { askWith } from "#/scripts/package-manager.internal.ts";\n',
+test("the package-manager rule lets the public module and its test import the internal one, and holds the public facade's parameter counts", () => {
+  const validFacade = parseText(
+    [
+      'import { askWith } from "#/scripts/package-manager.internal.ts";',
+      "export function installedVitePlusVersion() { return undefined; }",
+      "export function askPackageManager(args: readonly string[], options: object) { return askWith(args, options); }",
+      "",
+    ].join("\n"),
     ".ts",
   );
 
   for (const file of mayImportTheInternalModule) {
-    expect(packageManagerCallProblemsIn(source, file)).toEqual([]);
+    expect(packageManagerCallProblemsIn(validFacade, file)).toEqual([]);
+  }
+
+  for (const [code, problem] of [
+    [
+      "export function installedVitePlusVersion() { return undefined; }\nexport function askPackageManager(a: unknown, b: unknown, seam?: unknown) {}",
+      "askPackageManager must take exactly 2 parameters and nothing else.",
+    ],
+    [
+      "export function installedVitePlusVersion() { return undefined; }\nexport function askPackageManager(a: unknown, ...rest: unknown[]) {}",
+      "askPackageManager must take exactly 2 parameters and nothing else.",
+    ],
+    [
+      'export { installedVitePlusVersion } from "#/scripts/package-manager.internal.ts";\nexport function askPackageManager(a: unknown, b: unknown) {}',
+      "must export function installedVitePlusVersion with 0 parameters.",
+    ],
+  ] as const) {
+    const problems = packageManagerCallProblemsIn(parseText(`${code}\n`, ".ts"), publicModule);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain(problem);
   }
 });

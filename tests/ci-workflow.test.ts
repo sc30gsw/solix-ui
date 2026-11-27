@@ -271,8 +271,8 @@ function aWorkflow(changes: {
   };
 }
 
-const setUpWith = JSON.stringify({ "node-version-file": "package.json", cache: true });
-const gateSteps = `actions/checkout with {"fetch-depth":0} and, if it likes, {"persist-credentials":false}, voidzero-dev/setup-vp with ${setUpWith} and the version the vite-plus version rule asks for, then run ${newestReleasesCheck}, each setting nothing else but a name`;
+const setUpWith = JSON.stringify(setUpVp.with);
+const gateSteps = `actions/checkout with {"fetch-depth":0} and, if it likes, {"persist-credentials":false}, voidzero-dev/setup-vp with ${setUpWith}, then run ${newestReleasesCheck}, each setting nothing else but a name`;
 
 const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
   [
@@ -390,7 +390,7 @@ const wrongRuns: [what: string, workflow: Workflow, problem: string][] = [
     aWorkflow({
       steps: [checkout, { ...setUpVp, with: { ...setUpVp.with, "run-install": false } }, check],
     }),
-    `step 2 of the a job has with ${JSON.stringify({ "node-version-file": "package.json", cache: true, "run-install": false })}, not ${setUpWith}; a gate job's steps are exactly ${gateSteps}.`,
+    `step 2 of the a job has with ${JSON.stringify({ ...setUpVp.with, "run-install": false })}, not ${setUpWith}; a gate job's steps are exactly ${gateSteps}.`,
   ],
   [
     "the setup step left out",
