@@ -17,6 +17,14 @@ vp run verify
 
 Then run the `Run it` command of each `verify-*` skill whose covered-code table covers a file the branch changes.
 
+Last, with everything committed, run fallow's audit of the branch against its merge-base with its base branch:
+
+```bash
+vp run fallow:audit origin/<base branch>
+```
+
+Fix every error it reports. CI's `fallow` job runs the same check on the pull request. Judge each warning as step 5 judges a finding below Medium. fallow warns with `weakened-tests` on each entry the branch adds to `.fallowrc.json`: a file that runs in the product belongs in `entry`, and a script, setup file or other tooling in `supportEntry`.
+
 ## 2. Correct
 
 Follow pstack `correct` over this branch: its commits, its review findings and every correction the operator gave. A rule you add gets a row in `AGENTS.md` that names its check, and that check fails first on the mistake.

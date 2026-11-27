@@ -1,6 +1,6 @@
 import { expect, inject, test } from "vite-plus/test";
 import { packagesBuiltFirst } from "#/tests/support/project-setups.ts";
-import { configuredProjectNames } from "#/vite.config.ts";
+import { allProjectSettings } from "#/tests/support/run-settings.ts";
 
 const checkerProject = "rules";
 const browserProject = "browser";
@@ -9,19 +9,8 @@ function isOf(name: string, project: string): boolean {
   return name === project || name.startsWith(`${project} (`);
 }
 
-function refuseAFilteredRun(projects: readonly string[], cannotTell: string): void {
-  const missing = configuredProjectNames().filter((project) => !projects.includes(project));
-  if (missing.length > 0) {
-    throw new Error(
-      `The run is filtered: it holds only the projects ${projects.join(", ")}, and no ${missing.join(" or ")} project, so it cannot tell ${cannotTell}. Run it without --project.`,
-    );
-  }
-}
-
 test(`the ${checkerProject} project's sequence group comes before that of every other project`, () => {
-  const settings = inject("runSettingsOfEachProject");
-  refuseAFilteredRun(
-    Object.keys(settings),
+  const settings = allProjectSettings(
     `whether the ${checkerProject} project runs before the others`,
   );
   const others = Object.entries(settings).filter(([name]) => name !== checkerProject);
@@ -48,9 +37,7 @@ test("every project builds the packages, with no GIT_ variable left, before any 
 });
 
 test("no browser project saves a screenshot when a test fails: every project whose browser is enabled resolves screenshotFailures to false", () => {
-  const settings = inject("runSettingsOfEachProject");
-  refuseAFilteredRun(
-    Object.keys(settings),
+  const settings = allProjectSettings(
     "whether every project whose browser is enabled saves no screenshot",
   );
   const inABrowser = Object.entries(settings).filter(([, { browser }]) => browser.enabled);
@@ -66,9 +53,7 @@ test("no browser project saves a screenshot when a test fails: every project who
 });
 
 test(`the ${browserProject} project's instances run in a sequence group no other project shares, so no other project's engines load the machine while its timed properties run`, () => {
-  const settings = inject("runSettingsOfEachProject");
-  refuseAFilteredRun(
-    Object.keys(settings),
+  const settings = allProjectSettings(
     `whether the ${browserProject} project's instances share a sequence group with another project`,
   );
   const isBrowser = (name: string) => isOf(name, browserProject);

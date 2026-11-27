@@ -19,7 +19,7 @@ export type Workflow<On = unknown> = {
   on?: On;
   permissions?: unknown;
   jobs?: Record<string, Job>;
-};
+} & Record<string, unknown>;
 
 export function workflowAt<On = unknown>(file: string): Workflow<On> {
   return parseYaml(readFileSync(join(repositoryRoot, file), "utf8")) as Workflow<On>;
@@ -99,9 +99,45 @@ function describedStep(step: SetUpStep): string {
   return `${step.action} with ${JSON.stringify(step.with)}${also}`;
 }
 
-function gateStepsFor(command: string, steps: readonly SetUpStep[]): string {
-  const described = steps.map(describedStep);
-  return `${described.join(", ")}, then run ${command}, each setting nothing else but a name`;
+type GateJobOptions = {
+  checkoutWith?: Record<string, unknown>;
+  env?: Record<string, unknown>;
+};
+
+function validateGateOptions(pinned: string, options?: GateJobOptions): void {
+  if (options?.env !== undefined && Object.keys(options.env).length === 0) {
+    throw new Error("gateJobProblems: env must name at least one variable, or be omitted.");
+  }
+  if (options?.checkoutWith !== undefined) {
+    const keys = Object.keys(options.checkoutWith);
+    if (keys.length === 0) {
+      throw new Error("gateJobProblems: checkoutWith must name at least one input, or be omitted.");
+    }
+    const [checkout] = setUpStepsFor(pinned);
+    const reserved = { ...checkout.mayAlsoSet, ...checkout.with };
+    const collided = keys.filter((key) => key in reserved);
+    if (collided.length > 0) {
+      throw new Error(
+        `gateJobProblems: checkoutWith may not override ${collided.join(", ")}, which the shared checkout step fixes.`,
+      );
+    }
+  }
+}
+
+function setUpStepsWith(pinned: string, options?: GateJobOptions): readonly SetUpStep[] {
+  const steps = setUpStepsFor(pinned);
+  if (!options?.checkoutWith) return steps;
+  const [checkout, ...rest] = steps;
+  return [{ ...checkout, with: { ...checkout.with, ...options.checkoutWith } }, ...rest];
+}
+
+function gateStepsFor(
+  command: string,
+  steps: readonly SetUpStep[],
+  env?: Record<string, unknown>,
+): string {
+  const withEnv = env ? ` with env ${JSON.stringify(env)}` : "";
+  return `${steps.map(describedStep).join(", ")}, then run ${command}${withEnv}, each setting nothing else but a name`;
 }
 
 function withMatches(given: Record<string, unknown>, expected: SetUpStep): boolean {
@@ -132,11 +168,20 @@ function setUpStepProblem(step: Step, expected: SetUpStep): string | undefined {
   return `has with ${JSON.stringify(given)}, not ${JSON.stringify(expected.with)}`;
 }
 
-function gateStepProblem(step: Step, command: string): string | undefined {
-  const beyond = keysBeyond(step, keysOfTheGateStep);
+function gateStepProblem(
+  step: Step,
+  command: string,
+  env?: Record<string, unknown>,
+): string | undefined {
+  const allowed = env ? [...keysOfTheGateStep, "env"] : keysOfTheGateStep;
+  const beyond = keysBeyond(step, allowed);
   if (beyond.length > 0) return `sets ${beyond.join(", ")}`;
   const run = typeof step.run === "string" ? step.run.trim() : undefined;
-  return run === command ? undefined : `runs ${run ?? "nothing"}, not ${command}`;
+  if (run !== command) return `runs ${run ?? "nothing"}, not ${command}`;
+  if (env && !isDeepStrictEqual(step.env, env)) {
+    return `has env ${JSON.stringify(step.env ?? {})}, not ${JSON.stringify(env)}`;
+  }
+  return undefined;
 }
 
 function stepProblems(
@@ -144,9 +189,10 @@ function stepProblems(
   steps: readonly Step[],
   command: string,
   pinned: string,
+  options?: GateJobOptions,
 ): string[] {
-  const expectedSteps = setUpStepsFor(pinned);
-  const exactly = `a gate job's steps are exactly ${gateStepsFor(command, expectedSteps)}.`;
+  const expectedSteps = setUpStepsWith(pinned, options);
+  const exactly = `a gate job's steps are exactly ${gateStepsFor(command, expectedSteps, options?.env)}.`;
   const wanted = expectedSteps.length + 1;
   if (steps.length !== wanted) {
     return [`the ${name} job has ${steps.length} steps, not ${wanted}; ${exactly}`];
@@ -154,7 +200,9 @@ function stepProblems(
   return steps.flatMap((step, index) => {
     const expected = expectedSteps[index];
     const problem =
-      expected === undefined ? gateStepProblem(step, command) : setUpStepProblem(step, expected);
+      expected === undefined
+        ? gateStepProblem(step, command, options?.env)
+        : setUpStepProblem(step, expected);
     return problem === undefined
       ? []
       : [`step ${index + 1} of the ${name} job ${problem}; ${exactly}`];
@@ -178,10 +226,16 @@ export function vitePlusVersionProblems(
   );
 }
 
-export function gateJobProblems(workflow: Workflow, name: string, command: string): string[] {
+export function gateJobProblems(
+  workflow: Workflow,
+  name: string,
+  command: string,
+  options?: GateJobOptions,
+): string[] {
+  const pinned = catalogVitePlus();
+  validateGateOptions(pinned, options);
   const job = workflow.jobs?.[name];
   if (job === undefined) return [`the workflow has no ${name} job.`];
-  const pinned = catalogVitePlus();
   return [
     ...keysBeyond(workflow, keysOfAGateWorkflow).map(
       (key) =>
@@ -193,7 +247,7 @@ export function gateJobProblems(workflow: Workflow, name: string, command: strin
     ...(typeof job["timeout-minutes"] === "number"
       ? []
       : [`give the ${name} job timeout-minutes, so a hung step ends.`]),
-    ...stepProblems(name, job.steps ?? [], command, pinned),
+    ...stepProblems(name, job.steps ?? [], command, pinned, options),
     ...vitePlusVersionProblems({ jobs: { [name]: job } }, pinned),
     ...writeScopes(job.permissions ?? workflow.permissions).map(
       (scope) => `the ${name} job is given ${scope}; a gate job only reads.`,

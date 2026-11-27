@@ -4,7 +4,7 @@ import { listed, repositoryRoot } from "#/scripts/repository.ts";
 import type { TestFilesOfEachProject } from "#/tests/support/global-setup.ts";
 
 export const roadmapFile = "ROADMAP.md";
-export const stepStatuses = ["not started", "in progress", "merged"] as const;
+const stepStatuses = ["not started", "in progress", "merged"] as const;
 
 export type StepStatus = (typeof stepStatuses)[number];
 
