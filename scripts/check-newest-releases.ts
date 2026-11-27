@@ -30,10 +30,16 @@ const { comparisons, problems } = compareWithNewest({
 });
 
 function filesOfThePullRequest(base: string): string[] | undefined {
-  const run = gitRun(["diff", "--name-only", "-z", `refs/remotes/origin/${base}...HEAD`]);
+  const run = gitRun([
+    "diff",
+    "--name-only",
+    "--no-renames",
+    "-z",
+    `refs/remotes/origin/${base}...HEAD`,
+  ]);
   if (run.status === 0) return pathsIn(run.stdout);
   console.error(
-    `git diff against origin/${base} failed, so the check treats this pull request as changing the pins:\n${run.stderr.trim()}`,
+    `git diff against origin/${base} failed, so the check treats this pull request as changing the pins:\n${(run.stderr ?? "").trim()}`,
   );
   return undefined;
 }

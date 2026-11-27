@@ -497,7 +497,7 @@ export function compareWithNewest(input: {
 
 export type RunEnvironment = Record<string, string | undefined>;
 
-export const pinFilePatterns = [
+const pinFilePatterns = [
   "**/package.json",
   workspaceFile,
   "pnpm-lock.yaml",
