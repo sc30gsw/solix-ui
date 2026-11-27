@@ -13,8 +13,8 @@ catalog:
   "@solidjs/signals": 2.0.4
   "@solidjs/vite-plugin": 3.0.1
   "@solidjs/web": 2.0.4
-  "@storybook/addon-a11y": 11.0.0-rc.0
-  "@storybook/addon-vitest": 11.0.0-rc.0
+  "@storybook/addon-a11y": 11.0.0-rc.1
+  "@storybook/addon-vitest": 11.0.0-rc.1
   "@stylexjs/babel-plugin": 0.19.2
   "@stylexjs/stylex": 0.19.2
   "@stylexjs/unplugin": 0.19.2
@@ -24,7 +24,7 @@ catalog:
   "@ui-sdk/solid": 0.1.0-beta.17
   "@vitest/browser-playwright": 5.1.1
   axe-core: 4.14.1
-  fallow: 3.48.0
+  fallow: 3.49.0
   fast-check: 4.11.0
   modern-web-guidance: 1.0.2
   playwright: 1.65.1
@@ -34,7 +34,7 @@ catalog:
   semver: 7.8.6
   solid-js: 2.0.4
   solid2-agent-kit: 0.29.0
-  storybook: 11.0.0-rc.0
+  storybook: 11.0.0-rc.1
   storybook-solidjs-vite: 11.0.0-next-20261117161333
   typescript: 7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@8.3.8001
