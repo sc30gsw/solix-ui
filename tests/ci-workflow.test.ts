@@ -556,6 +556,102 @@ test.for(wrongRuns)(
   },
 );
 
+const pullRequestWorkflow = ".github/workflows/pull-request.yml";
+const fallowAudit = 'node scripts/check-fallow-audit.ts "$PULL_REQUEST_BASE"';
+const fallowGateOptions = {
+  checkoutWith: { ref: "${{ github.event.pull_request.head.sha }}" },
+  env: { PULL_REQUEST_BASE: "refs/remotes/origin/${{ github.event.pull_request.base.ref }}" },
+};
+
+function fallowJobProblems(workflow: Workflow): string[] {
+  return [
+    ...pullRequestTriggerProblems(workflow.on),
+    ...gateJobProblems(workflow, "fallow", fallowAudit, fallowGateOptions),
+  ];
+}
+
+function aFallowWorkflow(changes: { checkout?: Step; audit?: Step }): Workflow {
+  return {
+    on: { pull_request: { types: ["opened", "synchronize", "reopened"] } },
+    permissions: readOnly,
+    jobs: {
+      fallow: {
+        ...gate,
+        steps: [
+          changes.checkout ?? {
+            ...checkout,
+            with: { ...checkout.with, ...fallowGateOptions.checkoutWith },
+          },
+          setUpVp,
+          changes.audit ?? { run: fallowAudit, env: fallowGateOptions.env },
+        ],
+      },
+    },
+  };
+}
+
+test(`on every pull request, the fallow job of ${pullRequestWorkflow} is a read-only gate job running ${fallowAudit} against the event's base, reading no secret`, () => {
+  expect(fallowJobProblems(workflowAt(pullRequestWorkflow))).toEqual([]);
+});
+
+const wrongFallowWorkflows: [string, Workflow, string][] = [
+  [
+    "a checkout step omitting ref",
+    aFallowWorkflow({ checkout }),
+    'step 1 of the fallow job has with {"fetch-depth":0}, not {"fetch-depth":0,"ref":"${{ github.event.pull_request.head.sha }}"};',
+  ],
+  [
+    "a checkout step with a wrong ref",
+    aFallowWorkflow({
+      checkout: { ...checkout, with: { "fetch-depth": 0, ref: "main" } },
+    }),
+    'step 1 of the fallow job has with {"fetch-depth":0,"ref":"main"}, not {"fetch-depth":0,"ref":"${{ github.event.pull_request.head.sha }}"};',
+  ],
+  [
+    "a fallow audit step omitting env",
+    aFallowWorkflow({ audit: { run: fallowAudit } }),
+    'step 3 of the fallow job has env {}, not {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}"};',
+  ],
+  [
+    "a fallow audit step with a wrong PULL_REQUEST_BASE env",
+    aFallowWorkflow({ audit: { run: fallowAudit, env: { PULL_REQUEST_BASE: "HEAD" } } }),
+    'step 3 of the fallow job has env {"PULL_REQUEST_BASE":"HEAD"}, not {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}"};',
+  ],
+  [
+    "a fallow audit step with an extra env variable alongside PULL_REQUEST_BASE",
+    aFallowWorkflow({
+      audit: {
+        run: fallowAudit,
+        env: { ...fallowGateOptions.env, NODE_OPTIONS: "--version" },
+      },
+    }),
+    'step 3 of the fallow job has env {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}","NODE_OPTIONS":"--version"}, not {"PULL_REQUEST_BASE":"refs/remotes/origin/${{ github.event.pull_request.base.ref }}"};',
+  ],
+];
+
+test.for(wrongFallowWorkflows)(
+  "the fallow gate rule refuses %s",
+  ([, workflow, expectedProblem]) => {
+    expect(fallowJobProblems(workflow)).toContainEqual(expect.stringContaining(expectedProblem));
+  },
+);
+
+test("gateJobProblems refuses empty env, empty checkoutWith, and checkoutWith overriding reserved checkout inputs", () => {
+  const empty: Workflow = {};
+  expect(() => gateJobProblems(empty, "fallow", fallowAudit, { env: {} })).toThrow("env");
+  expect(() => gateJobProblems(empty, "fallow", fallowAudit, { checkoutWith: {} })).toThrow(
+    "checkoutWith",
+  );
+  expect(() =>
+    gateJobProblems(empty, "fallow", fallowAudit, { checkoutWith: { "fetch-depth": 1 } }),
+  ).toThrow("fetch-depth");
+  expect(() =>
+    gateJobProblems(empty, "fallow", fallowAudit, {
+      checkoutWith: { "persist-credentials": true },
+    }),
+  ).toThrow("persist-credentials");
+});
+
 test("a setup-vp step with both a wrong version and an extra input reports both problems", () => {
   const badWith = { ...setUpVp.with, version: "0.0.1", "run-install": false };
   const problems = newestCheckProblems(

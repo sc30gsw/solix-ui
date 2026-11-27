@@ -13,7 +13,7 @@ export const verificationFiles = [
 
 const fixType = /^fix(\([^()]*\))?!?:/;
 
-export function isVerificationFile(path: string): boolean {
+function isVerificationFile(path: string): boolean {
   return verificationFiles.some((pattern) => matchesGlob(path, pattern));
 }
 
