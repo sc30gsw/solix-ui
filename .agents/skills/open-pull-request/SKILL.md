@@ -45,11 +45,14 @@ Follow pstack `no-comments` over `git diff origin/<base branch>...HEAD`. It star
 
 Start two reviewers, each an agent of its own. The first instruction of one is to read and follow `.agents/skills/thermo-nuclear-review/SKILL.md`, and the first instruction of the other is to read and follow `.agents/skills/thermo-nuclear-code-quality-review/SKILL.md`. Give each `git diff origin/<base branch>...HEAD` and the full text of the changed files. Beside them, review the diff with `.agents/skills/review-solid2/SKILL.md`. `.agents/skills/thermos/SKILL.md` says how to merge their findings.
 
-- There is no round limit. Resolve every finding at Medium or higher. A presumptive blocker of the quality rubric counts as Medium.
-- Judge each finding below Medium as fixed, follow-up or dismissed with a reason. You may open the pull request with them open. Record every judgement, every follow-up and the history of each round only in the coordinator's private notes, never in an issue or in this repository. The body gives only their counts.
+- State this bar and the next bullet in each reviewer's brief. A finding is Medium or higher only when it shows a concrete failure, and the reviewer gives its inputs and its result: wrong behaviour of the library, its build or its published files; a CI job that passes on such a failure or fails on correct code; or a command, script or message a contributor meets that fails wrongly, does harm or misleads them.
+- A finding that shows no such failure is Low at most: a change of structure, a presumptive blocker of the quality rubric among them, or a way around a check the repository's own tests run. A way around a check is Low only when the AGENTS.md row of that check states what the check does not see; when there is no such row or it does not say so, writing that statement in this pull request is the finding's fix.
+- Resolve every finding at Medium or higher here: fix it, move it to a follow-up when it is beyond what the pull request is for, or accept it when the person who started you says so. A moved finding counts as a follow-up and an accepted one as dismissed, and neither is open.
+- Judge each finding below Medium as fixed, follow-up or dismissed with a reason. A missing AGENTS.md statement is always fixed. You may open the pull request with them open. Record every judgement, every follow-up and the history of each round only in the coordinator's private notes, never in an issue or in this repository. The body gives only their counts.
 - Fix all the findings of one round together, run step 3 for any covered code they change, then step 4 on the fixes.
-- Set the scope of each next round and state it in the reviewers' brief: the fix delta, and every caller, shared layer and use of the same pattern in the pull request that a fix touches. When a fix changes structure, the scope is the whole pull request.
-- Stop once a round finds nothing at Medium or higher and comment-sicko is clean on the same commit. What may follow it is what `filesAfterReview` in `scripts/pull-request-text.ts` and the text check allow; anything else goes through steps 4 and 5 again, scoped to what it adds.
+- Set the scope of each next round and state it in the reviewers' brief. Round 1 covers the whole pull request. Round 2 covers the whole pull request when a fix changed structure, and otherwise the fix delta with every caller, shared layer and use of the same pattern it touches. From round 3 the scope is only the fix delta. A merge of the base branch that had conflicts adds to the scope how they were resolved (`git show --remerge-diff`), and a round of its own when nothing else is in scope; that round does not count toward round 3.
+- When round 3 or a later round still finds anything at Medium or higher, stop and ask the person who started you whether to fix it here, move it to a follow-up, or accept it.
+- Stop once a round leaves nothing at Medium or higher open and comment-sicko is clean on the same commit. What may follow it is what `filesAfterReview` in `scripts/pull-request-text.ts` and the text check allow; anything else goes through steps 4 and 5 again as the next round, scoped to what it adds.
 
 ## 6. Statechart
 
@@ -58,7 +61,7 @@ For each tla-ts model the branch adds or changes, a file that `modelFilePatterns
 ## 7. Open it
 
 - Stack the branch on the pull request it builds on and target that branch, or `main` when it builds on nothing unmerged.
-- Write the title by the title rule of `pstack/skills/poteto-mode/playbooks/opening-a-pr.md`, and the body as the one-minute briefing in the sections it names. `## Verification` holds the lines that `reviewLines` in `scripts/pull-request-text.ts` begins, the Thermos one with the counts of the findings below Medium, and the chart of each model from step 6.
+- Write the title by the title rule of `pstack/skills/poteto-mode/playbooks/opening-a-pr.md`, and the body as the one-minute briefing in the sections it names. `## Verification` holds the lines that `reviewLines` in `scripts/pull-request-text.ts` begins, the Thermos one with the counts of the findings judged fixed, follow-up or dismissed, any at Medium or higher that was moved or accepted among them, and the chart of each model from step 6.
 - Write both to a file and check it as CI will check the opened pull request, and fix what it reports:
 
   ```bash
