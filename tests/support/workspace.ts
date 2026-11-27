@@ -18,7 +18,6 @@ export {
   type Installed,
   type Manifest,
   installedVersions,
-  installedVp,
   listed,
   outsideGeneratedOrInstalled,
   packageManagerAnswerTimeout,
