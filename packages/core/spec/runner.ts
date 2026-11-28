@@ -102,16 +102,21 @@ export async function runCleanups(
   raised: () => readonly string[],
 ): Promise<void> {
   const failures: unknown[] = [];
-  for (const cleanup of cleanups.toReversed()) {
-    try {
-      await cleanup();
-    } catch (error) {
-      failures.push(error);
+  try {
+    for (const cleanup of cleanups.toReversed()) {
+      try {
+        await cleanup();
+      } catch (error) {
+        failures.push(error);
+      }
     }
+    flush();
+  } catch (error) {
+    failures.push(error);
+  } finally {
+    const diagnostics = raised();
+    if (diagnostics.length > 0) failures.push(new Error(`Solid raised ${diagnostics.join("; ")}.`));
   }
-  flush();
-  const diagnostics = raised();
-  if (diagnostics.length > 0) failures.push(new Error(`Solid raised ${diagnostics.join("; ")}.`));
   if (failures.length > 0) {
     const messages = failures.map((failure) =>
       failure instanceof Error ? failure.message : String(failure),
@@ -210,9 +215,9 @@ export function mount(
   }, host);
   scope.defer(dispose);
   flush();
-  const root = [...host.querySelectorAll<HTMLElement>("*")].find(
-    (element) => element.localName !== "style",
-  );
+  const rendered = () =>
+    [...host.querySelectorAll<HTMLElement>("*")].find((element) => element.localName !== "style");
+  const root = rendered();
   if (root === undefined) throw new Error(`${fixture.component}: it rendered no element.`);
   const classOf = ({ of, part }: Address) => stableClass(componentOf(of, fixture.component), part);
   const all = (address: Address) => [...host.querySelectorAll<HTMLElement>(`.${classOf(address)}`)];
@@ -255,6 +260,11 @@ export function mount(
         Object.assign(draft, next);
       });
       flush();
+      if (rendered() !== root) {
+        throw new SpecError(
+          `${fixture.component}: the update rendered another root element, so the root this entry holds is no longer in the document, where every computed style reads empty. Mount a fixture for each root instead.`,
+        );
+      }
     },
   };
 }

@@ -111,6 +111,15 @@ specTest("the scope a spec entry runs in holds Solid's exclusive diagnostics gat
   expectingSolidDiagnostic("STRICT_READ_UNTRACKED", readUntracked);
 });
 
+test("an update that renders another root element is a SpecError, since the root the entry holds is then out of the document", async () => {
+  const { scope, close } = scoped();
+  const rendered = mount(scope, fixture("Button", {}, "Save"), "light", "function");
+
+  expect(rendered.root.localName).toBe("button");
+  expect(() => rendered.update({ component: "a" })).toThrow(SpecError);
+  await close();
+});
+
 test("a function fixture's provider keeps the scheme props it is given", async () => {
   const { scope, close } = scoped();
   const given: Fixture = {
