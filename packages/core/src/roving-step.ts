@@ -1,4 +1,4 @@
-export type RovingLayout = { vertical: boolean; rightToLeft: boolean; loop: boolean };
+type RovingLayout = { vertical: boolean; rightToLeft: boolean; loop: boolean };
 
 export type RovingStep = { handled: boolean; to: number };
 

@@ -4,7 +4,7 @@ import { parseAction } from "#/scripts/formal/state-graph.ts";
 import { pathBetween, type StepTable } from "#/scripts/formal/step-table.ts";
 import { keyOf, type TlaValue } from "#/scripts/formal/tla-value.ts";
 
-export type PageAction = (page: Page, parameters: TlaValue[]) => Promise<void>;
+type PageAction = (page: Page, parameters: TlaValue[]) => Promise<void>;
 
 export type GraphReplay<State extends object> = {
   name: string;

@@ -6,7 +6,7 @@ import { repositoryRoot } from "#/scripts/repository.ts";
 import { parseStateGraph, type StateGraph } from "#/scripts/formal/state-graph.ts";
 import { brokenRuleOf, type RuleBreak } from "#/scripts/formal/trace.ts";
 
-export type CompiledModel = { model: string; module: string; spec: string; config: string };
+type CompiledModel = { model: string; module: string; spec: string; config: string };
 
 export type ModelRun = CompiledModel & {
   result: CheckResult;

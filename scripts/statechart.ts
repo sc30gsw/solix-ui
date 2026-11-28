@@ -47,7 +47,7 @@ export function viewOf(loaded: Readonly<Record<string, unknown>>, where: string)
   return loaded as ChartView;
 }
 
-export type Statechart = {
+type Statechart = {
   chart: string;
   report: string;
   broken: RuleBreak[];

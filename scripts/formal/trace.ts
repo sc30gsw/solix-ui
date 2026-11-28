@@ -2,7 +2,7 @@ import { type CheckResult, formatValue, type Violation } from "tla-ts";
 import { parseVars } from "#/scripts/formal/state-graph.ts";
 import type { Vars } from "#/scripts/formal/tla-value.ts";
 
-export type TraceStep = { action: string; vars: Vars };
+type TraceStep = { action: string; vars: Vars };
 
 export type RuleBreak = {
   rule: string;

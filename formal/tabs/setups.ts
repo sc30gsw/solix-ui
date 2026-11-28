@@ -6,7 +6,7 @@ import {
 import type { RovingList } from "#/formal/tabs/roving-list.ts";
 import type { TlaValue } from "#/scripts/formal/tla-value.ts";
 
-export type RovingConfig = {
+type RovingConfig = {
   size: number;
   disabled: number[];
   vertical: boolean;

@@ -1,5 +1,5 @@
 export type TlaValue = number | string | boolean | null | undefined | TlaValue[] | TlaRecord;
-export type TlaRecord = { [field: string]: TlaValue };
+type TlaRecord = { [field: string]: TlaValue };
 export type Vars = Record<string, TlaValue>;
 
 export class ValueReader {

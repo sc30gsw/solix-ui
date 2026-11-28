@@ -1,5 +1,5 @@
 export type Move = "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" | "Home" | "End";
-export type Press = "Enter" | "Space";
+type Press = "Enter" | "Space";
 export type Key = Move | Press;
 
 export const keys: Key[] = [

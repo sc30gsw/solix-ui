@@ -77,14 +77,14 @@ export function afterKeyByName(
   return namesOf(list, afterKey(list.list, indexesOf(list, state), key));
 }
 
-export type TabsState = {
+type TabsState = {
   selected: string | null;
   focused: string | null;
   shown: string[];
   tabStops: (string | null)[];
 };
 
-export type TabsReading = TabsState & {
+type TabsReading = TabsState & {
   active: (string | null)[];
   ariaSelected: (string | null)[];
 };
@@ -99,7 +99,7 @@ export function tabNamed(page: Page, list: string, name: string): Locator {
     .filter({ has: page.getByText(name, { exact: true }) });
 }
 
-export type TabSnapshot = {
+type TabSnapshot = {
   text: string;
   ariaSelected: string | null;
   dataActive: boolean;
@@ -107,9 +107,9 @@ export type TabSnapshot = {
   tabIndex: number;
 };
 
-export type PanelSnapshot = { text: string; hidden: HTMLElement["hidden"]; display: string };
+type PanelSnapshot = { text: string; hidden: HTMLElement["hidden"]; display: string };
 
-export type ListSnapshot = { tabs: TabSnapshot[]; panels: PanelSnapshot[] };
+type ListSnapshot = { tabs: TabSnapshot[]; panels: PanelSnapshot[] };
 
 export type TabsSnapshot = { document: DocumentSnapshot; lists: ListSnapshot[] };
 
@@ -217,7 +217,7 @@ export async function clickTab(page: Page, list: string, name: string): Promise<
   }
 }
 
-export type Named = { tab: string[][]; panel: string[][] };
+type Named = { tab: string[][]; panel: string[][] };
 
 export function elementsNamedBy(page: Page, list: string): Promise<Named[]> {
   return tabList(page, list).evaluate((node) => {

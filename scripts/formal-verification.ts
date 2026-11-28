@@ -8,7 +8,7 @@ export const modelFilePatterns = [
   "**/*.model.ts",
   "**/*.model.test.{ts,tsx}",
 ] as const;
-export const formalSkillFiles = `.agents/skills/${formalSkillPrefix}*/**`;
+const formalSkillFiles = `.agents/skills/${formalSkillPrefix}*/**`;
 
 export function isModelFile(path: string): boolean {
   return modelFilePatterns.some((pattern) => matchesGlob(path, pattern));

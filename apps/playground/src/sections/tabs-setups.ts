@@ -1,4 +1,4 @@
-export type TabSetup = {
+type TabSetup = {
   name: string;
   disabled: boolean;
   leftSection?: string;
@@ -136,7 +136,7 @@ const controlledSetups: ControlledSetup[] = [
   { list: held, value: kept, refused: null, follows: false },
 ];
 
-export type KeyboardRow = {
+type KeyboardRow = {
   list: string;
   start: string;
   keys: string[];
@@ -218,13 +218,13 @@ export function panelOf(name: string): string {
   return `${name} panel`;
 }
 
-export type NamedTabs = { list: string; tabs: readonly { name: string }[] };
+type NamedTabs = { list: string; tabs: readonly { name: string }[] };
 
 function named(names: Readonly<Record<string, string>>): { name: string }[] {
   return Object.values(names).map((name) => ({ name }));
 }
 
-export const handWrittenTabs: NamedTabs[] = [
+const handWrittenTabs: NamedTabs[] = [
   { list: controlled, tabs: named(tabNames.controlled) },
   { list: held, tabs: named(tabNames.held) },
   { list: inAShadowRoot, tabs: named(tabNames.inAShadowRoot) },

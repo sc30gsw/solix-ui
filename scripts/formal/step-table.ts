@@ -6,7 +6,7 @@ import {
 } from "#/scripts/formal/state-graph.ts";
 import { keyOf, type Vars } from "#/scripts/formal/tla-value.ts";
 
-export type ObservedStep<State> = { to: State; internal: number };
+type ObservedStep<State> = { to: State; internal: number };
 
 export type StepTable<State> = {
   start: State;
