@@ -58,12 +58,18 @@ const specDocuments = [
 const specNodeModules = ["format", "gaps", "registry", "shared", "fixtures"].map(
   (module) => `packages/core/spec/${module}.ts`,
 );
-const specRunnerModules = ["packages/core/spec/runner.ts", "packages/core/spec/computed.ts"];
+const specRunnerModuleNames = ["spec/runner.ts", "spec/computed.ts"];
+const specRunnerModules = specRunnerModuleNames.map((name) => `packages/core/${name}`);
 const specRunnerImporters = [
   "packages/core/tests/component-spec.browser.test.ts",
   "packages/core/tests/visual-spec.browser.test.ts",
   "packages/core/tests/spec-runner.browser.test.ts",
 ];
+
+function inEverySpelling(nameInThePackage: string): string[] {
+  return [`**/${nameInThePackage}`, `\\#/${nameInThePackage}`];
+}
+
 const specDocumentImports = [
   "vite-plus/test",
   ...["format", "fixtures", "shared", "gaps", "look/reference"].map(
@@ -75,16 +81,16 @@ const specBrowserModules = [
   "axe-core",
   "solid-js",
   "vite-plus/test/browser",
-  ...["runner", "computed", "commands"].map((module) => `\\#/spec/${module}.ts`),
+  ...[...specRunnerModuleNames, "spec/commands.ts"].flatMap(inEverySpelling),
 ];
 const sourceValues = {
-  regex: "^#/src/",
+  regex: "^(#/|\\./|(\\.\\./)+)src/",
   allowTypeImports: true,
   message:
     "A spec module takes only types from packages/core/src; the runner reaches the library through packages/core/dist.",
 };
 const runnerOnlyInItsTests = {
-  group: specRunnerModules.map((file) => `\\#/${file.replace("packages/core/", "")}`),
+  group: specRunnerModuleNames.flatMap(inEverySpelling),
   message: `Only ${specRunnerImporters.join(", ")} import the spec runner and its comparison.`,
 };
 
@@ -93,6 +99,51 @@ const fastCheckRunnersOnlyThroughTheWrapper = {
   importNames: fastCheckRunners,
   message: runPropertiesThroughTheWrapper,
 };
+const openProgramsOnlyInTheirOwn = {
+  group: programModules,
+  importNames: ["openProgram"],
+  message: openProgramsInTheRules,
+};
+type RestrictedPath = {
+  name: string;
+  importNames?: string[];
+  allowImportNames?: string[];
+  message: string;
+};
+type RestrictedPattern = {
+  group?: string[];
+  regex?: string;
+  importNames?: string[];
+  allowTypeImports?: boolean;
+  message: string;
+};
+type ImportsRestricted = {
+  paths?: RestrictedPath[];
+  patterns?: RestrictedPattern[];
+  opensPrograms?: boolean;
+};
+type ImportRestrictions = ["error", { paths: RestrictedPath[]; patterns: RestrictedPattern[] }];
+
+const restrictedPaths: RestrictedPath[] = [fastCheckRunnersOnlyThroughTheWrapper];
+const restrictedPatterns: RestrictedPattern[] = [openProgramsOnlyInTheirOwn];
+
+function restrictedImports({
+  paths = [],
+  patterns = [],
+  opensPrograms = false,
+}: ImportsRestricted): ImportRestrictions {
+  return [
+    "error",
+    {
+      paths: [...restrictedPaths, ...paths],
+      patterns: [...(opensPrograms ? [] : restrictedPatterns), ...patterns],
+    },
+  ];
+}
+
+function lintProbe(boundary: string): string {
+  return `tests/lint-probes/${boundary}.ts`;
+}
 
 const seedNoticeShown = `${seedVariable}_NOTICE_SHOWN`;
 const seedNoticeText = seedNotice(process.env[seedVariable]);
@@ -272,19 +323,7 @@ export default defineConfig({
       "import/no-default-export": "error",
       "import/no-duplicates": "error",
       "unicorn/no-array-for-each": "error",
-      "no-restricted-imports": [
-        "error",
-        {
-          paths: [fastCheckRunnersOnlyThroughTheWrapper],
-          patterns: [
-            {
-              group: programModules,
-              importNames: ["openProgram"],
-              message: openProgramsInTheRules,
-            },
-          ],
-        },
-      ],
+      "no-restricted-imports": restrictedImports({}),
       "no-restricted-properties": [
         "error",
         ...fastCheckRunners.map((property) => ({
@@ -296,79 +335,56 @@ export default defineConfig({
     },
     overrides: [
       {
-        files: ["packages/core/**"],
+        files: ["packages/core/**", lintProbe("packages-core")],
         rules: {
-          "no-restricted-imports": [
-            "error",
-            {
-              paths: [fastCheckRunnersOnlyThroughTheWrapper],
-              patterns: [
-                {
-                  group: programModules,
-                  importNames: ["openProgram"],
-                  message: openProgramsInTheRules,
-                },
-                runnerOnlyInItsTests,
-              ],
-            },
-          ],
+          "no-restricted-imports": restrictedImports({ patterns: [runnerOnlyInItsTests] }),
         },
       },
       {
-        files: specDocuments,
+        files: [...specDocuments, lintProbe("spec-document")],
         rules: {
-          "no-restricted-imports": [
-            "error",
-            {
-              paths: [
-                {
-                  name: "vite-plus/test",
-                  allowImportNames: ["expect", "vi"],
-                  message: "A spec document takes only expect and vi from vite-plus/test.",
-                },
-              ],
-              patterns: [
-                {
-                  group: ["*", ...specDocumentImports.map((module) => `!${module}`)],
-                  message: `A spec document imports only ${specDocumentImports.join(", ").replaceAll("\\", "")}.`,
-                },
-              ],
-            },
-          ],
+          "no-restricted-imports": restrictedImports({
+            paths: [
+              {
+                name: "vite-plus/test",
+                allowImportNames: ["expect", "vi"],
+                message: "A spec document takes only expect and vi from vite-plus/test.",
+              },
+            ],
+            patterns: [
+              {
+                group: ["*", ...specDocumentImports.map((module) => `!${module}`)],
+                message: `A spec document imports only ${specDocumentImports.join(", ").replaceAll("\\", "")}.`,
+              },
+            ],
+          }),
         },
       },
       {
-        files: specNodeModules,
+        files: [...specNodeModules, lintProbe("spec-node-module")],
         rules: {
-          "no-restricted-imports": [
-            "error",
-            {
-              paths: [fastCheckRunnersOnlyThroughTheWrapper],
-              patterns: [
-                sourceValues,
-                runnerOnlyInItsTests,
-                {
-                  group: specBrowserModules,
-                  message: "A spec module that Node loads imports no browser module.",
-                },
-              ],
-            },
-          ],
+          "no-restricted-imports": restrictedImports({
+            patterns: [
+              sourceValues,
+              runnerOnlyInItsTests,
+              {
+                group: specBrowserModules,
+                message: "A spec module that Node loads imports no browser module.",
+              },
+            ],
+          }),
         },
       },
       {
-        files: specRunnerModules,
+        files: [...specRunnerModules, lintProbe("spec-runner-module")],
         rules: {
-          "no-restricted-imports": [
-            "error",
-            { paths: [fastCheckRunnersOnlyThroughTheWrapper], patterns: [sourceValues] },
-          ],
+          "no-restricted-imports": restrictedImports({ patterns: [sourceValues] }),
         },
       },
       {
-        files: specRunnerImporters,
+        files: [...specRunnerImporters, lintProbe("spec-runner-importer")],
         rules: {
-          "no-restricted-imports": ["error", { paths: [fastCheckRunnersOnlyThroughTheWrapper] }],
+          "no-restricted-imports": restrictedImports({}),
         },
       },
       {
@@ -376,9 +392,9 @@ export default defineConfig({
         rules: { "no-restricted-imports": "off", "no-restricted-properties": "off" },
       },
       {
-        files: programOpeners,
+        files: [...programOpeners, lintProbe("program-opener")],
         rules: {
-          "no-restricted-imports": ["error", { paths: [fastCheckRunnersOnlyThroughTheWrapper] }],
+          "no-restricted-imports": restrictedImports({ opensPrograms: true }),
         },
       },
       {
