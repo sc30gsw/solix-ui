@@ -35,6 +35,8 @@ export const foundationsSpec: FunctionSpec<typeof reference> = {
       fixture: fixture("Button", { radius: 8 }, "Save"),
       assert: ({ root, update }) => {
         const given = radiusOf(root);
+        update({ radius: undefined });
+        expect(radiusOf(root), "radius 8 against the default radius").not.toBe(given);
         update({ radius: "0.5rem" });
         expect(radiusOf(root), "radius 8 against 0.5rem").toBe(given);
       },

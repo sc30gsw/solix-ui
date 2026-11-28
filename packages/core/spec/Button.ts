@@ -147,11 +147,14 @@ const variantEntries: Entry[] = [
 
 const sizeEntries: Entry[] = [
   ...sizeVariables.map((variable): Entry => ({
-    says: `size="lg" sets ${variable} on the root`,
+    says: `size="lg" sets ${variable} on the root, to a length the default size does not give it`,
     about: `variable ${variable}`,
     fixture: button({ size: "lg" }),
-    assert: ({ root }) => {
-      expect(variableOf(root, variable), `${variable} is set`).not.toBe("");
+    assert: ({ root, update }) => {
+      const given = variableOf(root, variable);
+      expect(given, `${variable} is set`).not.toBe("");
+      update({ size: undefined });
+      expect(variableOf(root, variable), `${variable} follows the size`).not.toBe(given);
     },
     status: "holds",
   })),
@@ -174,11 +177,16 @@ const sizeEntries: Entry[] = [
     status: { until: "Button 2", fails: "data-size: expected null to be 'compact-sm'" },
   },
   {
-    says: 'radius="lg" sets --button-radius on the root',
+    says: 'radius="lg" sets --button-radius on the root, to a radius the default does not give it',
     about: "prop radius",
     fixture: button({ radius: "lg" }),
-    assert: ({ root }) => {
-      expect(variableOf(root, "--button-radius"), "--button-radius is set").not.toBe("");
+    assert: ({ root, update }) => {
+      const given = variableOf(root, "--button-radius");
+      expect(given, "--button-radius is set").not.toBe("");
+      update({ radius: undefined });
+      expect(variableOf(root, "--button-radius"), "--button-radius follows the radius").not.toBe(
+        given,
+      );
     },
     status: "holds",
   },

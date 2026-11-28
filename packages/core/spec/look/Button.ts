@@ -212,6 +212,7 @@ const sizeEntries = [
   looks(button({ size: "xs" }), "height", "2.25rem", undefined, narrow),
   looks(button({ size: "sm" }), "height", "2.5rem", undefined, narrow),
   looks(button({ size: "md" }), "height", "2.75rem", undefined, narrow),
+  looks(button({ size: "lg" }), "height", "3rem", undefined, narrow),
   looks(button({ size: "xs" }), "height", "2rem", "step 4", wide),
   looks(button({ size: "sm" }), "height", "2.25rem", "step 4", wide),
   looks(button({ size: "md" }), "height", "2.5rem", "step 4", wide),
@@ -224,12 +225,15 @@ const sizeEntries = [
   looks(button({ size: "xs" }), "padding-inline-start", "0.75rem", undefined, narrow),
   looks(button({ size: "sm" }), "padding-inline-start", "1rem", undefined, narrow),
   looks(button({ size: "md" }), "padding-inline-start", "1rem", undefined, narrow),
+  looks(button({ size: "lg" }), "padding-inline-start", "1.25rem", undefined, narrow),
   looks(button({ size: "xs" }), "font-size", "0.875rem", "Button 23", narrow),
   looks(button({ size: "sm" }), "font-size", "0.875rem", undefined, narrow),
   looks(button({ size: "md" }), "font-size", "1rem", undefined, narrow),
+  looks(button({ size: "lg" }), "font-size", "1.125rem", undefined, narrow),
   looks(button({ size: "xs" }), "transform", "scale(0.98)", "Button 22", { state: "pressed" }),
   looks(button({ size: "md" }), "transform", "scale(0.96)", "Button 22", { state: "pressed" }),
   looks(button(), "border-top-left-radius", "1.5rem"),
+  looks(button({ radius: "lg" }), "border-top-left-radius", "0.5rem"),
   looks(button(), "font-weight", "500"),
 ];
 
