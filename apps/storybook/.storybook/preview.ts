@@ -1,11 +1,10 @@
 import type { AfterEach, BeforeEach } from "storybook/internal/types";
 import type { Preview, SolidRenderer } from "storybook-solidjs-vite";
+import { isRecord, wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
 import {
-  captureSolidDiagnostics,
-  isRecord,
+  openSolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
-  wcag2AAndAATags,
-} from "../../../tests/support/browser-gates.ts";
+} from "../../../tests/support/solid-diagnostics.ts";
 import { colorContrastRule } from "../../../tests/support/contrast-exceptions.ts";
 import {
   globalSwitchesThatSkipTheAccessibilityScan,
@@ -28,7 +27,11 @@ type StoryState = {
   canvasElement: Element;
 };
 
-let diagnosticsRaised: () => string[] = () => [];
+const diagnostics = openSolidDiagnosticsGate();
+
+function raisedSinceTheLastHook(): string[] {
+  return diagnostics.rotateDescribed();
+}
 
 function shown(value: unknown): string {
   return value === undefined ? "nothing" : JSON.stringify(value);
@@ -81,7 +84,12 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
       "Solid's development build is not loaded, so no story can be checked for Solid development diagnostics.",
     );
   }
-  diagnosticsRaised = captureSolidDiagnostics();
+  const prior = raisedSinceTheLastHook();
+  if (prior.length > 0) {
+    throw new Error(
+      `A Solid development diagnostic was raised before the story:\n${prior.join("\n")}`,
+    );
+  }
   const mount = context.mount;
   context.mount = async (...rendered) => {
     const canvas = await mount(...rendered);
@@ -92,13 +100,12 @@ const beforeEachStory: BeforeEach<SolidRenderer> = (context) => {
 
 const afterEachStory: AfterEach<SolidRenderer> = (context) => {
   playReturned();
+  const raised = raisedSinceTheLastHook();
   if (context.reporting.reports.length > 0) {
     throw new Error(
       `The preview's afterEach tells a failed play from a failed gate, so it must run first after the play function, but ${context.reporting.reports.map(({ type }) => type).join(", ")} reported before it. A story or a meta that writes afterEach, or an addon whose afterEach the preview's no longer comes before, ran first.`,
     );
   }
-  const raised = diagnosticsRaised();
-  diagnosticsRaised = () => [];
   refuseAnyWayOut("while it ran", [...waysOutOfTheGate(context), ...unscannedIn(context)]);
   if (raised.length > 0) {
     throw new Error(`The story raised a Solid development diagnostic:\n${raised.join("\n")}`);

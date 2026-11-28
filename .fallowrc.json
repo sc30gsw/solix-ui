@@ -12,6 +12,7 @@
     "tests/support/git-free-environment.ts",
     "tests/support/build-packages.ts",
     "tests/support/global-setup.ts",
+    "tests/support/solid-diagnostics-check.ts",
     "apps/playground/tests/support/console-check.ts",
     "apps/storybook/story-color-scheme.setup.ts",
     "apps/storybook/story-records.setup.ts",

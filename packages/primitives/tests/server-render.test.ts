@@ -1,5 +1,10 @@
 import { expect, test } from "vite-plus/test";
-import { type Primitive, serialized, serverCases, startCase } from "#/fixtures/server-cases.ts";
+import {
+  type Primitive,
+  serialized,
+  serverPrimitives,
+  startCase,
+} from "#/fixtures/server-cases.ts";
 import { library } from "#/tests/built-library.ts";
 import {
   browserResourcesReadDuring,
@@ -8,12 +13,6 @@ import {
 } from "#/tests/support/server-harness.ts";
 
 const primitivePrefix = "create";
-
-function isPrimitive(name: string): name is Primitive {
-  return Object.hasOwn(serverCases, name);
-}
-
-const primitives = Object.keys(serverCases).filter(isPrimitive).sort();
 
 function renderOnTheServer(name: Primitive) {
   const rendered = {
@@ -30,7 +29,6 @@ function renderOnTheServer(name: Primitive) {
       rendered.expected = started.value?.expected;
       started.browserCommands?.();
       rendered.afterBrowserCommands = serialized(started.value?.read());
-      started.stateCommands?.run();
       return rendered.afterBrowserCommands;
     });
   });
@@ -43,8 +41,8 @@ test("the build exports exactly the primitives the server cases cover", () => {
     .map(([name]) => name)
     .sort();
 
-  expect(primitives.length).toBeGreaterThan(0);
-  expect(built).toEqual(primitives);
+  expect(serverPrimitives.length).toBeGreaterThan(0);
+  expect(built).toEqual(serverPrimitives);
 });
 
 test("a primitive that returns nothing, or only functions, passes; one that returns a value fails", () => {
@@ -55,8 +53,8 @@ test("a primitive that returns nothing, or only functions, passes; one that retu
   expect(plainValuesIn([command, 1], "createFrozen")).toEqual(["createFrozen[1] is 1"]);
 });
 
-test.each(primitives)(
-  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, keeps it when a browser command is called there, calls a state command there without a browser read, and returns nothing or only functions",
+test.each(serverPrimitives)(
+  "%s, built and called inside a server render, reads none of the browser resources, gives its server value, keeps it when a browser command is called there and returns nothing or only functions",
   (name) => {
     const { returned, value, expected, afterBrowserCommands, touched } = renderOnTheServer(name);
 

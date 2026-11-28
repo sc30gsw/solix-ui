@@ -5,10 +5,10 @@ import { type ColorOption, type ColorPropKey, colorResolver } from "#/src/colors
 import { stableClass } from "#/src/stable-class.ts";
 import { stylePropKeys } from "#/src/style-prop-table.ts";
 import { type Variables } from "#/src/variables.ts";
+import type { QueryContainer } from "#/src/query-container.ts";
 import {
   type VariableSource,
   presentStyle,
-  type QueryContainer,
   type Resolver,
   type StyleProps,
   stylePropResolver,

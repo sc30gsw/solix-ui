@@ -1,5 +1,6 @@
 import type { CompiledStyles } from "@stylexjs/stylex";
 import { createComponent, renderToString } from "@solidjs/web";
+import { createMemo, createSignal, Errored, Loading } from "solid-js";
 import { expect, expectTypeOf, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "#/build-pipeline.mjs";
 import type {
@@ -17,8 +18,9 @@ import type { createParts, PartsOptions } from "#/src/parts.ts";
 import type { spaceVariables } from "#/src/Space.variables.ts";
 import type { Variables } from "#/src/variables.ts";
 import { breakpointWidths } from "#/src/style-prop-table.ts";
-import type { ContainerWidth } from "#/src/style-props.ts";
-import { isContainerWidth, library } from "#/tests/built-library.ts";
+import type { ContainerWidth } from "#/src/query-container.ts";
+import { builtQueryContainer, library } from "#/tests/built-library.ts";
+import { expectingSolidDiagnostic } from "../../../tests/support/solid-diagnostics.ts";
 import { render } from "#/tests/fixtures.ts";
 import {
   classesOf,
@@ -771,7 +773,9 @@ test("GridCol: in a grid with container queries and no breakpoints, keys its val
   expect(html).toContain("solix-Grid-container");
 });
 
-test("a container grid of 12 columns writes each rule its columns share once, in the first column that places it, and a later column writes only what no earlier one wrote", () => {
+const mdFlexBasisRule = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
+
+test("in renderToString, each of the 12 columns of a container grid writes the rules it places, the ones it shares with the others among them", () => {
   const span = { base: 12, md: 6 };
   const html = renderToString(() =>
     createComponent(library.Grid, {
@@ -785,13 +789,12 @@ test("a container grid of 12 columns writes each rule its columns share once, in
     }),
   );
   const rules = rulesOf(html);
-  const flexBasis = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
 
-  expect(rules).toHaveLength(2);
-  expect(rules.join("").split(flexBasis)).toHaveLength(2);
-  expect(rules[0]).toContain(flexBasis);
-  expect(rules[1]).not.toContain(flexBasis);
-  expect(rules[1]).toContain(".sx-col-offset-c0-2{--col-offset:var(--sx-col-offset-c0-2)}");
+  const offsetRule = ".sx-col-offset-c0-2{--col-offset:var(--sx-col-offset-c0-2)}";
+
+  expect(rules).toHaveLength(12);
+  expect(rules.every((written) => written.includes(mdFlexBasisRule))).toBe(true);
+  expect(rules.filter((written) => written.includes(offsetRule))).toEqual(rules.slice(11));
 });
 
 test("a grid with container queries and no value keyed by a width renders its container part and no style element", () => {
@@ -850,7 +853,9 @@ type AcceptedByTheType = {
 type AcceptedByTheTable = Extract<WidthCase, readonly [string, true]>[0];
 
 test("a container width is a non-negative decimal length with a unit and no space, and the type and the run time take the same ones", () => {
-  const acceptedAtRunTime = widthCases.filter(([written]) => isContainerWidth(written));
+  const acceptedAtRunTime = widthCases.filter(([written]) =>
+    builtQueryContainer.isContainerWidth(written),
+  );
 
   expectTypeOf<AcceptedByTheType>().toEqualTypeOf<AcceptedByTheTable>();
   expect(acceptedAtRunTime).toEqual(widthCases.filter(([, accepted]) => accepted));
@@ -867,4 +872,179 @@ type TakenWithoutOptions<Of extends string | Variables> =
 test("createParts refuses, by type, a component's variables called without its options", () => {
   expectTypeOf<TakenWithoutOptions<"Center">>().toEqualTypeOf<true>();
   expectTypeOf<TakenWithoutOptions<typeof spaceVariables>>().toEqualTypeOf<false>();
+});
+
+test("a Grid with container queries and one with media queries, each with two like columns, render on the server, and each container column writes the rule they share", () => {
+  const twoLikeColumns = (type: "container" | "media") =>
+    createComponent(library.Grid, {
+      type,
+      get children() {
+        return [
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "First" }),
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Second" }),
+        ];
+      },
+    });
+  const container = renderToString(() => twoLikeColumns("container"));
+  const media = renderToString(() => twoLikeColumns("media"));
+
+  expect(container).toContain("Second");
+  expect(rulesOf(container).join("").split(mdFlexBasisRule)).toHaveLength(3);
+  expect(media).toContain("Second");
+  expect(rulesOf(media)).toEqual([]);
+});
+
+test("in renderToString, a column after a column that waits inside Loading writes the rules they share, since the waiting column's rules are not in the markup", () => {
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      get children() {
+        return [
+          createComponent(Loading, {
+            fallback: "Waiting for a column",
+            get children() {
+              const span = createMemo(() => new Promise<number>(() => undefined));
+              return createComponent(library.GridCol, {
+                get span() {
+                  return { base: 12, md: span() };
+                },
+                children: "Waiting",
+              });
+            },
+          }),
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "After" }),
+        ];
+      },
+    }),
+  );
+
+  expect(html).toContain("Waiting for a column");
+  expect(html).toContain("After");
+  expect(rulesOf(html).join("").split(mdFlexBasisRule)).toHaveLength(2);
+});
+
+function neverSettlingColumn(): ReturnType<typeof createComponent> {
+  const text = createMemo(() => new Promise<string>(() => undefined));
+  return createComponent(library.GridCol, {
+    span: { base: 12, md: 6 },
+    get children() {
+      return text();
+    },
+  });
+}
+
+test("in renderToString, a column after a column with a synchronous span whose children wait inside Loading writes the rules they share", () => {
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      get children() {
+        return [
+          createComponent(Loading, {
+            fallback: "Waiting",
+            get children() {
+              return neverSettlingColumn();
+            },
+          }),
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "After" }),
+        ];
+      },
+    }),
+  );
+  const waiting = html.indexOf("Waiting");
+  const after = html.indexOf("After");
+
+  expect(waiting).toBeGreaterThan(-1);
+  expect(after).toBeGreaterThan(waiting);
+  expect(rulesOf(html.slice(waiting, after)).join("")).toContain(mdFlexBasisRule);
+});
+
+test("in renderToString, a Grid.Col that is the fallback of a column waiting inside Loading writes its own rules", () => {
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      get children() {
+        return createComponent(Loading, {
+          get fallback() {
+            return createComponent(library.GridCol, {
+              span: { base: 12, md: 6 },
+              children: "Waiting",
+            });
+          },
+          get children() {
+            return neverSettlingColumn();
+          },
+        });
+      },
+    }),
+  );
+  const waiting = html.indexOf("Waiting");
+
+  expect(waiting).toBeGreaterThan(-1);
+  expect(rulesOf(html.slice(0, waiting)).join("")).toContain(mdFlexBasisRule);
+});
+
+function renderErroredContainerGrid(
+  brokenColumn: () => ReturnType<typeof createComponent>,
+): string {
+  return expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () =>
+    renderToString(() =>
+      createComponent(library.Grid, {
+        type: "container",
+        get children() {
+          return [
+            createComponent(Errored, {
+              fallback: () => "Fallback",
+              get children() {
+                return brokenColumn();
+              },
+            }),
+            createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "Healthy" }),
+          ];
+        },
+      }),
+    ),
+  );
+}
+
+test("a container Grid.Col whose children throw inside Errored leaves no stale entry to suppress a later healthy column's rules", () => {
+  function Throws(): never {
+    throw new Error("broken child");
+  }
+  const html = renderErroredContainerGrid(() =>
+    createComponent(library.GridCol, {
+      span: { base: 12, md: 6 },
+      get children() {
+        return createComponent(Throws, {});
+      },
+    }),
+  );
+
+  expect(html).toContain("Fallback");
+  expect(html).toContain("Healthy");
+  expect(rulesOf(html).join("")).toContain(mdFlexBasisRule);
+});
+
+test("a container Grid.Col whose span throws inside Errored neither leaks its error to a later sibling nor suppresses its rules", () => {
+  const html = renderErroredContainerGrid(() =>
+    createComponent(library.GridCol, {
+      get span(): never {
+        throw new Error("broken span");
+      },
+      children: "First",
+    }),
+  );
+
+  expect(html).toContain("Fallback");
+  expect(html).toContain("Healthy");
+  expect(rulesOf(html).join("")).toContain(mdFlexBasisRule);
+});
+
+test("a signal written in a server render at the end of this file still raises SERVER_WRITE, so no render before it used up the one report Solid makes of it in this process", () => {
+  expectingSolidDiagnostic("SERVER_WRITE", () =>
+    renderToString(() => {
+      const [, setWritten] = createSignal(false);
+      setWritten(true);
+      return "written";
+    }),
+  );
 });
