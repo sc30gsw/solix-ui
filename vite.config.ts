@@ -102,6 +102,7 @@ if (seedNoticeText !== undefined && process.env[seedNoticeShown] === undefined) 
 }
 
 const sequenceGroup = { browser: 1, others: 2, storySpec: 3 } as const;
+const timeouts = { testTimeout: 30_000, hookTimeout: 30_000 } as const;
 
 function inGroup(groupOrder: number) {
   return <P extends { test?: object }>(project: P) => ({
@@ -118,6 +119,15 @@ function withPackagesBuiltFirst<P extends { test?: object }>(project: P) {
     join(import.meta.dirname, file),
   );
   return { ...project, test: { ...project.test, globalSetup } };
+}
+
+function withoutRefresh<P extends { test: object }>(project: P) {
+  return {
+    ...project,
+    extends: false as const,
+    plugins: lazyPlugins(() => [solid({ refresh: false })]),
+    test: { ...project.test, ...timeouts },
+  };
 }
 
 type InEveryEngine = {
@@ -189,14 +199,16 @@ const projects = [
         ],
       },
     },
-    inEveryEngine({
-      name: "component spec",
-      root: specRoot,
-      include: specTestsInTheirRoot,
-      preBundled: preBundledForSpecTests,
-      leftToTheLinkedBuild: allowedRuntimeDependencyNames(),
-      commands: specCommands,
-    }),
+    withoutRefresh(
+      inEveryEngine({
+        name: "component spec",
+        root: specRoot,
+        include: specTestsInTheirRoot,
+        preBundled: preBundledForSpecTests,
+        leftToTheLinkedBuild: allowedRuntimeDependencyNames(),
+        commands: specCommands,
+      }),
+    ),
     ...storiesServers.map((server) => ({
       extends: false as const,
       ...storiesProject(server, storybookConfigDirectory),
@@ -396,8 +408,7 @@ export default defineConfig({
   },
   test: {
     env: { [seedVariable]: process.env[seedVariable] ?? "" },
-    testTimeout: 30_000,
-    hookTimeout: 30_000,
+    ...timeouts,
     projects,
   },
 });

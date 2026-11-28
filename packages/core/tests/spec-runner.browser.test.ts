@@ -1,3 +1,4 @@
+import { createEffect, createRoot, createSignal, flush } from "solid-js";
 import { expect, test } from "vite-plus/test";
 import { fixture } from "#/spec/fixtures.ts";
 import { type Fixture, MissingError, SpecError } from "#/spec/format.ts";
@@ -10,6 +11,7 @@ import {
   runCleanups,
   type Scope,
 } from "#/spec/runner.ts";
+import { openSolidDiagnosticsGate } from "../../../tests/support/solid-diagnostics.ts";
 
 type Cleanup = () => void | Promise<void>;
 
@@ -17,7 +19,7 @@ function scoped(): { readonly scope: Scope; readonly close: () => Promise<void> 
   const cleanups: Cleanup[] = [];
   return {
     scope: { defer: (cleanup) => void cleanups.push(cleanup) },
-    close: () => runCleanups("the scratch scope", cleanups),
+    close: () => runCleanups("the scratch scope", cleanups, () => []),
   };
 }
 
@@ -63,11 +65,42 @@ test("every cleanup of a test runs, last deferred first, even when one throws, a
     () => void ran.push("third"),
   ];
 
-  const closing = runCleanups("three cleanups", cleanups);
+  const closing = runCleanups("three cleanups", cleanups, () => []);
 
   await expect(closing).rejects.toBeInstanceOf(AggregateError);
   await expect(closing).rejects.toHaveProperty("errors", [thrown]);
   expect(ran).toEqual(["third", "second", "first"]);
+});
+
+function readUntracked(): void {
+  const [count] = createSignal(0);
+  const dispose = createRoot((dispose) => {
+    createEffect(count, () => {
+      count();
+    });
+    return dispose;
+  });
+  flush();
+  dispose();
+}
+
+test("a Solid diagnostic raised while a test closes fails it by its code, beside a cleanup that threw", async () => {
+  const gate = openSolidDiagnosticsGate({ exclusive: true });
+  const thrown = new Error("a cleanup throws");
+
+  const closing = runCleanups(
+    "an untracked read",
+    [
+      readUntracked,
+      () => {
+        throw thrown;
+      },
+    ],
+    gate.finishDescribed,
+  );
+
+  await expect(closing).rejects.toThrow("STRICT_READ_UNTRACKED");
+  await expect(closing).rejects.toHaveProperty("errors.0", thrown);
 });
 
 test("a function fixture's provider keeps the scheme props it is given", async () => {

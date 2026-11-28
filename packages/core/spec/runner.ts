@@ -33,6 +33,10 @@ import {
 import { breakpoints } from "#/spec/look/reference.ts";
 import type { Named } from "#/spec/registry.ts";
 import { wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
+import {
+  openSolidDiagnosticsGate,
+  solidDevelopmentBuildLoaded,
+} from "../../../tests/support/solid-diagnostics.ts";
 
 type Cleanup = () => void | Promise<void>;
 
@@ -86,7 +90,17 @@ export async function linkedStylesheet(href: string): Promise<void> {
 
 await linkedStylesheet(new URL("../dist/styles.css", import.meta.url).href);
 
-export async function runCleanups(test: string, cleanups: readonly Cleanup[]): Promise<void> {
+if (!solidDevelopmentBuildLoaded()) {
+  throw new SpecError(
+    "The component spec project loaded Solid's production build, which raises no development diagnostic.",
+  );
+}
+
+export async function runCleanups(
+  test: string,
+  cleanups: readonly Cleanup[],
+  raised: () => readonly string[],
+): Promise<void> {
   const failures: unknown[] = [];
   for (const cleanup of cleanups.toReversed()) {
     try {
@@ -96,17 +110,23 @@ export async function runCleanups(test: string, cleanups: readonly Cleanup[]): P
     }
   }
   flush();
+  const diagnostics = raised();
+  if (diagnostics.length > 0) failures.push(new Error(`Solid raised ${diagnostics.join("; ")}.`));
   if (failures.length > 0) {
-    throw new AggregateError(failures, `${test}: ${failures.length} of its cleanups threw.`);
+    const messages = failures.map((failure) =>
+      failure instanceof Error ? failure.message : String(failure),
+    );
+    throw new AggregateError(failures, `${test}: ${messages.join(" ")}`);
   }
 }
 
 const specTest = test.extend<{ scope: Scope }>({
   scope: [
     async ({ task }, use) => {
+      const gate = openSolidDiagnosticsGate({ exclusive: true });
       const cleanups: Cleanup[] = [];
       await use({ defer: (cleanup) => void cleanups.push(cleanup) });
-      await runCleanups(task.name, cleanups);
+      await runCleanups(task.name, cleanups, gate.finishDescribed);
     },
     { auto: true },
   ],
@@ -172,7 +192,10 @@ export function mount(
   host.setAttribute(library.colorSchemeAttribute, scheme);
   document.body.append(host);
   scope.defer(() => host.remove());
-  const [props, setProps] = createStore<Record<string, unknown>>({ ...resolved.props });
+  const [props, setProps] = createStore<Record<string, unknown>>(
+    { ...resolved.props },
+    { shallow: true },
+  );
   const { provider } = fixture;
   const dispose = render(() => {
     if (provider === undefined) return created(resolved, props);
