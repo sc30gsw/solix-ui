@@ -1,4 +1,5 @@
-import type { ComponentName, FunctionSpec, GapItem, LookSpec } from "#/spec/format.ts";
+import type { FunctionSpec, GapItem, LookSpec, OneOf } from "#/spec/format.ts";
+import type { Section } from "#/spec/gaps.ts";
 import { spec as buttonSpec } from "#/spec/Button.ts";
 import { spec as foundationsSpec } from "#/spec/foundations.ts";
 import { look as buttonLook } from "#/spec/look/Button.ts";
@@ -8,63 +9,60 @@ import { spec as solixProviderSpec } from "#/spec/SolixProvider.ts";
 import { spec as tabsSpec } from "#/spec/Tabs.ts";
 import { spec as textInputSpec } from "#/spec/TextInput.ts";
 
-export const drawsNoLook = "draws no look of its own";
+export type Slot<D> = OneOf<
+  { readonly written: D; readonly completedBy?: GapItem } | { readonly writtenBy: GapItem }
+>;
 
-export type Registered =
-  | {
-      readonly spec: FunctionSpec | GapItem;
-      readonly look: LookSpec | GapItem | typeof drawsNoLook;
-      readonly until?: GapItem;
-    }
-  | { readonly coveredBy: ComponentName };
+export type Registered = OneOf<
+  | { readonly function: Slot<FunctionSpec>; readonly look: Slot<LookSpec> | "draws none" }
+  | { readonly coveredBy: Section }
+>;
 
-export const specs = {
-  Box: { spec: "step 1", look: drawsNoLook },
-  Button: { spec: buttonSpec, look: buttonLook },
-  Center: { spec: "step 2", look: drawsNoLook },
-  ColorSchemeScript: { spec: "step 2", look: drawsNoLook },
-  Container: { spec: "step 2", look: drawsNoLook },
-  Disclosure: { spec: "step 12", look: "step 12" },
-  Flex: { spec: "step 2", look: drawsNoLook },
-  Grid: { spec: "step 2", look: drawsNoLook },
-  GridCol: { spec: "step 2", look: drawsNoLook },
-  Group: { spec: "step 2", look: drawsNoLook },
-  Modal: { spec: modalSpec, look: "step 13", until: "step 13" },
-  SimpleGrid: { spec: "step 2", look: drawsNoLook },
-  SolixProvider: { spec: solixProviderSpec, look: drawsNoLook, until: "step 14" },
-  Space: { spec: "step 2", look: drawsNoLook },
-  Stack: { spec: "step 2", look: drawsNoLook },
-  Tabs: { spec: tabsSpec, look: "step 8", until: "step 8" },
+export type Named<D> = readonly (readonly [section: string, document: D])[];
+
+export const registry = {
+  foundations: { function: { written: foundationsSpec }, look: { written: foundationsLook } },
+  Box: { function: { writtenBy: "step 1" }, look: "draws none" },
+  Button: { function: { written: buttonSpec }, look: { written: buttonLook } },
+  Center: { function: { writtenBy: "step 2" }, look: "draws none" },
+  ColorSchemeScript: { function: { writtenBy: "step 2" }, look: "draws none" },
+  Container: { function: { writtenBy: "step 2" }, look: "draws none" },
+  Disclosure: { function: { writtenBy: "step 12" }, look: { writtenBy: "step 12" } },
+  Flex: { function: { writtenBy: "step 2" }, look: "draws none" },
+  Grid: { function: { writtenBy: "step 2" }, look: "draws none" },
+  GridCol: { function: { writtenBy: "step 2" }, look: "draws none" },
+  Group: { function: { writtenBy: "step 2" }, look: "draws none" },
+  Modal: {
+    function: { written: modalSpec, completedBy: "step 13" },
+    look: { writtenBy: "step 13" },
+  },
+  SimpleGrid: { function: { writtenBy: "step 2" }, look: "draws none" },
+  SolixProvider: {
+    function: { written: solixProviderSpec, completedBy: "step 14" },
+    look: "draws none",
+  },
+  Space: { function: { writtenBy: "step 2" }, look: "draws none" },
+  Stack: { function: { writtenBy: "step 2" }, look: "draws none" },
+  Tabs: { function: { written: tabsSpec, completedBy: "step 8" }, look: { writtenBy: "step 8" } },
   TabsList: { coveredBy: "Tabs" },
   TabsPanel: { coveredBy: "Tabs" },
   TabsTab: { coveredBy: "Tabs" },
-  TextInput: { spec: textInputSpec, look: "step 10", until: "step 10" },
-} as const satisfies Record<ComponentName, Registered>;
+  TextInput: {
+    function: { written: textInputSpec, completedBy: "step 10" },
+    look: { writtenBy: "step 10" },
+  },
+} as const satisfies Record<Section, Registered>;
 
-export const foundations = { spec: foundationsSpec, look: foundationsLook } as const;
+const sections: Named<Registered> = Object.entries(registry);
 
-type Named<S> = readonly (readonly [name: string, spec: S])[];
+export const functionSpecs: Named<FunctionSpec> = sections.flatMap(([section, registered]) =>
+  registered.function !== undefined && registered.function.written !== undefined
+    ? [[section, registered.function.written] as const]
+    : [],
+);
 
-function written<S>(
-  pick: (entry: Registered) => unknown,
-  isOne: (value: unknown) => value is S,
-): Named<S> {
-  return Object.entries(specs).flatMap(([name, entry]: [string, Registered]) => {
-    const found = pick(entry);
-    return isOne(found) ? [[name, found] as const] : [];
-  });
-}
-
-function isObject<S>(value: unknown): value is S {
-  return typeof value === "object" && value !== null;
-}
-
-export const functionSpecs: Named<FunctionSpec> = [
-  ["foundations", foundations.spec],
-  ...written<FunctionSpec>((entry) => ("spec" in entry ? entry.spec : undefined), isObject),
-];
-
-export const lookSpecs: Named<LookSpec> = [
-  ["foundations", foundations.look],
-  ...written<LookSpec>((entry) => ("look" in entry ? entry.look : undefined), isObject),
-];
+export const lookSpecs: Named<LookSpec> = sections.flatMap(([section, registered]) =>
+  typeof registered.look === "object" && registered.look.written !== undefined
+    ? [[section, registered.look.written] as const]
+    : [],
+);

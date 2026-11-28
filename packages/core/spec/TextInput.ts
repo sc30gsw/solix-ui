@@ -3,7 +3,7 @@ import { unbuilt } from "#/spec/fixtures.ts";
 import type { FunctionSpec, Reference } from "#/spec/format.ts";
 
 const reference = {
-  props: ["description", "error"],
+  props: ["error"],
   parts: [],
   variables: [],
 } as const satisfies Reference;

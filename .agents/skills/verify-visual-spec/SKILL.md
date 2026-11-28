@@ -29,7 +29,7 @@ A variant renders like another, a hover or a pressed state draws nothing, the da
 | `packages/core/spec/computed.ts`: `sameColour`, `channelTolerance` | The colour comparison on a canvas over white and over black. |
 | `packages/core/spec/commands.ts`: `specCommands` | The press held down and the reduced-motion emulation, through Playwright. |
 | `packages/core/spec/fixtures.ts`: `fixture`, `unbuilt`, `tabs`, `looks` | The fixtures. |
-| `packages/core/spec/registry.ts`: `lookSpecs`, `specs`, `drawsNoLook` | Every look spec the runner reads. |
+| `packages/core/spec/registry.ts`: `lookSpecs`, `registry` | Every look spec the runner reads. |
 | `packages/core/tests/visual-spec.browser.test.ts` | It runs `lookSpecs` through `runLookSpecs`. |
 | `packages/core/tests/spec-registry.test.ts` | The registry rule, read from the build. |
 | `packages/core/src` | The styles, tokens and colour rules, built to `packages/core/dist/styles.css`. |

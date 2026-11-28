@@ -10,9 +10,9 @@ export type ComponentName = {
     : never;
 }[keyof LibraryExports];
 
-type GapSection = "foundations" | ComponentName;
+export type Section = "foundations" | ComponentName;
 
-type GapKey = `${GapSection} ${number}` | `step ${number}`;
+type GapKey = `${Section} ${number}` | `step ${number}`;
 
 export const parityGapItems = {
   "foundations 1": "mod writes the data attributes it names",

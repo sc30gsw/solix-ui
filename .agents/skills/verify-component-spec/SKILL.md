@@ -34,7 +34,7 @@ A component ships without a feature of the reference and nothing says so, or a f
 | --- | --- |
 | `packages/core/spec/format.ts`: `held`, `nowHolds`, `givenProps` | The types of a reference, an entry, a fixture and a check, and the rule. |
 | `packages/core/spec/gaps.ts`: `parityGapItems` | Each gap item an entry or the registry waits on, keyed `<section> <n>` for the n-th check to write first of a section of the parity audit, its section `foundations` or a component, or `step <n>` for a step of the audit's order. |
-| `packages/core/spec/registry.ts`: `specs`, `foundations`, `functionSpecs`, `lookSpecs`, `drawsNoLook` | One entry per exported component, its type exhaustive over the library's components. |
+| `packages/core/spec/registry.ts`: `registry`, `functionSpecs`, `lookSpecs` | One entry per exported component, its type exhaustive over the library's components. |
 | `packages/core/spec/shared.ts`: `sharedSuite`, `sharedPromises` | The shared promises and their checks. |
 | `packages/core/spec/fixtures.ts`: `fixture`, `unbuilt`, `tabs`, `modal` | The fixtures the specs share. |
 | `packages/core/spec/runner.ts`: `runFunctionSpecs` | It imports the built library and its stable-class module from `packages/core/dist`, links its stylesheet, mounts each fixture in a host that carries the library's colour-scheme attribute, inside a `SolixProvider` forced to that scheme or a disabled `fieldset` when the fixture asks, and gives a DOM check the root, the parts by their stable class, a reactive `update`, an axe scan with every WCAG 2 A and AA tag, and the user's clicks and keys. |

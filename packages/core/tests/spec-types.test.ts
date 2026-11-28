@@ -10,6 +10,8 @@ import type {
   LookStatus,
   Missing,
 } from "#/spec/format.ts";
+import type { Section } from "#/spec/gaps.ts";
+import type { Registered, registry, Slot } from "#/spec/registry.ts";
 
 type ButtonAbout = About<(typeof button)["reference"]>;
 type ButtonProp = keyof NonNullable<Fixture<"Button">["props"]>;
@@ -88,4 +90,25 @@ test("a look fixture's provider takes no colour-scheme prop, which only the entr
 
 test("a look spec is not a function spec", () => {
   expectTypeOf<LookSpec>().not.toExtend<FunctionSpec>();
+});
+
+test("a registry slot is written, or waits on the gap item that writes it, never both", () => {
+  expectTypeOf<{ written: FunctionSpec; completedBy: "step 8" }>().toExtend<Slot<FunctionSpec>>();
+  expectTypeOf<{ writtenBy: "step 1" }>().toExtend<Slot<FunctionSpec>>();
+  expectTypeOf<{ written: FunctionSpec; writtenBy: "step 1" }>().not.toExtend<Slot<FunctionSpec>>();
+  expectTypeOf<{ written: LookSpec }>().not.toExtend<Slot<FunctionSpec>>();
+});
+
+test("a section has its documents or the section whose spec covers it, never both", () => {
+  expectTypeOf<{ coveredBy: "Tabs" }>().toExtend<Registered>();
+  expectTypeOf<{
+    function: { writtenBy: "step 1" };
+    look: "draws none";
+    coveredBy: "Tabs";
+  }>().not.toExtend<Registered>();
+});
+
+test("the registry has a row for every section", () => {
+  expectTypeOf<typeof registry>().toExtend<Record<Section, Registered>>();
+  expectTypeOf<Omit<typeof registry, "foundations">>().not.toExtend<Record<Section, Registered>>();
 });
