@@ -13,7 +13,7 @@ Each entry states one stateless promise of the functional reference, which the l
 
 A tla-ts model specifies behaviour across a sequence of user actions, or a state that changes over time, so no entry checks it. Each such behaviour is an item of `behaviourGapItems` in `packages/core/spec/gaps.ts`, which says that it waits for a tla-ts model, or that `verify-formal-tabs` covers it, for the selection and roving focus of `Tabs`. `Rendered` gives an entry no user events.
 
-The function spec holds no computed value: every computed value is in the look spec, with the reference's literal value, so no function entry compares a value with a `--solix-*` token. `.agents/skills/verify-visual-spec` covers the look spec.
+A function entry may read a computed value, and compares it only with another computed value of the same fixture under other props, or with a test colour of `packages/core/spec/fixtures.ts`: no function entry compares a value with the reference's literal or with a `--solix-*` token. That is where the line with the look spec sits. Every value compared with the reference's literal is in the look spec, which `.agents/skills/verify-visual-spec` covers, the `lg` end of the size and radius scales among them.
 
 Each entry carries a `status`:
 
