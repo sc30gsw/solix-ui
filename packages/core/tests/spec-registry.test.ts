@@ -30,7 +30,7 @@ test("every parity-gap item is one that an entry or a slot of the registry waits
 });
 
 function uncovered(name: string, spec: FunctionSpec): string[] {
-  const { props, parts, variables } = spec.reference;
+  const { props, parts, variables, exports } = spec.reference;
   const named = new Set(
     spec.entries.flatMap(({ about }) =>
       about === "every part" ? parts.map((part) => `part ${part}`) : [about],
@@ -40,12 +40,13 @@ function uncovered(name: string, spec: FunctionSpec): string[] {
     ...props.map((prop) => `prop ${prop}`),
     ...parts.map((part) => `part ${part}`),
     ...variables.map((variable) => `variable ${variable}`),
+    ...exports.map((name) => `export ${name}`),
   ]
     .filter((listed) => !named.has(listed))
     .map((listed) => `${name}: no entry promises its ${listed}.`);
 }
 
-test("every prop, part and variable a written function spec lists has an entry that promises it", () => {
+test("every prop, part, variable and export a written function spec lists has an entry that promises it", () => {
   expect(functionSpecs.flatMap(([name, spec]) => uncovered(name, spec))).toEqual([]);
 });
 

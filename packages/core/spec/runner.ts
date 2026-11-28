@@ -256,12 +256,6 @@ export function mount(
       });
       flush();
     },
-    user: {
-      click: (element) => userEvent.click(element),
-      hover: (element) => userEvent.hover(element),
-      tab: () => userEvent.tab(),
-      keyboard: (text) => userEvent.keyboard(text),
-    },
   };
 }
 

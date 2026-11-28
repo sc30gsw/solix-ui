@@ -1,6 +1,6 @@
 import { SpecError } from "#/spec/format.ts";
 
-export const channelTolerance = 2;
+const channelTolerance = 2;
 const grounds = ["#ffffff", "#000000"] as const;
 
 function painted(colour: string, ground: string): readonly number[] {

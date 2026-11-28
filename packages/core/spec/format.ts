@@ -2,6 +2,7 @@ import type { ColorSchemeOptions } from "#/src/color-schemes.ts";
 import type * as Library from "#/src/index.ts";
 import type { ComponentName, GapItem } from "#/spec/gaps.ts";
 import { breakpoints } from "#/spec/look/reference.ts";
+import type { SharedPromise } from "#/spec/shared.ts";
 
 export type { ComponentName, GapItem } from "#/spec/gaps.ts";
 
@@ -68,14 +69,16 @@ export type Reference = {
   readonly props: readonly string[];
   readonly parts: readonly string[];
   readonly variables: readonly `--${string}`[];
+  readonly exports: readonly string[];
 };
 
 export type About<R extends Reference> =
   | `prop ${R["props"][number]}`
   | `part ${R["parts"][number]}`
   | `variable ${R["variables"][number]}`
-  | "every part"
-  | "behaviour";
+  | `export ${R["exports"][number]}`
+  | `shared ${SharedPromise}`
+  | "every part";
 
 export type Pinned = `${string}: ${string}`;
 
@@ -87,13 +90,6 @@ export type FunctionStatus = "holds" | Pending<Pinned | Missing>;
 
 export type LookStatus = "holds" | Pending<"differs" | Missing>;
 
-export type SpecUser = {
-  readonly click: (element: Element) => Promise<void>;
-  readonly hover: (element: Element) => Promise<void>;
-  readonly tab: () => Promise<void>;
-  readonly keyboard: (text: string) => Promise<void>;
-};
-
 export type Rendered = {
   readonly root: HTMLElement;
   readonly container: HTMLElement;
@@ -104,7 +100,6 @@ export type Rendered = {
   readonly classOf: (address: Address) => string;
   readonly update: (props: Props) => void;
   readonly axe: () => Promise<readonly string[]>;
-  readonly user: SpecUser;
 };
 
 export type FunctionEntry<R extends Reference = Reference> = {
@@ -183,16 +178,22 @@ export class LookDiffers extends Error {
 
 export const nowHolds = "now holds: mark it holds";
 
-const describedTypes = new Set(["string", "number", "boolean"]);
-
 export function givenProps(given: { readonly props?: Props; readonly unbuilt?: Props }): Props {
   return given.props ?? given.unbuilt ?? {};
 }
 
+function shownValue(value: unknown): string | undefined {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return typeof value === "object" ? JSON.stringify(value) : undefined;
+}
+
 function described(fixture: LookFixture): string {
-  const props = Object.entries(givenProps(fixture))
-    .filter(([, value]) => describedTypes.has(typeof value))
-    .map(([name, value]) => `${name}=${String(value)}`);
+  const props = Object.entries(givenProps(fixture)).flatMap(([name, value]) => {
+    const shown = shownValue(value);
+    return shown === undefined ? [] : [`${name}=${shown}`];
+  });
   const within = fixture.provider === undefined ? [] : ["in a provider"];
   return [fixture.component, ...props, ...within].join(" ");
 }

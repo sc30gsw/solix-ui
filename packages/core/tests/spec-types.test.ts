@@ -1,5 +1,5 @@
 import { expectTypeOf, test } from "vite-plus/test";
-import type { spec as button } from "#/spec/Button.ts";
+import type { buttonSpec } from "#/spec/Button.ts";
 import type {
   About,
   Fixture,
@@ -9,12 +9,16 @@ import type {
   LookSpec,
   LookStatus,
   Missing,
+  Rendered,
 } from "#/spec/format.ts";
-import type { Section } from "#/spec/gaps.ts";
+import type { behaviourGapItems, GapItem, Section } from "#/spec/gaps.ts";
 import type { Registered, registry, Slot } from "#/spec/registry.ts";
+import type { SharedPromise, SharedSuite } from "#/spec/shared.ts";
 
-type ButtonAbout = About<(typeof button)["reference"]>;
+type ButtonReference = (typeof buttonSpec)["reference"];
+type ButtonAbout = About<ButtonReference>;
 type ButtonProp = keyof NonNullable<Fixture<"Button">["props"]>;
+type NoVariables = { props: []; parts: []; variables: []; exports: [] };
 
 test("a status that holds carries no gap item, and a pending one names a gap item that exists", () => {
   expectTypeOf<"holds">().toExtend<FunctionStatus>();
@@ -49,11 +53,32 @@ test("a missing pin names one of an export, a part or an attribute", () => {
   }>().not.toExtend<Missing>();
 });
 
-test("an entry is about a prop, part or variable its reference lists", () => {
+test("an entry is about a prop, part, variable or export its reference lists, or a shared promise", () => {
   expectTypeOf<"prop variant">().toExtend<ButtonAbout>();
+  expectTypeOf<"export Button.Group">().toExtend<ButtonAbout>();
+  expectTypeOf<"shared mod">().toExtend<ButtonAbout>();
   expectTypeOf<"prop varient">().not.toExtend<ButtonAbout>();
   expectTypeOf<"part inenr">().not.toExtend<ButtonAbout>();
   expectTypeOf<"variable --button-bgg">().not.toExtend<ButtonAbout>();
+  expectTypeOf<"export Button.Groop">().not.toExtend<ButtonAbout>();
+  expectTypeOf<"shared mood">().not.toExtend<ButtonAbout>();
+  expectTypeOf<"behaviour">().not.toExtend<ButtonAbout>();
+});
+
+test("an entry cannot act as a user, so a sequence of actions is a model's to specify", () => {
+  expectTypeOf<Rendered>().not.toHaveProperty("user");
+});
+
+test("a shared suite states the status of every shared promise its reference takes", () => {
+  type Statuses = SharedSuite<ButtonReference>["statuses"];
+  expectTypeOf<Record<SharedPromise, "holds">>().toExtend<Statuses>();
+  expectTypeOf<Omit<Record<SharedPromise, "holds">, "mod">>().not.toExtend<Statuses>();
+  expectTypeOf<"vars">().not.toExtend<keyof SharedSuite<NoVariables>["statuses"]>();
+  expectTypeOf<"static varsResolver">().not.toExtend<keyof SharedSuite<NoVariables>["statuses"]>();
+});
+
+test("a behaviour gap item is never a parity gap item an entry can wait on", () => {
+  expectTypeOf<Extract<keyof typeof behaviourGapItems, GapItem>>().toBeNever();
 });
 
 test("a fixture's props are the built component's own, and a prop the build does not take goes in unbuilt", () => {

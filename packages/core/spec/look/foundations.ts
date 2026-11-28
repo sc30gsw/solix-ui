@@ -9,7 +9,7 @@ const disabledFirstTab = tabs({ root: { defaultValue: "b" }, firstTab: { disable
 
 const focused = { state: "focus-visible" } as const;
 
-export const look: LookSpec = [
+export const foundationsLook: LookSpec = [
   looks(field, "outline-style", "solid", "foundations 16", focused),
   looks(field, "outline-width", statuses.focusRingWidth, "foundations 16", focused),
   looks(field, "outline-color", visualReference.light.accent, "foundations 16", focused),

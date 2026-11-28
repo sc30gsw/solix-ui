@@ -1,4 +1,5 @@
 import { expect } from "vite-plus/test";
+import { testColours } from "#/spec/fixtures.ts";
 import type {
   ComponentName,
   Fixture,
@@ -9,7 +10,7 @@ import type {
   Reference,
 } from "#/spec/format.ts";
 
-export const sharedPromises = [
+const sharedPromises = [
   "parts",
   "mod",
   "variant",
@@ -30,17 +31,37 @@ export const sharedPromises = [
 
 export type SharedPromise = (typeof sharedPromises)[number];
 
+type SharedFor<R extends Reference> = R["variables"] extends readonly []
+  ? Exclude<SharedPromise, "vars" | "static varsResolver">
+  : SharedPromise;
+
 export type SharedSuite<R extends Reference> = {
   readonly component: ComponentName;
   readonly reference: R;
   readonly fixture: (props: Props) => Fixture;
-  readonly until: { readonly [Promise in SharedPromise]?: GapItem };
+  readonly statuses: { readonly [Promise in SharedFor<R>]: "holds" | GapItem };
 };
 
 type Shared = Pick<FunctionEntry, "says" | "fixture" | "assert"> & { readonly pin: Pinned };
 
-const salmon = "rgb(250, 128, 114)";
-const olive = "rgb(128, 128, 0)";
+const { salmon, olive } = testColours;
+
+function classNames(value: unknown): string[] {
+  if (typeof value === "string") return value.split(" ").filter((name) => name !== "");
+  if (Array.isArray(value)) return value.flatMap(classNames);
+  if (typeof value !== "object" || value === null) return [];
+  return Object.entries(value).flatMap(([name, given]) => (given === true ? [name] : []));
+}
+
+function linkGiven(props: Props): HTMLAnchorElement {
+  const link = document.createElement("a");
+  for (const [name, value] of Object.entries(props)) {
+    if (typeof value === "string" && name !== "class") link.setAttribute(name, value);
+  }
+  link.classList.add(...classNames(props.class));
+  link.href = "#test-link";
+  return link;
+}
 
 function sharedChecks<R extends Reference>({
   component,
@@ -143,12 +164,13 @@ function sharedChecks<R extends Reference>({
       pin: "styles.root: expected",
     },
     "style as a list": {
-      says: "style given a list of objects merges them in order on the root",
-      fixture: fixture({ style: [{ color: salmon }, { background: olive }] }),
+      says: "style given a list of objects merges them in order on the root, a later object winning",
+      fixture: fixture({ style: [{ color: salmon, background: salmon }, { background: olive }] }),
       assert: ({ root }) => {
-        expect(getComputedStyle(root).backgroundColor, "style list").toBe(olive);
+        expect(getComputedStyle(root).color, "style list's first object").toBe(salmon);
+        expect(getComputedStyle(root).backgroundColor, "style list's later object").toBe(olive);
       },
-      pin: "style list: expected",
+      pin: "style list's first object: expected",
     },
     "style as a function": {
       says: "style given a function receives the theme, and its object reaches the root",
@@ -161,12 +183,13 @@ function sharedChecks<R extends Reference>({
       pin: "style function: expected",
     },
     renderRoot: {
-      says: "renderRoot renders the root it returns, with the root's classes",
-      fixture: fixture({
-        renderRoot: () => Object.assign(document.createElement("a"), { href: "#test-link" }),
-      }),
-      assert: ({ root }) => {
+      says: "renderRoot is given the root's props, and the root it returns renders with the root's classes",
+      fixture: fixture({ renderRoot: linkGiven }),
+      assert: ({ root, classOf }) => {
         expect(root.localName, "renderRoot").toBe("a");
+        expect(root.classList.contains(classOf({ part: "root" })), "renderRoot's root class").toBe(
+          true,
+        );
       },
       pin: "renderRoot: expected",
     },
@@ -235,19 +258,20 @@ function sharedChecks<R extends Reference>({
   };
 }
 
-export function sharedSuite<R extends Reference>(suite: SharedSuite<R>): FunctionEntry<R>[] {
+export function sharedSuite<const R extends Reference>(suite: SharedSuite<R>): FunctionEntry<R>[] {
   const checks = sharedChecks(suite);
+  const statuses: Partial<Record<SharedPromise, "holds" | GapItem>> = suite.statuses;
   return sharedPromises.flatMap((key): FunctionEntry<R>[] => {
     const shared = checks[key];
-    if (shared === undefined) return [];
-    const until = suite.until[key];
+    const status = statuses[key];
+    if (shared === undefined || status === undefined) return [];
     return [
       {
         says: shared.says,
-        about: key === "parts" ? "every part" : "behaviour",
+        about: key === "parts" ? "every part" : `shared ${key}`,
         fixture: shared.fixture,
         assert: shared.assert,
-        status: until === undefined ? "holds" : { until, fails: shared.pin },
+        status: status === "holds" ? "holds" : { until: status, fails: shared.pin },
       },
     ];
   });

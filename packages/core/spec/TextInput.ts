@@ -6,9 +6,10 @@ const reference = {
   props: ["error"],
   parts: [],
   variables: [],
+  exports: [],
 } as const satisfies Reference;
 
-export const spec: FunctionSpec<typeof reference> = {
+export const textInputSpec: FunctionSpec<typeof reference> = {
   reference,
   entries: [
     {

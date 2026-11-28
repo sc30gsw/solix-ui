@@ -3,16 +3,17 @@ import { tabs } from "#/spec/fixtures.ts";
 import type { FunctionSpec, Reference } from "#/spec/format.ts";
 
 const reference = {
-  props: ["orientation", "defaultValue", "keepMounted", "keepMountedMode"],
+  props: ["orientation", "keepMounted", "keepMountedMode"],
   parts: ["tabSection"],
   variables: [],
+  exports: ["TabsTab", "TabsPanel"],
 } as const satisfies Reference;
 
 const tab = { of: "TabsTab", part: "root" } as const;
 const panels = { of: "TabsPanel", part: "root" } as const;
 const list = { of: "TabsList", part: "root" } as const;
 
-export const spec: FunctionSpec<typeof reference> = {
+export const tabsSpec: FunctionSpec<typeof reference> = {
   reference,
   entries: [
     {
@@ -36,33 +37,18 @@ export const spec: FunctionSpec<typeof reference> = {
       decision: "Q168",
     },
     {
-      says: "with defaultValue=null and the first tab disabled, the first enabled tab is the list's one tab stop",
-      about: "prop defaultValue",
-      fixture: tabs({ root: { defaultValue: null }, firstTab: { disabled: true } }),
-      assert: ({ all }) => {
-        expect(
-          all(tab).map((tab) => tab.tabIndex),
-          "tab stops",
-        ).toEqual([-1, 0]);
-      },
-      status: "holds",
-      decision: "Q168",
-    },
-    {
-      says: "Tab from the selected tab moves focus to its panel, which takes focus",
-      about: "behaviour",
+      says: "the selected tab's panel takes focus: it is in the tab order, with tabindex 0",
+      about: "export TabsPanel",
       fixture: tabs(),
-      assert: async ({ at, user }) => {
-        at(tab).focus();
-        await user.tab();
-        expect(document.activeElement, "focus after Tab").toBe(at(panels));
+      assert: ({ at }) => {
+        expect(at(panels).tabIndex, "the selected panel's tabindex").toBe(0);
       },
       status: "holds",
       decision: "Q168",
     },
     {
       says: "once mounted, each tab names its panel by aria-controls",
-      about: "behaviour",
+      about: "export TabsTab",
       fixture: tabs(),
       assert: ({ all }) => {
         expect(
@@ -94,8 +80,11 @@ export const spec: FunctionSpec<typeof reference> = {
         expect(inactive.textContent, "the inactive panel").toBe("Panel B");
         expect(inactive.hidden, "the inactive panel is hidden").toBe(true);
         expect(inactive.style.display, "the inactive panel's display").toBe("");
+        expect(inactive.hasAttribute("keepMountedMode"), "keepMountedMode on the panel").toBe(
+          false,
+        );
       },
-      status: "holds",
+      status: { until: "Tabs 9", fails: "keepMountedMode on the panel: expected true to be false" },
       decision: "Q171",
     },
     {

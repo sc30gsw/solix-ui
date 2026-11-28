@@ -54,7 +54,6 @@ export const parityGapItems = {
   "Button 23": "the look of each size",
   "Tabs 9": "keepMountedMode",
   "Tabs 11": "the tabSection part with data-position",
-  "Modal 2": "closeOnEscape and closeOnClickOutside",
   "Modal 8": "zIndex and the Modal's variables",
   "TextInput 2": "description and error, shown together",
   "SolixProvider 8":
@@ -70,3 +69,39 @@ export const parityGapItems = {
 } as const satisfies Record<GapKey, string>;
 
 export type GapItem = keyof typeof parityGapItems;
+
+type BehaviourGap = {
+  readonly says: string;
+  readonly specifiedBy: "a tla-ts model, not yet written" | "verify-formal-tabs";
+};
+
+export const behaviourGapItems = {
+  "Button 24": {
+    says: "a disabled Button does not call onClick",
+    specifiedBy: "a tla-ts model, not yet written",
+  },
+  "Button 25": {
+    says: "a Button given data-disabled keeps taking focus",
+    specifiedBy: "a tla-ts model, not yet written",
+  },
+  "Button 26": {
+    says: "a loading Button keeps focus and does not call onClick",
+    specifiedBy: "a tla-ts model, not yet written",
+  },
+  "Button 27": {
+    says: "a consumer's onFocus and onBlur are called once per focus and blur",
+    specifiedBy: "a tla-ts model, not yet written",
+  },
+  "Modal 2": {
+    says: "closeOnEscape and closeOnClickOutside: closeOnEscape={false} keeps the Modal open on Escape",
+    specifiedBy: "a tla-ts model, not yet written",
+  },
+  "Tabs 12": {
+    says: "Tab from the selected tab moves focus to its panel",
+    specifiedBy: "a tla-ts model, not yet written",
+  },
+  "Tabs 13": {
+    says: "with defaultValue=null and the first tab disabled, the first enabled tab is the list's one tab stop",
+    specifiedBy: "verify-formal-tabs",
+  },
+} as const satisfies Record<GapKey, BehaviourGap>;

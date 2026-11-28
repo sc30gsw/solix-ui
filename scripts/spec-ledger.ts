@@ -1,4 +1,5 @@
 import { describeLook, type FunctionStatus, type LookStatus } from "#/packages/core/spec/format.ts";
+import { behaviourGapItems } from "#/packages/core/spec/gaps.ts";
 import { functionSpecs, lookSpecs } from "#/packages/core/spec/registry.ts";
 
 function statusOf(status: FunctionStatus | LookStatus): string {
@@ -14,6 +15,12 @@ const ledger = [
   ...lookSpecs.flatMap(([section, spec]) =>
     spec.map((entry) => ["look", section, describeLook(entry), statusOf(entry.status)]),
   ),
+  ...Object.entries(behaviourGapItems).map(([item, gap]) => [
+    "behaviour",
+    item,
+    gap.says,
+    `specified by ${gap.specifiedBy}`,
+  ]),
 ];
 
 process.stdout.write(ledger.map((line) => `${line.join("\t")}\n`).join(""));

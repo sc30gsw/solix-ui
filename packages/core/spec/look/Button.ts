@@ -1,15 +1,5 @@
-import { fixture, looks, unbuilt } from "#/spec/fixtures.ts";
-import type {
-  GapItem,
-  LookEntry,
-  LookFixture,
-  LookProperty,
-  LookSpec,
-  Props,
-  PropsOf,
-  Scheme,
-  State,
-} from "#/spec/format.ts";
+import { button, group, looks, testColours, unbuiltButton } from "#/spec/fixtures.ts";
+import type { GapItem, LookEntry, LookProperty, LookSpec, Scheme, State } from "#/spec/format.ts";
 import {
   functionalReference,
   mix,
@@ -101,27 +91,29 @@ function rowsOf(tokens: Tokens): Record<Variant, Row> {
   };
 }
 
-const waiting: ReadonlyMap<string, GapItem> = new Map([
-  ["* pressed transform", "Button 22"],
-  ["* rest opacity", "Button 22"],
-  ["outline rest color", "Button 22"],
-  ["outline rest border-top-color", "Button 22"],
-  ["outline hover background-color", "Button 22"],
-  ["outline pressed background-color", "Button 22"],
-  ["subtle rest color", "Button 22"],
-  ["transparent rest color", "Button 22"],
-  ["transparent hover opacity", "Button 22"],
-  ["default rest background-color", "Button 22"],
-  ["default hover background-color", "Button 22"],
-  ["default pressed background-color", "Button 22"],
-]);
+type Cell = { readonly variant: Variant; readonly state: State; readonly property: LookProperty };
 
-function button(props: PropsOf<"Button"> = {}): LookFixture {
-  return fixture("Button", props, "Save");
-}
+const cellKeys = ["variant", "state", "property"] as const;
 
-function unbuiltButton(props: Props): LookFixture {
-  return unbuilt("Button", props, "Save");
+const waiting: readonly (readonly [Partial<Cell>, GapItem])[] = [
+  [{ state: "pressed", property: "transform" }, "Button 22"],
+  [{ state: "rest", property: "opacity" }, "Button 22"],
+  [{ variant: "outline", state: "rest", property: "color" }, "Button 22"],
+  [{ variant: "outline", state: "rest", property: "border-top-color" }, "Button 22"],
+  [{ variant: "outline", state: "hover", property: "background-color" }, "Button 22"],
+  [{ variant: "outline", state: "pressed", property: "background-color" }, "Button 22"],
+  [{ variant: "subtle", state: "rest", property: "color" }, "Button 22"],
+  [{ variant: "transparent", state: "rest", property: "color" }, "Button 22"],
+  [{ variant: "transparent", state: "hover", property: "opacity" }, "Button 22"],
+  [{ variant: "default", state: "rest", property: "background-color" }, "Button 22"],
+  [{ variant: "default", state: "hover", property: "background-color" }, "Button 22"],
+  [{ variant: "default", state: "pressed", property: "background-color" }, "Button 22"],
+];
+
+function waitsOn(cell: Cell): GapItem | undefined {
+  return waiting.find(([match]) =>
+    cellKeys.every((key) => match[key] === undefined || match[key] === cell[key]),
+  )?.[1];
 }
 
 function variantEntry(
@@ -144,13 +136,17 @@ function variantEntry(
       status: { until: "Button 3", fails: requires },
     };
   }
-  const until =
-    waiting.get(`${variant} ${state} ${property}`) ?? waiting.get(`* ${state} ${property}`);
   return {
-    ...looks(button(disabled ? { variant, disabled } : { variant }), property, value, until, {
-      state,
-      scheme,
-    }),
+    ...looks(
+      button(disabled ? { variant, disabled } : { variant }),
+      property,
+      value,
+      waitsOn({ variant, state, property }),
+      {
+        state,
+        scheme,
+      },
+    ),
     requires,
   };
 }
@@ -237,7 +233,7 @@ const sizeEntries = [
   looks(button(), "font-weight", "500"),
 ];
 
-const salmon = "rgb(250, 128, 114)";
+const { salmon } = testColours;
 const givenColour = "oklch(0.45 0.15 260)";
 const inner = { part: "inner" } as const;
 
@@ -259,7 +255,7 @@ const partEntries: LookEntry[] = [
     status: { until: "Button 6", fails: inner },
   },
   {
-    fixture: fixture("Button.Group", { "aria-label": "Actions" }, [button(), button()]),
+    fixture: group(),
     at: { of: "Button", part: "root" },
     property: "border-end-end-radius",
     value: "0px",
@@ -275,7 +271,7 @@ const motionEntries = [
   }),
 ];
 
-export const look: LookSpec = [
+export const buttonLook: LookSpec = [
   ...variants.flatMap((variant) => schemes.flatMap((scheme) => gridOf(variant, scheme))),
   ...statusEntries,
   ...sizeEntries,

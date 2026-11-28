@@ -6,13 +6,14 @@ const reference = {
   props: ["color", "radius", "theme.primaryShade", "theme.defaultRadius"],
   parts: [],
   variables: [],
+  exports: ["Transition"],
 } as const satisfies Reference;
 
 function radiusOf(element: HTMLElement): string {
   return getComputedStyle(element).borderTopLeftRadius;
 }
 
-export const spec: FunctionSpec<typeof reference> = {
+export const foundationsSpec: FunctionSpec<typeof reference> = {
   reference,
   entries: [
     {
@@ -71,7 +72,7 @@ export const spec: FunctionSpec<typeof reference> = {
     },
     {
       says: "the library exports Transition",
-      about: "behaviour",
+      about: "export Transition",
       fixture: fixture("Box", {}, "Content"),
       assert: ({ exports }) => {
         expect(typeof exports.Transition, "Transition").toBe("function");

@@ -26,7 +26,7 @@ A variant renders like another, a hover or a pressed state draws nothing, the da
 | `packages/core/spec/look` | The look entries, each exported as `look`, and `reference.ts`, the reference's literal values. |
 | `packages/core/spec/format.ts`: `describeLook`, `lookProperties`, `held` | A look entry is an entry whose check is a computed style. |
 | `packages/core/spec/runner.ts`: `runLookSpecs` | It mounts each fixture in a host with the entry's scheme, under its media, checks the attributes the entry requires, enters the state with the user's pointer, a held press or the keyboard's Tab, up to twenty stops, waits for every CSS transition to finish, and compares the computed value with a probe's. It restores the viewport it read at start. |
-| `packages/core/spec/computed.ts`: `sameColour`, `channelTolerance` | The colour comparison on a canvas over white and over black. |
+| `packages/core/spec/computed.ts`: `sameColour` | The colour comparison on a canvas over white and over black. |
 | `packages/core/spec/commands.ts`: `specCommands` | The press held down and the reduced-motion emulation, through Playwright. |
 | `packages/core/spec/fixtures.ts`: `fixture`, `unbuilt`, `tabs`, `looks` | The fixtures. |
 | `packages/core/spec/registry.ts`: `lookSpecs`, `registry` | Every look spec the runner reads. |

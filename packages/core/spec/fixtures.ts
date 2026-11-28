@@ -30,6 +30,28 @@ export function unbuilt<C extends ComponentPath>(
   return { component, unbuilt: props, ...(children === undefined ? {} : { children }) };
 }
 
+export const testColours = { salmon: "rgb(250, 128, 114)", olive: "rgb(128, 128, 0)" } as const;
+
+export const buttonLabel = "Save";
+
+export function button(
+  props: PropsOf<"Button"> = {},
+  children: Children = buttonLabel,
+): Node<"Button"> {
+  return fixture("Button", props, children);
+}
+
+export function unbuiltButton(props: Props): Node<"Button"> {
+  return unbuilt("Button", props, buttonLabel);
+}
+
+export function group(props: Props = {}): Node<"Button.Group"> {
+  return fixture("Button.Group", { "aria-label": "Actions", ...props }, [
+    button({}, "One"),
+    button({}, "Two"),
+  ]);
+}
+
 export type TabsFixture = {
   readonly root?: PropsOf<"Tabs">;
   readonly firstTab?: Partial<PropsOf<"TabsTab">>;

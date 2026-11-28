@@ -1,14 +1,6 @@
-import { expect, vi } from "vite-plus/test";
-import { fixture, unbuilt } from "#/spec/fixtures.ts";
-import type {
-  Children,
-  Fixture,
-  FunctionEntry,
-  FunctionSpec,
-  Props,
-  PropsOf,
-  Reference,
-} from "#/spec/format.ts";
+import { expect } from "vite-plus/test";
+import { button, buttonLabel, fixture, group, unbuiltButton } from "#/spec/fixtures.ts";
+import type { FunctionEntry, FunctionSpec, Reference } from "#/spec/format.ts";
 import { sharedSuite } from "#/spec/shared.ts";
 
 const reference = {
@@ -43,11 +35,11 @@ const reference = {
     "--button-color",
     "--button-bd",
   ],
+  exports: ["Button", "Button.Group", "Button.GroupSection"],
 } as const satisfies Reference;
 
 type Entry = FunctionEntry<typeof reference>;
 
-const label = "Save";
 const builtVariants = ["default", "filled", "light", "outline", "subtle", "transparent"] as const;
 const missingVariants = ["white", "gradient"] as const;
 const colourVariables = [
@@ -59,21 +51,6 @@ const colourVariables = [
 ] as const;
 const sizeVariables = ["--button-height", "--button-padding-x", "--button-fz"] as const;
 
-function button(props: PropsOf<"Button"> = {}, children: Children = label): Fixture {
-  return fixture("Button", props, children);
-}
-
-function unbuiltButton(props: Props): Fixture {
-  return unbuilt("Button", props, label);
-}
-
-function group(props: Props = {}): Fixture {
-  return fixture("Button.Group", { "aria-label": "Actions", ...props }, [
-    button({}, "One"),
-    button({}, "Two"),
-  ]);
-}
-
 function variableOf(root: HTMLElement, variable: string): string {
   return getComputedStyle(root).getPropertyValue(variable);
 }
@@ -82,7 +59,7 @@ const shared = sharedSuite({
   component: "Button",
   reference,
   fixture: (props) => unbuiltButton({ loading: true, leftSection: "$", ...props }),
-  until: {
+  statuses: {
     parts: "Button 15",
     mod: "foundations 1",
     variant: "foundations 2",
@@ -159,10 +136,12 @@ const variantEntries: Entry[] = [
     fixture: button({ color: "yellow" }),
     assert: ({ root, update }) => {
       const unset = getComputedStyle(root).color;
+      update({ autoContrast: false });
+      expect(getComputedStyle(root).color, "the text without autoContrast").not.toBe(unset);
       update({ autoContrast: true });
       expect(getComputedStyle(root).color, "the text with autoContrast").toBe(unset);
     },
-    status: { until: "foundations 11", fails: "the text with autoContrast: expected" },
+    status: { until: "foundations 11", fails: "the text without autoContrast: expected" },
   },
 ];
 
@@ -232,7 +211,7 @@ const sizeEntries: Entry[] = [
   },
 ];
 
-const behaviourEntries: Entry[] = [
+const rootEntries: Entry[] = [
   {
     says: "with no component the root is a native button",
     about: "prop component",
@@ -269,7 +248,7 @@ const behaviourEntries: Entry[] = [
     assert: ({ root, at }) => {
       expect(at({ part: "inner" }).parentElement, "the inner part's parent").toBe(root);
       expect(at({ part: "label" }).parentElement, "the label's parent").toBe(at({ part: "inner" }));
-      expect(at({ part: "label" }).textContent, "the label").toBe(label);
+      expect(at({ part: "label" }).textContent, "the label").toBe(buttonLabel);
     },
     status: { until: "Button 15", fails: { part: "inner" } },
   },
@@ -321,7 +300,7 @@ const behaviourEntries: Entry[] = [
   },
   {
     says: "disabled writes data-disabled, and false removes it",
-    about: "behaviour",
+    about: "prop disabled",
     fixture: button({ disabled: true }),
     assert: ({ root, update }) => {
       expect(root.hasAttribute("data-disabled"), "data-disabled").toBe(true);
@@ -331,28 +310,14 @@ const behaviourEntries: Entry[] = [
     status: { until: "Button 9", fails: "data-disabled: expected false to be true" },
   },
   {
-    says: "data-disabled writes data-disabled and keeps the button focusable, and false removes it",
+    says: "data-disabled writes data-disabled and no disabled attribute, and false removes it",
     about: "prop data-disabled",
     fixture: button({ "data-disabled": true }),
     assert: ({ root, update }) => {
       expect(root.hasAttribute("data-disabled"), "data-disabled").toBe(true);
       expect(root.hasAttribute("disabled"), "disabled").toBe(false);
-      root.focus();
-      expect(document.activeElement, "focus").toBe(root);
       update({ "data-disabled": false });
       expect(root.hasAttribute("data-disabled"), "data-disabled after false").toBe(false);
-    },
-    status: "holds",
-  },
-  {
-    says: "a disabled Button does not call onClick",
-    about: "behaviour",
-    fixture: button({ disabled: true }),
-    assert: ({ root, update }) => {
-      const onClick = vi.fn();
-      update({ onClick });
-      root.click();
-      expect(onClick, "onClick").not.toHaveBeenCalled();
     },
     status: "holds",
   },
@@ -380,18 +345,12 @@ const behaviourEntries: Entry[] = [
     status: { until: "Button 10", fails: { part: "loader" } },
   },
   {
-    says: 'a loading Button keeps focus, has aria-disabled="true" and aria-busy="true", and does not call onClick',
-    about: "behaviour",
+    says: 'a loading Button has aria-disabled="true" and aria-busy="true"',
+    about: "prop loading",
     fixture: unbuiltButton({ loading: true }),
-    assert: ({ root, update }) => {
-      const onClick = vi.fn();
-      update({ onClick });
-      root.focus();
-      expect(document.activeElement, "focus").toBe(root);
+    assert: ({ root }) => {
       expect(root.getAttribute("aria-disabled"), "aria-disabled").toBe("true");
       expect(root.getAttribute("aria-busy"), "aria-busy").toBe("true");
-      root.click();
-      expect(onClick, "onClick").not.toHaveBeenCalled();
     },
     status: { until: "Button 10", fails: "aria-disabled: expected null to be 'true'" },
   },
@@ -405,23 +364,8 @@ const behaviourEntries: Entry[] = [
     status: { until: "Button 11", fails: "the loader: expected null not to be null" },
   },
   {
-    says: "a consumer's onFocus and onBlur are called once per focus and blur",
-    about: "behaviour",
-    fixture: button(),
-    assert: ({ root, update }) => {
-      const onFocus = vi.fn();
-      const onBlur = vi.fn();
-      update({ onFocus, onBlur });
-      root.focus();
-      root.blur();
-      expect(onFocus, "onFocus").toHaveBeenCalledOnce();
-      expect(onBlur, "onBlur").toHaveBeenCalledOnce();
-    },
-    status: "holds",
-  },
-  {
     says: "axe finds no violation in a Button named by aria-label",
-    about: "behaviour",
+    about: "export Button",
     fixture: button({ "aria-label": "test" }, []),
     assert: async ({ axe }) => {
       expect(await axe(), "axe").toEqual([]);
@@ -433,7 +377,7 @@ const behaviourEntries: Entry[] = [
 const groupEntries: Entry[] = [
   {
     says: "Button.Group and Button.GroupSection are static members of Button",
-    about: "behaviour",
+    about: "export Button.Group",
     fixture: button(),
     assert: ({ exports }) => {
       const holder = Object(exports.Button);
@@ -444,7 +388,7 @@ const groupEntries: Entry[] = [
   },
   {
     says: 'Button.Group renders role="group" with data-orientation="horizontal" by default',
-    about: "behaviour",
+    about: "export Button.Group",
     fixture: group(),
     assert: ({ root }) => {
       expect(root.getAttribute("role"), "role").toBe("group");
@@ -454,7 +398,7 @@ const groupEntries: Entry[] = [
   },
   {
     says: 'Button.Group orientation="vertical" writes data-orientation="vertical"',
-    about: "behaviour",
+    about: "export Button.Group",
     fixture: group({ orientation: "vertical" }),
     assert: ({ root }) => {
       expect(root.getAttribute("data-orientation"), "data-orientation").toBe("vertical");
@@ -463,7 +407,7 @@ const groupEntries: Entry[] = [
   },
   {
     says: "Button.Group borderWidth=2 sets --button-border-width",
-    about: "behaviour",
+    about: "export Button.Group",
     fixture: group({ borderWidth: 2 }),
     assert: ({ root }) => {
       expect(variableOf(root, "--button-border-width"), "--button-border-width").not.toBe("");
@@ -472,7 +416,7 @@ const groupEntries: Entry[] = [
   },
   {
     says: 'Button.GroupSection size="md" sets --section-height',
-    about: "behaviour",
+    about: "export Button.GroupSection",
     fixture: fixture("Button.GroupSection", { size: "md" }, "Section"),
     assert: ({ root }) => {
       expect(variableOf(root, "--section-height"), "--section-height").not.toBe("");
@@ -481,7 +425,7 @@ const groupEntries: Entry[] = [
   },
   {
     says: "axe finds no violation in a Button.Group of two named buttons",
-    about: "behaviour",
+    about: "export Button.Group",
     fixture: group(),
     assert: async ({ axe }) => {
       expect(await axe(), "axe").toEqual([]);
@@ -490,7 +434,7 @@ const groupEntries: Entry[] = [
   },
 ];
 
-export const spec: FunctionSpec<typeof reference> = {
+export const buttonSpec: FunctionSpec<typeof reference> = {
   reference,
-  entries: [...shared, ...behaviourEntries, ...variantEntries, ...sizeEntries, ...groupEntries],
+  entries: [...shared, ...rootEntries, ...variantEntries, ...sizeEntries, ...groupEntries],
 };

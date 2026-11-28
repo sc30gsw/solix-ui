@@ -6,9 +6,10 @@ const reference = {
   props: ["colorSchemeManager", "defaultColorScheme"],
   parts: [],
   variables: [],
+  exports: [],
 } as const satisfies Reference;
 
-export const spec: FunctionSpec<typeof reference> = {
+export const solixProviderSpec: FunctionSpec<typeof reference> = {
   reference,
   entries: [
     {

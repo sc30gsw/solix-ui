@@ -1,13 +1,13 @@
 import type { FunctionSpec, GapItem, LookSpec, OneOf } from "#/spec/format.ts";
 import type { Section } from "#/spec/gaps.ts";
-import { spec as buttonSpec } from "#/spec/Button.ts";
-import { spec as foundationsSpec } from "#/spec/foundations.ts";
-import { look as buttonLook } from "#/spec/look/Button.ts";
-import { look as foundationsLook } from "#/spec/look/foundations.ts";
-import { spec as modalSpec } from "#/spec/Modal.ts";
-import { spec as solixProviderSpec } from "#/spec/SolixProvider.ts";
-import { spec as tabsSpec } from "#/spec/Tabs.ts";
-import { spec as textInputSpec } from "#/spec/TextInput.ts";
+import { buttonSpec } from "#/spec/Button.ts";
+import { foundationsSpec } from "#/spec/foundations.ts";
+import { buttonLook } from "#/spec/look/Button.ts";
+import { foundationsLook } from "#/spec/look/foundations.ts";
+import { modalSpec } from "#/spec/Modal.ts";
+import { solixProviderSpec } from "#/spec/SolixProvider.ts";
+import { tabsSpec } from "#/spec/Tabs.ts";
+import { textInputSpec } from "#/spec/TextInput.ts";
 
 export type Slot<D> = OneOf<
   { readonly written: D; readonly completedBy?: GapItem } | { readonly writtenBy: GapItem }

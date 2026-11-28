@@ -36,7 +36,7 @@ export const visualReference: Record<Scheme, Tokens> = {
     foreground: snow,
     neutral: "oklch(27.4% 0.006 286.033)",
     neutralForeground: snow,
-    surface: "oklch(0.2103 0.0059 285.89)",
+    surface: eclipse,
     soft: 12,
     softHover: 16,
     softForeground: [80, 30],
