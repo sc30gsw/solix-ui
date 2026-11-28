@@ -14,7 +14,7 @@ beforeEach(() => {
   const raisedOutsideTests = outsideTests.finishDescribed();
   onTestFinished(() => {
     const raised = gate.finishDescribed();
-    outsideTests.rotate();
+    outsideTests.reopen();
     expect.soft(raised, inTestMessage).toEqual([]);
   });
   expect(

@@ -39,9 +39,10 @@ type Reply = { ok: boolean; said: string };
 async function replyFrom(url: string): Promise<Reply | undefined> {
   try {
     const response = await fetch(url);
+    const body = await response.text();
     return {
       ok: response.ok,
-      said: response.ok ? "" : `${response.status}: ${(await response.text()).slice(0, bodyShown)}`,
+      said: response.ok ? "" : `${response.status}: ${body.slice(0, bodyShown)}`,
     };
   } catch {
     return undefined;

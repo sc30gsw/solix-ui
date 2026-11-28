@@ -775,7 +775,7 @@ test("GridCol: in a grid with container queries and no breakpoints, keys its val
 
 const mdFlexBasisRule = ".sx-col-flex-basis-c0-2{--col-flex-basis:var(--sx-col-flex-basis-c0-2)}";
 
-test("a container grid of 12 columns writes each rule its columns share once, in the first column that places it, and a later column writes only what no earlier one wrote", () => {
+test("in renderToString, each of the 12 columns of a container grid writes the rules it places, the ones it shares with the others among them", () => {
   const span = { base: 12, md: 6 };
   const html = renderToString(() =>
     createComponent(library.Grid, {
@@ -790,11 +790,11 @@ test("a container grid of 12 columns writes each rule its columns share once, in
   );
   const rules = rulesOf(html);
 
-  expect(rules).toHaveLength(2);
-  expect(rules.join("").split(mdFlexBasisRule)).toHaveLength(2);
-  expect(rules[0]).toContain(mdFlexBasisRule);
-  expect(rules[1]).not.toContain(mdFlexBasisRule);
-  expect(rules[1]).toContain(".sx-col-offset-c0-2{--col-offset:var(--sx-col-offset-c0-2)}");
+  const offsetRule = ".sx-col-offset-c0-2{--col-offset:var(--sx-col-offset-c0-2)}";
+
+  expect(rules).toHaveLength(12);
+  expect(rules.every((written) => written.includes(mdFlexBasisRule))).toBe(true);
+  expect(rules.filter((written) => written.includes(offsetRule))).toEqual(rules.slice(11));
 });
 
 test("a grid with container queries and no value keyed by a width renders its container part and no style element", () => {
@@ -872,7 +872,7 @@ test("createParts refuses, by type, a component's variables called without its o
   expectTypeOf<TakenWithoutOptions<typeof spaceVariables>>().toEqualTypeOf<false>();
 });
 
-test("a Grid with container queries and one with media queries, each with two like columns, render on the server, and the two container columns write the rule they share once", () => {
+test("a Grid with container queries and one with media queries, each with two like columns, render on the server, and each container column writes the rule they share", () => {
   const twoLikeColumns = (type: "container" | "media") =>
     createComponent(library.Grid, {
       type,
@@ -887,7 +887,7 @@ test("a Grid with container queries and one with media queries, each with two li
   const media = renderToString(() => twoLikeColumns("media"));
 
   expect(container).toContain("Second");
-  expect(rulesOf(container).join("").split(mdFlexBasisRule)).toHaveLength(2);
+  expect(rulesOf(container).join("").split(mdFlexBasisRule)).toHaveLength(3);
   expect(media).toContain("Second");
   expect(rulesOf(media)).toEqual([]);
 });
@@ -919,6 +919,66 @@ test("in renderToString, a column after a column that waits inside Loading write
   expect(html).toContain("Waiting for a column");
   expect(html).toContain("After");
   expect(rulesOf(html).join("").split(mdFlexBasisRule)).toHaveLength(2);
+});
+
+function neverSettlingColumn(): ReturnType<typeof createComponent> {
+  const text = createMemo(() => new Promise<string>(() => undefined));
+  return createComponent(library.GridCol, {
+    span: { base: 12, md: 6 },
+    get children() {
+      return text();
+    },
+  });
+}
+
+test("in renderToString, a column after a column with a synchronous span whose children wait inside Loading writes the rules they share", () => {
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      get children() {
+        return [
+          createComponent(Loading, {
+            fallback: "Waiting",
+            get children() {
+              return neverSettlingColumn();
+            },
+          }),
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "After" }),
+        ];
+      },
+    }),
+  );
+  const waiting = html.indexOf("Waiting");
+  const after = html.indexOf("After");
+
+  expect(waiting).toBeGreaterThan(-1);
+  expect(after).toBeGreaterThan(waiting);
+  expect(rulesOf(html.slice(waiting, after)).join("")).toContain(mdFlexBasisRule);
+});
+
+test("in renderToString, a Grid.Col that is the fallback of a column waiting inside Loading writes its own rules", () => {
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      get children() {
+        return createComponent(Loading, {
+          get fallback() {
+            return createComponent(library.GridCol, {
+              span: { base: 12, md: 6 },
+              children: "Waiting",
+            });
+          },
+          get children() {
+            return neverSettlingColumn();
+          },
+        });
+      },
+    }),
+  );
+  const waiting = html.indexOf("Waiting");
+
+  expect(waiting).toBeGreaterThan(-1);
+  expect(rulesOf(html.slice(0, waiting)).join("")).toContain(mdFlexBasisRule);
 });
 
 function renderErroredContainerGrid(

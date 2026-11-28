@@ -14,6 +14,8 @@ export type SolidDiagnosticsGate = {
   readonly finish: () => SolidDiagnostic[];
   readonly finishDescribed: () => string[];
   readonly rotate: () => SolidDiagnostic[];
+  readonly rotateDescribed: () => string[];
+  readonly reopen: () => void;
 };
 
 export type PrintedProblems = {
@@ -124,15 +126,26 @@ export function openSolidDiagnosticsGate(options?: {
       .map(solidDiagnosticOf)
       .filter((diagnostic) => !isUpstream(diagnostic));
   };
+  const reopen = () => {
+    if (!closed) {
+      throw new Error(
+        "reopen was called on a Solid diagnostics gate that is still open; finish it first, or rotate it.",
+      );
+    }
+    capture = open();
+    closed = false;
+  };
+  const rotate = (): SolidDiagnostic[] => {
+    const raised = finish();
+    reopen();
+    return raised;
+  };
   return {
     finish,
     finishDescribed: () => finish().map(describeSolidDiagnostic),
-    rotate: () => {
-      const raised = finish();
-      capture = open();
-      closed = false;
-      return raised;
-    },
+    rotate,
+    rotateDescribed: () => rotate().map(describeSolidDiagnostic),
+    reopen,
   };
 }
 

@@ -71,7 +71,7 @@ test.each(["media", "container"] as const)(
 const flexBasisRule = ".sx-col-flex-basis-c0-2{";
 const offsetRule = ".sx-col-offset-c0-2{";
 
-test("in a streaming render, a Grid writes one container hydration flag and each column writes its own rules", async () => {
+test("in a streaming render, each column of a container Grid writes its own rules, in the shell and in the chunk that brings a waiting column", async () => {
   const chunks = await chunksFrom(() =>
     createComponent(library.Grid, {
       type: "container",
@@ -94,11 +94,9 @@ test("in a streaming render, a Grid writes one container hydration flag and each
 
   expect(shell).toContain(fallback);
   expect(shell).toContain(flexBasisRule);
-  expect(shell).toContain("solix:qc:");
   expect(later).toContain("Half");
   expect(later).toContain(flexBasisRule);
   expect(later).toContain(offsetRule);
-  expect(later).not.toContain("solix:qc:");
 });
 
 test("a responsive fallback column inside Loading does not suppress a later shell column or the resolved column", async () => {

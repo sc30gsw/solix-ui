@@ -82,7 +82,7 @@ function readServerProblems(): ServerProblems {
 function serverProblems(): ServerProblems {
   if (printed.problems === undefined) {
     throw new Error(
-      'The beforeAll of "the development server", the hook that stops the server and reads what it printed, did not finish; see that hook\'s failure.',
+      'The beforeAll of "the development server", the hook that stops the server and reads what it printed, did not run or did not finish. It runs only alongside a test of that describe: run this file without -t, or read that hook\'s failure.',
     );
   }
   return printed.problems;

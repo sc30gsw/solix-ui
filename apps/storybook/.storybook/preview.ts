@@ -2,7 +2,6 @@ import type { AfterEach, BeforeEach } from "storybook/internal/types";
 import type { Preview, SolidRenderer } from "storybook-solidjs-vite";
 import { isRecord, wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
 import {
-  describeSolidDiagnostic,
   openSolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
 } from "../../../tests/support/solid-diagnostics.ts";
@@ -31,7 +30,7 @@ type StoryState = {
 const diagnostics = openSolidDiagnosticsGate();
 
 function raisedSinceTheLastHook(): string[] {
-  return diagnostics.rotate().map(describeSolidDiagnostic);
+  return diagnostics.rotateDescribed();
 }
 
 function shown(value: unknown): string {

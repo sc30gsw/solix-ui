@@ -160,3 +160,29 @@ test("rotate gives what the gate caught and reopens it, so a diagnostic raised a
     ["SSR_RENDER_ERROR_CONTAINED"],
   ]);
 });
+
+test("reopen opens a finished gate again, so it catches what is raised after it, and refuses a gate that is still open, and rotateDescribed describes what it caught as finishDescribed does", () => {
+  const caught = expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () => {
+    const gate = openSolidDiagnosticsGate();
+    const quiet = gate.finishDescribed();
+    renderAContainedError();
+    gate.reopen();
+    renderAContainedError();
+    const described = gate.rotateDescribed();
+    let refused: unknown;
+    try {
+      gate.reopen();
+    } catch (error) {
+      refused = error;
+    }
+    renderAContainedError();
+    const last = gate.finishDescribed();
+    return { quiet, described, refused, last };
+  });
+
+  expect(caught.quiet).toEqual([]);
+  expect(caught.described).toHaveLength(1);
+  expect(caught.described[0]).toMatch(/^SSR_RENDER_ERROR_CONTAINED: /);
+  expect(caught.last).toEqual(caught.described);
+  expect(String(caught.refused)).toContain("still open");
+});
