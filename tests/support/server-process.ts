@@ -36,16 +36,22 @@ export function localUrl(port: number): string {
 
 type Reply = { ok: boolean; said: string };
 
-async function replyFrom(url: string): Promise<Reply | undefined> {
+async function replyFrom(url: string, deadline: number): Promise<Reply | undefined> {
+  const signal = AbortSignal.timeout(Math.max(0, deadline - Date.now()));
+  let response: Response;
   try {
-    const response = await fetch(url);
+    response = await fetch(url, { signal });
+  } catch {
+    return undefined;
+  }
+  try {
     const body = await response.text();
     return {
       ok: response.ok,
       said: response.ok ? "" : `${response.status}: ${body.slice(0, bodyShown)}`,
     };
-  } catch {
-    return undefined;
+  } catch (error) {
+    return { ok: false, said: `${response.status} but did not finish its page: ${String(error)}` };
   }
 }
 
@@ -103,7 +109,7 @@ export async function startServer({
   for (;;) {
     const port = announcedUrl.exec(printed())?.[1];
     const url = port === undefined ? undefined : localUrl(Number(port));
-    const reply = url === undefined ? undefined : await replyFrom(url);
+    const reply = url === undefined ? undefined : await replyFrom(url, deadline);
     if (url !== undefined && reply?.ok) return { url, printedLines, stop };
     if (reply) return failed(`the server at ${url} answered ${reply.said}`);
     if (running.exitCode !== null || running.signalCode !== null)
