@@ -10,8 +10,12 @@ import {
   mount,
   runCleanups,
   type Scope,
+  specTest,
 } from "#/spec/runner.ts";
-import { openSolidDiagnosticsGate } from "../../../tests/support/solid-diagnostics.ts";
+import {
+  expectingSolidDiagnostic,
+  openSolidDiagnosticsGate,
+} from "../../../tests/support/solid-diagnostics.ts";
 
 type Cleanup = () => void | Promise<void>;
 
@@ -101,6 +105,10 @@ test("a Solid diagnostic raised while a test closes fails it by its code, beside
 
   await expect(closing).rejects.toThrow("STRICT_READ_UNTRACKED");
   await expect(closing).rejects.toHaveProperty("errors.0", thrown);
+});
+
+specTest("the scope a spec entry runs in holds Solid's exclusive diagnostics gate", () => {
+  expectingSolidDiagnostic("STRICT_READ_UNTRACKED", readUntracked);
 });
 
 test("a function fixture's provider keeps the scheme props it is given", async () => {

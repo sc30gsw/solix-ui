@@ -120,7 +120,7 @@ export async function runCleanups(
   }
 }
 
-const specTest = test.extend<{ scope: Scope }>({
+export const specTest = test.extend<{ scope: Scope }>({
   scope: [
     async ({ task }, use) => {
       const gate = openSolidDiagnosticsGate({ exclusive: true });
