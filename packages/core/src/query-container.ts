@@ -2,6 +2,7 @@ import { getHydrationWriter, isServer, takeHydrationValue } from "@solidjs/web";
 import {
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   isHydratable,
   isHydrating,
@@ -139,7 +140,7 @@ function uniqueUsed(used: readonly Used[]): Used[] {
   );
 }
 
-type Member = { keys: readonly string[] };
+type Member = { rendered: readonly string[]; mounted: readonly string[] };
 
 type Membership = {
   readonly members: Member[];
@@ -151,6 +152,10 @@ type Membership = {
 function isFollowed(members: readonly Member[], member: Member): boolean {
   const index = members.indexOf(member);
   return index !== -1 && index < members.length - 1;
+}
+
+function sameKeys(before: readonly string[], after: readonly string[]): boolean {
+  return before.length === after.length && before.every((key, index) => key === after[index]);
 }
 
 function createMembership(): Membership {
@@ -171,26 +176,31 @@ function createMembership(): Membership {
       const index = members.indexOf(member);
       if (index === -1) return;
       members.splice(index, 1);
-      if (!isServer && index < members.length && member.keys.length > 0) queueMicrotask(notify);
+      const wasMounted = member.mounted.length > 0;
+      member.rendered = [];
+      member.mounted = [];
+      if (!isServer && index < members.length && wasMounted) queueMicrotask(notify);
     },
   };
 }
 
-function placedBefore(membership: Membership, own: Member): Set<string> {
-  const index = membership.members.indexOf(own);
-  if (index <= 0) return new Set();
-  membership.version();
-  return new Set(membership.members.slice(0, index).flatMap((member) => member.keys));
+function keysBefore(
+  members: readonly Member[],
+  own: Member,
+  keysOf: (member: Member) => readonly string[],
+): Set<string> {
+  const index = members.indexOf(own);
+  return new Set(index <= 0 ? [] : members.slice(0, index).flatMap(keysOf));
 }
 
-function streamedRender(scope: string): boolean {
-  const hydrationKey = `${queryContainerPrefix}${scope}`;
-  if (isServer) {
-    const writer = getHydrationWriter();
-    const streaming = writer?.async === true;
-    if (streaming && isHydratable()) writer.write(hydrationKey, true);
-    return streaming;
-  }
+function writeFlagWhenStreaming(hydrationKey: string): boolean {
+  const writer = getHydrationWriter();
+  const streaming = writer?.async === true;
+  if (streaming && isHydratable()) writer.write(hydrationKey, true);
+  return streaming;
+}
+
+function readStreamedFlag(hydrationKey: string): boolean {
   if (!isHydrating()) return false;
   const taken = takeHydrationValue(hydrationKey);
   return taken?.status === "resolved" && taken.value === true;
@@ -218,16 +228,8 @@ function queriesOf(
   );
 }
 
-function placedOf(used: () => readonly Used[], member?: Member): () => readonly Used[] {
-  return createMemo(
-    () => {
-      if (member !== undefined) member.keys = [];
-      const placed = uniqueUsed(used());
-      if (member !== undefined) member.keys = placed.map(keyOf);
-      return placed;
-    },
-    { equals: sameUsed },
-  );
+function placedOf(used: () => readonly Used[]): () => readonly Used[] {
+  return createMemo(() => uniqueUsed(used()), { equals: sameUsed });
 }
 
 function ownedContainer(queries: () => ContainerQueries | undefined): QueryContainer {
@@ -254,21 +256,38 @@ function memberContainer(
     queries,
     report(used) {
       if (joined !== undefined) return;
-      const member: Member = { keys: [] };
-      const placed = placedOf(used, member);
+      const member: Member = { rendered: [], mounted: [] };
+      const placed = placedOf(used);
       joined = { member, placed };
       membership.members.push(member);
       onCleanup(() => membership.leave(member));
-      createEffect(placed, () => {
-        if (isFollowed(membership.members, member)) membership.notify();
+      const hydrating = !isServer && isHydrating();
+      if (!streamed && (isServer || hydrating)) {
+        createRenderEffect(placed, (pairs) => {
+          member.rendered = pairs.map(keyOf);
+        });
+      }
+      let rerunAfterHydration = hydrating;
+      createEffect(placed, (pairs) => {
+        const keys = pairs.map(keyOf);
+        const changed = !sameKeys(member.mounted, keys);
+        member.mounted = keys;
+        const rerun = rerunAfterHydration || (changed && isFollowed(membership.members, member));
+        rerunAfterHydration = false;
+        if (rerun) membership.notify();
       });
     },
     rules() {
       const current = queries();
       if (current === undefined || joined === undefined) return undefined;
+      membership.version();
       const placed = joined.placed();
-      const before = placedBefore(membership, joined.member);
       if (streamed && (isServer || isHydrating())) return rulesFor(current, placed);
+      const before = keysBefore(
+        membership.members,
+        joined.member,
+        isServer || isHydrating() ? (member) => member.rendered : (member) => member.mounted,
+      );
       return rulesFor(
         current,
         placed.filter((pair) => !before.has(keyOf(pair))),
@@ -293,7 +312,8 @@ export function createSharedQueryContainer(
   widths: () => readonly (readonly [key: string, width: string])[] | undefined,
 ): SharedQueryContainer {
   const normalizedScope = scopeOf(scope);
-  const streamed = streamedRender(normalizedScope);
+  const hydrationKey = `${queryContainerPrefix}${normalizedScope}`;
+  const streamed = isServer ? writeFlagWhenStreaming(hydrationKey) : readStreamedFlag(hydrationKey);
   const queries = queriesOf(normalizedScope, widths);
   const membership = createMembership();
   return {

@@ -13,6 +13,7 @@ export type SolidDiagnostic = {
 export type SolidDiagnosticsGate = {
   readonly finish: () => SolidDiagnostic[];
   readonly finishDescribed: () => string[];
+  readonly rotate: () => SolidDiagnostic[];
 };
 
 export type PrintedProblems = {
@@ -102,13 +103,17 @@ export function openSolidDiagnosticsGate(options?: {
   readonly exclusive?: boolean;
 }): SolidDiagnosticsGate {
   const exclusive = options?.exclusive === true;
-  if (exclusive && testGate.open) {
-    throw new Error(
-      "A test opened Solid's diagnostics gate while another test's gate was open. The gate reads one process-wide channel, so tests under it run one at a time.",
-    );
-  }
-  const capture = OBSERVE?.diagnostics.capture();
-  if (exclusive) testGate.open = true;
+  const open = () => {
+    if (exclusive && testGate.open) {
+      throw new Error(
+        "A test opened Solid's diagnostics gate while another test's gate was open. The gate reads one process-wide channel, so tests under it run one at a time.",
+      );
+    }
+    const capture = OBSERVE?.diagnostics.capture();
+    if (exclusive) testGate.open = true;
+    return capture;
+  };
+  let capture = open();
   let closed = false;
   const finish = (): SolidDiagnostic[] => {
     if (closed) return [];
@@ -122,6 +127,12 @@ export function openSolidDiagnosticsGate(options?: {
   return {
     finish,
     finishDescribed: () => finish().map(describeSolidDiagnostic),
+    rotate: () => {
+      const raised = finish();
+      capture = open();
+      closed = false;
+      return raised;
+    },
   };
 }
 

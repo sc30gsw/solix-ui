@@ -385,6 +385,13 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
         ),
         "a column after a streamed Loading boundary keeps its container-query width",
       ).toBe(true);
+      expect(
+        near(
+          (await boxOf(column("Before a streamed column"))).width,
+          await spanWidth(column("Before a streamed column"), 6, 12),
+        ),
+        "a column before a streamed Loading boundary keeps its container-query width",
+      ).toBe(true);
       if (javaScriptEnabled) {
         expect(
           near(
@@ -393,21 +400,32 @@ const checks: [behaviour: string, check: (opened: Opened) => Promise<void>][] = 
           ),
           "a column that streams in before a synchronous sibling keeps its container-query width after hydration",
         ).toBe(true);
-        await expect
-          .poll(
-            () =>
-              column("After a streamed column")
-                .locator("xpath=..")
-                .evaluate(
-                  (inner, mark) => inner.querySelectorAll(`:scope > style[${mark}]`).length,
-                  libraryStyleMark,
-                ),
-            {
-              message:
-                "once the page has hydrated, the like columns of the streamed grid write the rules they share once",
-            },
-          )
-          .toBe(1);
+        expect(
+          near(
+            (await boxOf(column("Last streamed half"))).width,
+            await spanWidth(column("Last streamed half"), 6, 12),
+          ),
+          "a column that streams in after a synchronous sibling, as the last column of its grid, keeps its container-query width after hydration",
+        ).toBe(true);
+        for (const [beside, order] of [
+          ["After a streamed column", "a streamed column before a synchronous one"],
+          ["Before a streamed column", "a synchronous column before a streamed one"],
+        ]) {
+          await expect
+            .poll(
+              () =>
+                column(beside)
+                  .locator("xpath=..")
+                  .evaluate(
+                    (inner, mark) => inner.querySelectorAll(`:scope > style[${mark}]`).length,
+                    libraryStyleMark,
+                  ),
+              {
+                message: `once the page has hydrated, the like columns of the streamed grid with ${order} write the rules they share once`,
+              },
+            )
+            .toBe(1);
+        }
       }
     },
   ],

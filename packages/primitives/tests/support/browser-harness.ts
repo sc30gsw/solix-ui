@@ -2,6 +2,7 @@ import { createEffect, createRoot, flush as flushSolid } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
 import { propertyRunsGoing } from "../../../../tests/support/properties.ts";
 import {
+  describeSolidDiagnostic,
   openSolidDiagnosticsGate,
   type SolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
@@ -46,10 +47,11 @@ const journals = new Set<Attachments>();
 const diagnostics: { gate?: SolidDiagnosticsGate; running: number } = { running: 0 };
 
 function diagnosticsRaised(): string[] {
-  const raised = diagnostics.gate?.finishDescribed() ?? [];
-  diagnostics.gate =
-    diagnostics.running > 0 ? openSolidDiagnosticsGate({ exclusive: true }) : undefined;
-  return raised;
+  const { gate } = diagnostics;
+  if (gate === undefined) return [];
+  if (diagnostics.running > 0) return gate.rotate().map(describeSolidDiagnostic);
+  diagnostics.gate = undefined;
+  return gate.finishDescribed();
 }
 
 function inScope(): boolean {

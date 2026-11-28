@@ -1,23 +1,20 @@
 import { afterAll, beforeEach, expect, onTestFinished } from "vite-plus/test";
 import {
   openSolidDiagnosticsGate,
-  type SolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
 } from "#/tests/support/solid-diagnostics.ts";
 
-const outsideTests: { gate: SolidDiagnosticsGate } = {
-  gate: openSolidDiagnosticsGate(),
-};
+const outsideTests = openSolidDiagnosticsGate();
 
 const inTestMessage =
   "the Solid development diagnostics this test raised, in a server render or anywhere else in its body, but those it ran inside expectingSolidDiagnostic";
 
 beforeEach(() => {
   const gate = openSolidDiagnosticsGate({ exclusive: true });
-  const raisedOutsideTests = outsideTests.gate.finishDescribed();
+  const raisedOutsideTests = outsideTests.finishDescribed();
   onTestFinished(() => {
     const raised = gate.finishDescribed();
-    outsideTests.gate = openSolidDiagnosticsGate();
+    outsideTests.rotate();
     expect.soft(raised, inTestMessage).toEqual([]);
   });
   expect(
@@ -32,7 +29,7 @@ beforeEach(() => {
 
 afterAll(() => {
   expect(
-    outsideTests.gate.finishDescribed(),
+    outsideTests.finishDescribed(),
     "the Solid development diagnostics raised after the file's last test",
   ).toEqual([]);
 });

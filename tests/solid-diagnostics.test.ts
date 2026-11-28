@@ -124,3 +124,39 @@ test("a test gate opened while another test's gate is open is refused, and a gat
   );
   expect(openSolidDiagnosticsGate().finish()).toEqual([]);
 });
+
+function renderAContainedError(): void {
+  renderToString(() =>
+    createComponent(Errored, {
+      fallback: () => "fallback",
+      get children(): string {
+        throw new Error("contained");
+      },
+    }),
+  );
+}
+
+test("rotate gives what the gate caught and reopens it, so a diagnostic raised after it is caught by the next rotate or finish, and a finished gate reopens", () => {
+  const caught = expectingSolidDiagnostic("SSR_RENDER_ERROR_CONTAINED", () => {
+    const gate = openSolidDiagnosticsGate();
+    renderAContainedError();
+    const first = gate.rotate();
+    renderAContainedError();
+    const second = gate.rotate();
+    const quiet = gate.finish();
+    const afterFinish = gate.rotate();
+    renderAContainedError();
+    const reopened = gate.finish();
+    return [first, second, quiet, afterFinish, reopened].map((raised) =>
+      raised.map(({ code }) => code),
+    );
+  });
+
+  expect(caught).toEqual([
+    ["SSR_RENDER_ERROR_CONTAINED"],
+    ["SSR_RENDER_ERROR_CONTAINED"],
+    [],
+    [],
+    ["SSR_RENDER_ERROR_CONTAINED"],
+  ]);
+});

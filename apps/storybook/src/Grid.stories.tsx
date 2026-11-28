@@ -144,6 +144,46 @@ export const ContainerColumnAfterALoadedOne: Story = {
   },
 };
 
+export const ColumnBesideAHeldOne: Story = {
+  args: {
+    type: "container",
+    breakpoints: narrowContainerBreakpoints,
+  },
+  render: (args) => {
+    const held = Promise.withResolvers<string>();
+    const text = createMemo(() => held.promise);
+    return (
+      <Box w={480}>
+        <Button onClick={() => held.resolve("released")}>Release the held column</Button>
+        <Grid {...args}>
+          <Loading fallback="Holding a column">
+            <Grid.Col span={{ base: 12, md: 6 }}>Held column {text()}</Grid.Col>
+          </Loading>
+          <Grid.Col span={{ base: 12, md: 6 }}>Column beside a held one</Grid.Col>
+        </Grid>
+      </Box>
+    );
+  },
+  play: async ({ canvas }) => {
+    const beside = canvas.getByText("Column beside a held one");
+
+    await waitFor(async () => {
+      await expect(beside.getBoundingClientRect().width).toBeLessThan(300);
+      await expect(columnRulesBeside(beside)).toBe(1);
+    });
+    await expect(canvas.queryByText("Holding a column")).not.toBeNull();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Release the held column" }));
+    const released = await canvas.findByText("Held column released");
+    await waitFor(async () => {
+      await expect(canvas.queryByText("Holding a column")).toBeNull();
+      await expect(released.getBoundingClientRect().width).toBeLessThan(300);
+      await expect(beside.getBoundingClientRect().width).toBeLessThan(300);
+      await expect(columnRulesBeside(beside)).toBe(1);
+    });
+  },
+};
+
 export const Aligned: Story = {
   args: {
     rowGap: "xl",

@@ -1,6 +1,6 @@
 import type { CompiledStyles } from "@stylexjs/stylex";
 import { createComponent, renderToString } from "@solidjs/web";
-import { createSignal, Errored } from "solid-js";
+import { createMemo, createSignal, Errored, Loading } from "solid-js";
 import { expect, expectTypeOf, test } from "vite-plus/test";
 import { LIBRARY_CLASS_PREFIX } from "#/build-pipeline.mjs";
 import type {
@@ -890,6 +890,35 @@ test("a Grid with container queries and one with media queries, each with two li
   expect(rulesOf(container).join("").split(mdFlexBasisRule)).toHaveLength(2);
   expect(media).toContain("Second");
   expect(rulesOf(media)).toEqual([]);
+});
+
+test("in renderToString, a column after a column that waits inside Loading writes the rules they share, since the waiting column's rules are not in the markup", () => {
+  const html = renderToString(() =>
+    createComponent(library.Grid, {
+      type: "container",
+      get children() {
+        return [
+          createComponent(Loading, {
+            fallback: "Waiting for a column",
+            get children() {
+              const span = createMemo(() => new Promise<number>(() => undefined));
+              return createComponent(library.GridCol, {
+                get span() {
+                  return { base: 12, md: span() };
+                },
+                children: "Waiting",
+              });
+            },
+          }),
+          createComponent(library.GridCol, { span: { base: 12, md: 6 }, children: "After" }),
+        ];
+      },
+    }),
+  );
+
+  expect(html).toContain("Waiting for a column");
+  expect(html).toContain("After");
+  expect(rulesOf(html).join("").split(mdFlexBasisRule)).toHaveLength(2);
 });
 
 function renderErroredContainerGrid(

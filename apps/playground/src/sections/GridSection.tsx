@@ -10,12 +10,22 @@ const containerBreakpoints = {
   xl: "30em",
 } as const;
 
+const lateColumnDelay = 300;
+
 function StreamedColumn() {
   const span = createMemo(async () => {
     await Promise.resolve();
     return 6;
   });
   return <Grid.Col span={{ base: 12, md: span() }}>Streamed half</Grid.Col>;
+}
+
+function LateStreamedColumn() {
+  const span = createMemo(async () => {
+    await new Promise((resolve) => setTimeout(resolve, lateColumnDelay));
+    return 6;
+  });
+  return <Grid.Col span={{ base: 12, md: span() }}>Last streamed half</Grid.Col>;
 }
 
 export function GridSection() {
@@ -66,6 +76,14 @@ export function GridSection() {
             <StreamedColumn />
           </Loading>
           <Grid.Col span={{ base: 12, md: 6 }}>After a streamed column</Grid.Col>
+        </Grid>
+      </Box>
+      <Box w={480} mt="md">
+        <Grid type="container" breakpoints={containerBreakpoints}>
+          <Grid.Col span={{ base: 12, md: 6 }}>Before a streamed column</Grid.Col>
+          <Loading fallback="Waiting for the last streamed half">
+            <LateStreamedColumn />
+          </Loading>
         </Grid>
       </Box>
       <Box w={240} mt="md">
