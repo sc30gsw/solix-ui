@@ -184,8 +184,8 @@ settings:
 catalogs:
   default:
     '@babel/core':
-      specifier: ^8.1.3
-      version: 8.1.3
+      specifier: ^8.1.4
+      version: 8.1.4
     '@babel/plugin-syntax-jsx':
       specifier: ^8.0.1
       version: 8.0.1
@@ -244,8 +244,8 @@ catalogs:
       specifier: 1.65.1
       version: 1.65.1
     postcss:
-      specifier: 8.5.33
-      version: 8.5.33
+      specifier: 8.5.34
+      version: 8.5.34
     postcss-selector-parser:
       specifier: 7.2.1
       version: 7.2.1
@@ -302,7 +302,7 @@ importers:
     devDependencies:
       '@solidjs/vite-plugin':
         specifier: 'catalog:'
-        version: 3.0.1(@babel/core@8.1.3)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)
+        version: 3.0.1(@babel/core@8.1.4)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)
       '@solidjs/web':
         specifier: 'catalog:'
         version: 2.0.4(solid-js@2.0.4)
@@ -332,7 +332,7 @@ importers:
         version: 1.65.1
       postcss:
         specifier: 'catalog:'
-        version: 8.5.33
+        version: 8.5.34
       postcss-value-parser:
         specifier: 'catalog:'
         version: 4.2.0
@@ -378,7 +378,7 @@ importers:
     devDependencies:
       '@solidjs/vite-plugin':
         specifier: 'catalog:'
-        version: 3.0.1(@babel/core@8.1.3)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)
+        version: 3.0.1(@babel/core@8.1.4)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -409,7 +409,7 @@ importers:
     devDependencies:
       '@solidjs/vite-plugin':
         specifier: 'catalog:'
-        version: 3.0.1(@babel/core@8.1.3)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)
+        version: 3.0.1(@babel/core@8.1.4)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)
       '@storybook/addon-a11y':
         specifier: 'catalog:'
         version: 11.0.0-rc.1(storybook@11.0.0-rc.1(react@19.3.1))
@@ -430,7 +430,7 @@ importers:
         version: 11.0.0-rc.1(react@19.3.1)
       storybook-solidjs-vite:
         specifier: 'catalog:'
-        version: 11.0.0-next-20261117161333(@solidjs/vite-plugin@3.0.1(@babel/core@8.1.3)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4))(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)(storybook@11.0.0-rc.1(react@19.3.1))(typescript@7.0.2)
+        version: 11.0.0-next-20261117161333(@solidjs/vite-plugin@3.0.1(@babel/core@8.1.4)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4))(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)(storybook@11.0.0-rc.1(react@19.3.1))(typescript@7.0.2)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -483,13 +483,13 @@ importers:
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
-        version: 8.1.3
+        version: 8.1.4
       '@babel/plugin-syntax-jsx':
         specifier: 'catalog:'
-        version: 8.0.1(@babel/core@8.1.3)
+        version: 8.0.1(@babel/core@8.1.4)
       '@babel/preset-typescript':
         specifier: 'catalog:'
-        version: 8.0.7(@babel/core@8.1.3)
+        version: 8.0.7(@babel/core@8.1.4)
       '@solidjs/web':
         specifier: 'catalog:'
         version: 2.0.4(solid-js@2.0.4)
@@ -504,7 +504,7 @@ importers:
         version: 0.19.2
       postcss:
         specifier: 'catalog:'
-        version: 8.5.33
+        version: 8.5.34
       postcss-selector-parser:
         specifier: 'catalog:'
         version: 7.2.1
@@ -516,19 +516,19 @@ importers:
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
-        version: 8.1.3
+        version: 8.1.4
       '@babel/preset-typescript':
         specifier: 'catalog:'
-        version: 8.0.7(@babel/core@8.1.3)
+        version: 8.0.7(@babel/core@8.1.4)
 
   packages/primitives:
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
-        version: 8.1.3
+        version: 8.1.4
       '@babel/preset-typescript':
         specifier: 'catalog:'
-        version: 8.0.7(@babel/core@8.1.3)
+        version: 8.0.7(@babel/core@8.1.4)
       solid-js:
         specifier: 'catalog:'
         version: 2.0.4
@@ -559,8 +559,8 @@ packages:
     resolution: {integrity: sha512-j1nvOQCZYSgp7HLmisnCXFTpVvFODiijQ9QHkORfGKWH6YDtskTEeCJS7eV545GZ9UBzrq0e2xsOd5QQ5PjIqw==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/core@8.1.3':
-    resolution: {integrity: sha512-kcHuFAOr6mQDd9acrkBd138f+HzIjFmhPAP3yMKL+M3/ncMEYjd3JKvdK7G+b1FR9tc0uhzo9PqgXMtLIL/qzg==}
+  '@babel/core@8.1.4':
+    resolution: {integrity: sha512-ArS53Qo2b5FsmuotQ0zwEwcf636K09P8zuze1UTasKmonS1zWcw+VCWvNfjeayYy0wU45ZKp5xYqtW8C0T1+PA==}
     engines: {node: ^22.18.0 || >=24.11.0}
 
   '@babel/generator@7.29.14':
@@ -571,8 +571,8 @@ packages:
     resolution: {integrity: sha512-tAjURz1NaCZGtdG3hB6gjaIeTVo4XFD4TnbqIEneADVJ1Jpt2NxhPBAjbhius8ulUG5b/P2b56ec1ClJZa2aBQ==}
     engines: {node: ^22.18.0 || >=24.11.0}
 
-  '@babel/generator@8.1.3':
-    resolution: {integrity: sha512-lfUz17Qtr+EinAoqyK1+4J5F0GtgsZjXktM5o+QXWM8KRUOauR/WuwBHWGU/aaSp4FI99M7rj6kg851XYWDvmQ==}
+  '@babel/generator@8.1.4':
+    resolution: {integrity: sha512-pK5fBMR2lWVPILB71LQkXNGCDhiR+ctNtN6xlNK04+rGaHhJiLZ5VGTDjpqqiNKzXNzn91wH/L1XcbBHXyTQ6g==}
     engines: {node: ^22.18.0 || >=24.11.0}
 
   '@babel/helper-annotate-as-pure@8.0.0':
@@ -681,8 +681,8 @@ packages:
     resolution: {integrity: sha512-6E3Mi1r0B0umq6vmZa4/78q+64fqO2YY0THUdjDPKUCKhNb0yQy5NQIaPHCSD3ryTgiTss//P4JsWS80AsZ6LQ==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/helpers@8.1.3':
-    resolution: {integrity: sha512-s5s0hMqsgSVikMuK7XHFDlIJvZp5CdAFpJcgNF5b/6oRvVCS8n779zsJVQuwtUUu75/nCYceKvi+K2FDKcogXg==}
+  '@babel/helpers@8.1.4':
+    resolution: {integrity: sha512-amJuSGP90GKWdn3rOWkSJ6EHrJyhBuSHWIIhF4K8TuLS+nqQoYepWI0Y66NxEPlN6SzlQC4i8tbMjYj4LeFEeA==}
     engines: {node: ^22.18.0 || >=24.11.0}
 
   '@babel/parser@7.29.14':
@@ -768,8 +768,8 @@ packages:
     resolution: {integrity: sha512-J8OoydypQO6HGgRYiiHPMj0iBfz2XpSm5hkmd0+OEHWgQFzYL8TEvYq2y4Gu8vxRCa7g06BilFZ0Imiye5jzzg==}
     engines: {node: ^22.18.0 || >=24.11.0}
 
-  '@babel/traverse@8.1.3':
-    resolution: {integrity: sha512-Mil7E37zLel1sjGwcgAF0wn8tbTJp3LLVMb0fqgDxWJJm52NXBv3MJaqmNOp76qzInY/0uDH3rSZfl3BqCjHiw==}
+  '@babel/traverse@8.1.4':
+    resolution: {integrity: sha512-HMv5dlDElg36crW+z+GPQ8RRGFfD85sfaQoBnE7+iXix4H+m8a+mEkQkjWvJBTeVrHajRwUk5caX40GLb+OmTg==}
     engines: {node: ^22.18.0 || >=24.11.0}
 
   '@babel/types@7.29.14':
@@ -2454,8 +2454,8 @@ packages:
   postcss-value-parser@4.2.0:
     resolution: {integrity: sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==}
 
-  postcss@8.5.33:
-    resolution: {integrity: sha512-RVHEU9/Pp1Fnjr/MpAJsZoADukCKhfIi15OunEYiGktIkYLkPVvC1sioWolGDS7XByMTx9m/IGbro0Js13zhnQ==}
+  postcss@8.5.34:
+    resolution: {integrity: sha512-P1Qzj0XXZjMda74C7qiVnBG90UKNbyNUAOeQRBW8X63RsIMV57gevRqjnkELdwtZ/S2/uQFksJhmwuN8xShLPw==}
     engines: {node: ^10 || ^12 || >=14}
 
   pretty-format@27.5.1:
@@ -2504,9 +2504,9 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  source-map-js@1.2.2:
-    resolution: {integrity: sha512-KGj/8Y43x35aZVDtt+J4mK1hoLGHULMYfSkODJNQjNDC3oW1PqPoxMwo0pLUsWM/UEGzON/NxeHywEfNXNP3Vw==}
-    engines: {node: '>=0.10.0'}
+  source-map-js@1.2.4:
+    resolution: {integrity: sha512-J7ZjMvHd9O1fcT/5V09QWaaSl2BbWx3F6O08spde82Namf9UB0GxRVIPiNbVsdKkoizHiSpTodo3vp2bAy91MA==}
+    engines: {node: '>=6.0.0'}
 
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
@@ -2771,15 +2771,15 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@babel/core@8.1.3':
+  '@babel/core@8.1.4':
     dependencies:
       '@babel/code-frame': 8.0.6
-      '@babel/generator': 8.1.3
+      '@babel/generator': 8.1.4
       '@babel/helper-compilation-targets': 8.0.7
-      '@babel/helpers': 8.1.3
+      '@babel/helpers': 8.1.4
       '@babel/parser': 8.1.3
       '@babel/template': 8.1.2
-      '@babel/traverse': 8.1.3
+      '@babel/traverse': 8.1.4
       '@babel/types': 8.1.3
       '@types/convert-source-map': 2.0.3
       '@types/gensync': 1.0.5
@@ -2808,7 +2808,7 @@ snapshots:
       '@types/jsesc': 2.5.1
       jsesc: 3.1.0
 
-  '@babel/generator@8.1.3':
+  '@babel/generator@8.1.4':
     dependencies:
       '@babel/parser': 8.1.3
       '@babel/types': 8.1.3
@@ -2837,13 +2837,13 @@ snapshots:
       flru: 1.0.2
       verkit: 0.5.0
 
-  '@babel/helper-create-class-features-plugin@8.0.10(@babel/core@8.1.3)':
+  '@babel/helper-create-class-features-plugin@8.0.10(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
+      '@babel/core': 8.1.4
       '@babel/helper-annotate-as-pure': 8.0.0
       '@babel/helper-member-expression-to-functions': 8.1.2
       '@babel/helper-optimise-call-expression': 8.0.0
-      '@babel/helper-replace-supers': 8.0.1(@babel/core@8.1.3)
+      '@babel/helper-replace-supers': 8.0.1(@babel/core@8.1.4)
       '@babel/helper-skip-transparent-expression-wrappers': 8.1.0
       '@babel/traverse': 8.1.2
       verkit: 0.5.0
@@ -2879,9 +2879,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@babel/helper-module-transforms@8.1.2(@babel/core@8.1.3)':
+  '@babel/helper-module-transforms@8.1.2(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
+      '@babel/core': 8.1.4
       '@babel/helper-module-imports': 8.0.0
       '@babel/helper-validator-identifier': 8.0.6
       '@babel/traverse': 8.1.2
@@ -2892,13 +2892,13 @@ snapshots:
 
   '@babel/helper-plugin-utils@7.29.7': {}
 
-  '@babel/helper-plugin-utils@8.0.1(@babel/core@8.1.3)':
+  '@babel/helper-plugin-utils@8.0.1(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
+      '@babel/core': 8.1.4
 
-  '@babel/helper-replace-supers@8.0.1(@babel/core@8.1.3)':
+  '@babel/helper-replace-supers@8.0.1(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
+      '@babel/core': 8.1.4
       '@babel/helper-member-expression-to-functions': 8.1.2
       '@babel/helper-optimise-call-expression': 8.0.0
       '@babel/traverse': 8.1.2
@@ -2927,7 +2927,7 @@ snapshots:
       '@babel/template': 7.29.7
       '@babel/types': 7.29.14
 
-  '@babel/helpers@8.1.3':
+  '@babel/helpers@8.1.4':
     dependencies:
       '@babel/template': 8.1.2
       '@babel/types': 8.1.3
@@ -2954,43 +2954,43 @@ snapshots:
       '@babel/core': 7.29.13
       '@babel/helper-plugin-utils': 7.29.7
 
-  '@babel/plugin-syntax-jsx@8.0.1(@babel/core@8.1.3)':
+  '@babel/plugin-syntax-jsx@8.0.1(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.3)
+      '@babel/core': 8.1.4
+      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.4)
 
   '@babel/plugin-syntax-typescript@7.29.7(@babel/core@7.29.13)':
     dependencies:
       '@babel/core': 7.29.13
       '@babel/helper-plugin-utils': 7.29.7
 
-  '@babel/plugin-syntax-typescript@8.0.3(@babel/core@8.1.3)':
+  '@babel/plugin-syntax-typescript@8.0.3(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.3)
+      '@babel/core': 8.1.4
+      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.4)
 
-  '@babel/plugin-transform-modules-commonjs@8.1.2(@babel/core@8.1.3)':
+  '@babel/plugin-transform-modules-commonjs@8.1.2(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
-      '@babel/helper-module-transforms': 8.1.2(@babel/core@8.1.3)
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.3)
+      '@babel/core': 8.1.4
+      '@babel/helper-module-transforms': 8.1.2(@babel/core@8.1.4)
+      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.4)
 
-  '@babel/plugin-transform-typescript@8.0.6(@babel/core@8.1.3)':
+  '@babel/plugin-transform-typescript@8.0.6(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
+      '@babel/core': 8.1.4
       '@babel/helper-annotate-as-pure': 8.0.0
-      '@babel/helper-create-class-features-plugin': 8.0.10(@babel/core@8.1.3)
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.3)
+      '@babel/helper-create-class-features-plugin': 8.0.10(@babel/core@8.1.4)
+      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.4)
       '@babel/helper-skip-transparent-expression-wrappers': 8.1.0
-      '@babel/plugin-syntax-typescript': 8.0.3(@babel/core@8.1.3)
+      '@babel/plugin-syntax-typescript': 8.0.3(@babel/core@8.1.4)
 
-  '@babel/preset-typescript@8.0.7(@babel/core@8.1.3)':
+  '@babel/preset-typescript@8.0.7(@babel/core@8.1.4)':
     dependencies:
-      '@babel/core': 8.1.3
-      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.3)
+      '@babel/core': 8.1.4
+      '@babel/helper-plugin-utils': 8.0.1(@babel/core@8.1.4)
       '@babel/helper-validator-option': 8.0.0
-      '@babel/plugin-transform-modules-commonjs': 8.1.2(@babel/core@8.1.3)
-      '@babel/plugin-transform-typescript': 8.0.6(@babel/core@8.1.3)
+      '@babel/plugin-transform-modules-commonjs': 8.1.2(@babel/core@8.1.4)
+      '@babel/plugin-transform-typescript': 8.0.6(@babel/core@8.1.4)
 
   '@babel/runtime@7.29.14': {}
 
@@ -3028,10 +3028,10 @@ snapshots:
       '@babel/types': 8.1.2
       obug: 3.0.0
 
-  '@babel/traverse@8.1.3':
+  '@babel/traverse@8.1.4':
     dependencies:
       '@babel/code-frame': 8.0.6
-      '@babel/generator': 8.1.3
+      '@babel/generator': 8.1.4
       '@babel/helper-globals': 8.0.6
       '@babel/parser': 8.1.3
       '@babel/template': 8.1.2
@@ -3517,7 +3517,7 @@ snapshots:
     optionalDependencies:
       '@babel/core': 7.29.13
 
-  '@solidjs/vite-plugin@3.0.1(@babel/core@8.1.3)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)':
+  '@solidjs/vite-plugin@3.0.1(@babel/core@8.1.4)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@solidjs/compiler': 2.0.3
@@ -3528,7 +3528,7 @@ snapshots:
       vite: '@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1)'
       vitefu: 1.1.3(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))
     optionalDependencies:
-      '@babel/core': 8.1.3
+      '@babel/core': 8.1.4
 
   '@solidjs/web@2.0.4(solid-js@2.0.4)':
     dependencies:
@@ -3821,7 +3821,7 @@ snapshots:
       '@oxc-project/runtime': 0.159.0
       '@oxc-project/types': 0.159.0
       lightningcss: 1.33.0
-      postcss: 8.5.33
+      postcss: 8.5.34
       yuku-parser: 0.19.0
     optionalDependencies:
       '@types/node': 26.6.11
@@ -4248,11 +4248,11 @@ snapshots:
 
   postcss-value-parser@4.2.0: {}
 
-  postcss@8.5.33:
+  postcss@8.5.34:
     dependencies:
       nanoid: 3.3.20
       picocolors: 1.1.1
-      source-map-js: 1.2.2
+      source-map-js: 1.2.4
 
   pretty-format@27.5.1:
     dependencies:
@@ -4290,11 +4290,11 @@ snapshots:
 
   solid2-agent-kit@0.29.0: {}
 
-  source-map-js@1.2.2: {}
+  source-map-js@1.2.4: {}
 
   std-env@4.3.0: {}
 
-  storybook-solidjs-vite@11.0.0-next-20261117161333(@solidjs/vite-plugin@3.0.1(@babel/core@8.1.3)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4))(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)(storybook@11.0.0-rc.1(react@19.3.1))(typescript@7.0.2):
+  storybook-solidjs-vite@11.0.0-next-20261117161333(@solidjs/vite-plugin@3.0.1(@babel/core@8.1.4)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4))(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)(storybook@11.0.0-rc.1(react@19.3.1))(typescript@7.0.2):
     dependencies:
       '@storybook/builder-vite': 11.0.0-rc.0(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(storybook@11.0.0-rc.1(react@19.3.1))
       '@storybook/global': 5.0.0
@@ -4306,7 +4306,7 @@ snapshots:
       storybook: 11.0.0-rc.1(react@19.3.1)
       vite: '@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1)'
     optionalDependencies:
-      '@solidjs/vite-plugin': 3.0.1(@babel/core@8.1.3)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)
+      '@solidjs/vite-plugin': 3.0.1(@babel/core@8.1.4)(@solidjs/web@2.0.4(solid-js@2.0.4))(@voidzero-dev/vite-plus-core@8.3.8001(@types/node@26.6.11)(esbuild@0.28.2)(typescript@7.0.2)(yaml@2.9.1))(solid-js@2.0.4)
       '@solidjs/web': 2.0.4(solid-js@2.0.4)
       typescript: 7.0.2
 
