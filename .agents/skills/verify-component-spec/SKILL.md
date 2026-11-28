@@ -32,7 +32,7 @@ A component ships without a feature of the reference and nothing says so, or a f
 
 | Covered code | What the checks assume about it |
 | --- | --- |
-| `packages/core/spec/format.ts`: `held`, `nowHolds`, `defineReference`, `defineSpec`, `defineLook`, `isSpec`, `dom`, `style`, `lookEntry`, `differs` | The types of a reference, an entry, a fixture and a check, and the rule. |
+| `packages/core/spec/format.ts`: `held`, `nowHolds`, `defineReference`, `defineSpec`, `defineLook`, `dom`, `style`, `lookEntry`, `differs` | The types of a reference, an entry, a fixture and a check, and the rule. |
 | `packages/core/spec/gaps.ts`: `parityGapItems` | Each gap item an entry or the registry waits on, keyed `<section> <n>` for the n-th check to write first of a section of the parity audit, its section `foundations` or a component, or `step <n>` for a step of the audit's order. |
 | `packages/core/spec/registry.ts`: `specs`, `foundations`, `functionSpecs`, `lookSpecs`, `drawsNoLook` | One entry per exported component, its type exhaustive over the library's components. |
 | `packages/core/spec/shared.ts`: `sharedSuite`, `sharedPromises` | The shared promises and their checks. |

@@ -1,7 +1,6 @@
 import { SpecError } from "#/spec/format.ts";
 
 export const channelTolerance = 2;
-const lengthTolerance = 0.5;
 const grounds = ["#ffffff", "#000000"] as const;
 
 function painted(colour: string, ground: string): readonly number[] {
@@ -25,9 +24,4 @@ export function sameColour(actual: string, expected: string): boolean {
     const [one, other] = [painted(actual, ground), painted(expected, ground)];
     return one.every((channel, index) => Math.abs(channel - other[index]) <= channelTolerance);
   });
-}
-
-export function sameLength(actual: string, expected: string): boolean {
-  const [one, other] = [Number.parseFloat(actual), Number.parseFloat(expected)];
-  return Number.isFinite(one) && Number.isFinite(other) && Math.abs(one - other) <= lengthTolerance;
 }

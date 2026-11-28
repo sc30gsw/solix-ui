@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, test } from "vite-plus/test";
 import { commands, page, userEvent } from "vite-plus/test/browser";
 import type * as Library from "#/src/index.ts";
 import type * as StableClass from "#/src/stable-class.ts";
-import { sameColour, sameLength } from "#/spec/computed.ts";
+import { sameColour } from "#/spec/computed.ts";
 import {
   type Address,
   type Comparison,
@@ -106,13 +106,9 @@ function mounted(fixture: Fixture, scheme: Scheme): Rendered {
   document.body.append(host);
   cleanups.push(() => host.remove());
   const within = fixture.within;
-  const mount =
-    within !== undefined && "fieldset" in within
-      ? host.appendChild(Object.assign(document.createElement("fieldset"), { disabled: true }))
-      : host;
   const [props, setProps] = createStore<Record<string, unknown>>({ ...fixture.props });
   const dispose = render(() => {
-    if (within === undefined || !("provider" in within)) return created(fixture, props);
+    if (within === undefined) return created(fixture, props);
     return createComponent(library.SolixProvider, {
       ...within.provider,
       forceColorScheme: scheme,
@@ -121,19 +117,19 @@ function mounted(fixture: Fixture, scheme: Scheme): Rendered {
         return created(fixture, props);
       },
     });
-  }, mount);
+  }, host);
   cleanups.push(dispose);
   flush();
-  const root = [...mount.querySelectorAll<HTMLElement>("*")].find(
+  const root = [...host.querySelectorAll<HTMLElement>("*")].find(
     (element) => element.localName !== "style",
   );
   if (root === undefined) throw new Error(`${fixture.component}: it rendered no element.`);
   const all = (address: Address) => [
-    ...mount.querySelectorAll<HTMLElement>(`.${stableClassOf(address, fixture.component)}`),
+    ...host.querySelectorAll<HTMLElement>(`.${stableClassOf(address, fixture.component)}`),
   ];
   return {
     root,
-    container: mount,
+    container: host,
     exports: builtExports,
     at: (address) => {
       const [found] = all(address);
@@ -144,7 +140,7 @@ function mounted(fixture: Fixture, scheme: Scheme): Rendered {
     },
     all,
     axe: async () => {
-      const { violations } = await axe.run(mount, {
+      const { violations } = await axe.run(host, {
         runOnly: { type: "tag", values: accessibilityTags },
       });
       return violations.map(({ id }) => id);
@@ -237,26 +233,12 @@ function expectedOf(property: string, value: string, beside: HTMLElement): strin
 }
 
 function comparisonOf(check: StyleCheck): Comparison {
-  if (check.as !== undefined) return check.as;
   return colourProperty.test(check.property) ? "colour" : "text";
 }
 
 function same(comparison: Comparison, actual: string, expected: string): boolean {
   if (comparison === "colour") return sameColour(actual, expected);
-  if (comparison === "length") return sameLength(actual, expected);
   return actual === expected;
-}
-
-function customPropertyMatches(check: StyleCheck, actual: string, beside: HTMLElement): boolean {
-  const expected = check.value ?? "";
-  const comparison = comparisonOf(check);
-  if (comparison === "text") return actual === expected;
-  const through = comparison === "colour" ? "color" : "width";
-  return same(
-    comparison,
-    expectedOf(through, actual, beside),
-    expectedOf(through, expected, beside),
-  );
 }
 
 async function styleHolds(check: StyleCheck): Promise<void> {
@@ -276,23 +258,9 @@ async function styleHolds(check: StyleCheck): Promise<void> {
     if (found !== value)
       throw new Error(`${where}: ${name}="${value}" is not on it, it has ${found}`);
   }
-  const interactWith = check.interactWith === undefined ? target : rendered.at(check.interactWith);
-  await enter[check.state ?? "rest"](interactWith);
+  await enter[check.state ?? "rest"](target);
   await transitionsSettled(target);
   const actual = getComputedStyle(target).getPropertyValue(check.property).trim();
-  if (check.value === null) {
-    if (actual !== "")
-      throw new Error(`${where}, ${check.property}: expected it unset, it is ${actual}.`);
-    return;
-  }
-  if (check.property.startsWith("--")) {
-    if (!customPropertyMatches(check, actual, target)) {
-      throw new Error(
-        `${where}, ${check.property}: expected ${check.value}, it is ${actual || "unset"}.`,
-      );
-    }
-    return;
-  }
   const expected = expectedOf(check.property, check.value, target);
   if (!same(comparisonOf(check), actual, expected)) {
     throw new Error(

@@ -16,7 +16,7 @@ export type Props = Readonly<Record<string, unknown>>;
 
 export type Scheme = "light" | "dark";
 
-export type Within = { readonly provider: Props } | { readonly fieldset: "disabled" };
+export type Within = { readonly provider: Props };
 
 export type Fixture = {
   readonly component: ComponentPath;
@@ -49,7 +49,7 @@ export type State = "rest" | "hover" | "pressed" | "focus-visible";
 
 export type Media = { readonly reducedMotion?: true; readonly width?: number };
 
-export type Comparison = "colour" | "length" | "text";
+export type Comparison = "colour" | "text";
 
 export type DomCheck = {
   readonly by: "dom";
@@ -61,14 +61,12 @@ export type StyleCheck = {
   readonly by: "style";
   readonly fixture: Fixture;
   readonly at?: Address;
-  readonly interactWith?: Address;
   readonly state?: State;
   readonly scheme?: Scheme;
   readonly media?: Media;
   readonly given?: Readonly<Record<string, string>>;
   readonly property: string;
-  readonly value: string | null;
-  readonly as?: Comparison;
+  readonly value: string;
 };
 
 export type Check = DomCheck | StyleCheck;
@@ -95,10 +93,7 @@ export type SpecEntry<R extends Reference = Reference, C extends Check = Check> 
   readonly decision?: `Q${number}`;
 };
 
-const specMark = Symbol.for("solix.spec");
-
 export type Spec<R extends Reference = Reference> = {
-  readonly [specMark]: "function";
   readonly reference: R;
   readonly entries: readonly SpecEntry<R>[];
 };
@@ -106,7 +101,6 @@ export type Spec<R extends Reference = Reference> = {
 export type LookEntry = SpecEntry<Reference, StyleCheck>;
 
 export type LookSpec = {
-  readonly [specMark]: "look";
   readonly entries: readonly SpecEntry<Reference, StyleCheck>[];
 };
 
@@ -118,15 +112,11 @@ export function defineSpec<R extends Reference>(
   reference: R,
   entries: readonly SpecEntry<R>[],
 ): Spec<R> {
-  return { [specMark]: "function", reference, entries };
+  return { reference, entries };
 }
 
 export function defineLook(entries: readonly SpecEntry<Reference, StyleCheck>[]): LookSpec {
-  return { [specMark]: "look", entries };
-}
-
-export function isSpec(value: unknown): value is Spec | LookSpec {
-  return typeof value === "object" && value !== null && specMark in value;
+  return { entries };
 }
 
 export class SpecError extends Error {
@@ -173,14 +163,14 @@ export type StyleOptions = Omit<StyleCheck, "by" | "fixture" | "property" | "val
 export function style(
   fixture: Fixture,
   property: string,
-  value: string | null,
+  value: string,
   options: StyleOptions = {},
 ): StyleCheck {
   return { by: "style", fixture, property, value, ...options };
 }
 
 export function differs(check: Pick<StyleCheck, "property" | "value">): string {
-  return `${check.property}: expected ${check.value ?? "it unset"}`;
+  return `${check.property}: expected ${check.value}`;
 }
 
 const describedTypes = new Set(["string", "number", "boolean"]);
@@ -207,7 +197,7 @@ export function lookEntry(
     check.media?.width === undefined ? "" : `${check.media.width}px wide`,
     check.media?.reducedMotion === undefined ? "" : "reduced motion",
   ].filter((part) => part !== "");
-  const says = `${where.join(", ")}: ${check.property} is ${check.value ?? "unset"}`;
+  const says = `${where.join(", ")}: ${check.property} is ${check.value}`;
   const promise = { kind: "look", property: check.property } as const;
   return options.until === undefined
     ? { says, promise, check, status: "holds" }
