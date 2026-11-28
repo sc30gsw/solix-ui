@@ -50,6 +50,44 @@ const programModules = [
 const openProgramsInTheRules = `Open a TypeScript program only in a test under tests/rules, which the rules project runs before every browser engine, or in a module under ${programOpeners.slice(1).join(", ")}.`;
 const runPropertiesThroughTheWrapper = `Run a property with assertProperty from ${propertyRunner}, which gives it the time limit of the test that runs it and makes a failure report its seed, path and counterexample.`;
 
+const specDocuments = [
+  "packages/core/spec/[A-Z]*.ts",
+  "packages/core/spec/foundations.ts",
+  "packages/core/spec/look/*.ts",
+];
+const specNodeModules = ["format", "gaps", "registry", "shared", "fixtures"].map(
+  (module) => `packages/core/spec/${module}.ts`,
+);
+const specRunnerModules = ["packages/core/spec/runner.ts", "packages/core/spec/computed.ts"];
+const specRunnerImporters = [
+  "packages/core/tests/component-spec.browser.test.ts",
+  "packages/core/tests/visual-spec.browser.test.ts",
+  "packages/core/tests/spec-runner.browser.test.ts",
+];
+const specDocumentImports = [
+  "vite-plus/test",
+  ...["format", "fixtures", "shared", "gaps", "look/reference"].map(
+    (module) => `\\#/spec/${module}.ts`,
+  ),
+];
+const specBrowserModules = [
+  "@solidjs/web",
+  "axe-core",
+  "solid-js",
+  "vite-plus/test/browser",
+  ...["runner", "computed", "commands"].map((module) => `\\#/spec/${module}.ts`),
+];
+const sourceValues = {
+  regex: "^#/src/",
+  allowTypeImports: true,
+  message:
+    "A spec module takes only types from packages/core/src; the runner reaches the library through packages/core/dist.",
+};
+const runnerOnlyInItsTests = {
+  group: specRunnerModules.map((file) => `\\#/${file.replace("packages/core/", "")}`),
+  message: `Only ${specRunnerImporters.join(", ")} import the spec runner and its comparison.`,
+};
+
 const fastCheckRunnersOnlyThroughTheWrapper = {
   name: "fast-check",
   importNames: fastCheckRunners,
@@ -245,6 +283,82 @@ export default defineConfig({
       ],
     },
     overrides: [
+      {
+        files: ["packages/core/**"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              paths: [fastCheckRunnersOnlyThroughTheWrapper],
+              patterns: [
+                {
+                  group: programModules,
+                  importNames: ["openProgram"],
+                  message: openProgramsInTheRules,
+                },
+                runnerOnlyInItsTests,
+              ],
+            },
+          ],
+        },
+      },
+      {
+        files: specDocuments,
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              paths: [
+                {
+                  name: "vite-plus/test",
+                  allowImportNames: ["expect", "vi"],
+                  message: "A spec document takes only expect and vi from vite-plus/test.",
+                },
+              ],
+              patterns: [
+                {
+                  group: ["*", ...specDocumentImports.map((module) => `!${module}`)],
+                  message: `A spec document imports only ${specDocumentImports.join(", ").replaceAll("\\", "")}.`,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        files: specNodeModules,
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            {
+              paths: [fastCheckRunnersOnlyThroughTheWrapper],
+              patterns: [
+                sourceValues,
+                runnerOnlyInItsTests,
+                {
+                  group: specBrowserModules,
+                  message: "A spec module that Node loads imports no browser module.",
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        files: specRunnerModules,
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            { paths: [fastCheckRunnersOnlyThroughTheWrapper], patterns: [sourceValues] },
+          ],
+        },
+      },
+      {
+        files: specRunnerImporters,
+        rules: {
+          "no-restricted-imports": ["error", { paths: [fastCheckRunnersOnlyThroughTheWrapper] }],
+        },
+      },
       {
         files: [propertyRunner],
         rules: { "no-restricted-imports": "off", "no-restricted-properties": "off" },

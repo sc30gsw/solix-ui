@@ -99,9 +99,11 @@ export type Rendered = {
   readonly container: HTMLElement;
   readonly exports: Readonly<Record<string, unknown>>;
   readonly at: (address: Address) => HTMLElement;
-  readonly all: (address: Address) => HTMLElement[];
+  readonly all: (address: Address) => readonly HTMLElement[];
+  readonly parts: (of?: ComponentPath) => readonly string[];
+  readonly classOf: (address: Address) => string;
   readonly update: (props: Props) => void;
-  readonly axe: () => Promise<string[]>;
+  readonly axe: () => Promise<readonly string[]>;
   readonly user: SpecUser;
 };
 

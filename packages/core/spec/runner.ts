@@ -1,7 +1,7 @@
 import { createComponent, type JSX, render } from "@solidjs/web";
 import axe from "axe-core";
 import { createStore, flush, merge } from "solid-js";
-import { afterEach, beforeEach, describe, test } from "vite-plus/test";
+import { describe, test } from "vite-plus/test";
 import { commands, page, userEvent } from "vite-plus/test/browser";
 import type * as Library from "#/src/index.ts";
 import type * as StableClass from "#/src/stable-class.ts";
@@ -9,7 +9,6 @@ import { sameColour } from "#/spec/computed.ts";
 import {
   type Address,
   type Attribute,
-  type Children,
   type ComponentPath,
   describeLook,
   type Fixture,
@@ -20,9 +19,11 @@ import {
   LookDiffers,
   type LookEntry,
   type LookFixture,
+  type LookProperty,
   lookProperties,
   type LookSpec,
   MissingError,
+  type Node,
   type Props,
   type Rendered,
   type Scheme,
@@ -30,49 +31,88 @@ import {
   type State,
 } from "#/spec/format.ts";
 import { breakpoints } from "#/spec/look/reference.ts";
+import type { Named } from "#/spec/registry.ts";
+import { wcag2AAndAATags } from "../../../tests/support/browser-gates.ts";
 
-type AnyComponent = (props: Record<string, unknown>) => JSX.Element;
-type Built = "index" | "stable-class";
-type Named<D> = readonly (readonly [section: string, document: D])[];
+type Cleanup = () => void | Promise<void>;
 
-async function built<T>(module: Built): Promise<T> {
+export type Scope = { readonly defer: (cleanup: Cleanup) => void };
+
+type Component = (props: Props) => JSX.Element;
+
+type Resolved = {
+  readonly path: ComponentPath;
+  readonly component: Component;
+  readonly props: Props;
+  readonly children?: string | readonly Resolved[];
+};
+
+type Kind = "function" | "look";
+
+async function built<T>(module: "index" | "stable-class"): Promise<T> {
   return (await import(`../dist/${module}.js`)) as T;
 }
 
 const library = await built<typeof Library>("index");
 const { stableClass } = await built<typeof StableClass>("stable-class");
 const builtExports: Readonly<Record<string, unknown>> = library;
-const builtStylesheet = new URL("../dist/styles.css", import.meta.url).href;
 const startingViewport = { width: window.innerWidth, height: window.innerHeight };
-const defaultScheme: Scheme = "light";
 const targetMark = "data-spec-target";
 const tabStopsTried = 20;
 const probeBaseline = "border-style: solid; outline-style: solid;";
-const otherContext =
-  "color: rgb(1, 2, 3); font: italic 37px serif; cursor: wait; visibility: visible;";
-const accessibilityTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"];
-const cleanups: (() => void | Promise<void>)[] = [];
+const contexts = [
+  "color: rgb(1, 2, 3); font: italic 37px serif; cursor: wait; visibility: visible; width: 640px; height: 480px;",
+  "color: rgb(250, 251, 252); font: 11px monospace; cursor: crosshair; visibility: visible; width: 120px; height: 90px;",
+] as const;
 
-afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
-});
-
-async function stylesheetLinked(): Promise<void> {
-  if (document.querySelector(`link[href="${builtStylesheet}"]`) !== null) return;
+export async function linkedStylesheet(href: string): Promise<void> {
   const link = document.createElement("link");
   link.rel = "stylesheet";
-  link.href = builtStylesheet;
+  link.href = href;
   const loaded = new Promise<void>((resolve, reject) => {
     link.addEventListener("load", () => resolve());
     link.addEventListener("error", () =>
-      reject(new SpecError(`${builtStylesheet}: the built stylesheet did not load.`)),
+      reject(new SpecError(`${href}: the built stylesheet did not load.`)),
     );
   });
   document.head.append(link);
-  await loaded;
+  try {
+    await loaded;
+  } catch (error) {
+    link.remove();
+    throw error;
+  }
 }
 
-function componentAt(path: ComponentPath): AnyComponent {
+await linkedStylesheet(new URL("../dist/styles.css", import.meta.url).href);
+
+export async function runCleanups(test: string, cleanups: readonly Cleanup[]): Promise<void> {
+  const failures: unknown[] = [];
+  for (const cleanup of cleanups.toReversed()) {
+    try {
+      await cleanup();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  flush();
+  if (failures.length > 0) {
+    throw new AggregateError(failures, `${test}: ${failures.length} of its cleanups threw.`);
+  }
+}
+
+const specTest = test.extend<{ scope: Scope }>({
+  scope: [
+    async ({ task }, use) => {
+      const cleanups: Cleanup[] = [];
+      await use({ defer: (cleanup) => void cleanups.push(cleanup) });
+      await runCleanups(task.name, cleanups);
+    },
+    { auto: true },
+  ],
+});
+
+function exportAt(path: ComponentPath): Component {
   const [name, ...members] = path.split(".");
   const found = members.reduce<unknown>(
     (holder, member) =>
@@ -87,58 +127,72 @@ function componentAt(path: ComponentPath): AnyComponent {
       `${path}: the built library exports no component by this name.`,
     );
   }
-  return found as AnyComponent;
+  return found as Component;
 }
 
-function childrenOf(children: Children | undefined): JSX.Element {
-  if (children === undefined || typeof children === "string") return children;
-  return children.map((child) => created(child, givenProps(child)));
+function resolve(node: Node<ComponentPath> | Fixture | LookFixture): Resolved {
+  const { children } = node;
+  return {
+    path: node.component,
+    component: exportAt(node.component),
+    props: givenProps(node),
+    ...(children === undefined
+      ? {}
+      : { children: typeof children === "string" ? children : children.map(resolve) }),
+  };
 }
 
-function created(fixture: Fixture | LookFixture, props: Props): JSX.Element {
-  const component = componentAt(fixture.component);
-  if (fixture.children === undefined) return createComponent(component, props);
+function created(resolved: Resolved, props: Props): JSX.Element {
+  const { children } = resolved;
+  if (children === undefined) return createComponent(resolved.component, props);
   return createComponent(
-    component,
+    resolved.component,
     merge(props, {
       get children() {
-        return childrenOf(fixture.children);
+        return typeof children === "string"
+          ? children
+          : children.map((child) => created(child, child.props));
       },
     }),
   );
 }
 
-function stableClassOf({ of, part }: Address, fallback: string): string {
-  return stableClass((of ?? fallback).replaceAll(".", ""), part);
+function componentOf(of: ComponentPath | undefined, root: ComponentPath): string {
+  return (of ?? root).replaceAll(".", "");
 }
 
-function mounted(fixture: Fixture | LookFixture, scheme: Scheme): Rendered {
+export function mount(
+  scope: Scope,
+  fixture: Fixture | LookFixture,
+  scheme: Scheme,
+  kind: Kind,
+): Rendered {
+  const resolved = resolve(fixture);
   const host = document.createElement("div");
   host.setAttribute(library.colorSchemeAttribute, scheme);
   document.body.append(host);
-  cleanups.push(() => host.remove());
+  scope.defer(() => host.remove());
+  const [props, setProps] = createStore<Record<string, unknown>>({ ...resolved.props });
   const { provider } = fixture;
-  const [props, setProps] = createStore<Record<string, unknown>>({ ...givenProps(fixture) });
   const dispose = render(() => {
-    if (provider === undefined) return created(fixture, props);
+    if (provider === undefined) return created(resolved, props);
     return createComponent(library.SolixProvider, {
       ...givenProps(provider),
-      forceColorScheme: scheme,
+      ...(kind === "look" ? { forceColorScheme: scheme } : {}),
       getRootElement: () => host,
       get children() {
-        return created(fixture, props);
+        return created(resolved, props);
       },
     });
   }, host);
-  cleanups.push(dispose);
+  scope.defer(dispose);
   flush();
   const root = [...host.querySelectorAll<HTMLElement>("*")].find(
     (element) => element.localName !== "style",
   );
   if (root === undefined) throw new Error(`${fixture.component}: it rendered no element.`);
-  const all = (address: Address) => [
-    ...host.querySelectorAll<HTMLElement>(`.${stableClassOf(address, fixture.component)}`),
-  ];
+  const classOf = ({ of, part }: Address) => stableClass(componentOf(of, fixture.component), part);
+  const all = (address: Address) => [...host.querySelectorAll<HTMLElement>(`.${classOf(address)}`)];
   return {
     root,
     container: host,
@@ -154,9 +208,22 @@ function mounted(fixture: Fixture | LookFixture, scheme: Scheme): Rendered {
       return found;
     },
     all,
+    parts: (of) => {
+      const prefix = stableClass(componentOf(of, fixture.component), "");
+      return [
+        ...new Set(
+          [...host.querySelectorAll("*")].flatMap((element) =>
+            [...element.classList].filter((name) => name.startsWith(prefix)),
+          ),
+        ),
+      ]
+        .map((name) => name.slice(prefix.length))
+        .sort();
+    },
+    classOf,
     axe: async () => {
       const { violations } = await axe.run(host, {
-        runOnly: { type: "tag", values: accessibilityTags },
+        runOnly: { type: "tag", values: wcag2AAndAATags },
       });
       return violations.map(({ id }) => id);
     },
@@ -199,116 +266,130 @@ async function tabbedTo(target: HTMLElement): Promise<void> {
   }
 }
 
-const enter: Record<State, (target: HTMLElement) => Promise<void>> = {
-  rest: async (target) => {
+export async function enter(scope: Scope, state: State, target: HTMLElement): Promise<void> {
+  if (state === "rest") {
     blurred();
     await userEvent.unhover(target);
-  },
-  hover: async (target) => {
+    return;
+  }
+  if (state === "focus-visible") {
+    await tabbedTo(target);
+    return;
+  }
+  scope.defer(() => userEvent.unhover(target));
+  if (state === "hover") {
     await userEvent.hover(target);
-    cleanups.push(() => userEvent.unhover(target));
-  },
-  pressed: async (target) => {
-    target.setAttribute(targetMark, "");
-    await commands.pressOn(`[${targetMark}]`);
-    cleanups.push(() => commands.releasePress());
-  },
-  "focus-visible": tabbedTo,
+    return;
+  }
+  target.setAttribute(targetMark, "");
+  scope.defer(() => commands.releasePress());
+  await commands.pressOn(`[${targetMark}]`);
+}
+
+async function under(scope: Scope, media: LookEntry["media"]): Promise<void> {
+  if (media?.width !== undefined) {
+    scope.defer(() => page.viewport(startingViewport.width, startingViewport.height));
+    await page.viewport(breakpoints[media.width], startingViewport.height);
+  }
+  if (media?.reducedMotion === true) {
+    scope.defer(() => commands.emulateReducedMotion(false));
+    await commands.emulateReducedMotion(true);
+  }
+}
+
+type Expected = {
+  readonly property: LookProperty;
+  readonly value: string;
+  readonly computed: string;
 };
 
-function resolvedIn(context: HTMLElement, property: string, value: string): string {
+function computedIn(context: string, property: LookProperty, value: string): string {
+  const holder = document.createElement("div");
+  holder.style.cssText = context;
   const probe = document.createElement("div");
   probe.style.cssText = probeBaseline;
   probe.style.setProperty(property, value);
-  if (probe.style.getPropertyValue(property) === "") {
-    throw new SpecError(`${property}: the engine does not take ${value} for it.`);
-  }
-  context.append(probe);
-  const resolved = getComputedStyle(probe).getPropertyValue(property);
-  probe.remove();
-  return resolved;
+  holder.append(probe);
+  document.body.append(holder);
+  const computed = getComputedStyle(probe).getPropertyValue(property);
+  holder.remove();
+  return computed;
 }
 
-function expectedOf(property: string, value: string, beside: HTMLElement): string {
-  if (value.includes("var(")) {
+export function expected(property: LookProperty, value: string): Expected {
+  if (/var\(/i.test(value)) {
     throw new SpecError(`${property}: ${value} reads a custom property; give the literal value.`);
   }
-  const context = beside.parentElement ?? document.body;
-  const other = document.createElement("div");
-  other.style.cssText = otherContext;
-  document.body.append(other);
-  const [here, there] = [resolvedIn(context, property, value), resolvedIn(other, property, value)];
-  other.remove();
-  if (here !== there) {
+  if (!CSS.supports(property, value)) {
+    throw new SpecError(`${property}: the engine does not take ${value} for it.`);
+  }
+  const [one, other] = contexts.map((context) => computedIn(context, property, value));
+  if (one !== other) {
     throw new SpecError(
-      `${property}: ${value} computes ${here} beside the part and ${there} elsewhere, so it follows its context.`,
+      `${property}: ${value} computes ${one} in one context and ${other} in another, so it follows its context.`,
     );
   }
-  return here;
+  return { property, value, computed: one };
 }
 
-function requireAttribute(root: HTMLElement, where: string, requires: Attribute | undefined): void {
+function compare(target: Element, want: Expected): void {
+  const actual = getComputedStyle(target).getPropertyValue(want.property).trim();
+  const same =
+    lookProperties[want.property] === "colour"
+      ? sameColour(actual, want.computed)
+      : actual === want.computed;
+  if (!same) {
+    throw new LookDiffers(
+      `${want.property}: expected ${want.value}, computed ${want.computed}; it is ${actual}.`,
+    );
+  }
+}
+
+function requireAttribute(root: HTMLElement, requires: Attribute | undefined): void {
   if (requires === undefined) return;
   const found = root.getAttribute(requires.attribute);
   if (found !== requires.value) {
     throw new MissingError(
       requires,
-      `${where}: ${requires.attribute}="${requires.value}" is not on it, it has ${found}`,
+      `${requires.attribute}="${requires.value}" is not on it, it has ${found}.`,
     );
   }
 }
 
-async function lookHolds(entry: LookEntry): Promise<void> {
-  const width = entry.media?.width;
-  if (width !== undefined) {
-    await page.viewport(breakpoints[width], startingViewport.height);
-    cleanups.push(() => page.viewport(startingViewport.width, startingViewport.height));
-  }
-  if (entry.media?.reducedMotion === true) {
-    await commands.emulateReducedMotion(true);
-    cleanups.push(() => commands.emulateReducedMotion(false));
-  }
-  const rendered = mounted(entry.fixture, entry.scheme ?? defaultScheme);
-  const target = entry.at === undefined ? rendered.root : rendered.at(entry.at);
-  const where = `${entry.at?.of ?? entry.fixture.component} ${entry.at?.part ?? "root"}`;
-  requireAttribute(rendered.root, where, entry.requires);
-  await enter[entry.state ?? "rest"](target);
-  await transitionsSettled(target);
-  const actual = getComputedStyle(target).getPropertyValue(entry.property).trim();
-  const expected = expectedOf(entry.property, entry.value, target);
-  const same =
-    lookProperties[entry.property] === "colour"
-      ? sameColour(actual, expected)
-      : actual === expected;
-  if (!same) {
-    throw new LookDiffers(
-      `${where}, ${entry.property}: expected ${entry.value}, computed ${expected}; it is ${actual}.`,
-    );
-  }
+async function checkFunction(scope: Scope, entry: FunctionEntry): Promise<void> {
+  await held(entry.says, entry.status, async () => {
+    await entry.assert(mount(scope, entry.fixture, "light", "function"));
+  });
 }
 
-async function functionHolds(entry: FunctionEntry): Promise<void> {
-  await entry.assert(mounted(entry.fixture, defaultScheme));
+export async function checkLook(scope: Scope, entry: LookEntry): Promise<void> {
+  await under(scope, entry.media);
+  const want = expected(entry.property, entry.value);
+  await held(describeLook(entry), entry.status, async () => {
+    const rendered = mount(scope, entry.fixture, entry.scheme ?? "light", "look");
+    const target = entry.at === undefined ? rendered.root : rendered.at(entry.at);
+    requireAttribute(rendered.root, entry.requires);
+    await enter(scope, entry.state ?? "rest", target);
+    await transitionsSettled(target);
+    compare(target, want);
+  });
 }
 
 export function runFunctionSpecs(specs: Named<FunctionSpec>): void {
-  for (const [name, spec] of specs) {
-    describe(name, () => {
-      beforeEach(stylesheetLinked);
+  for (const [section, spec] of specs) {
+    describe(section, () => {
       for (const entry of spec.entries) {
-        test(entry.says, () => held(entry.says, entry.status, () => functionHolds(entry)));
+        specTest(entry.says, ({ scope }) => checkFunction(scope, entry));
       }
     });
   }
 }
 
 export function runLookSpecs(specs: Named<LookSpec>): void {
-  for (const [name, spec] of specs) {
-    describe(name, () => {
-      beforeEach(stylesheetLinked);
+  for (const [section, spec] of specs) {
+    describe(section, () => {
       for (const entry of spec) {
-        const says = describeLook(entry);
-        test(says, () => held(says, entry.status, () => lookHolds(entry)));
+        specTest(describeLook(entry), ({ scope }) => checkLook(scope, entry));
       }
     });
   }

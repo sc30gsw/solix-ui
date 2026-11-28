@@ -42,19 +42,6 @@ type Shared = Pick<FunctionEntry, "says" | "fixture" | "assert"> & { readonly pi
 const salmon = "rgb(250, 128, 114)";
 const olive = "rgb(128, 128, 0)";
 
-function stableClassesIn(container: HTMLElement, component: string): string[] {
-  const prefix = `solix-${component}-`;
-  return [
-    ...new Set(
-      [...container.querySelectorAll("*")].flatMap((element) =>
-        [...element.classList].filter((name) => name.startsWith(prefix)),
-      ),
-    ),
-  ]
-    .map((name) => name.slice(prefix.length))
-    .sort();
-}
-
 function sharedChecks<R extends Reference>({
   component,
   reference,
@@ -70,8 +57,8 @@ function sharedChecks<R extends Reference>({
     parts: {
       says: `renders exactly the reference's parts, ${parts.join(", ")}, each with its stable class`,
       fixture: plain,
-      assert: ({ container }) => {
-        expect(stableClassesIn(container, component), "parts").toEqual(parts);
+      assert: (rendered) => {
+        expect(rendered.parts(), "parts").toEqual(parts);
       },
       pin: "parts: expected",
     },
@@ -186,9 +173,9 @@ function sharedChecks<R extends Reference>({
     "static classes": {
       says: `${component}.classes maps each part to its stable class`,
       fixture: plain,
-      assert: ({ exports }) => {
+      assert: ({ exports, classOf }) => {
         expect(Reflect.get(Object(exports[component]), "classes"), "static classes").toEqual(
-          onEveryPart((part) => `solix-${component}-${part}`),
+          onEveryPart((part) => classOf({ part })),
         );
       },
       pin: "static classes: expected undefined to deeply equal",
