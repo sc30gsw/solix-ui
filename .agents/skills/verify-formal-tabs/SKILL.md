@@ -7,6 +7,8 @@ description: Model-checks the selection and roving focus of `Tabs` with tla-ts, 
 
 ## The promise
 
+The models under `formal/tabs` are the specification of the selection and roving focus of `Tabs`. `Tabs` calls `stepPastDisabled`, the kernel that `formal/tabs/step-over.model.ts` checks, through `stepOverDisabled`. The replay holds the page to the state graphs of the roving list and the controlled list, and the kernel, run as JavaScript, to the graph of the step over. Each chart is drawn from its model's graph. `tests/formal-kernels.test.ts` holds the kernel to the models: every value a kernel module exports is compiled into a model that tla-ts passes, a source of its library imports it, and a model takes nothing else from a library's sources.
+
 For every list of two to four tabs, every set of disabled tabs that leaves one enabled, both orientations, both directions, with or without wrapping, with arrows that select or not, and with a click on the selected tab that deselects it or not:
 
 - Focus and selection rest only on an enabled tab, the list's one tab stop is the selected tab, else the first enabled one, and where arrows select, a selected tab is the focused one.
