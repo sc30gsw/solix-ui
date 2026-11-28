@@ -25,12 +25,12 @@ It does if it edits any of these:
 | `packages/core/src/light-dismiss.ts` | The fallback runs only where `closedBy` is missing. It closes when the press and the release are both outside the dialog's box. |
 | `apps/playground/src/App.tsx` and `apps/playground/src/sections` | The page has one `<dialog>`, a button named `Open modal`, a first button directly under `main`, a text input named `Name` inside the dialog, the text `Modal content`, and a paragraph that starts `The app records the modal as` and ends `opened.` or `closed.` |
 | `apps/playground/tests/modal-protocol.test.ts` | It runs the commands against the built app in each installed engine and holds the model of the two facts. It runs the fixed sequences in `everyActionInEachRun` before the generated ones. |
-| `tests/support` | It runs `vp run -r build` in production mode before any test, which builds the library and the app, and then starts the built app once and gives the test its URL as `playgroundUrl`. |
+| `tests/support` | It runs `vp run -r build` in production mode before any test, which builds the library and the app, and then starts the built app once and gives the test its URL as `playgroundUrl`. `solid-diagnostics-check.ts`, a setup file of the node project, holds each test, and what runs between tests, to no Solid development diagnostic through `tests/support/solid-diagnostics.ts`. |
 | `scripts/browser-engines.mjs` | It lists the engines the test runs on, and which of them are installed. |
-| `vite.config.ts` | It sets the test include globs and the global setup. |
+| `vite.config.ts` | It sets the test include globs, the global setup and the node project's setup files. |
 | `playwright`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `06bb761`. Run `git diff 06bb761 -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
+Last confirmed against commit `f62b116`. Run `git diff f62b116 -- packages/core apps/playground tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the table before you trust a pass. Move the commit forward only after you have confirmed that the table and the check still describe the code at the new commit.
 
 ## Run it
 

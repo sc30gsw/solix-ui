@@ -145,7 +145,10 @@ const projects = [
           storySpec,
         ],
         globalSetup: ["tests/support/global-setup.ts"],
-        setupFiles: ["apps/playground/tests/support/console-check.ts"],
+        setupFiles: [
+          "apps/playground/tests/support/console-check.ts",
+          "tests/support/solid-diagnostics-check.ts",
+        ],
       },
     },
     inEveryEngine({

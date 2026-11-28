@@ -7,4 +7,5 @@ const dependenciesOfTheLinkedLibrariesViteMustNotPreBundle = allowedRuntimeDepen
 export default defineConfig({
   plugins: [solid({ start: { nodeServer: true, middleware: "src/middleware.ts" }, ssr: true })],
   optimizeDeps: { exclude: dependenciesOfTheLinkedLibrariesViteMustNotPreBundle },
+  server: { forwardConsole: false },
 });

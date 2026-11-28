@@ -1,5 +1,5 @@
 import { Button, colorSchemeAttribute } from "@solix/core";
-import { createEffect, onCleanup } from "solid-js";
+import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import type { Meta, StoryObj } from "storybook-solidjs-vite";
 import { expect } from "storybook/test";
 
@@ -124,3 +124,12 @@ export const SetsTheOtherScheme: Story = {
     page.setAttribute(colorSchemeAttribute, other);
   },
 };
+
+export const RaisesAfterItsGate: Story = {
+  beforeEach: () => () => {
+    const [read] = createSignal(false);
+    untrack(read, "the cleanup its beforeEach returns");
+  },
+};
+
+export const RunsAfterALateDiagnostic: Story = {};

@@ -7,6 +7,7 @@ import type * as Colors from "#/src/colors.ts";
 import type * as CreateTheme from "#/src/create-theme.ts";
 import type * as Library from "#/src/index.ts";
 import type * as Parts from "#/src/parts.ts";
+import type * as QueryContainer from "#/src/query-container.ts";
 import type * as StableClass from "#/src/stable-class.ts";
 import type * as StyleProps from "#/src/style-props.ts";
 import type { VariableRow, Variables } from "#/src/variables.ts";
@@ -60,7 +61,11 @@ export const { scaleOfThemeKey, themeStyleSheet } = (await import(
 
 export const { stableClass } = (await import(join(dist, "stable-class.js"))) as typeof StableClass;
 
-export const { isContainerWidth, resolveVariables } = (await import(
+export const builtQueryContainer = (await import(
+  join(dist, "query-container.js")
+)) as typeof QueryContainer;
+
+export const { resolveVariables } = (await import(
   join(dist, "style-props.js")
 )) as typeof StyleProps;
 

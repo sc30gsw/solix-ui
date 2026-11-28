@@ -1,5 +1,6 @@
 import { createTheme, SolixProvider } from "@solix/core";
 import { createEffect } from "solid-js";
+import { DiagnosticProbe } from "#/src/diagnostic-probe.tsx";
 import { hydratedMark } from "#/src/hydrated-mark.ts";
 import { BoxSection } from "#/src/sections/BoxSection.tsx";
 import { ButtonSection } from "#/src/sections/ButtonSection.tsx";
@@ -62,6 +63,7 @@ export default function App() {
         <ThemeSection />
         <ColorSchemeSection />
         <PrimitivesSection />
+        <DiagnosticProbe />
       </main>
     </SolixProvider>
   );
