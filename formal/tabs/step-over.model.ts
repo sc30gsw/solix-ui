@@ -7,12 +7,9 @@ import {
   type Move,
   type RovingList,
 } from "#/formal/tabs/roving-list.ts";
+import { type Size, type Tab, tabs } from "#/formal/tabs/tab.ts";
 
-type Tab = 0 | 1 | 2 | 3;
-
-const tabs: Tab[] = [0, 1, 2, 3];
-
-let size!: 2 | 3 | 4;
+let size!: Size;
 let disabled!: Set<Tab>;
 let vertical!: boolean;
 let rightToLeft!: boolean;

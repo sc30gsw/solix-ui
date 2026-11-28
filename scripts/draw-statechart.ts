@@ -24,7 +24,11 @@ if (model === undefined) {
     "Usage: node scripts/draw-statechart.ts <model> [--view <file>] [--out <dir>] [--max-states <n>]",
   );
 }
-const cap = values["max-states"] === undefined ? defaultStateCap : Number(values["max-states"]);
+const maxStates = values["max-states"];
+if (maxStates !== undefined && !/^\d+$/.test(maxStates)) {
+  throw new Error(`--max-states takes a whole number of states, not ${JSON.stringify(maxStates)}.`);
+}
+const cap = maxStates === undefined ? defaultStateCap : Number(maxStates);
 const { chart, report, broken } = await statechartOf(model, await viewFrom(values.view), cap);
 if (values.out !== undefined) {
   mkdirSync(values.out, { recursive: true });

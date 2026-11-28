@@ -87,6 +87,7 @@ export function replayGraph<State extends object>(
           `${replay.name}: the page left the state the last step reached. It shows ${keyOf(now)}, and the model reached ${keyOf(reached)}.`,
         );
       }
+      reached = {};
       const known = replay.table.states.has(keyOf(now)) ? now : await startOver();
       const path =
         pathBetween(replay.table, known, from) ??
@@ -120,7 +121,6 @@ export function replayGraph<State extends object>(
       test(name, async () => {
         await bringTo(from);
         const counted = await replay.count(page);
-        reached = {};
         await perform(label);
         const shown = replay.shown(label, to);
         await replay.agrees(page, shown);

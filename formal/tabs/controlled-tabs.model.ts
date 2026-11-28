@@ -5,23 +5,14 @@ import {
   type Key,
   type RovingList,
 } from "#/formal/tabs/roving-list.ts";
+import { type Size, type Tab, tabAt } from "#/formal/tabs/tab.ts";
 
-type Tab = 0 | 1 | 2 | 3;
-
-let size!: 2 | 3 | 4;
+let size!: Size;
 let follows!: boolean;
 let refused!: Tab | null;
 let value!: Tab | null;
 let focused: Tab | null = null;
 let asked: Tab | undefined = undefined;
-
-function tabAt(index: number): Tab {
-  if (index === 0) return 0;
-  if (index === 1) return 1;
-  if (index === 2) return 2;
-  if (index === 3) return 3;
-  throw new Error("the roving list gave an index past the fourth tab");
-}
 
 function list(): RovingList {
   return {

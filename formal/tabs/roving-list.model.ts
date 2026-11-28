@@ -9,13 +9,11 @@ import {
   type Selection,
   tabStopOf,
 } from "#/formal/tabs/roving-list.ts";
+import { type Size, type Tab, tabAt, tabs } from "#/formal/tabs/tab.ts";
 
-type Tab = 0 | 1 | 2 | 3;
 type Last = Key | "click" | "clickDisabled" | "none";
 
-const tabs: Tab[] = [0, 1, 2, 3];
-
-let size!: 2 | 3 | 4;
+let size!: Size;
 let disabled!: Set<Tab>;
 let vertical!: boolean;
 let rightToLeft!: boolean;
@@ -26,22 +24,13 @@ let selected!: Tab | null;
 let focused: Tab | null = null;
 let last: Last = "none";
 
-function tabAt(index: number | null): Tab | null {
-  if (index === null) return null;
-  if (index === 0) return 0;
-  if (index === 1) return 1;
-  if (index === 2) return 2;
-  if (index === 3) return 3;
-  throw new Error("the roving list gave an index past the fourth tab");
-}
-
 function list(): RovingList {
   return { size, disabled, vertical, rightToLeft, loop, selectsOnMove, deselects };
 }
 
 function become(next: Selection, action: Last) {
-  selected = tabAt(next.selected);
-  focused = tabAt(next.focused);
+  selected = next.selected === null ? null : tabAt(next.selected);
+  focused = next.focused === null ? null : tabAt(next.focused);
   last = action;
 }
 
