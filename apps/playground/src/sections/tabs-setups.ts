@@ -25,7 +25,7 @@ export const account = "Account";
 export const manual = "Manual vertical";
 export const vertical = "Vertical";
 export const optional = "Optional";
-export const rightToLeft = "Right to left";
+const rightToLeft = "Right to left";
 export const controlled = "Controlled";
 export const held = "Held";
 export const generated = "Generated";
@@ -131,7 +131,7 @@ export type ControlledSetup = {
 const { drafts, locked } = tabNames.controlled;
 const { kept } = tabNames.held;
 
-export const controlledSetups: ControlledSetup[] = [
+const controlledSetups: ControlledSetup[] = [
   { list: controlled, value: drafts, refused: locked, follows: true },
   { list: held, value: kept, refused: null, follows: false },
 ];

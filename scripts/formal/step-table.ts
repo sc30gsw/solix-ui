@@ -1,4 +1,9 @@
-import { edgesFrom, type GraphState, type StateGraph } from "#/scripts/formal/state-graph.ts";
+import {
+  edgesFrom,
+  type GraphEdge,
+  type GraphState,
+  type StateGraph,
+} from "#/scripts/formal/state-graph.ts";
 import { keyOf, type Vars } from "#/scripts/formal/tla-value.ts";
 
 export type ObservedStep<State> = { to: State; internal: number };
@@ -9,18 +14,14 @@ export type StepTable<State> = {
   steps: Map<string, Map<string, ObservedStep<State>>>;
 };
 
-export function stepTable<State>(
+type Settled = { id: string; crossed: number };
+
+function settlerOf(
   graph: StateGraph,
-  start: GraphState,
-  observe: (vars: Vars) => State,
-  internal: readonly string[] = [],
-): StepTable<State> {
-  const out = edgesFrom(graph);
-  const settled = (
-    id: string,
-    crossed = 0,
-    seen: readonly string[] = [],
-  ): { id: string; crossed: number } => {
+  out: ReadonlyMap<string, readonly GraphEdge[]>,
+  internal: readonly string[],
+) {
+  const settled = (id: string, crossed = 0, seen: readonly string[] = []): Settled => {
     const onward = (out.get(id) ?? []).filter(({ action }) => internal.includes(action));
     if (onward.length === 0) return { id, crossed };
     if (onward.length > 1 || seen.includes(id)) {
@@ -30,6 +31,35 @@ export function stepTable<State>(
     }
     return settled(onward[0].to, crossed + 1, [...seen, id]);
   };
+  return settled;
+}
+
+function record<State>(
+  table: Map<string, ObservedStep<State>>,
+  label: string,
+  from: State,
+  step: ObservedStep<State>,
+): void {
+  const known = table.get(label);
+  if (
+    known !== undefined &&
+    (keyOf(known.to) !== keyOf(step.to) || known.internal !== step.internal)
+  ) {
+    throw new Error(
+      `the model takes ${label} from ${keyOf(from)} to both ${keyOf(known.to)} and ${keyOf(step.to)}, so a page cannot be compared with it.`,
+    );
+  }
+  table.set(label, step);
+}
+
+export function stepTable<State>(
+  graph: StateGraph,
+  start: GraphState,
+  observe: (vars: Vars) => State,
+  internal: readonly string[] = [],
+): StepTable<State> {
+  const out = edgesFrom(graph);
+  const settled = settlerOf(graph, out, internal);
   const states = new Map<string, State>();
   const steps = new Map<string, Map<string, ObservedStep<State>>>();
   const first = settled(start.id).id;
@@ -46,17 +76,7 @@ export function stepTable<State>(
       const target = settled(edge.to);
       const reached = graph.states.get(target.id);
       if (reached === undefined) continue;
-      const to = observe(reached.vars);
-      const known = table.get(edge.label);
-      if (
-        known !== undefined &&
-        (keyOf(known.to) !== keyOf(to) || known.internal !== target.crossed)
-      ) {
-        throw new Error(
-          `the model takes ${edge.label} from ${keyOf(from)} to both ${keyOf(known.to)} and ${keyOf(to)}, so a page cannot be compared with it.`,
-        );
-      }
-      table.set(edge.label, { to, internal: target.crossed });
+      record(table, edge.label, from, { to: observe(reached.vars), internal: target.crossed });
       if (!visited.has(target.id)) {
         visited.add(target.id);
         queue.push(target.id);

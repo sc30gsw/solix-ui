@@ -7,7 +7,7 @@ import {
 } from "#/scripts/formal/run.ts";
 import {
   actionLabel,
-  type GraphEdge,
+  edgesFrom,
   parseAction,
   type StateGraph,
 } from "#/scripts/formal/state-graph.ts";
@@ -21,7 +21,7 @@ export type ChartView = {
   step?: (action: string, parameters: TlaValue[], from: Vars, to: Vars) => string | null;
 };
 
-export const chartViewKeys = [
+const chartViewKeys = [
   "title",
   "keep",
   "state",
@@ -79,16 +79,8 @@ function labelsOf(view: ChartView) {
   return { state, step };
 }
 
-export function chartOf(
-  graph: StateGraph,
-  view: ChartView,
-  broken: readonly RuleBreak[],
-  cap: number = defaultStateCap,
-): { chart: string; states: number; arrows: number; hidden: string[] } {
-  const { state, step } = labelsOf(view);
-  const keep = view.keep ?? (() => true);
-  const out = new Map<string, GraphEdge[]>();
-  for (const edge of graph.edges) out.set(edge.from, [...(out.get(edge.from) ?? []), edge]);
+function reachedFrom(graph: StateGraph, keep: (vars: Vars) => boolean) {
+  const out = edgesFrom(graph);
   const starts = [...graph.states.values()].filter(({ initial, vars }) => initial && keep(vars));
   const reached = new Set(starts.map(({ id }) => id));
   const queue = [...reached];
@@ -101,28 +93,34 @@ export function chartOf(
       }
     }
   }
+  return { starts, reached };
+}
+
+function stateLabelsOf(
+  graph: StateGraph,
+  reached: ReadonlySet<string>,
+  state: (vars: Vars) => string,
+): Map<string, string> {
   const labelOf = new Map<string, string>();
   for (const id of reached) {
     const vars = graph.states.get(id)?.vars;
     if (vars !== undefined) labelOf.set(id, inChart(state(vars)));
   }
-  const labels = [...new Set(labelOf.values())];
-  if (labels.length > cap) {
-    throw new Error(
-      `The chart would draw ${labels.length} states, more than its cap of ${cap}. Give a view whose state() merges states that act the same or whose keep() draws fewer, or raise --max-states.`,
-    );
-  }
-  const name = (label: string | undefined) => {
-    const index = labels.indexOf(label ?? "");
-    return index === -1 ? undefined : `s${index}`;
-  };
+  return labelOf;
+}
+
+function arrowsOf(
+  graph: StateGraph,
+  labelOf: ReadonlyMap<string, string>,
+  name: (label: string | undefined) => string | undefined,
+  step: (label: string, from: Vars, to: Vars) => string | null,
+) {
   const arrows = new Map<string, Set<string>>();
   const hidden = new Set<string>();
   for (const edge of graph.edges) {
-    if (!reached.has(edge.from) || !reached.has(edge.to)) continue;
     const from = labelOf.get(edge.from);
     const to = labelOf.get(edge.to);
-    if (from === to) continue;
+    if (from === undefined || to === undefined || from === to) continue;
     const text = step(
       edge.label,
       graph.states.get(edge.from)?.vars ?? {},
@@ -135,25 +133,30 @@ export function chartOf(
     const key = `${name(from)} --> ${name(to)}`;
     arrows.set(key, (arrows.get(key) ?? new Set()).add(inChart(text)));
   }
-  const marked = (classOf: (trace: RuleBreak["trace"]) => Vars[]) =>
+  return { arrows, hidden };
+}
+
+function marksOf(
+  broken: readonly RuleBreak[],
+  keep: (vars: Vars) => boolean,
+  nameOf: (vars: Vars) => string | undefined,
+) {
+  const marked = (pick: (trace: RuleBreak["trace"]) => RuleBreak["trace"]) =>
     new Set(
       broken.flatMap(({ trace }) =>
-        classOf(trace)
-          .filter((vars) => keep(vars))
-          .flatMap((vars) => name(inChart(state(vars))) ?? []),
+        pick(trace)
+          .filter(({ vars }) => keep(vars))
+          .flatMap(({ vars }) => nameOf(vars) ?? []),
       ),
     );
-  const breaking = marked((trace) => trace.slice(-1).map(({ vars }) => vars));
-  const onAPath = marked((trace) => trace.slice(0, -1).map(({ vars }) => vars));
-  const lines = [
-    ...(view.title === undefined ? [] : ["---", `title: ${inChart(view.title)}`, "---"]),
-    "stateDiagram-v2",
-    "  direction LR",
-    ...labels.map((label, index) => `  s${index}: ${label}`),
-    ...[...new Set(starts.flatMap(({ id }) => name(labelOf.get(id)) ?? []))].map(
-      (start) => `  [*] --> ${start}`,
-    ),
-    ...[...arrows].map(([key, texts]) => `  ${key}: ${[...texts].sort().join(" or ")}`),
+  return {
+    breaking: marked((trace) => trace.slice(-1)),
+    onAPath: marked((trace) => trace.slice(0, -1)),
+  };
+}
+
+function classLines(breaking: ReadonlySet<string>, onAPath: ReadonlySet<string>): string[] {
+  return [
     ...(breaking.size === 0
       ? []
       : [`  ${breaksClass}`, ...[...breaking].map((each) => `  class ${each} breaks`)]),
@@ -165,6 +168,41 @@ export function chartOf(
             .filter((each) => !breaking.has(each))
             .map((each) => `  class ${each} bugPath`),
         ]),
+  ];
+}
+
+export function chartOf(
+  graph: StateGraph,
+  view: ChartView,
+  broken: readonly RuleBreak[],
+  cap: number = defaultStateCap,
+): { chart: string; states: number; arrows: number; hidden: string[] } {
+  const { state, step } = labelsOf(view);
+  const keep = view.keep ?? (() => true);
+  const { starts, reached } = reachedFrom(graph, keep);
+  const labelOf = stateLabelsOf(graph, reached, state);
+  const labels = [...new Set(labelOf.values())];
+  if (labels.length > cap) {
+    throw new Error(
+      `The chart would draw ${labels.length} states, more than its cap of ${cap}. Give a view whose state() merges states that act the same or whose keep() draws fewer, or raise --max-states.`,
+    );
+  }
+  const name = (label: string | undefined) => {
+    const index = labels.indexOf(label ?? "");
+    return index === -1 ? undefined : `s${index}`;
+  };
+  const { arrows, hidden } = arrowsOf(graph, labelOf, name, step);
+  const { breaking, onAPath } = marksOf(broken, keep, (vars) => name(inChart(state(vars))));
+  const lines = [
+    ...(view.title === undefined ? [] : ["---", `title: ${inChart(view.title)}`, "---"]),
+    "stateDiagram-v2",
+    "  direction LR",
+    ...labels.map((label, index) => `  s${index}: ${label}`),
+    ...[...new Set(starts.flatMap(({ id }) => name(labelOf.get(id)) ?? []))].map(
+      (start) => `  [*] --> ${start}`,
+    ),
+    ...[...arrows].map(([key, texts]) => `  ${key}: ${[...texts].sort().join(" or ")}`),
+    ...classLines(breaking, onAPath),
   ];
   return {
     chart: `${lines.join("\n")}\n`,
@@ -213,7 +251,7 @@ export function withBroken(
   return [...broken, found];
 }
 
-export async function checkEveryRule(
+async function checkEveryRule(
   model: string,
   options: RunOptions = {},
 ): Promise<{ runs: ModelRun[]; broken: RuleBreak[]; rules: string[] }> {

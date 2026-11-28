@@ -39,7 +39,7 @@ function agreesOn<State extends object>(state: State, shown: Partial<State>): bo
   return keyOf(picked) === keyOf(shown);
 }
 
-export function replaysOf<State extends object>(replay: GraphReplay<State>): Replay<State>[] {
+function replaysOf<State extends object>(replay: GraphReplay<State>): Replay<State>[] {
   return [...replay.table.states.values()].flatMap((from) => {
     const steps = replay.table.steps.get(keyOf(from)) ?? new Map();
     const labels = [...new Set([...steps.keys(), ...replay.alsoFrom(from)])].sort((one, other) =>

@@ -16,7 +16,6 @@ export {
   type ControlledSetup,
   controlled,
   controlledSetupOf,
-  controlledSetups,
   displayedByTheApp,
   generated,
   held,
@@ -25,7 +24,6 @@ export {
   manual,
   optional,
   panelOf,
-  rightToLeft,
   setupOf,
   tabNames,
   tabNamesOf,
@@ -44,7 +42,7 @@ export type NamedRovingList = { name: string; names: string[]; list: RovingList 
 
 export type NamedSelection = { selected: string | null; focused: string | null };
 
-export function namedListOf(setup: TabsSetup): NamedRovingList {
+function namedListOf(setup: TabsSetup): NamedRovingList {
   return { name: setup.list, names: tabNamesOf(setup.list), list: rovingListOf(setup) };
 }
 

@@ -35,11 +35,11 @@ function enabledFrom(list: RovingList, index: number, by: number): number {
   return enabledFrom(list, index + by, by);
 }
 
-export function firstEnabled(list: RovingList): number {
+function firstEnabled(list: RovingList): number {
   return enabledFrom(list, 0, 1);
 }
 
-export function lastEnabled(list: RovingList): number {
+function lastEnabled(list: RovingList): number {
   return enabledFrom(list, list.size - 1, -1);
 }
 
