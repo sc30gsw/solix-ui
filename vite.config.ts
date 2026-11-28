@@ -104,7 +104,10 @@ const projects = [
         include: [...nodeTestFiles],
         exclude: ["**/node_modules/**", browserTests, ...ruleFixtures, checkerRules, storySpec],
         globalSetup: ["tests/support/global-setup.ts"],
-        setupFiles: ["apps/playground/tests/support/console-check.ts"],
+        setupFiles: [
+          "apps/playground/tests/support/console-check.ts",
+          "tests/support/solid-diagnostics-check.ts",
+        ],
       },
     },
     ...storiesServers.map((server) => ({

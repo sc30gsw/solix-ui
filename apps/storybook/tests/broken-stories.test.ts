@@ -13,9 +13,13 @@ import { brokenStoriesServer, storiesServers } from "#/tests/support/test-server
 
 type BrokenStory = Exclude<keyof typeof BrokenStories, "default">;
 
+const raisesAfterItsGate = "RaisesAfterItsGate" satisfies BrokenStory;
+
+type FailingStory = Exclude<BrokenStory, typeof raisesAfterItsGate>;
+
 type Outcome = { status: string; messages: string; colorSchemeAtTheEnd: string | undefined };
 
-const reasonOf: { [Story in BrokenStory]: string } = {
+const reasonOf: { [Story in FailingStory]: string } = {
   NoAccessibleName: "button-name",
   TargetTooSmall: "target-size",
   ContrastOutsideTheList: "minimum color contrast ratio",
@@ -33,7 +37,10 @@ const reasonOf: { [Story in BrokenStory]: string } = {
   PlayTurnsTheCheckOff: 'while it ran:\na11y.test is "off"',
   NamelessLinkAfterAWrite: "link-name",
   SetsTheOtherScheme: "leaves the colour scheme of its project",
+  RunsAfterALateDiagnostic: "raised before the story",
 };
+
+const everyBrokenStory: string[] = [...Object.keys(reasonOf), raisesAfterItsGate];
 
 const fixturesDirectory = join(storybookDirectory, "fixtures");
 const brokenStoriesRunTimeout = 240_000;
@@ -83,6 +90,10 @@ describe.each(enginesToVerify())("in %s, one run of every broken story", (engine
     },
   );
 
+  test(`passes ${raisesAfterItsGate}, whose diagnostic is raised after the preview's gate on it closed, so that the story after it fails for it`, () => {
+    expect(outcomes.get(storyIdOf(raisesAfterItsGate))?.status, runOutput).toBe("passed");
+  });
+
   test("the page of every broken story that ran ends in the project's colour scheme, and in the other for the one that sets it, read from the page after each story", () => {
     const { colorScheme } = brokenStoriesServer;
     const other = storiesServers
@@ -92,7 +103,7 @@ describe.each(enginesToVerify())("in %s, one run of every broken story", (engine
 
     expect(
       Object.fromEntries(
-        Object.keys(reasonOf).map((story) => [
+        everyBrokenStory.map((story) => [
           story,
           outcomes.get(storyIdOf(story))?.colorSchemeAtTheEnd,
         ]),
@@ -100,15 +111,13 @@ describe.each(enginesToVerify())("in %s, one run of every broken story", (engine
       runOutput,
     ).toEqual(
       Object.fromEntries(
-        Object.keys(reasonOf).map((story) => [story, story === setsTheOther ? other : colorScheme]),
+        everyBrokenStory.map((story) => [story, story === setsTheOther ? other : colorScheme]),
       ),
     );
   });
 
   test("runs every broken story Storybook indexes, and no other", () => {
-    expect([...outcomes.keys()].sort(), runOutput).toEqual(
-      Object.keys(reasonOf).map(storyIdOf).sort(),
-    );
+    expect([...outcomes.keys()].sort(), runOutput).toEqual(everyBrokenStory.map(storyIdOf).sort());
   });
 });
 

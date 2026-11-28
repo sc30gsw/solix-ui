@@ -2,9 +2,10 @@ import { createEffect, createRoot, flush as flushSolid } from "solid-js";
 import { afterEach, beforeEach, expect } from "vite-plus/test";
 import { propertyRunsGoing } from "../../../../tests/support/properties.ts";
 import {
-  captureSolidDiagnostics,
+  openSolidDiagnosticsGate,
+  type SolidDiagnosticsGate,
   solidDevelopmentBuildLoaded,
-} from "../../../../tests/support/browser-gates.ts";
+} from "../../../../tests/support/solid-diagnostics.ts";
 import type { EventOf } from "#/src/internal-listener.ts";
 import type { RefSetter } from "#/src/types.ts";
 import {
@@ -42,7 +43,15 @@ const disposers: (() => void)[] = [];
 const recorders: (() => void)[] = [];
 const scope = { depth: 0 };
 const journals = new Set<Attachments>();
-let diagnosticsRaised: () => string[] = () => [];
+const diagnostics: { gate?: SolidDiagnosticsGate; running: number } = { running: 0 };
+
+function diagnosticsRaised(): string[] {
+  const { gate } = diagnostics;
+  if (gate === undefined) return [];
+  if (diagnostics.running > 0) return gate.rotateDescribed();
+  diagnostics.gate = undefined;
+  return gate.finishDescribed();
+}
 
 function inScope(): boolean {
   return scope.depth > 0;
@@ -270,7 +279,6 @@ function startRecording(): void {
   liveTimers.clear();
   liveObservations.clear();
   liveHandlers.clear();
-  diagnosticsRaised = captureSolidDiagnostics();
 }
 
 export function mount<T>(create: () => T): T {
@@ -336,25 +344,43 @@ export function unmount(): void {
 }
 
 export function reportAfterDispose(): string[] {
+  if (diagnostics.gate === undefined || diagnostics.running !== 1) {
+    throw new Error(
+      "reportAfterDispose() only runs inside a browser-harness test that no other test runs beside.",
+    );
+  }
   unmount();
   const report = [...diagnosticsRaised(), ...leftAfterDispose()];
   startRecording();
   return report;
 }
 
-beforeEach(() => {
+beforeEach(({ task }) => {
+  if (task.concurrent !== true) startRecording();
+  diagnostics.running += 1;
+  diagnostics.gate ??= openSolidDiagnosticsGate({ exclusive: true });
   expect(solidDevelopmentBuildLoaded(), "the browser project runs Solid's development build").toBe(
     true,
   );
-  startRecording();
 });
 
 afterEach(({ task }) => {
   const propertyRunsLeft = propertyRunsGoing(task);
-  unmount();
-  for (const remove of recorders.splice(0)) remove();
-  document.body.replaceChildren();
-  expect(diagnosticsRaised(), "a primitive raised a Solid development diagnostic").toEqual([]);
+  let raised: string[] = [];
+  try {
+    unmount();
+    for (const remove of recorders.splice(0)) remove();
+    document.body.replaceChildren();
+  } finally {
+    diagnostics.running -= 1;
+    raised = diagnosticsRaised();
+  }
+  expect(
+    raised,
+    task.concurrent === true
+      ? "a primitive raised a Solid development diagnostic while this test, or a test that ran at once with it, ran"
+      : "a primitive raised a Solid development diagnostic",
+  ).toEqual([]);
   expect(
     leftAfterDispose(),
     "a primitive left a listener, timer or observer behind after its owner was disposed",

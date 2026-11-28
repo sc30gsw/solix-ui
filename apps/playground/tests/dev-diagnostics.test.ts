@@ -1,14 +1,22 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Browser } from "playwright";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { browserType, enginesToVerify } from "../../../scripts/browser-engines.mjs";
 import { installedVp } from "../../../scripts/repository";
 import {
+  type PrintedLine,
   type RunningServer,
   startServer,
   viteOnAFreePort,
 } from "../../../tests/support/server-process";
+import {
+  isCoveredBy,
+  problemsPrinted,
+  type SolidDiagnostic,
+  unexpectedDiagnostics,
+} from "../../../tests/support/solid-diagnostics.ts";
+import { upstreamExceptions } from "../../../tests/support/upstream-diagnostic-exceptions.ts";
+import { diagnosticProbeMessage, diagnosticProbeParameter } from "#/src/diagnostic-probe.tsx";
 import { opened } from "#/tests/support/opening.ts";
 import { account, optional, panelOf, tabNamed, tabNames } from "#/tests/support/tabs.ts";
 
@@ -17,29 +25,71 @@ const { notes } = tabNames.optional;
 
 const appDirectory = join(import.meta.dirname, "..");
 
-type UpstreamException = {
-  code: string;
-  reportedUnder: string;
-  package: string;
-  reachedThrough: string;
-  reason: string;
-  expires: string;
-};
+const server: { running?: RunningServer } = {};
+const reportedInEveryEngine: SolidDiagnostic[] = [];
 
-const upstreamExceptions = JSON.parse(
-  readFileSync(join(import.meta.dirname, "upstream-diagnostic-exceptions.json"), "utf8"),
-) as UpstreamException[];
+function runningServer(): RunningServer {
+  if (server.running === undefined) throw new Error("The development server did not start.");
+  return server.running;
+}
 
-function isCoveredBy(exception: UpstreamException, diagnostic: string): boolean {
+function unexpectedIn(text: string): string[] {
+  const { diagnostics, otherLines } = problemsPrinted(text);
+  return [...unexpectedDiagnostics(diagnostics), ...otherLines];
+}
+
+function isTheProbe(diagnostic: SolidDiagnostic): boolean {
   return (
-    diagnostic.startsWith(`[${exception.code}]`) && diagnostic.includes(exception.reportedUnder)
+    diagnostic.code === "SSR_RENDER_ERROR_CONTAINED" &&
+    diagnostic.message.includes(diagnosticProbeMessage)
   );
 }
 
-let devServer: RunningServer | undefined;
+function printedAfterTheAddress(stream: PrintedLine["stream"]): string {
+  const running = runningServer();
+  const lines = running.printedLines();
+  const announced = lines.findIndex(({ text }) => text.includes(running.url));
+  if (announced === -1) {
+    throw new Error(`The development server did not print its address ${running.url}.`);
+  }
+  return lines
+    .slice(announced + 1)
+    .filter((line) => line.stream === stream)
+    .map(({ text }) => text)
+    .join("\n");
+}
+
+type ServerProblems = {
+  readonly stderrDiagnostics: readonly SolidDiagnostic[];
+  readonly diagnostics: readonly SolidDiagnostic[];
+  readonly otherErrors: readonly string[];
+};
+
+const printed: { problems?: ServerProblems } = {};
+
+function readServerProblems(): ServerProblems {
+  const stderr = problemsPrinted(printedAfterTheAddress("stderr"));
+  const stdout = problemsPrinted(printedAfterTheAddress("stdout"));
+  return {
+    stderrDiagnostics: stderr.diagnostics,
+    diagnostics: [...stderr.diagnostics, ...stdout.diagnostics].filter(
+      (diagnostic) => !isTheProbe(diagnostic),
+    ),
+    otherErrors: stderr.otherLines,
+  };
+}
+
+function serverProblems(): ServerProblems {
+  if (printed.problems === undefined) {
+    throw new Error(
+      'The beforeAll of "the development server", the hook that stops the server and reads what it printed, did not run or did not finish. It runs only alongside a test of that describe: run this file without -t, or read that hook\'s failure.',
+    );
+  }
+  return printed.problems;
+}
 
 beforeAll(async () => {
-  devServer = await startServer({
+  server.running = await startServer({
     directory: appDirectory,
     command: [installedVp, "dev", "--force", ...viteOnAFreePort],
     environment: { NODE_ENV: "development" },
@@ -47,29 +97,24 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await devServer?.stop();
+  await server.running?.stop();
 });
-
-function devUrl(): string {
-  if (devServer === undefined) throw new Error("The development server did not start.");
-  return devServer.url;
-}
 
 describe.each(enginesToVerify())("in %s", (engine) => {
   let browser: Browser;
-  const diagnostics: string[] = [];
+  const reported: string[] = [];
 
   beforeAll(async () => {
     browser = await browserType(engine).launch();
     const page = await browser.newPage();
     page.on("console", (message) => {
       if (message.type() === "error" || message.type() === "warning") {
-        diagnostics.push(message.text());
+        reported.push(message.text());
       }
     });
-    page.on("pageerror", (error) => diagnostics.push(String(error)));
+    page.on("pageerror", (error) => reported.push(String(error)));
 
-    await opened(page, devUrl(), "hydrated");
+    await opened(page, runningServer().url, "hydrated");
     const summary = page.locator("summary").filter({ hasText: "Toggle" });
     const content = page.getByText("Hidden content");
     await summary.click();
@@ -94,23 +139,48 @@ describe.each(enginesToVerify())("in %s", (engine) => {
 
   afterAll(async () => {
     await browser.close();
+    reportedInEveryEngine.push(...reported.flatMap((text) => problemsPrinted(text).diagnostics));
   });
 
-  test("Solid's development build reports no diagnostics from our own code", () => {
-    const unexpected = diagnostics.filter(
-      (diagnostic) => !upstreamExceptions.some((exception) => isCoveredBy(exception, diagnostic)),
-    );
+  test("the page reports no console error or warning, nor a diagnostic of Solid's development build from our own code", () => {
+    expect(reported.flatMap(unexpectedIn)).toEqual([]);
+  });
+});
 
-    expect(unexpected).toEqual([]);
+describe("the development server", () => {
+  beforeAll(async () => {
+    const running = runningServer();
+    const page = await fetch(running.url);
+    expect(page.ok, `fetching ${running.url} answered ${page.status}`).toBe(true);
+    await page.text();
+    const probe = await fetch(`${running.url}?${diagnosticProbeParameter}`);
+    expect(probe.ok, `fetching the diagnostic probe answered ${probe.status}`).toBe(true);
+    await probe.text();
+    await running.stop();
+    printed.problems = readServerProblems();
   });
 
-  test("every upstream exception still describes a diagnostic that is reported", () => {
-    const noLongerReported = upstreamExceptions.filter(
-      (exception) => !diagnostics.some((diagnostic) => isCoveredBy(exception, diagnostic)),
-    );
+  test("prints its address, and the report Solid's development build makes of the diagnostic probe, so what it printed is read and its render runs that build", () => {
+    const { stderrDiagnostics } = serverProblems();
 
-    expect(noLongerReported).toEqual([]);
+    expect(stderrDiagnostics.filter(isTheProbe)).toHaveLength(1);
   });
+
+  test("prints no error, warning or diagnostic of Solid's from our own code while it renders the page", () => {
+    const { diagnostics, otherErrors } = serverProblems();
+
+    expect([...unexpectedDiagnostics(diagnostics), ...otherErrors]).toEqual([]);
+  });
+});
+
+test("every upstream exception still describes a diagnostic that is reported, in a browser or by the development server", () => {
+  const reported = [...reportedInEveryEngine, ...serverProblems().diagnostics];
+
+  expect(
+    upstreamExceptions.filter(
+      (exception) => !reported.some((diagnostic) => isCoveredBy(exception, diagnostic)),
+    ),
+  ).toEqual([]);
 });
 
 test("no upstream exception is past its expiry date", () => {

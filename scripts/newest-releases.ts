@@ -1,4 +1,6 @@
+import { matchesGlob } from "node:path";
 import semver from "semver";
+import { workspaceFile } from "#/scripts/pnpm-settings.ts";
 
 export const heldBackFile = "scripts/held-back-releases.json";
 export const packageManagerPinName = "packageManager";
@@ -494,6 +496,51 @@ export function compareWithNewest(input: {
 }
 
 export type RunEnvironment = Record<string, string | undefined>;
+
+const pinFilePatterns = [
+  "**/package.json",
+  workspaceFile,
+  "pnpm-lock.yaml",
+  heldBackFile,
+  ".github/workflows/newest-releases*.yml",
+  "scripts/check-newest-releases.ts",
+  "scripts/git.ts",
+  "scripts/newest-releases.ts",
+  "scripts/package-manager.internal.ts",
+  "scripts/package-manager.ts",
+  "scripts/pnpm-settings.ts",
+  "scripts/release-sources.ts",
+  "scripts/repository-root.ts",
+  "scripts/repository.ts",
+];
+
+export function mayChangePins(changedFiles: readonly string[] | undefined): boolean {
+  return (
+    changedFiles === undefined ||
+    changedFiles.some((file) => pinFilePatterns.some((pattern) => matchesGlob(file, pattern)))
+  );
+}
+
+export type Verdict = { failures: Problem[]; warnings: Problem[] };
+
+export function verdictOf(
+  problems: readonly Problem[],
+  pullRequestFiles: readonly string[] | undefined,
+): Verdict {
+  if (mayChangePins(pullRequestFiles)) return { failures: [...problems], warnings: [] };
+  return {
+    failures: problems.filter(({ kind }) => kind !== "behind"),
+    warnings: problems.filter(({ kind }) => kind === "behind"),
+  };
+}
+
+export function warningLines(warnings: readonly Problem[], base: string): string[] {
+  if (warnings.length === 0) return [];
+  return [
+    ...warnings.map(({ message }) => message),
+    `This pull request changes no pin, so a pin behind does not fail it. The fix is a build(deps) pull request of its own to ${base}.`,
+  ].map((line) => `::warning::${line}`);
+}
 
 export function failureLines(problems: readonly Problem[], run: RunEnvironment): string[] {
   const messages = problems.map(({ message }) => message);

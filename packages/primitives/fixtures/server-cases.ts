@@ -412,6 +412,14 @@ const cases = {
 
 export const serverCases: { [K in Primitive]: ServerCase<Library[K]> } = cases;
 
+function isPrimitive(name: string): name is Primitive {
+  return Object.hasOwn(serverCases, name);
+}
+
+export const serverPrimitives: readonly Primitive[] = Object.keys(serverCases)
+  .filter(isPrimitive)
+  .sort();
+
 export const valueCases: { [K in BrowserValuePrimitive]: ValueCase<Library[K]> } = cases;
 
 function unheard(): () => void {

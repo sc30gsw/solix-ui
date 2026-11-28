@@ -10,11 +10,9 @@ import { type Breakpoint, breakpoints } from "#/src/style-prop-table.ts";
 import {
   type ContainerWidth,
   containerWidthOf,
-  createQueryContainer,
-  type GapProps,
-  type GridTypeProps,
-  type VariableProp,
-} from "#/src/style-props.ts";
+  createSharedQueryContainer,
+} from "#/src/query-container.ts";
+import { type GapProps, type GridTypeProps, type VariableProp } from "#/src/style-props.ts";
 import { tokens } from "#/src/tokens.stylex.ts";
 
 const styles = stylex.create({
@@ -63,7 +61,7 @@ const defaults = defaultsOf<GridProps>()({ columns: 12, grow: false });
 
 export function Grid(rawProps: GridProps) {
   const props = withDefaults(defaults, rawProps);
-  const container = createQueryContainer(createUniqueId(), () => {
+  const container = createSharedQueryContainer(createUniqueId(), () => {
     if (props.type !== "container") return undefined;
     const widths = props.breakpoints;
     return breakpoints.map((name) => [name, widths?.[name] ?? containerWidthOf(name)]);
