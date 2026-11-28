@@ -94,19 +94,17 @@ export const DynamicContainerColumns: Story = {
       await expect(styleCount()).toBe(1);
     });
 
-    await userEvent.click(canvas.getByRole("button", { name: "Toggle first md span" }));
-    await waitFor(async () => {
-      await expect(first().getBoundingClientRect().width).toBeGreaterThan(400);
-      await expect(second().getBoundingClientRect().width).toBeLessThan(300);
-      await expect(styleCount()).toBe(1);
-    });
+    const toggleFirstSpan = async (firstWidth: (width: number) => unknown) => {
+      await userEvent.click(canvas.getByRole("button", { name: "Toggle first md span" }));
+      await waitFor(async () => {
+        await firstWidth(first().getBoundingClientRect().width);
+        await expect(second().getBoundingClientRect().width).toBeLessThan(300);
+        await expect(styleCount()).toBe(1);
+      });
+    };
 
-    await userEvent.click(canvas.getByRole("button", { name: "Toggle first md span" }));
-    await waitFor(async () => {
-      await expect(first().getBoundingClientRect().width).toBeLessThan(300);
-      await expect(second().getBoundingClientRect().width).toBeLessThan(300);
-      await expect(styleCount()).toBe(1);
-    });
+    await toggleFirstSpan((width) => expect(width).toBeGreaterThan(400));
+    await toggleFirstSpan((width) => expect(width).toBeLessThan(300));
 
     await userEvent.click(canvas.getByRole("button", { name: "Toggle first column" }));
     await waitFor(async () => {

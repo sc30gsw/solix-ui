@@ -59,7 +59,7 @@ export function isCoveredBy(exception: UpstreamException, diagnostic: SolidDiagn
   );
 }
 
-export function isUpstream(diagnostic: SolidDiagnostic): boolean {
+function isUpstream(diagnostic: SolidDiagnostic): boolean {
   return upstreamExceptions.some((exception) => isCoveredBy(exception, diagnostic));
 }
 

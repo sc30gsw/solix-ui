@@ -61,7 +61,7 @@ export const { scaleOfThemeKey, themeStyleSheet } = (await import(
 
 export const { stableClass } = (await import(join(dist, "stable-class.js"))) as typeof StableClass;
 
-export const { isContainerWidth } = (await import(
+export const builtQueryContainer = (await import(
   join(dist, "query-container.js")
 )) as typeof QueryContainer;
 

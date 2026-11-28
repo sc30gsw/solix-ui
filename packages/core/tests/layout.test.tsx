@@ -19,7 +19,7 @@ import type { spaceVariables } from "#/src/Space.variables.ts";
 import type { Variables } from "#/src/variables.ts";
 import { breakpointWidths } from "#/src/style-prop-table.ts";
 import type { ContainerWidth } from "#/src/query-container.ts";
-import { isContainerWidth, library } from "#/tests/built-library.ts";
+import { builtQueryContainer, library } from "#/tests/built-library.ts";
 import { expectingSolidDiagnostic } from "../../../tests/support/solid-diagnostics.ts";
 import { render } from "#/tests/fixtures.ts";
 import {
@@ -853,7 +853,9 @@ type AcceptedByTheType = {
 type AcceptedByTheTable = Extract<WidthCase, readonly [string, true]>[0];
 
 test("a container width is a non-negative decimal length with a unit and no space, and the type and the run time take the same ones", () => {
-  const acceptedAtRunTime = widthCases.filter(([written]) => isContainerWidth(written));
+  const acceptedAtRunTime = widthCases.filter(([written]) =>
+    builtQueryContainer.isContainerWidth(written),
+  );
 
   expectTypeOf<AcceptedByTheType>().toEqualTypeOf<AcceptedByTheTable>();
   expect(acceptedAtRunTime).toEqual(widthCases.filter(([, accepted]) => accepted));
