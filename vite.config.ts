@@ -211,6 +211,10 @@ export default defineConfig({
         rules: { "no-console": "off" },
       },
       {
+        files: ["**/*.model.ts"],
+        rules: { "no-unassigned-vars": "off" },
+      },
+      {
         files: ["packages/core/src/development-warning.ts"],
         rules: { "no-console": ["error", { allow: ["warn"] }] },
       },

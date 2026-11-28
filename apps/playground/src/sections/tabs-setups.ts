@@ -1,4 +1,4 @@
-export type TabSetup = {
+type TabSetup = {
   name: string;
   disabled: boolean;
   leftSection?: string;
@@ -25,7 +25,7 @@ export const account = "Account";
 export const manual = "Manual vertical";
 export const vertical = "Vertical";
 export const optional = "Optional";
-export const rightToLeft = "Right to left";
+const rightToLeft = "Right to left";
 export const controlled = "Controlled";
 export const held = "Held";
 export const generated = "Generated";
@@ -121,6 +121,95 @@ export const tabsSetups: TabsSetup[] = [
   },
 ];
 
+export type ControlledSetup = {
+  list: string;
+  value: string;
+  refused: string | null;
+  follows: boolean;
+};
+
+const { drafts, locked } = tabNames.controlled;
+const { kept } = tabNames.held;
+
+const controlledSetups: ControlledSetup[] = [
+  { list: controlled, value: drafts, refused: locked, follows: true },
+  { list: held, value: kept, refused: null, follows: false },
+];
+
+type KeyboardRow = {
+  list: string;
+  start: string;
+  keys: string[];
+  focused: string;
+  selected: string;
+};
+
+export const keyboardTable: KeyboardRow[] = [
+  {
+    list: account,
+    start: overview,
+    keys: ["ArrowRight"],
+    focused: members,
+    selected: members,
+  },
+  {
+    list: account,
+    start: members,
+    keys: ["ArrowLeft"],
+    focused: overview,
+    selected: overview,
+  },
+  {
+    list: account,
+    start: overview,
+    keys: ["ArrowLeft"],
+    focused: security,
+    selected: security,
+  },
+  {
+    list: account,
+    start: security,
+    keys: ["ArrowRight"],
+    focused: overview,
+    selected: overview,
+  },
+  { list: account, start: members, keys: ["Home"], focused: overview, selected: overview },
+  { list: account, start: overview, keys: ["End"], focused: security, selected: security },
+  { list: account, start: members, keys: ["ArrowDown"], focused: members, selected: members },
+  { list: account, start: members, keys: ["ArrowUp"], focused: members, selected: members },
+  {
+    list: account,
+    start: overview,
+    keys: ["ArrowRight", "ArrowRight"],
+    focused: security,
+    selected: security,
+  },
+  { list: rightToLeft, start: north, keys: ["ArrowLeft"], focused: south, selected: south },
+  { list: rightToLeft, start: south, keys: ["ArrowRight"], focused: north, selected: north },
+  { list: rightToLeft, start: north, keys: ["ArrowRight"], focused: west, selected: west },
+  { list: rightToLeft, start: west, keys: ["ArrowLeft"], focused: north, selected: north },
+  { list: rightToLeft, start: south, keys: ["Home"], focused: north, selected: north },
+  { list: rightToLeft, start: south, keys: ["End"], focused: west, selected: west },
+  { list: manual, start: two, keys: ["ArrowDown"], focused: three, selected: two },
+  { list: manual, start: two, keys: ["ArrowDown", "Enter"], focused: three, selected: three },
+  { list: manual, start: two, keys: ["ArrowUp", "Space"], focused: one, selected: one },
+  { list: manual, start: three, keys: ["ArrowDown"], focused: three, selected: three },
+  { list: manual, start: one, keys: ["ArrowUp"], focused: one, selected: one },
+  { list: manual, start: two, keys: ["ArrowRight"], focused: two, selected: two },
+  { list: manual, start: two, keys: ["Home"], focused: one, selected: two },
+  { list: manual, start: two, keys: ["End"], focused: three, selected: two },
+  { list: vertical, start: beta, keys: ["ArrowUp"], focused: alpha, selected: alpha },
+  { list: vertical, start: alpha, keys: ["ArrowUp"], focused: gamma, selected: gamma },
+  { list: vertical, start: gamma, keys: ["ArrowDown"], focused: alpha, selected: alpha },
+  { list: vertical, start: alpha, keys: ["ArrowDown"], focused: beta, selected: beta },
+  { list: vertical, start: beta, keys: ["ArrowLeft"], focused: beta, selected: beta },
+  { list: vertical, start: alpha, keys: ["End"], focused: gamma, selected: gamma },
+  { list: optional, start: files, keys: ["Home"], focused: notes, selected: notes },
+  { list: optional, start: notes, keys: ["End"], focused: files, selected: files },
+  { list: optional, start: files, keys: ["ArrowRight"], focused: notes, selected: notes },
+  { list: optional, start: notes, keys: ["ArrowLeft"], focused: files, selected: files },
+];
+
 export function valueOf(name: string): string {
   return name.toLowerCase();
 }
@@ -129,13 +218,13 @@ export function panelOf(name: string): string {
   return `${name} panel`;
 }
 
-export type NamedTabs = { list: string; tabs: readonly { name: string }[] };
+type NamedTabs = { list: string; tabs: readonly { name: string }[] };
 
 function named(names: Readonly<Record<string, string>>): { name: string }[] {
   return Object.values(names).map((name) => ({ name }));
 }
 
-export const handWrittenTabs: NamedTabs[] = [
+const handWrittenTabs: NamedTabs[] = [
   { list: controlled, tabs: named(tabNames.controlled) },
   { list: held, tabs: named(tabNames.held) },
   { list: inAShadowRoot, tabs: named(tabNames.inAShadowRoot) },
@@ -153,4 +242,10 @@ export function setupOf(list: string): TabsSetup {
 
 export function tabNamesOf(list: string): string[] {
   return listNamed([...tabsSetups, ...handWrittenTabs], list).tabs.map(({ name }) => name);
+}
+
+export function controlledSetupOf(list: string): ControlledSetup {
+  const found = controlledSetups.find((setup) => setup.list === list);
+  if (!found) throw new Error(`${list}: the playground names no controlled list of tabs so.`);
+  return found;
 }

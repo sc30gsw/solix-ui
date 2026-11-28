@@ -1,19 +1,19 @@
 ---
 name: verify-behaviour-protocol
-description: Checks that the state of a component that takes its behaviour from UI SDK stays in agreement with the user's clicks and keys, for generated sequences and for every single key from every state, against a small model of each instance the playground renders. Today it covers the selection of `Tabs`. Use when a change edits a behaviour component, `packages/core/src/step-over-disabled.ts`, `packages/core/src/headless.ts`, the setups the playground renders, the SDK's version, or Solid, the Solid plugin, Playwright or fast-check.
+description: Checks that the state of a component that takes its behaviour from UI SDK stays in agreement with the user's clicks and keys, for generated sequences from a fresh page load, against a small model of each instance the playground renders, and that the drive waits for hydration and reports a click that misses its tab. Today it covers the selection of `Tabs`. Use when a change edits a behaviour component, `packages/core/src/step-over-disabled.ts`, `packages/core/src/headless.ts`, the setups the playground renders, the SDK's version, or Solid, the Solid plugin, Playwright or fast-check.
 ---
 
 # Verify the protocol of a behaviour component
 
 ## The promise
 
-For any sequence of clicks and keys on an instance of a behaviour component that the playground renders, what the page shows is what a model of that instance says. The model knows only what a user could know about the instance, and nothing about the code.
+For any sequence of clicks and keys on an instance of a behaviour component that the playground renders, from a fresh page load, what the page shows is what a model of that instance says. The model knows only what a user could know about the instance, and nothing about the code. Every single step from every state, the keyboard table, and the model itself against the graph tla-ts checks, are `verify-formal-tabs`'s.
 
 Each behaviour component has one row here. The next one adds a row, a setups module and its checks, and a model only where the roving list does not describe it.
 
 | Component | Covered code | Setups the playground renders | Model | Checks |
 | --- | --- | --- | --- | --- |
-| `Tabs` | `packages/core/src/Tabs*.tsx`, `packages/core/src/tabs-context.ts`; `apps/playground/src/sections/TabsSection.tsx`, which renders every entry of `tabsSetups` as a set of tabs whose list is named for the entry, with the entry's direction as `dir` and each panel's text from `panelOf`; and `apps/playground/tests/support/tabs.ts`, whose `keyboardTable` is the tabs pattern written by hand and whose `stateOf` reads the selected tab, the focused tab and the tabs with `tabindex` 0 by their index in the list, names them from the setups module, and reads the panels displayed | `apps/playground/src/sections/tabs-setups.ts` | `apps/playground/tests/support/roving-list-model.ts`, given each setup through `rovingListOf` in `apps/playground/tests/support/tabs.ts` | `apps/playground/tests/roving-list-model.test.ts`, `apps/playground/tests/tabs-protocol.test.ts` and the single steps in `apps/playground/tests/tabs.test.ts` |
+| `Tabs` | `packages/core/src/Tabs*.tsx`, `packages/core/src/tabs-context.ts`; `apps/playground/src/sections/TabsSection.tsx`, which renders every entry of `tabsSetups` as a set of tabs whose list is named for the entry, with the entry's direction as `dir` and each panel's text from `panelOf`; and `apps/playground/tests/support/tabs.ts`, whose `stateOf` reads the selected tab, the focused tab and the tabs with `tabindex` 0 by their index in the list, names them from the setups module, and reads the panels displayed | `apps/playground/src/sections/tabs-setups.ts` | `formal/tabs/roving-list.ts`, the spec that `verify-formal-tabs` model-checks, run on each setup's tab names through `namedLists`, `afterClickByName` and `afterKeyByName` in `apps/playground/tests/support/tabs.ts` | `apps/playground/tests/tabs-protocol.test.ts` and `apps/playground/tests/tabs.test.ts` |
 
 **The selection of Tabs.** The model of a list holds two facts, the selected tab and the focused tab. It knows the list's tabs and which are disabled, its orientation, its direction, whether it wraps, whether an arrow selects, and whether a click on the selected tab selects none.
 
@@ -40,46 +40,41 @@ It does if it edits a file the table above names, or any of these:
 | `vite.config.ts` | It sets the test include globs, the global setup, the node project's setup files and the Solid plugin. |
 | `@ui-sdk/core`, `@ui-sdk/solid`, `solid-js`, `@solidjs/signals`, `@solidjs/web`, `@solidjs/compiler`, `@solidjs/vite-plugin`, `playwright` and `fast-check` in the catalog in `pnpm-workspace.yaml` | At the versions the catalog pins. |
 
-Last confirmed against commit `f62b116`. Run `git diff f62b116 -- packages/core/src apps/playground/src/sections apps/playground/tests tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the tables before you trust a pass. Move the commit forward only after you have confirmed that the tables and the checks still describe the code at the new commit.
+Last confirmed against commit `bdacd8e`. Run `git diff bdacd8e -- packages/core/src apps/playground/src/sections apps/playground/tests tests/support scripts/browser-engines.mjs vite.config.ts pnpm-workspace.yaml`. If it shows changes to the covered code, read them against the tables before you trust a pass. Move the commit forward only after you have confirmed that the tables and the checks still describe the code at the new commit.
 
 ## Run it
 
 ```bash
-vp test apps/playground/tests/roving-list-model.test.ts apps/playground/tests/tabs-protocol.test.ts apps/playground/tests/tabs.test.ts
+vp test apps/playground/tests/tabs-protocol.test.ts apps/playground/tests/tabs.test.ts
 ```
 
 It takes about thirty seconds with one engine installed. With `CI` set, all three engines must be installed.
 
 ## The tool and why
 
-No model checker runs on a Solid component or on the SDK, so this is not a proof. The selection is a small state machine, so the checks run the real component against a model of it in three ways.
+No model checker runs on a Solid component or on the SDK, so this is not a proof. `verify-formal-tabs` checks the selection with tla-ts and replays every step of its graph on the page; this skill keeps the long sequences and the drive that runs them.
 
-- `roving-list-model.test.ts` runs in Node. It checks every row of the hand-written keyboard table against the model, so the model and the pattern as a person wrote it down agree before a browser opens.
-- The single steps in `tabs.test.ts` take every state the model can reach in each list and every key, bring the page to that state by the shortest way the model knows, press the key, and compare the page with the model. This covers every key from every state, once.
 - `tabs-protocol.test.ts` uses fast-check's model-based commands. It generates sequences of clicks and keys, runs each against the built app from a fresh page load, and compares the page with the model after every action. A failing sequence is shrunk to the shortest that still fails. Each run opens the page through `opened(page, url, "hydrated")` in `apps/playground/tests/support/opening.ts`, which opens until `commit` and waits, all within `hydrationTimeout`, 10 s, less than the 30 s test timeout, until an effect of the app has marked `<html>` with `data-hydrated` once the page hydrated, so no step acts on the server's markup before its handlers exist and no read waits behind the script; a page that does not get there fails with `the page did not become ready`. Two pages whose client script hydrates late, one that waits and one that keeps the page busy, run the two sequences that failed in CI as the first run in a cold engine, and a page that never hydrates must fail so. `clickTab` in `apps/playground/tests/support/tabs.ts` fails with `the click did not reach the tab` when no click event lands on the tab.
 
 ## What a pass covers
 
-- Every row of the keyboard table against the model.
-- Every key of `keys` in `roving-list-model.ts` from every state the model can reach, in each list `tabsSetups` describes, per engine. The lists differ in every fact the model holds: a disabled tab in the middle, at the end and at both ends, vertical and horizontal, left to right and right to left, wrapping and not, selecting on an arrow and not, and able to select none.
-- `generatedRuns` generated sequences per engine per run, of up to `longestSequence` actions, as `tabs-protocol.test.ts` sets them, each starting from a fresh page load on one list of `tabsSetups`.
+- `generatedRuns` generated sequences per engine per run, of up to `longestSequence` actions, as `tabs-protocol.test.ts` sets them, each starting from a fresh page load on one list of `tabsSetups`. The lists differ in every fact the model holds: a disabled tab in the middle, at the end and at both ends, vertical and horizontal, left to right and right to left, wrapping and not, selecting on an arrow and not, and able to select none.
 
 ## What a pass does not cover
 
-- A click on a disabled tab, which moves focus differently in each engine. `apps/playground/tests/tabs.test.ts` checks that it selects nothing.
+- A click on a disabled tab, which moves focus differently in each engine. `verify-formal-tabs` replays one from every state and `apps/playground/tests/tabs.test.ts` checks that it selects nothing.
+- Every single step from every state, the keyboard table, and the controlled and held lists, which `verify-formal-tabs` replays from tla-ts's graph.
 - The lists the section writes by hand, outside `tabsSetups`. Tests of their own in `apps/playground/tests/tabs.test.ts` hold a controlled value, a value the app never changes, and tabs and panels that mount later, and one in `apps/playground/tests/behaviour-seam.test.ts` the arrow keys in a shadow root.
 - The Tab key. A test of its own in `apps/playground/tests/tabs.test.ts` holds where it puts focus.
 - A click that misses its tab because the page moves under the pointer. An arrow key the list leaves to the page scrolls the page, in Chromium for up to 155 ms; in fifty repetitions per engine of a click, such a key and a click, no click missed its tab, so the drive does not wait for the page to come to rest, and a miss is caught only by the click's own report.
-- The clicks of the single steps and of the other tests in `apps/playground/tests/tabs.test.ts`, which do not report a click that misses its tab.
+- The clicks of the tests in `apps/playground/tests/tabs.test.ts`, which do not report a click that misses its tab.
 - Which tab is the tab stop while none is selected. The checks require one tab stop and do not say which.
 - A list whose own direction differs from its tabs', and a list that changes its orientation or direction while the page is open.
 - Firefox and WebKit where they are not installed.
 
 ## Reading a failure
 
-- **`the roving-list model agrees with the keyboard table` fails.** The table and the model disagree, and no browser was involved. Decide from the tabs pattern which is wrong. A row whose start the model cannot reach names a disabled tab or a tab the list does not have.
-- **A single step fails.** Its name is the list, the state, the key and what the model expects, such as `in Vertical, with Gamma selected and focus on Gamma, after ArrowDown Alpha is selected and focus is on Alpha`. Replay it by hand in the playground. If the page is right and the model wrong, fix the model and say what was wrong. If the page is wrong, it is a bug in the component or a change in the SDK; report it in those words and do not loosen the model.
-- **The generated check fails after `Counterexample`.** It prints the list and the shortest sequence, such as `click the enabled tab at position 1, counted round the list, press ArrowLeft`, and the first observation that disagreed. Treat it as a single step that the single steps missed, and say which state they do not reach.
+- **The generated check fails after `Counterexample`.** It prints the list and the shortest sequence, such as `click the enabled tab at position 1, counted round the list, press ArrowLeft`, and the first observation that disagreed. Replay it by hand in the playground. If the page is right and the spec wrong, fix `formal/tabs/roving-list.ts` and say what was wrong; `verify-formal-tabs` model-checks the same spec. If the page is wrong, it is a bug in the component or a change in the SDK; report it in those words and do not loosen the model.
 - **`the click did not reach the tab`.** The press went somewhere else, and the message lists the events the page saw with how far it was scrolled at each. The component was not asked to select anything, so this is a fault of the drive, not of `Tabs`: look for what moved the page under the pointer.
 - **`the page did not become ready`.** The client script did not mark `<html>` with `data-hydrated` within `hydrationTimeout`, so the drive never acted. The message carries every console message and page error the page raised while it opened, which names a script that failed to load or threw.
 - **A timeout in `page.goto` or a click.** The server did not start, or the section no longer renders what `tabsSetups` describes.
@@ -87,9 +82,9 @@ No model checker runs on a Solid component or on the SDK, so this is not a proof
 
 ## When the change is intended
 
-- A new list of tabs in the playground, or a changed one: change its entry in `tabsSetups`, which the section renders and the model reads, and give it a row in `keyboardTable`.
-- A new fact about a list, such as tabs that close: add it to `TabsSetup`, to `RovingList` through `rovingListOf`, and to the model, with a row in the table that shows it.
+- A new list of tabs in the playground, or a changed one: change its entry in `tabsSetups`, which the section renders and the model reads, and follow `verify-formal-tabs` for its keyboard table and its model.
+- A new fact about a list, such as tabs that close: add it to `TabsSetup`, and follow `verify-formal-tabs` for the spec and its models.
 - A new way to change the selection: add an action to the model and a command class to `steps` in the generated check.
-- A new behaviour component: add its row to the first table, its setups beside the section that renders them, and the three checks for it. A list whose items take focus by arrow keys, such as a menu, a listbox or a radio group, describes each setup as a `RovingList` and reuses the model in `roving-list-model.ts`, adding a fact to `RovingList` and the model only where its pattern differs; anything else gets a model of its own beside it.
+- A new behaviour component: add its row to the first table, its setups beside the section that renders them, and the checks for it. A list whose items take focus by arrow keys, such as a menu, a listbox or a radio group, describes each setup as a `RovingList` and reuses the spec in `formal/tabs/roving-list.ts`, adding a fact to it only where its pattern differs; anything else gets a spec of its own beside it.
 - Upgrading the SDK, Solid, Playwright or fast-check: run the command above.
-- Mutation check after editing covered code: in `packages/core/src/step-over-disabled.ts` make the `onKeyDown` that `stepOverDisabled` returns return at once and run `SOLIX_PROPERTY_SEED=-742600836 vp test apps/playground/tests/roving-list-model.test.ts apps/playground/tests/tabs-protocol.test.ts apps/playground/tests/tabs.test.ts`. The single steps must fail on a key that points at a disabled tab, such as `in Account, with Overview selected and focus on Overview, after ArrowRight Members is selected and focus is on Members`, the generated check must fail, and so must the replay of `firstRunsThatFailedInCi`, whose own seeds press an arrow towards a disabled tab. Restore the file afterwards.
+- Mutation check after editing covered code: in `packages/core/src/step-over-disabled.ts` make the `onKeyDown` that `stepOverDisabled` returns return at once and run `SOLIX_PROPERTY_SEED=-742600836 vp test apps/playground/tests/tabs-protocol.test.ts`. The generated check must fail, and so must the replay of `firstRunsThatFailedInCi`, whose own seeds press an arrow towards a disabled tab. Restore the file afterwards.

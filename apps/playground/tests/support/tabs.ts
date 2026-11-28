@@ -1,31 +1,32 @@
 import type { Locator, Page } from "playwright";
-import {
-  account,
-  manual,
-  optional,
-  rightToLeft,
-  tabNames,
-  tabNamesOf,
-  type TabsSetup,
-  tabsSetups,
-  vertical,
-} from "#/src/sections/tabs-setups.ts";
+import { tabNamesOf, type TabsSetup, tabsSetups } from "#/src/sections/tabs-setups.ts";
 import { type DocumentSnapshot, snapshotOfDocument } from "#/tests/support/opening.ts";
-import type { RovingList } from "#/tests/support/roving-list-model.ts";
+import {
+  afterClick,
+  afterKey,
+  indexIn,
+  type Key,
+  named,
+  type RovingList,
+  rovingListOf,
+} from "#/tests/support/formal.ts";
 
 export {
   account,
+  type ControlledSetup,
   controlled,
+  controlledSetupOf,
   displayedByTheApp,
   generated,
   held,
   inAShadowRoot,
+  keyboardTable,
   manual,
   optional,
   panelOf,
-  rightToLeft,
   setupOf,
   tabNames,
+  tabNamesOf,
   type TabsSetup,
   tabsSetups,
   valueOf,
@@ -37,109 +38,53 @@ export const clickMissedItsTab = "the click did not reach the tab";
 
 const pressEvents = ["mousedown", "mouseup", "click"];
 
-export function rovingListOf(setup: TabsSetup): RovingList {
-  return {
-    name: setup.list,
-    items: setup.tabs,
-    orientation: setup.orientation,
-    direction: setup.direction,
-    loop: setup.loop,
-    selectsOnMove: setup.selectsOnArrow,
-    deselects: setup.deselects,
-    initial: setup.initial,
-  };
+export type NamedRovingList = { name: string; names: string[]; list: RovingList };
+
+export type NamedSelection = { selected: string | null; focused: string | null };
+
+function namedListOf(setup: TabsSetup): NamedRovingList {
+  return { name: setup.list, names: tabNamesOf(setup.list), list: rovingListOf(setup) };
 }
 
-export const tabLists: RovingList[] = tabsSetups.map(rovingListOf);
+export const namedLists: NamedRovingList[] = tabsSetups.map(namedListOf);
 
-export type KeyboardCase = {
-  list: string;
-  start: string;
-  keys: string[];
-  focused: string;
-  selected: string;
-};
+function indexesOf({ names }: NamedRovingList, state: NamedSelection) {
+  return { selected: indexIn(names, state.selected), focused: indexIn(names, state.focused) };
+}
 
-const { overview, members, security } = tabNames.account;
-const { one, two, three } = tabNames.manual;
-const { alpha, beta, gamma } = tabNames.vertical;
-const { notes, files } = tabNames.optional;
-const { north, south, west } = tabNames.rightToLeft;
+function namesOf(
+  { names }: NamedRovingList,
+  state: { selected: number | null; focused: number | null },
+) {
+  return { selected: named(names, state.selected), focused: named(names, state.focused) };
+}
 
-export const keyboardTable: KeyboardCase[] = [
-  {
-    list: account,
-    start: overview,
-    keys: ["ArrowRight"],
-    focused: members,
-    selected: members,
-  },
-  {
-    list: account,
-    start: members,
-    keys: ["ArrowLeft"],
-    focused: overview,
-    selected: overview,
-  },
-  {
-    list: account,
-    start: overview,
-    keys: ["ArrowLeft"],
-    focused: security,
-    selected: security,
-  },
-  {
-    list: account,
-    start: security,
-    keys: ["ArrowRight"],
-    focused: overview,
-    selected: overview,
-  },
-  { list: account, start: members, keys: ["Home"], focused: overview, selected: overview },
-  { list: account, start: overview, keys: ["End"], focused: security, selected: security },
-  { list: account, start: members, keys: ["ArrowDown"], focused: members, selected: members },
-  { list: account, start: members, keys: ["ArrowUp"], focused: members, selected: members },
-  {
-    list: account,
-    start: overview,
-    keys: ["ArrowRight", "ArrowRight"],
-    focused: security,
-    selected: security,
-  },
-  { list: rightToLeft, start: north, keys: ["ArrowLeft"], focused: south, selected: south },
-  { list: rightToLeft, start: south, keys: ["ArrowRight"], focused: north, selected: north },
-  { list: rightToLeft, start: north, keys: ["ArrowRight"], focused: west, selected: west },
-  { list: rightToLeft, start: west, keys: ["ArrowLeft"], focused: north, selected: north },
-  { list: rightToLeft, start: south, keys: ["Home"], focused: north, selected: north },
-  { list: rightToLeft, start: south, keys: ["End"], focused: west, selected: west },
-  { list: manual, start: two, keys: ["ArrowDown"], focused: three, selected: two },
-  { list: manual, start: two, keys: ["ArrowDown", "Enter"], focused: three, selected: three },
-  { list: manual, start: two, keys: ["ArrowUp", "Space"], focused: one, selected: one },
-  { list: manual, start: three, keys: ["ArrowDown"], focused: three, selected: three },
-  { list: manual, start: one, keys: ["ArrowUp"], focused: one, selected: one },
-  { list: manual, start: two, keys: ["ArrowRight"], focused: two, selected: two },
-  { list: manual, start: two, keys: ["Home"], focused: one, selected: two },
-  { list: manual, start: two, keys: ["End"], focused: three, selected: two },
-  { list: vertical, start: beta, keys: ["ArrowUp"], focused: alpha, selected: alpha },
-  { list: vertical, start: alpha, keys: ["ArrowUp"], focused: gamma, selected: gamma },
-  { list: vertical, start: gamma, keys: ["ArrowDown"], focused: alpha, selected: alpha },
-  { list: vertical, start: alpha, keys: ["ArrowDown"], focused: beta, selected: beta },
-  { list: vertical, start: beta, keys: ["ArrowLeft"], focused: beta, selected: beta },
-  { list: vertical, start: alpha, keys: ["End"], focused: gamma, selected: gamma },
-  { list: optional, start: files, keys: ["Home"], focused: notes, selected: notes },
-  { list: optional, start: notes, keys: ["End"], focused: files, selected: files },
-  { list: optional, start: files, keys: ["ArrowRight"], focused: notes, selected: notes },
-  { list: optional, start: notes, keys: ["ArrowLeft"], focused: files, selected: files },
-];
+export function afterClickByName(
+  list: NamedRovingList,
+  state: NamedSelection,
+  name: string,
+): NamedSelection {
+  const tab = indexIn(list.names, name);
+  if (tab === null) throw new Error(`${list.name}: a click needs a tab.`);
+  return namesOf(list, afterClick(list.list, indexesOf(list, state), tab));
+}
 
-export type TabsState = {
+export function afterKeyByName(
+  list: NamedRovingList,
+  state: NamedSelection,
+  key: Key,
+): NamedSelection {
+  return namesOf(list, afterKey(list.list, indexesOf(list, state), key));
+}
+
+type TabsState = {
   selected: string | null;
   focused: string | null;
   shown: string[];
   tabStops: (string | null)[];
 };
 
-export type TabsReading = TabsState & {
+type TabsReading = TabsState & {
   active: (string | null)[];
   ariaSelected: (string | null)[];
 };
@@ -154,7 +99,7 @@ export function tabNamed(page: Page, list: string, name: string): Locator {
     .filter({ has: page.getByText(name, { exact: true }) });
 }
 
-export type TabSnapshot = {
+type TabSnapshot = {
   text: string;
   ariaSelected: string | null;
   dataActive: boolean;
@@ -162,9 +107,9 @@ export type TabSnapshot = {
   tabIndex: number;
 };
 
-export type PanelSnapshot = { text: string; hidden: HTMLElement["hidden"]; display: string };
+type PanelSnapshot = { text: string; hidden: HTMLElement["hidden"]; display: string };
 
-export type ListSnapshot = { tabs: TabSnapshot[]; panels: PanelSnapshot[] };
+type ListSnapshot = { tabs: TabSnapshot[]; panels: PanelSnapshot[] };
 
 export type TabsSnapshot = { document: DocumentSnapshot; lists: ListSnapshot[] };
 
@@ -272,7 +217,7 @@ export async function clickTab(page: Page, list: string, name: string): Promise<
   }
 }
 
-export type Named = { tab: string[][]; panel: string[][] };
+type Named = { tab: string[][]; panel: string[][] };
 
 export function elementsNamedBy(page: Page, list: string): Promise<Named[]> {
   return tabList(page, list).evaluate((node) => {

@@ -8,6 +8,7 @@
     "vite.config.ts",
     "tests",
     "scripts",
+    "formal",
     "packages/*/tests",
     "packages/*/fixtures",
     "apps/*/tests",

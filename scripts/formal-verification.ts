@@ -8,7 +8,7 @@ export const modelFilePatterns = [
   "**/*.model.ts",
   "**/*.model.test.{ts,tsx}",
 ] as const;
-export const formalSkillFiles = `.agents/skills/${formalSkillPrefix}*/**`;
+const formalSkillFiles = `.agents/skills/${formalSkillPrefix}*/**`;
 
 export function isModelFile(path: string): boolean {
   return modelFilePatterns.some((pattern) => matchesGlob(path, pattern));
@@ -17,3 +17,5 @@ export function isModelFile(path: string): boolean {
 export function isFormalVerificationFile(path: string): boolean {
   return isModelFile(path) || matchesGlob(path, formalSkillFiles);
 }
+
+export const kernelModules = ["packages/core/src/roving-step.ts"] as const;
