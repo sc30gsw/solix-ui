@@ -1,4 +1,4 @@
 import { lookSpecs } from "#/spec/registry.ts";
-import { runSpecs } from "#/spec/runner.ts";
+import { runLookSpecs } from "#/spec/runner.ts";
 
-runSpecs(lookSpecs);
+runLookSpecs(lookSpecs);

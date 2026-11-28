@@ -24,13 +24,13 @@ A variant renders like another, a hover or a pressed state draws nothing, the da
 | Covered code | What the checks assume about it |
 | --- | --- |
 | `packages/core/spec/look` | The look entries, each exported as `look`, and `reference.ts`, the reference's literal values. |
-| `packages/core/spec/format.ts`: `defineLook`, `lookEntry`, `held`, `style` | A look entry is an entry whose check is a computed style. |
-| `packages/core/spec/runner.ts`: `runSpecs` | It mounts each fixture in a host with the entry's scheme, under its media, checks the attributes the entry requires, enters the state with the user's pointer, a held press or the keyboard's Tab, up to twenty stops, waits for every CSS transition to finish, and compares the computed value with a probe's. It restores the viewport it read at start. |
+| `packages/core/spec/format.ts`: `describeLook`, `lookProperties`, `held` | A look entry is an entry whose check is a computed style. |
+| `packages/core/spec/runner.ts`: `runLookSpecs` | It mounts each fixture in a host with the entry's scheme, under its media, checks the attributes the entry requires, enters the state with the user's pointer, a held press or the keyboard's Tab, up to twenty stops, waits for every CSS transition to finish, and compares the computed value with a probe's. It restores the viewport it read at start. |
 | `packages/core/spec/computed.ts`: `sameColour`, `channelTolerance` | The colour comparison on a canvas over white and over black. |
 | `packages/core/spec/commands.ts`: `specCommands` | The press held down and the reduced-motion emulation, through Playwright. |
-| `packages/core/spec/fixtures.ts`: `fixture`, `tabs` | The fixtures. |
+| `packages/core/spec/fixtures.ts`: `fixture`, `unbuilt`, `tabs`, `looks` | The fixtures. |
 | `packages/core/spec/registry.ts`: `lookSpecs`, `specs`, `drawsNoLook` | Every look spec the runner reads. |
-| `packages/core/tests/visual-spec.browser.test.ts` | It runs `lookSpecs` through `runSpecs`. |
+| `packages/core/tests/visual-spec.browser.test.ts` | It runs `lookSpecs` through `runLookSpecs`. |
 | `packages/core/tests/spec-registry.test.ts` | The registry rule, read from the build. |
 | `packages/core/src` | The styles, tokens and colour rules, built to `packages/core/dist/styles.css`. |
 | `vite.config.ts` | It defines the `component spec` project in every engine with `specCommands`. |

@@ -1,12 +1,12 @@
 import { expect, test } from "vite-plus/test";
-import type { LookSpec, Spec } from "#/spec/format.ts";
+import type { FunctionSpec, FunctionStatus, LookStatus } from "#/spec/format.ts";
 import { parityGapItems } from "#/spec/gaps.ts";
 import { foundations, functionSpecs, lookSpecs, type Registered, specs } from "#/spec/registry.ts";
 import { componentExports } from "#/tests/built-library.ts";
 
-const registered: readonly (Spec | LookSpec)[] = [
-  ...functionSpecs.map(([, spec]) => spec),
-  ...lookSpecs.map(([, spec]) => spec),
+const statuses: readonly (FunctionStatus | LookStatus)[] = [
+  ...functionSpecs.flatMap(([, spec]) => spec.entries.map(({ status }) => status)),
+  ...lookSpecs.flatMap(([, spec]) => spec.map(({ status }) => status)),
 ];
 
 test("the registry names exactly the components the built library exports", () => {
@@ -15,9 +15,7 @@ test("the registry names exactly the components the built library exports", () =
 
 test("every parity-gap item is one that an entry or the registry waits on", () => {
   const waited = new Set<string>([
-    ...registered.flatMap(({ entries }) =>
-      entries.flatMap((entry) => (entry.status === "pending" ? [entry.until] : [])),
-    ),
+    ...statuses.flatMap((status) => (status === "holds" ? [] : [status.until])),
     ...Object.values(specs).flatMap((entry: Registered) =>
       "coveredBy" in entry
         ? []
@@ -29,16 +27,12 @@ test("every parity-gap item is one that an entry or the registry waits on", () =
   expect(idle).toEqual([]);
 });
 
-function uncovered(name: string, spec: Spec): string[] {
+function uncovered(name: string, spec: FunctionSpec): string[] {
   const { props, parts, variables } = spec.reference;
   const named = new Set(
-    spec.entries.flatMap(({ promise }) => {
-      if (promise.kind === "prop" || promise.kind === "default") return [`prop ${promise.prop}`];
-      if (promise.kind === "part") return [`part ${promise.part}`];
-      if (promise.kind === "parts") return parts.map((part) => `part ${part}`);
-      if (promise.kind === "variable") return [`variable ${promise.variable}`];
-      return [];
-    }),
+    spec.entries.flatMap(({ about }) =>
+      about === "every part" ? parts.map((part) => `part ${part}`) : [about],
+    ),
   );
   return [
     ...props.map((prop) => `prop ${prop}`),
@@ -50,12 +44,13 @@ function uncovered(name: string, spec: Spec): string[] {
 }
 
 test("every prop, part and variable a complete spec lists has an entry that promises it", () => {
-  const complete: [string, Spec][] = [
+  const complete: [string, FunctionSpec][] = [
     ["foundations", foundations.spec],
-    ...Object.entries(specs).flatMap(([name, entry]: [string, Registered]): [string, Spec][] =>
-      "spec" in entry && typeof entry.spec !== "string" && entry.until === undefined
-        ? [[name, entry.spec]]
-        : [],
+    ...Object.entries(specs).flatMap(
+      ([name, entry]: [string, Registered]): [string, FunctionSpec][] =>
+        "spec" in entry && typeof entry.spec !== "string" && entry.until === undefined
+          ? [[name, entry.spec]]
+          : [],
     ),
   ];
 

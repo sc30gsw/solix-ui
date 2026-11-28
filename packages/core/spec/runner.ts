@@ -8,22 +8,32 @@ import type * as StableClass from "#/src/stable-class.ts";
 import { sameColour } from "#/spec/computed.ts";
 import {
   type Address,
-  type Comparison,
-  type DomCheck,
+  type Attribute,
+  type Children,
+  type ComponentPath,
+  describeLook,
   type Fixture,
+  type FunctionEntry,
+  type FunctionSpec,
+  givenProps,
   held,
+  LookDiffers,
+  type LookEntry,
+  type LookFixture,
+  lookProperties,
   type LookSpec,
+  MissingError,
   type Props,
   type Rendered,
   type Scheme,
-  type Spec,
   SpecError,
   type State,
-  type StyleCheck,
 } from "#/spec/format.ts";
+import { breakpoints } from "#/spec/look/reference.ts";
 
 type AnyComponent = (props: Record<string, unknown>) => JSX.Element;
 type Built = "index" | "stable-class";
+type Named<D> = readonly (readonly [section: string, document: D])[];
 
 async function built<T>(module: Built): Promise<T> {
   return (await import(`../dist/${module}.js`)) as T;
@@ -40,7 +50,6 @@ const tabStopsTried = 20;
 const probeBaseline = "border-style: solid; outline-style: solid;";
 const otherContext =
   "color: rgb(1, 2, 3); font: italic 37px serif; cursor: wait; visibility: visible;";
-const colourProperty = /(?:^|-)color$|^fill$|^stroke$/;
 const accessibilityTags = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"];
 const cleanups: (() => void | Promise<void>)[] = [];
 
@@ -63,7 +72,7 @@ async function stylesheetLinked(): Promise<void> {
   await loaded;
 }
 
-function componentAt(path: string): AnyComponent {
+function componentAt(path: ComponentPath): AnyComponent {
   const [name, ...members] = path.split(".");
   const found = members.reduce<unknown>(
     (holder, member) =>
@@ -73,17 +82,20 @@ function componentAt(path: string): AnyComponent {
     builtExports[name],
   );
   if (typeof found !== "function") {
-    throw new Error(`${path}: the built library exports no component by this name.`);
+    throw new MissingError(
+      { export: path },
+      `${path}: the built library exports no component by this name.`,
+    );
   }
   return found as AnyComponent;
 }
 
-function childrenOf(children: Fixture["children"]): JSX.Element {
+function childrenOf(children: Children | undefined): JSX.Element {
   if (children === undefined || typeof children === "string") return children;
-  return children.map((child) => created(child, child.props ?? {}));
+  return children.map((child) => created(child, givenProps(child)));
 }
 
-function created(fixture: Fixture, props: Props): JSX.Element {
+function created(fixture: Fixture | LookFixture, props: Props): JSX.Element {
   const component = componentAt(fixture.component);
   if (fixture.children === undefined) return createComponent(component, props);
   return createComponent(
@@ -100,17 +112,17 @@ function stableClassOf({ of, part }: Address, fallback: string): string {
   return stableClass((of ?? fallback).replaceAll(".", ""), part);
 }
 
-function mounted(fixture: Fixture, scheme: Scheme): Rendered {
+function mounted(fixture: Fixture | LookFixture, scheme: Scheme): Rendered {
   const host = document.createElement("div");
   host.setAttribute(library.colorSchemeAttribute, scheme);
   document.body.append(host);
   cleanups.push(() => host.remove());
-  const within = fixture.within;
-  const [props, setProps] = createStore<Record<string, unknown>>({ ...fixture.props });
+  const { provider } = fixture;
+  const [props, setProps] = createStore<Record<string, unknown>>({ ...givenProps(fixture) });
   const dispose = render(() => {
-    if (within === undefined) return created(fixture, props);
+    if (provider === undefined) return created(fixture, props);
     return createComponent(library.SolixProvider, {
-      ...within.provider,
+      ...givenProps(provider),
       forceColorScheme: scheme,
       getRootElement: () => host,
       get children() {
@@ -134,7 +146,10 @@ function mounted(fixture: Fixture, scheme: Scheme): Rendered {
     at: (address) => {
       const [found] = all(address);
       if (found === undefined) {
-        throw new Error(`${address.of ?? fixture.component}: it renders no ${address.part} part.`);
+        throw new MissingError(
+          address,
+          `${address.of ?? fixture.component}: it renders no ${address.part} part.`,
+        );
       }
       return found;
     },
@@ -232,58 +247,68 @@ function expectedOf(property: string, value: string, beside: HTMLElement): strin
   return here;
 }
 
-function comparisonOf(check: StyleCheck): Comparison {
-  return colourProperty.test(check.property) ? "colour" : "text";
-}
-
-function same(comparison: Comparison, actual: string, expected: string): boolean {
-  if (comparison === "colour") return sameColour(actual, expected);
-  return actual === expected;
-}
-
-async function styleHolds(check: StyleCheck): Promise<void> {
-  if (check.media?.width !== undefined) {
-    await page.viewport(check.media.width, startingViewport.height);
-    cleanups.push(() => page.viewport(startingViewport.width, startingViewport.height));
-  }
-  if (check.media?.reducedMotion === true) {
-    await commands.emulateReducedMotion(true);
-    cleanups.push(() => commands.emulateReducedMotion(false));
-  }
-  const rendered = mounted(check.fixture, check.scheme ?? defaultScheme);
-  const target = check.at === undefined ? rendered.root : rendered.at(check.at);
-  const where = `${check.at?.of ?? check.fixture.component} ${check.at?.part ?? "root"}`;
-  for (const [name, value] of Object.entries(check.given ?? {})) {
-    const found = rendered.root.getAttribute(name);
-    if (found !== value)
-      throw new Error(`${where}: ${name}="${value}" is not on it, it has ${found}`);
-  }
-  await enter[check.state ?? "rest"](target);
-  await transitionsSettled(target);
-  const actual = getComputedStyle(target).getPropertyValue(check.property).trim();
-  const expected = expectedOf(check.property, check.value, target);
-  if (!same(comparisonOf(check), actual, expected)) {
-    throw new Error(
-      `${where}, ${check.property}: expected ${check.value}, computed ${expected}; it is ${actual}.`,
+function requireAttribute(root: HTMLElement, where: string, requires: Attribute | undefined): void {
+  if (requires === undefined) return;
+  const found = root.getAttribute(requires.attribute);
+  if (found !== requires.value) {
+    throw new MissingError(
+      requires,
+      `${where}: ${requires.attribute}="${requires.value}" is not on it, it has ${found}`,
     );
   }
 }
 
-async function domHolds(check: DomCheck): Promise<void> {
-  await check.assert(mounted(check.fixture, defaultScheme));
+async function lookHolds(entry: LookEntry): Promise<void> {
+  const width = entry.media?.width;
+  if (width !== undefined) {
+    await page.viewport(breakpoints[width], startingViewport.height);
+    cleanups.push(() => page.viewport(startingViewport.width, startingViewport.height));
+  }
+  if (entry.media?.reducedMotion === true) {
+    await commands.emulateReducedMotion(true);
+    cleanups.push(() => commands.emulateReducedMotion(false));
+  }
+  const rendered = mounted(entry.fixture, entry.scheme ?? defaultScheme);
+  const target = entry.at === undefined ? rendered.root : rendered.at(entry.at);
+  const where = `${entry.at?.of ?? entry.fixture.component} ${entry.at?.part ?? "root"}`;
+  requireAttribute(rendered.root, where, entry.requires);
+  await enter[entry.state ?? "rest"](target);
+  await transitionsSettled(target);
+  const actual = getComputedStyle(target).getPropertyValue(entry.property).trim();
+  const expected = expectedOf(entry.property, entry.value, target);
+  const same =
+    lookProperties[entry.property] === "colour"
+      ? sameColour(actual, expected)
+      : actual === expected;
+  if (!same) {
+    throw new LookDiffers(
+      `${where}, ${entry.property}: expected ${entry.value}, computed ${expected}; it is ${actual}.`,
+    );
+  }
 }
 
-export type Named = readonly (readonly [name: string, spec: Spec | LookSpec])[];
+async function functionHolds(entry: FunctionEntry): Promise<void> {
+  await entry.assert(mounted(entry.fixture, defaultScheme));
+}
 
-export function runSpecs(specs: Named): void {
+export function runFunctionSpecs(specs: Named<FunctionSpec>): void {
   for (const [name, spec] of specs) {
     describe(name, () => {
       beforeEach(stylesheetLinked);
       for (const entry of spec.entries) {
-        const { check } = entry;
-        test(entry.says, () =>
-          held(entry, () => (check.by === "dom" ? domHolds(check) : styleHolds(check))),
-        );
+        test(entry.says, () => held(entry.says, entry.status, () => functionHolds(entry)));
+      }
+    });
+  }
+}
+
+export function runLookSpecs(specs: Named<LookSpec>): void {
+  for (const [name, spec] of specs) {
+    describe(name, () => {
+      beforeEach(stylesheetLinked);
+      for (const entry of spec) {
+        const says = describeLook(entry);
+        test(says, () => held(says, entry.status, () => lookHolds(entry)));
       }
     });
   }

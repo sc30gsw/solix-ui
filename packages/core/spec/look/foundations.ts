@@ -1,5 +1,5 @@
-import { fixture, tabs } from "#/spec/fixtures.ts";
-import { defineLook, lookEntry, style } from "#/spec/format.ts";
+import { fixture, looks, tabs } from "#/spec/fixtures.ts";
+import type { LookSpec } from "#/spec/format.ts";
 import { statuses, visualReference } from "#/spec/look/reference.ts";
 
 const field = fixture("TextInput", { "aria-label": "Name" });
@@ -7,38 +7,25 @@ const disabledField = fixture("TextInput", { "aria-label": "Name", disabled: tru
 const firstTab = { at: { of: "TabsTab", part: "root" } } as const;
 const disabledFirstTab = tabs({ root: { defaultValue: "b" }, firstTab: { disabled: true } });
 
-export const look = defineLook([
-  lookEntry(style(field, "outline-style", "solid", { state: "focus-visible" }), {
-    until: "foundations 16",
+const focused = { state: "focus-visible" } as const;
+
+export const look: LookSpec = [
+  looks(field, "outline-style", "solid", "foundations 16", focused),
+  looks(field, "outline-width", statuses.focusRingWidth, "foundations 16", focused),
+  looks(field, "outline-color", visualReference.light.accent, "foundations 16", focused),
+  looks(tabs(), "outline-style", "solid", undefined, { ...firstTab, ...focused }),
+  looks(tabs(), "outline-width", statuses.focusRingWidth, undefined, { ...firstTab, ...focused }),
+  looks(tabs(), "outline-offset", statuses.focusRingOffset, undefined, {
+    ...firstTab,
+    ...focused,
   }),
-  lookEntry(style(field, "outline-width", statuses.focusRingWidth, { state: "focus-visible" }), {
-    until: "foundations 16",
+  looks(disabledField, "opacity", statuses.disabledOpacity, "foundations 17"),
+  looks(disabledField, "cursor", "not-allowed"),
+  looks(disabledField, "pointer-events", "none", "foundations 17"),
+  looks(disabledFirstTab, "opacity", statuses.disabledOpacity, "foundations 17", firstTab),
+  looks(disabledFirstTab, "cursor", "not-allowed", undefined, firstTab),
+  looks(tabs(), "transition-property", "none", undefined, {
+    ...firstTab,
+    media: { reducedMotion: true },
   }),
-  lookEntry(
-    style(field, "outline-color", visualReference.light.accent, { state: "focus-visible" }),
-    { until: "foundations 16" },
-  ),
-  lookEntry(style(tabs(), "outline-style", "solid", { ...firstTab, state: "focus-visible" })),
-  lookEntry(
-    style(tabs(), "outline-width", statuses.focusRingWidth, {
-      ...firstTab,
-      state: "focus-visible",
-    }),
-  ),
-  lookEntry(
-    style(tabs(), "outline-offset", statuses.focusRingOffset, {
-      ...firstTab,
-      state: "focus-visible",
-    }),
-  ),
-  lookEntry(style(disabledField, "opacity", statuses.disabledOpacity), { until: "foundations 17" }),
-  lookEntry(style(disabledField, "cursor", "not-allowed")),
-  lookEntry(style(disabledField, "pointer-events", "none"), { until: "foundations 17" }),
-  lookEntry(style(disabledFirstTab, "opacity", statuses.disabledOpacity, firstTab), {
-    until: "foundations 17",
-  }),
-  lookEntry(style(disabledFirstTab, "cursor", "not-allowed", firstTab)),
-  lookEntry(
-    style(tabs(), "transition-property", "none", { ...firstTab, media: { reducedMotion: true } }),
-  ),
-]);
+];

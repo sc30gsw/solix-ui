@@ -1,27 +1,26 @@
 import { expect } from "vite-plus/test";
-import { fixture } from "#/spec/fixtures.ts";
-import { defineReference, defineSpec, dom } from "#/spec/format.ts";
+import { unbuilt } from "#/spec/fixtures.ts";
+import type { FunctionSpec, Reference } from "#/spec/format.ts";
 
-const reference = defineReference({
+const reference = {
   props: ["description", "error"],
   parts: [],
   variables: [],
-});
+} as const satisfies Reference;
 
-export const spec = defineSpec(reference, [
-  {
-    says: "description and error are shown together",
-    promise: { kind: "prop", prop: "error" },
-    check: dom(
-      fixture("TextInput", { description: "Helps", error: "Wrong", "aria-label": "Name" }),
-      ({ container }) => {
+export const spec: FunctionSpec<typeof reference> = {
+  reference,
+  entries: [
+    {
+      says: "description and error are shown together",
+      about: "prop error",
+      fixture: unbuilt("TextInput", { description: "Helps", error: "Wrong", "aria-label": "Name" }),
+      assert: ({ container }) => {
         expect(container.textContent, "the field's text").toContain("Helps");
         expect(container.textContent, "the field's text").toContain("Wrong");
       },
-    ),
-    status: "pending",
-    until: "TextInput 2",
-    failsWith: "the field's text: expected '' to contain 'Helps'",
-    decision: "Q177",
-  },
-]);
+      status: { until: "TextInput 2", fails: "the field's text: expected '' to contain 'Helps'" },
+      decision: "Q177",
+    },
+  ],
+};

@@ -1,4 +1,4 @@
-import type { ComponentName, GapItem, LookSpec, Spec } from "#/spec/format.ts";
+import type { ComponentName, FunctionSpec, GapItem, LookSpec } from "#/spec/format.ts";
 import { spec as buttonSpec } from "#/spec/Button.ts";
 import { spec as foundationsSpec } from "#/spec/foundations.ts";
 import { look as buttonLook } from "#/spec/look/Button.ts";
@@ -12,7 +12,7 @@ export const drawsNoLook = "draws no look of its own";
 
 export type Registered =
   | {
-      readonly spec: Spec | GapItem;
+      readonly spec: FunctionSpec | GapItem;
       readonly look: LookSpec | GapItem | typeof drawsNoLook;
       readonly until?: GapItem;
     }
@@ -59,9 +59,9 @@ function isObject<S>(value: unknown): value is S {
   return typeof value === "object" && value !== null;
 }
 
-export const functionSpecs: Named<Spec> = [
+export const functionSpecs: Named<FunctionSpec> = [
   ["foundations", foundations.spec],
-  ...written<Spec>((entry) => ("spec" in entry ? entry.spec : undefined), isObject),
+  ...written<FunctionSpec>((entry) => ("spec" in entry ? entry.spec : undefined), isObject),
 ];
 
 export const lookSpecs: Named<LookSpec> = [

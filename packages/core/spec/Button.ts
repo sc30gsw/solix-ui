@@ -1,9 +1,17 @@
 import { expect, vi } from "vite-plus/test";
-import { fixture } from "#/spec/fixtures.ts";
-import { defineReference, defineSpec, dom, type Fixture, type SpecEntry } from "#/spec/format.ts";
+import { fixture, unbuilt } from "#/spec/fixtures.ts";
+import type {
+  Children,
+  Fixture,
+  FunctionEntry,
+  FunctionSpec,
+  Props,
+  PropsOf,
+  Reference,
+} from "#/spec/format.ts";
 import { sharedSuite } from "#/spec/shared.ts";
 
-const reference = defineReference({
+const reference = {
   props: [
     "component",
     "size",
@@ -35,9 +43,9 @@ const reference = defineReference({
     "--button-color",
     "--button-bd",
   ],
-});
+} as const satisfies Reference;
 
-type Entry = SpecEntry<typeof reference>;
+type Entry = FunctionEntry<typeof reference>;
 
 const label = "Save";
 const builtVariants = ["default", "filled", "light", "outline", "subtle", "transparent"] as const;
@@ -51,11 +59,15 @@ const colourVariables = [
 ] as const;
 const sizeVariables = ["--button-height", "--button-padding-x", "--button-fz"] as const;
 
-function button(props: Fixture["props"] = {}, children: Fixture["children"] = label): Fixture {
+function button(props: PropsOf<"Button"> = {}, children: Children = label): Fixture {
   return fixture("Button", props, children);
 }
 
-function group(props: Fixture["props"] = {}): Fixture {
+function unbuiltButton(props: Props): Fixture {
+  return unbuilt("Button", props, label);
+}
+
+function group(props: Props = {}): Fixture {
   return fixture("Button.Group", { "aria-label": "Actions", ...props }, [
     button({}, "One"),
     button({}, "Two"),
@@ -69,7 +81,7 @@ function variableOf(root: HTMLElement, variable: string): string {
 const shared = sharedSuite({
   component: "Button",
   reference,
-  fixture: button({ loading: true, leftSection: "$" }),
+  fixture: (props) => unbuiltButton({ loading: true, leftSection: "$", ...props }),
   until: {
     parts: "Button 15",
     mod: "foundations 1",
@@ -93,137 +105,129 @@ const shared = sharedSuite({
 const variantEntries: Entry[] = [
   ...builtVariants.map((variant): Entry => ({
     says: `variant="${variant}" writes data-variant="${variant}" on the root`,
-    promise: { kind: "prop", prop: "variant", value: variant },
-    check: dom(button({ variant }), ({ root }) => {
+    about: "prop variant",
+    fixture: button({ variant }),
+    assert: ({ root }) => {
       expect(root.getAttribute("data-variant"), "data-variant").toBe(variant);
-    }),
+    },
     status: "holds",
   })),
   ...missingVariants.map((variant): Entry => ({
     says: `variant="${variant}" writes data-variant="${variant}" on the root`,
-    promise: { kind: "prop", prop: "variant", value: variant },
-    check: dom(button({ variant }), ({ root }) => {
+    about: "prop variant",
+    fixture: unbuiltButton({ variant }),
+    assert: ({ root }) => {
       expect(root.getAttribute("data-variant"), "data-variant").toBe(variant);
-    }),
-    status: "pending",
-    until: "Button 3",
-    failsWith: `data-variant: expected 'filled' to be '${variant}'`,
+    },
+    status: { until: "Button 3", fails: `data-variant: expected 'filled' to be '${variant}'` },
   })),
   ...colourVariables.map((variable): Entry => ({
     says: `variant="filled" color="red" sets ${variable}, the colour variable of that name`,
-    promise: { kind: "variable", variable },
-    check: dom(button({ variant: "filled", color: "red" }), ({ root }) => {
+    about: `variable ${variable}`,
+    fixture: button({ variant: "filled", color: "red" }),
+    assert: ({ root }) => {
       expect(variableOf(root, variable), `${variable} is set`).not.toBe("");
-    }),
-    status: "pending",
-    until: "Button 3",
-    failsWith: `${variable} is set: expected '' not to be ''`,
+    },
+    status: { until: "Button 3", fails: `${variable} is set: expected '' not to be ''` },
   })),
   {
     says: "with no color and no variant, --button-color is set and --button-bg, --button-hover and --button-bd are unset",
-    promise: { kind: "prop", prop: "color" },
-    check: dom(button(), ({ root }) => {
+    about: "prop color",
+    fixture: button(),
+    assert: ({ root }) => {
       expect(variableOf(root, "--button-color"), "--button-color is set").not.toBe("");
       for (const variable of ["--button-bg", "--button-hover", "--button-bd"]) {
         expect(variableOf(root, variable), `${variable} is unset`).toBe("");
       }
-    }),
-    status: "pending",
-    until: "Button 4",
-    failsWith: "--button-color is set: expected '' not to be ''",
+    },
+    status: { until: "Button 4", fails: "--button-color is set: expected '' not to be ''" },
   },
   {
     says: 'variant="gradient" with gradient draws a linear gradient as its background image',
-    promise: { kind: "prop", prop: "gradient" },
-    check: dom(
-      button({ variant: "gradient", gradient: { from: "red", to: "blue", deg: 90 } }),
-      ({ root }) => {
-        expect(getComputedStyle(root).backgroundImage, "background image").toMatch(
-          /^linear-gradient/,
-        );
-      },
-    ),
-    status: "pending",
-    until: "foundations 12",
-    failsWith: "background image: expected 'none' to match",
+    about: "prop gradient",
+    fixture: unbuiltButton({ variant: "gradient", gradient: { from: "red", to: "blue", deg: 90 } }),
+    assert: ({ root }) => {
+      expect(getComputedStyle(root).backgroundImage, "background image").toMatch(
+        /^linear-gradient/,
+      );
+    },
+    status: { until: "foundations 12", fails: "background image: expected 'none' to match" },
   },
   {
     says: "autoContrast is on unless false is given: a filled yellow Button's text is the one autoContrast picks",
-    promise: { kind: "default", prop: "autoContrast", value: true },
-    check: dom(button({ color: "yellow" }), ({ root, update }) => {
+    about: "prop autoContrast",
+    fixture: button({ color: "yellow" }),
+    assert: ({ root, update }) => {
       const unset = getComputedStyle(root).color;
       update({ autoContrast: true });
       expect(getComputedStyle(root).color, "the text with autoContrast").toBe(unset);
-    }),
-    status: "pending",
-    until: "foundations 11",
-    failsWith: "the text with autoContrast: expected",
+    },
+    status: { until: "foundations 11", fails: "the text with autoContrast: expected" },
   },
 ];
 
 const sizeEntries: Entry[] = [
   ...sizeVariables.map((variable): Entry => ({
     says: `size="lg" sets ${variable} on the root`,
-    promise: { kind: "variable", variable },
-    check: dom(button({ size: "lg" }), ({ root }) => {
+    about: `variable ${variable}`,
+    fixture: button({ size: "lg" }),
+    assert: ({ root }) => {
       expect(variableOf(root, variable), `${variable} is set`).not.toBe("");
-    }),
+    },
     status: "holds",
   })),
   {
     says: 'size="lg" writes data-size="lg" on the root',
-    promise: { kind: "prop", prop: "size", value: "lg" },
-    check: dom(button({ size: "lg" }), ({ root }) => {
+    about: "prop size",
+    fixture: button({ size: "lg" }),
+    assert: ({ root }) => {
       expect(root.getAttribute("data-size"), "data-size").toBe("lg");
-    }),
-    status: "pending",
-    until: "Button 2",
-    failsWith: "data-size: expected null to be 'lg'",
+    },
+    status: { until: "Button 2", fails: "data-size: expected null to be 'lg'" },
   },
   {
     says: 'size="compact-sm" writes data-size="compact-sm" on the root',
-    promise: { kind: "prop", prop: "size", value: "compact-sm" },
-    check: dom(button({ size: "compact-sm" }), ({ root }) => {
+    about: "prop size",
+    fixture: button({ size: "compact-sm" }),
+    assert: ({ root }) => {
       expect(root.getAttribute("data-size"), "data-size").toBe("compact-sm");
-    }),
-    status: "pending",
-    until: "Button 2",
-    failsWith: "data-size: expected null to be 'compact-sm'",
+    },
+    status: { until: "Button 2", fails: "data-size: expected null to be 'compact-sm'" },
   },
   {
     says: 'radius="lg" sets --button-radius on the root',
-    promise: { kind: "prop", prop: "radius", value: "lg" },
-    check: dom(button({ radius: "lg" }), ({ root }) => {
+    about: "prop radius",
+    fixture: button({ radius: "lg" }),
+    assert: ({ root }) => {
       expect(variableOf(root, "--button-radius"), "--button-radius is set").not.toBe("");
-    }),
+    },
     status: "holds",
   },
   {
     says: "with no radius, --button-radius is unset, so the root takes the theme's default radius",
-    promise: { kind: "variable", variable: "--button-radius" },
-    check: dom(button(), ({ root }) => {
+    about: "variable --button-radius",
+    fixture: button(),
+    assert: ({ root }) => {
       expect(variableOf(root, "--button-radius"), "--button-radius is unset").toBe("");
-    }),
-    status: "pending",
-    until: "Button 5",
-    failsWith: "--button-radius is unset: expected '1.5rem' to be ''",
+    },
+    status: { until: "Button 5", fails: "--button-radius is unset: expected '1.5rem' to be ''" },
   },
   {
     says: 'justify="space-between" sets --button-justify on the root',
-    promise: { kind: "prop", prop: "justify", value: "space-between" },
-    check: dom(button({ justify: "space-between" }), ({ root }) => {
+    about: "prop justify",
+    fixture: unbuiltButton({ justify: "space-between" }),
+    assert: ({ root }) => {
       expect(variableOf(root, "--button-justify"), "--button-justify").toBe("space-between");
-    }),
-    status: "pending",
-    until: "Button 6",
-    failsWith: "--button-justify: expected '' to be 'space-between'",
+    },
+    status: { until: "Button 6", fails: "--button-justify: expected '' to be 'space-between'" },
   },
   {
     says: "with no justify, --button-justify is unset",
-    promise: { kind: "variable", variable: "--button-justify" },
-    check: dom(button(), ({ root }) => {
+    about: "variable --button-justify",
+    fixture: button(),
+    assert: ({ root }) => {
       expect(variableOf(root, "--button-justify"), "--button-justify is unset").toBe("");
-    }),
+    },
     status: "holds",
   },
 ];
@@ -231,157 +235,155 @@ const sizeEntries: Entry[] = [
 const behaviourEntries: Entry[] = [
   {
     says: "with no component the root is a native button",
-    promise: { kind: "default", prop: "component", value: "button" },
-    check: dom(button(), ({ root }) => {
+    about: "prop component",
+    fixture: button(),
+    assert: ({ root }) => {
       expect(root.localName, "the root").toBe("button");
-    }),
+    },
     status: "holds",
   },
   {
     says: 'with no component the root has type="button", and as component="a" none',
-    promise: { kind: "default", prop: "component", value: "button" },
-    check: dom(button(), ({ root, container, update }) => {
+    about: "prop component",
+    fixture: button(),
+    assert: ({ root, container, update }) => {
       expect(root.getAttribute("type"), "type").toBe("button");
       update({ component: "a" });
       expect(container.querySelector("a")?.hasAttribute("type"), "type of a link").toBe(false);
-    }),
-    status: "pending",
-    until: "Button 1",
-    failsWith: "type: expected null to be 'button'",
+    },
+    status: { until: "Button 1", fails: "type: expected null to be 'button'" },
   },
   {
     says: 'with no variant the root has data-variant="filled"',
-    promise: { kind: "default", prop: "variant", value: "filled" },
-    check: dom(button(), ({ root }) => {
+    about: "prop variant",
+    fixture: button(),
+    assert: ({ root }) => {
       expect(root.getAttribute("data-variant"), "data-variant").toBe("filled");
-    }),
+    },
     status: "holds",
   },
   {
     says: "children render inside the label part, inside the inner part, inside the root",
-    promise: { kind: "prop", prop: "children" },
-    check: dom(button(), ({ root, at }) => {
+    about: "prop children",
+    fixture: button(),
+    assert: ({ root, at }) => {
       expect(at({ part: "inner" }).parentElement, "the inner part's parent").toBe(root);
       expect(at({ part: "label" }).parentElement, "the label's parent").toBe(at({ part: "inner" }));
       expect(at({ part: "label" }).textContent, "the label").toBe(label);
-    }),
-    status: "pending",
-    until: "Button 15",
-    failsWith: "Button: it renders no inner part",
+    },
+    status: { until: "Button 15", fails: { part: "inner" } },
   },
   {
     says: "fullWidth writes data-block on the root",
-    promise: { kind: "prop", prop: "fullWidth", value: true },
-    check: dom(button({ fullWidth: true }), ({ root }) => {
+    about: "prop fullWidth",
+    fixture: unbuiltButton({ fullWidth: true }),
+    assert: ({ root }) => {
       expect(root.hasAttribute("data-block"), "data-block").toBe(true);
-    }),
-    status: "pending",
-    until: "Button 7",
-    failsWith: "data-block: expected false to be true",
+    },
+    status: { until: "Button 7", fails: "data-block: expected false to be true" },
   },
   {
     says: 'leftSection renders a section part with data-position="left" before the label, and writes data-with-left-section',
-    promise: { kind: "prop", prop: "leftSection" },
-    check: dom(button({ leftSection: "test-left-section" }), ({ root, at }) => {
+    about: "prop leftSection",
+    fixture: unbuiltButton({ leftSection: "test-left-section" }),
+    assert: ({ root, at }) => {
       const section = at({ part: "section" });
       expect(section.getAttribute("data-position"), "data-position").toBe("left");
       expect(section.textContent, "the section").toBe("test-left-section");
       expect(section.nextElementSibling, "after the section").toBe(at({ part: "label" }));
       expect(root.hasAttribute("data-with-left-section"), "data-with-left-section").toBe(true);
-    }),
-    status: "pending",
-    until: "Button 8",
-    failsWith: "Button: it renders no section part",
+    },
+    status: { until: "Button 8", fails: { part: "section" } },
   },
   {
     says: 'rightSection renders a section part with data-position="right" after the label, and writes data-with-right-section',
-    promise: { kind: "prop", prop: "rightSection" },
-    check: dom(button({ rightSection: "test-right-section" }), ({ root, at }) => {
+    about: "prop rightSection",
+    fixture: unbuiltButton({ rightSection: "test-right-section" }),
+    assert: ({ root, at }) => {
       const section = at({ part: "section" });
       expect(section.getAttribute("data-position"), "data-position").toBe("right");
       expect(section.textContent, "the section").toBe("test-right-section");
       expect(section.previousElementSibling, "before the section").toBe(at({ part: "label" }));
       expect(root.hasAttribute("data-with-right-section"), "data-with-right-section").toBe(true);
-    }),
-    status: "pending",
-    until: "Button 8",
-    failsWith: "Button: it renders no section part",
+    },
+    status: { until: "Button 8", fails: { part: "section" } },
   },
   {
     says: "disabled sets the disabled attribute, and false removes it",
-    promise: { kind: "prop", prop: "disabled", value: true },
-    check: dom(button({ disabled: true }), ({ root, update }) => {
+    about: "prop disabled",
+    fixture: button({ disabled: true }),
+    assert: ({ root, update }) => {
       expect(root.hasAttribute("disabled"), "disabled").toBe(true);
       update({ disabled: false });
       expect(root.hasAttribute("disabled"), "disabled after false").toBe(false);
-    }),
+    },
     status: "holds",
   },
   {
     says: "disabled writes data-disabled, and false removes it",
-    promise: { kind: "attribute", attribute: "data-disabled" },
-    check: dom(button({ disabled: true }), ({ root, update }) => {
+    about: "behaviour",
+    fixture: button({ disabled: true }),
+    assert: ({ root, update }) => {
       expect(root.hasAttribute("data-disabled"), "data-disabled").toBe(true);
       update({ disabled: false });
       expect(root.hasAttribute("data-disabled"), "data-disabled after false").toBe(false);
-    }),
-    status: "pending",
-    until: "Button 9",
-    failsWith: "data-disabled: expected false to be true",
+    },
+    status: { until: "Button 9", fails: "data-disabled: expected false to be true" },
   },
   {
     says: "data-disabled writes data-disabled and keeps the button focusable, and false removes it",
-    promise: { kind: "prop", prop: "data-disabled", value: true },
-    check: dom(button({ "data-disabled": true }), ({ root, update }) => {
+    about: "prop data-disabled",
+    fixture: button({ "data-disabled": true }),
+    assert: ({ root, update }) => {
       expect(root.hasAttribute("data-disabled"), "data-disabled").toBe(true);
       expect(root.hasAttribute("disabled"), "disabled").toBe(false);
       root.focus();
       expect(document.activeElement, "focus").toBe(root);
       update({ "data-disabled": false });
       expect(root.hasAttribute("data-disabled"), "data-disabled after false").toBe(false);
-    }),
+    },
     status: "holds",
   },
   {
     says: "a disabled Button does not call onClick",
-    promise: { kind: "behaviour" },
-    check: dom(button({ disabled: true }), ({ root, update }) => {
+    about: "behaviour",
+    fixture: button({ disabled: true }),
+    assert: ({ root, update }) => {
       const onClick = vi.fn();
       update({ onClick });
       root.click();
       expect(onClick, "onClick").not.toHaveBeenCalled();
-    }),
+    },
     status: "holds",
   },
   {
     says: "loading writes data-loading on the root and the label, and false removes it",
-    promise: { kind: "prop", prop: "loading", value: true },
-    check: dom(button({ loading: true }), ({ root, at, update }) => {
+    about: "prop loading",
+    fixture: unbuiltButton({ loading: true }),
+    assert: ({ root, at, update }) => {
       expect(root.hasAttribute("data-loading"), "data-loading").toBe(true);
       expect(at({ part: "label" }).hasAttribute("data-loading"), "the label's data-loading").toBe(
         true,
       );
       update({ loading: false });
       expect(root.hasAttribute("data-loading"), "data-loading after false").toBe(false);
-    }),
-    status: "pending",
-    until: "Button 10",
-    failsWith: "data-loading: expected false to be true",
+    },
+    status: { until: "Button 10", fails: "data-loading: expected false to be true" },
   },
   {
     says: "a loading Button renders the loader part, hidden from assistive technology",
-    promise: { kind: "part", part: "loader" },
-    check: dom(button({ loading: true }), ({ at }) => {
+    about: "part loader",
+    fixture: unbuiltButton({ loading: true }),
+    assert: ({ at }) => {
       expect(at({ part: "loader" }).getAttribute("aria-hidden"), "aria-hidden").toBe("true");
-    }),
-    status: "pending",
-    until: "Button 10",
-    failsWith: "Button: it renders no loader part",
+    },
+    status: { until: "Button 10", fails: { part: "loader" } },
   },
   {
     says: 'a loading Button keeps focus, has aria-disabled="true" and aria-busy="true", and does not call onClick',
-    promise: { kind: "behaviour" },
-    check: dom(button({ loading: true }), ({ root, update }) => {
+    about: "behaviour",
+    fixture: unbuiltButton({ loading: true }),
+    assert: ({ root, update }) => {
       const onClick = vi.fn();
       update({ onClick });
       root.focus();
@@ -390,28 +392,23 @@ const behaviourEntries: Entry[] = [
       expect(root.getAttribute("aria-busy"), "aria-busy").toBe("true");
       root.click();
       expect(onClick, "onClick").not.toHaveBeenCalled();
-    }),
-    status: "pending",
-    until: "Button 10",
-    failsWith: "aria-disabled: expected null to be 'true'",
+    },
+    status: { until: "Button 10", fails: "aria-disabled: expected null to be 'true'" },
   },
   {
     says: "loaderProps reach the loader",
-    promise: { kind: "prop", prop: "loaderProps" },
-    check: dom(
-      button({ loading: true, loaderProps: { "data-test-loader": "" } }),
-      ({ container }) => {
-        expect(container.querySelector("[data-test-loader]"), "the loader").not.toBeNull();
-      },
-    ),
-    status: "pending",
-    until: "Button 11",
-    failsWith: "the loader: expected null not to be null",
+    about: "prop loaderProps",
+    fixture: unbuiltButton({ loading: true, loaderProps: { "data-test-loader": "" } }),
+    assert: ({ container }) => {
+      expect(container.querySelector("[data-test-loader]"), "the loader").not.toBeNull();
+    },
+    status: { until: "Button 11", fails: "the loader: expected null not to be null" },
   },
   {
     says: "a consumer's onFocus and onBlur are called once per focus and blur",
-    promise: { kind: "behaviour" },
-    check: dom(button(), ({ root, update }) => {
+    about: "behaviour",
+    fixture: button(),
+    assert: ({ root, update }) => {
       const onFocus = vi.fn();
       const onBlur = vi.fn();
       update({ onFocus, onBlur });
@@ -419,15 +416,16 @@ const behaviourEntries: Entry[] = [
       root.blur();
       expect(onFocus, "onFocus").toHaveBeenCalledOnce();
       expect(onBlur, "onBlur").toHaveBeenCalledOnce();
-    }),
+    },
     status: "holds",
   },
   {
     says: "axe finds no violation in a Button named by aria-label",
-    promise: { kind: "behaviour" },
-    check: dom(button({ "aria-label": "test" }, []), async ({ axe }) => {
+    about: "behaviour",
+    fixture: button({ "aria-label": "test" }, []),
+    assert: async ({ axe }) => {
       expect(await axe(), "axe").toEqual([]);
-    }),
+    },
     status: "holds",
   },
 ];
@@ -435,73 +433,64 @@ const behaviourEntries: Entry[] = [
 const groupEntries: Entry[] = [
   {
     says: "Button.Group and Button.GroupSection are static members of Button",
-    promise: { kind: "behaviour" },
-    check: dom(button(), ({ exports }) => {
+    about: "behaviour",
+    fixture: button(),
+    assert: ({ exports }) => {
       const holder = Object(exports.Button);
       expect(typeof Reflect.get(holder, "Group"), "Button.Group").toBe("function");
       expect(typeof Reflect.get(holder, "GroupSection"), "Button.GroupSection").toBe("function");
-    }),
-    status: "pending",
-    until: "Button 17",
-    failsWith: "Button.Group: expected 'undefined' to be 'function'",
+    },
+    status: { until: "Button 17", fails: "Button.Group: expected 'undefined' to be 'function'" },
   },
   {
     says: 'Button.Group renders role="group" with data-orientation="horizontal" by default',
-    promise: { kind: "attribute", attribute: "data-orientation" },
-    check: dom(group(), ({ root }) => {
+    about: "behaviour",
+    fixture: group(),
+    assert: ({ root }) => {
       expect(root.getAttribute("role"), "role").toBe("group");
       expect(root.getAttribute("data-orientation"), "data-orientation").toBe("horizontal");
-    }),
-    status: "pending",
-    until: "Button 17",
-    failsWith: "Button.Group: the built library exports no component by this name",
+    },
+    status: { until: "Button 17", fails: { export: "Button.Group" } },
   },
   {
     says: 'Button.Group orientation="vertical" writes data-orientation="vertical"',
-    promise: { kind: "attribute", attribute: "data-orientation" },
-    check: dom(group({ orientation: "vertical" }), ({ root }) => {
+    about: "behaviour",
+    fixture: group({ orientation: "vertical" }),
+    assert: ({ root }) => {
       expect(root.getAttribute("data-orientation"), "data-orientation").toBe("vertical");
-    }),
-    status: "pending",
-    until: "Button 17",
-    failsWith: "Button.Group: the built library exports no component by this name",
+    },
+    status: { until: "Button 17", fails: { export: "Button.Group" } },
   },
   {
     says: "Button.Group borderWidth=2 sets --button-border-width",
-    promise: { kind: "attribute", attribute: "--button-border-width" },
-    check: dom(group({ borderWidth: 2 }), ({ root }) => {
+    about: "behaviour",
+    fixture: group({ borderWidth: 2 }),
+    assert: ({ root }) => {
       expect(variableOf(root, "--button-border-width"), "--button-border-width").not.toBe("");
-    }),
-    status: "pending",
-    until: "Button 17",
-    failsWith: "Button.Group: the built library exports no component by this name",
+    },
+    status: { until: "Button 17", fails: { export: "Button.Group" } },
   },
   {
     says: 'Button.GroupSection size="md" sets --section-height',
-    promise: { kind: "attribute", attribute: "--section-height" },
-    check: dom(fixture("Button.GroupSection", { size: "md" }, "Section"), ({ root }) => {
+    about: "behaviour",
+    fixture: fixture("Button.GroupSection", { size: "md" }, "Section"),
+    assert: ({ root }) => {
       expect(variableOf(root, "--section-height"), "--section-height").not.toBe("");
-    }),
-    status: "pending",
-    until: "Button 19",
-    failsWith: "Button.GroupSection: the built library exports no component by this name",
+    },
+    status: { until: "Button 19", fails: { export: "Button.GroupSection" } },
   },
   {
     says: "axe finds no violation in a Button.Group of two named buttons",
-    promise: { kind: "behaviour" },
-    check: dom(group(), async ({ axe }) => {
+    about: "behaviour",
+    fixture: group(),
+    assert: async ({ axe }) => {
       expect(await axe(), "axe").toEqual([]);
-    }),
-    status: "pending",
-    until: "Button 20",
-    failsWith: "Button.Group: the built library exports no component by this name",
+    },
+    status: { until: "Button 20", fails: { export: "Button.Group" } },
   },
 ];
 
-export const spec = defineSpec(reference, [
-  ...shared,
-  ...behaviourEntries,
-  ...variantEntries,
-  ...sizeEntries,
-  ...groupEntries,
-]);
+export const spec: FunctionSpec<typeof reference> = {
+  reference,
+  entries: [...shared, ...behaviourEntries, ...variantEntries, ...sizeEntries, ...groupEntries],
+};

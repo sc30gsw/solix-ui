@@ -1,8 +1,68 @@
+import type { ColorSchemeOptions } from "#/src/color-schemes.ts";
+import type * as Library from "#/src/index.ts";
 import type { ComponentName, GapItem } from "#/spec/gaps.ts";
+import { breakpoints } from "#/spec/look/reference.ts";
 
 export type { ComponentName, GapItem } from "#/spec/gaps.ts";
 
+type Keys<T> = T extends unknown ? keyof T : never;
+
+export type OneOf<T, All = T> = T extends unknown
+  ? T & { readonly [K in Exclude<Keys<All>, keyof T>]?: never }
+  : never;
+
 export type ComponentPath = ComponentName | `${ComponentName}.${string}`;
+
+export type Props = { readonly [name: string]: unknown };
+
+export type Scheme = "light" | "dark";
+
+export type State = "rest" | "hover" | "pressed" | "focus-visible";
+
+export type Address = { readonly of?: ComponentPath; readonly part: string };
+
+export type Attribute = { readonly attribute: string; readonly value: string };
+
+type Exports = typeof Library;
+
+type ExportAt<C extends ComponentPath> =
+  C extends `${infer Name extends ComponentName}.${infer Member}`
+    ? Member extends keyof Exports[Name]
+      ? Exports[Name][Member]
+      : undefined
+    : C extends ComponentName
+      ? Exports[C]
+      : undefined;
+
+export type PropsOf<C extends ComponentPath> =
+  ExportAt<C> extends (props: infer Given) => unknown ? Omit<Given, "children"> : Props;
+
+type Given<Known> = OneOf<{ readonly props?: Known } | { readonly unbuilt: Props }>;
+
+export type Node<C extends ComponentPath> = Given<PropsOf<C>> & {
+  readonly component: C;
+  readonly children?: Children;
+};
+
+type AnyNode<C extends ComponentPath = ComponentPath> = C extends unknown ? Node<C> : never;
+
+export type Children = string | readonly AnyNode[];
+
+type ProviderProps = Omit<PropsOf<"SolixProvider">, "getRootElement">;
+
+type SchemeKey = keyof ColorSchemeOptions | "colorSchemeManager";
+
+type SchemeFree<P> = P & { readonly [K in SchemeKey]?: never };
+
+export type Fixture<C extends ComponentPath = ComponentPath> = AnyNode<C> & {
+  readonly provider?: Given<ProviderProps>;
+};
+
+export type LookFixture<C extends ComponentPath = ComponentPath> = AnyNode<C> & {
+  readonly provider?: OneOf<
+    { readonly props?: SchemeFree<ProviderProps> } | { readonly unbuilt: SchemeFree<Props> }
+  >;
+};
 
 export type Reference = {
   readonly props: readonly string[];
@@ -10,22 +70,22 @@ export type Reference = {
   readonly variables: readonly `--${string}`[];
 };
 
-export type Literal = string | number | boolean | null;
+export type About<R extends Reference> =
+  | `prop ${R["props"][number]}`
+  | `part ${R["parts"][number]}`
+  | `variable ${R["variables"][number]}`
+  | "every part"
+  | "behaviour";
 
-export type Props = Readonly<Record<string, unknown>>;
+export type Pinned = `${string}: ${string}`;
 
-export type Scheme = "light" | "dark";
+export type Missing = OneOf<{ readonly export: ComponentPath } | Address | Attribute>;
 
-export type Within = { readonly provider: Props };
+export type Pending<F> = { readonly until: GapItem; readonly fails: F };
 
-export type Fixture = {
-  readonly component: ComponentPath;
-  readonly props?: Props;
-  readonly children?: string | readonly Fixture[];
-  readonly within?: Within;
-};
+export type FunctionStatus = "holds" | Pending<Pinned | Missing>;
 
-export type Address = { readonly of?: ComponentPath; readonly part: string };
+export type LookStatus = "holds" | Pending<"differs" | Missing>;
 
 export type SpecUser = {
   readonly click: (element: Element) => Promise<void>;
@@ -45,91 +105,154 @@ export type Rendered = {
   readonly user: SpecUser;
 };
 
-export type State = "rest" | "hover" | "pressed" | "focus-visible";
-
-export type Media = { readonly reducedMotion?: true; readonly width?: number };
-
-export type Comparison = "colour" | "text";
-
-export type DomCheck = {
-  readonly by: "dom";
+export type FunctionEntry<R extends Reference = Reference> = {
+  readonly says: string;
+  readonly about: About<R>;
   readonly fixture: Fixture;
   readonly assert: (rendered: Rendered) => void | Promise<void>;
-};
-
-export type StyleCheck = {
-  readonly by: "style";
-  readonly fixture: Fixture;
-  readonly at?: Address;
-  readonly state?: State;
-  readonly scheme?: Scheme;
-  readonly media?: Media;
-  readonly given?: Readonly<Record<string, string>>;
-  readonly property: string;
-  readonly value: string;
-};
-
-export type Check = DomCheck | StyleCheck;
-
-export type Promised<R extends Reference> =
-  | { readonly kind: "prop"; readonly prop: R["props"][number]; readonly value?: Literal }
-  | { readonly kind: "default"; readonly prop: R["props"][number]; readonly value: Literal }
-  | { readonly kind: "part"; readonly part: R["parts"][number] }
-  | { readonly kind: "parts" }
-  | { readonly kind: "variable"; readonly variable: R["variables"][number] }
-  | { readonly kind: "attribute"; readonly attribute: string }
-  | { readonly kind: "shared"; readonly promise: string }
-  | { readonly kind: "behaviour" }
-  | { readonly kind: "look"; readonly property: string };
-
-export type Status =
-  | { readonly status: "holds" }
-  | { readonly status: "pending"; readonly until: GapItem; readonly failsWith: string };
-
-export type SpecEntry<R extends Reference = Reference, C extends Check = Check> = Status & {
-  readonly says: string;
-  readonly promise: Promised<R>;
-  readonly check: C;
+  readonly status: FunctionStatus;
   readonly decision?: `Q${number}`;
 };
 
-export type Spec<R extends Reference = Reference> = {
+export type FunctionSpec<R extends Reference = Reference> = {
   readonly reference: R;
-  readonly entries: readonly SpecEntry<R>[];
+  readonly entries: readonly FunctionEntry<R>[];
 };
 
-export type LookEntry = SpecEntry<Reference, StyleCheck>;
+export const lookProperties = {
+  "background-color": "colour",
+  "background-image": "text",
+  "border-end-end-radius": "text",
+  "border-top-color": "colour",
+  "border-top-left-radius": "text",
+  color: "colour",
+  cursor: "text",
+  "font-size": "text",
+  "font-weight": "text",
+  height: "text",
+  "justify-content": "text",
+  opacity: "text",
+  "outline-color": "colour",
+  "outline-offset": "text",
+  "outline-style": "text",
+  "outline-width": "text",
+  "padding-inline-start": "text",
+  "pointer-events": "text",
+  transform: "text",
+  "transition-duration": "text",
+  "transition-property": "text",
+} as const satisfies Readonly<Record<string, "colour" | "text">>;
 
-export type LookSpec = {
-  readonly entries: readonly SpecEntry<Reference, StyleCheck>[];
+export type LookProperty = keyof typeof lookProperties;
+
+export type Breakpoint = keyof typeof breakpoints;
+
+export type LookEntry = {
+  readonly fixture: LookFixture;
+  readonly at?: Address;
+  readonly requires?: Attribute;
+  readonly state?: State;
+  readonly scheme?: Scheme;
+  readonly media?: { readonly width?: Breakpoint; readonly reducedMotion?: true };
+  readonly property: LookProperty;
+  readonly value: string;
+  readonly status: LookStatus;
 };
 
-export function defineReference<const R extends Reference>(reference: R): R {
-  return reference;
-}
-
-export function defineSpec<R extends Reference>(
-  reference: R,
-  entries: readonly SpecEntry<R>[],
-): Spec<R> {
-  return { reference, entries };
-}
-
-export function defineLook(entries: readonly SpecEntry<Reference, StyleCheck>[]): LookSpec {
-  return { entries };
-}
+export type LookSpec = readonly LookEntry[];
 
 export class SpecError extends Error {
   override name = "SpecError";
 }
 
+export class MissingError extends Error {
+  override name = "MissingError";
+  readonly missing: Missing;
+
+  constructor(missing: Missing, message: string) {
+    super(message);
+    this.missing = missing;
+  }
+}
+
+export class LookDiffers extends Error {
+  override name = "LookDiffers";
+}
+
 export const nowHolds = "now holds: mark it holds";
+
+const describedTypes = new Set(["string", "number", "boolean"]);
+
+export function givenProps(given: { readonly props?: Props; readonly unbuilt?: Props }): Props {
+  return given.props ?? given.unbuilt ?? {};
+}
+
+function described(fixture: LookFixture): string {
+  const props = Object.entries(givenProps(fixture))
+    .filter(([, value]) => describedTypes.has(typeof value))
+    .map(([name, value]) => `${name}=${String(value)}`);
+  const within = fixture.provider === undefined ? [] : ["in a provider"];
+  return [fixture.component, ...props, ...within].join(" ");
+}
+
+export function describeLook(entry: LookEntry): string {
+  const width = entry.media?.width;
+  const where = [
+    described(entry.fixture),
+    entry.at === undefined ? "" : `${entry.at.of ?? ""} ${entry.at.part}`.trim(),
+    entry.state ?? "rest",
+    entry.scheme ?? "light",
+    width === undefined ? "" : `${breakpoints[width]}px wide`,
+    entry.media?.reducedMotion === undefined ? "" : "reduced motion",
+  ].filter((part) => part !== "");
+  return `${where.join(", ")}: ${entry.property} is ${entry.value}`;
+}
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-export async function held(entry: SpecEntry, run: () => void | Promise<void>): Promise<void> {
+function labelOf(pin: Pinned): string {
+  return pin.slice(0, pin.indexOf(": "));
+}
+
+function sameMissing(one: Missing, other: Missing): boolean {
+  return (
+    one.export === other.export &&
+    one.of === other.of &&
+    one.part === other.part &&
+    one.attribute === other.attribute &&
+    one.value === other.value
+  );
+}
+
+function shown(fails: Pinned | Missing | "differs"): string {
+  if (typeof fails === "string") return fails;
+  if (fails.export !== undefined) return `the built library exports no ${fails.export}`;
+  if (fails.part !== undefined) return `${fails.of ?? "it"} renders no ${fails.part} part`;
+  return `${fails.attribute}="${fails.value}" is not on the root`;
+}
+
+function failsAsPinned(fails: Pinned | Missing | "differs", error: unknown): boolean {
+  if (fails === "differs") return error instanceof LookDiffers;
+  if (typeof fails === "string") {
+    return (
+      error instanceof Error && error.name === "AssertionError" && error.message.startsWith(fails)
+    );
+  }
+  return error instanceof MissingError && sameMissing(error.missing, fails);
+}
+
+export async function held(
+  says: string,
+  status: FunctionStatus | LookStatus,
+  run: () => void | Promise<void>,
+): Promise<void> {
+  if (status !== "holds" && typeof status.fails === "string" && status.fails !== "differs") {
+    if (labelOf(status.fails).trim() === "") {
+      throw new SpecError(`"${says}" pins "${status.fails}", whose label before ": " is blank.`);
+    }
+  }
   const outcome = await Promise.resolve()
     .then(run)
     .then(
@@ -137,76 +260,19 @@ export async function held(entry: SpecEntry, run: () => void | Promise<void>): P
       (error: unknown) => ({ passed: false as const, error }),
     );
   if (!outcome.passed && outcome.error instanceof SpecError) throw outcome.error;
-  if (entry.status === "holds") {
+  if (status === "holds") {
     if (!outcome.passed) throw outcome.error;
     return;
   }
   if (outcome.passed) {
     throw new Error(
-      `${nowHolds}. "${entry.says}" is pending until ${entry.until}, and its check passes.`,
+      `${nowHolds}. "${says}" is pending until ${status.until}, and its check passes.`,
     );
   }
-  if (!messageOf(outcome.error).includes(entry.failsWith)) {
+  if (!failsAsPinned(status.fails, outcome.error)) {
     throw new Error(
-      `"${entry.says}" is pending until ${entry.until} and fails, but not with "${entry.failsWith}": ${messageOf(outcome.error)}`,
+      `"${says}" is pending until ${status.until} and fails, but not with "${shown(status.fails)}": ${messageOf(outcome.error)}`,
       { cause: outcome.error },
     );
   }
-}
-
-export function dom(fixture: Fixture, assert: DomCheck["assert"]): DomCheck {
-  return { by: "dom", fixture, assert };
-}
-
-export type StyleOptions = Omit<StyleCheck, "by" | "fixture" | "property" | "value">;
-
-export function style(
-  fixture: Fixture,
-  property: string,
-  value: string,
-  options: StyleOptions = {},
-): StyleCheck {
-  return { by: "style", fixture, property, value, ...options };
-}
-
-export function differs(check: Pick<StyleCheck, "property" | "value">): string {
-  return `${check.property}: expected ${check.value}`;
-}
-
-const describedTypes = new Set(["string", "number", "boolean"]);
-
-function described(fixture: Fixture): string {
-  const props = Object.entries(fixture.props ?? {})
-    .filter(([, value]) => describedTypes.has(typeof value))
-    .map(([name, value]) => `${name}=${String(value)}`);
-  const within = Object.keys(fixture.within ?? {}).map((wrapper) => `in a ${wrapper}`);
-  return [fixture.component, ...props, ...within].join(" ");
-}
-
-export type LookOptions = { readonly until?: GapItem; readonly failsWith?: string };
-
-export function lookEntry(
-  check: StyleCheck,
-  options: LookOptions = {},
-): SpecEntry<Reference, StyleCheck> {
-  const where = [
-    described(check.fixture),
-    check.at === undefined ? "" : `${check.at.of ?? ""} ${check.at.part}`.trim(),
-    check.state ?? "rest",
-    check.scheme ?? "light",
-    check.media?.width === undefined ? "" : `${check.media.width}px wide`,
-    check.media?.reducedMotion === undefined ? "" : "reduced motion",
-  ].filter((part) => part !== "");
-  const says = `${where.join(", ")}: ${check.property} is ${check.value}`;
-  const promise = { kind: "look", property: check.property } as const;
-  return options.until === undefined
-    ? { says, promise, check, status: "holds" }
-    : {
-        says,
-        promise,
-        check,
-        status: "pending",
-        until: options.until,
-        failsWith: options.failsWith ?? differs(check),
-      };
 }
