@@ -9,6 +9,7 @@
     "scripts/check-working-tree.ts",
     "scripts/check-private-terms.mjs",
     "scripts/copy-kit-skills.ts",
+    "scripts/spec-ledger.ts",
     "tests/support/git-free-environment.ts",
     "tests/support/build-packages.ts",
     "tests/support/global-setup.ts",
